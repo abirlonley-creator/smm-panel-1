@@ -1,0 +1,418 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model ProviderConfig {
+  id          String    @id @default(cuid())
+  name        String    @default("Standard SMM Provider")
+  apiUrl      String    @default("https://api.smmprovider.com/v2")
+  apiKey      String?
+  isMock      Boolean   @default(true)
+  active      Boolean   @default(true)
+  balance     Float?
+  currency    String    @default("INR")
+  lastSyncAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Service {
+  id                  String   @id @default(cuid())
+  externalId          String
+  name                String
+  type                String   @default("Default")
+  platform            String
+  category            String
+  description         String
+  minQuantity         Int
+  maxQuantity         Int
+  ratePer1000         Float
+  refillSupported     Boolean  @default(false)
+  cancelSupported     Boolean  @default(true)
+  dripFeedSupported   Boolean  @default(false)
+  dripFeedMinInterval Int      @default(10)
+  dripFeedMaxInterval Int      @default(1440)
+  restrictions        String?
+  isMock              Boolean  @default(false)
+  active              Boolean  @default(true)
+  orders              Order[]
+  monitoringSessions  MonitoringSession[]
+  comboItems          ComboItem[]
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model Order {
+  id                String                  @id @default(cuid())
+  orderRef          String                  @unique
+  serviceId         String
+  service           Service                 @relation(fields: [serviceId], references: [id])
+  targetUrl         String
+  requestedQuantity Int
+  submittedQuantity Int                     @default(0)
+  deliveredQuantity Int                     @default(0)
+  remainingQuantity Int                     @default(0)
+  failedQuantity    Int                     @default(0)
+  unitCost          Float
+  totalCost         Float
+  isScheduled       Boolean                 @default(false)
+  scheduleMode      String?                 // "INSTANT", "EVEN_DRIP", "FRONT_LOADED", "GRADUAL_RAMP", "CUSTOM", "ADAPTIVE"
+  status            String                  @default("PENDING") // DRAFT, SCHEDULED, PENDING, PROCESSING, PAUSED, COMPLETED, PARTIAL, FAILED, CANCELLED, REQUIRES_RECONCILIATION
+  providerOrderId   String?
+  refillId          String?
+  refillStatus      String?
+  errorMessage      String?
+  notes             String?
+  bulkBatchId       String?
+  bulkBatch         BulkBatch?              @relation(fields: [bulkBatchId], references: [id], onDelete: SetNull)
+  comboExecutionId  String?
+  comboExecution    ComboExecution?         @relation(fields: [comboExecutionId], references: [id], onDelete: SetNull)
+  scheduledJobId    String?
+  scheduledJob      ScheduledOrderJob?      @relation(fields: [scheduledJobId], references: [id], onDelete: SetNull)
+  userId            String?
+  user              User?                   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  steps             ScheduledDeliveryStep[]
+  providerRecords   ProviderRequestRecord[]
+  monitoringSession MonitoringSession?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+
+  @@index([userId])
+}
+
+model ScheduledDeliveryStep {
+  id             String    @id @default(cuid())
+  orderId        String
+  order          Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  stepNumber     Int
+  scheduledTime  DateTime
+  quantity       Int
+  status         String    @default("PENDING") // PENDING, PROCESSING, SUBMITTED, COMPLETED, FAILED, CANCELLED, PAUSED
+  idempotencyKey String    @unique
+  providerOrderId String?
+  executedAt     DateTime?
+  retryCount     Int       @default(0)
+  errorMessage   String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model ProviderRequestRecord {
+  id              String   @id @default(cuid())
+  orderId         String?
+  order           Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  stepId          String?
+  action          String
+  endpoint        String
+  requestPayload  String
+  responsePayload String
+  statusCode      Int
+  durationMs      Int
+  success         Boolean
+  createdAt       DateTime @default(now())
+}
+
+model User {
+  id             String              @id @default(cuid())
+  username       String              @unique
+  role           String              @default("USER") // ADMIN | USER
+  status         String              @default("ACTIVE") // ACTIVE | DISABLED | REVOKED | EXPIRED
+  passkeys       Passkey[]
+  sessions       Session[]
+  providerConfig UserProviderConfig?
+  orders             Order[]
+  scheduledJobs      ScheduledOrderJob[]
+  auditLogs          AuditLog[]
+  monitoringSessions MonitoringSession[]
+  combos             Combo[]
+  comboExecutions    ComboExecution[]
+  bulkBatches        BulkBatch[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+}
+
+model Passkey {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label        String
+  keyPrefix    String
+  keyHash      String    @unique
+  role         String    @default("USER") // ADMIN | USER
+  status       String    @default("ACTIVE") // ACTIVE | REVOKED | EXPIRED | DISABLED
+  durationDays Int?
+  expiresAt    DateTime?
+  lastUsedAt   DateTime?
+  sessions     Session[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([status, expiresAt])
+}
+
+model Session {
+  id             String    @id @default(cuid())
+  token          String    @unique
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  passkeyId      String?
+  passkey        Passkey?  @relation(fields: [passkeyId], references: [id], onDelete: SetNull)
+  expiresAt      DateTime
+  lastActivityAt DateTime  @default(now())
+  createdAt      DateTime  @default(now())
+
+  @@index([token, expiresAt])
+}
+
+model UserProviderConfig {
+  id         String    @id @default(cuid())
+  userId     String    @unique
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String    @default("My SMM Provider")
+  apiUrl     String    @default("https://api.smmprovider.com/v2")
+  apiKey     String?
+  isMock     Boolean   @default(true)
+  active     Boolean   @default(true)
+  balance    Float?
+  currency   String    @default("INR")
+  lastSyncAt DateTime?
+  lastError  String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+model WorkerStatus {
+  id              String    @id @default("singleton")
+  lastHeartbeatAt DateTime  @default(now())
+  status          String    @default("RUNNING") // RUNNING, STOPPED, DEGRADED
+  activeWorkers   Int       @default(1)
+  lastError       String?
+  updatedAt       DateTime  @updatedAt
+}
+
+model AccessKey {
+  id         String    @id @default(cuid())
+  label      String
+  keyPrefix  String
+  keyHash    String    @unique
+  role       String    @default("ADMIN")
+  status     String    @default("ACTIVE") // ACTIVE, REVOKED, EXPIRED
+  expiresAt  DateTime?
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  action    String
+  actor     String
+  details   String
+  ipAddress String?
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+}
+
+// =====================================================================
+// Likes Analyze — persistent interval-based video monitoring sessions
+// =====================================================================
+
+model MonitoringSession {
+  id                   String                 @id @default(cuid())
+  orderRef             String                 @unique
+  serviceId            String
+  service              Service                @relation(fields: [serviceId], references: [id])
+  orderId              String?                @unique
+  order                Order?                 @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  videoUrl             String
+  videoIdentifier      String                 @default("")
+  durationMinutes      Int
+  intervalMinutes      Int
+  budgetCap            Float
+  quantityCap          Int
+  status               String                 @default("RUNNING") // RUNNING, PAUSED, STOPPED, EXPIRED, COMPLETED
+  analyticsSource      String                 @default("MOCK_ANALYTICS")
+  startedAt            DateTime
+  expiresAt            DateTime
+  lastCheckpointAt     DateTime?
+  nextCheckpointAt     DateTime?
+  // Float (double): video engagement counts exceed the 32-bit Int range.
+  initialLikes         Float?
+  initialViews         Float?
+  latestSnapshotId     String?
+  snapshotCount        Int                    @default(0)
+  missedCheckpoints    Int                    @default(0)
+  scheduleReviserCount Int                    @default(0)
+  stopNote             String?
+  snapshots            VideoSnapshot[]
+  checkpoints          MonitoringCheckpoint[]
+  events               MonitoringAuditEvent[]
+  userId               String?
+  user                 User?                  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  @@index([status, nextCheckpointAt])
+  @@index([userId])
+}
+
+model MonitoringCheckpoint {
+  id           String            @id @default(cuid())
+  sessionId    String
+  session      MonitoringSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sequence     Int
+  plannedAt    DateTime
+  executedAt   DateTime?
+  delayMs      Int?
+  status       String            @default("PENDING") // PENDING, EXECUTED, MISSED, SKIPPED, EXPIRED, PAUSED
+  retryCount   Int               @default(0)
+  errorMessage String?
+  snapshot     VideoSnapshot?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  // Guarantees one checkpoint per sequence per session (duplicate-worker safety)
+  @@unique([sessionId, sequence])
+  @@index([sessionId, status])
+}
+
+model VideoSnapshot {
+  id              String                 @id @default(cuid())
+  sessionId       String
+  session         MonitoringSession      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  checkpointId    String                @unique
+  checkpoint      MonitoringCheckpoint  @relation(fields: [checkpointId], references: [id], onDelete: Cascade)
+  sequence        Int
+  plannedAt       DateTime
+  executedAt      DateTime
+  delayMs         Int                    @default(0)
+  // Counters use Float (double precision): real video view counts exceed the
+  // 32-bit Int range (e.g. > 2.1B views) and must be representable exactly.
+  likes           Float?
+  views           Float?
+  likesDelta      Float?
+  viewsDelta      Float?
+  ratio           Float?                 // observed like/view ratio, only when views > 0
+  source          String                 @default("")
+  isFresh         Boolean                @default(true)
+  reliabilityNote String?
+  createdAt       DateTime               @default(now())
+
+  // Idempotency: one snapshot per session checkpoint sequence
+  @@unique([sessionId, sequence])
+  @@index([sessionId, executedAt])
+}
+
+model MonitoringAuditEvent {
+  id         String            @id @default(cuid())
+  sessionId  String
+  session    MonitoringSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  action     String
+  details    String
+  createdAt  DateTime          @default(now())
+
+  @@index([sessionId, createdAt])
+}
+
+// =====================================================================
+// New Order Enhancements: Bulk Add, Combo Maker & Persistent Scheduler
+// =====================================================================
+
+model BulkBatch {
+  id              String      @id @default(cuid())
+  batchRef        String      @unique // e.g. "BLK-102938"
+  status          String      @default("COMPLETED") // PENDING, PROCESSING, COMPLETED, PARTIAL, FAILED
+  totalOrders     Int
+  successOrders   Int         @default(0)
+  failedOrders    Int         @default(0)
+  totalCost       Float       @default(0)
+  userId          String?
+  user            User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  orders          Order[]
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([userId])
+}
+
+model Combo {
+  id              String           @id @default(cuid())
+  comboRef        String           @unique // e.g. "CMB-102938"
+  name            String
+  description     String?
+  active          Boolean          @default(true)
+  userId          String?
+  user            User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  items           ComboItem[]
+  executions      ComboExecution[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([userId])
+}
+
+model ComboItem {
+  id              String      @id @default(cuid())
+  comboId         String
+  combo           Combo       @relation(fields: [comboId], references: [id], onDelete: Cascade)
+  serviceId       String
+  service         Service     @relation(fields: [serviceId], references: [id])
+  defaultQuantity Int
+  targetType      String      @default("SAME_URL") // "SAME_URL" or "CUSTOM_URL"
+  customUrl       String?
+  orderIndex      Int         @default(0)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+model ComboExecution {
+  id                 String      @id @default(cuid())
+  executionRef       String      @unique // e.g. "CMBX-102938"
+  comboId            String
+  combo              Combo       @relation(fields: [comboId], references: [id], onDelete: Cascade)
+  targetUrl          String
+  status             String      @default("PENDING") // PENDING, PROCESSING, COMPLETED, PARTIAL, FAILED, CANCELLED
+  totalCost          Float       @default(0)
+  totalServices      Int         @default(0)
+  successfulServices Int         @default(0)
+  failedServices     Int         @default(0)
+  errorMessage       String?
+  userId             String?
+  user               User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  orders             Order[]
+  createdAt          DateTime    @default(now())
+  completedAt        DateTime?
+  updatedAt          DateTime    @updatedAt
+
+  @@index([userId])
+}
+
+model ScheduledOrderJob {
+  id             String      @id @default(cuid())
+  jobRef         String      @unique // e.g. "SCH-102938"
+  jobType        String      // "SINGLE", "BULK", "COMBO"
+  status         String      @default("SCHEDULED") // DRAFT, SCHEDULED, QUEUED, PROCESSING, SUBMITTED, COMPLETED, PARTIAL, FAILED, CANCELLED, PAUSED
+  scheduledFor   DateTime    // UTC timestamp of planned execution
+  timezone       String      @default("UTC")
+  payload        String      // JSON encoded configuration of the order / batch / combo
+  resultPayload  String?     // JSON encoded results
+  retryCount     Int         @default(0)
+  maxRetries     Int         @default(3)
+  errorMessage   String?
+  executedAt     DateTime?
+  userId         String?
+  user           User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  orders         Order[]
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@index([status, scheduledFor])
+  @@index([userId])
+}
