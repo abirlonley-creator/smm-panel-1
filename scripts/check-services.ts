@@ -9,7 +9,7 @@ async function main() {
   });
   console.log("Users in DB:", users.map(u => ({
     id: u.id,
-    email: u.email,
+    username: u.username,
     role: u.role,
     provider: u.providerConfig ? {
       name: u.providerConfig.name,
@@ -24,7 +24,7 @@ async function main() {
   // Test provider directly with xmediasmm.in
   const activeUser = users.find(u => u.providerConfig?.apiKey);
   if (activeUser && activeUser.providerConfig?.apiKey) {
-    console.log(`Found user with provider key: ${activeUser.email}`);
+    console.log(`Found user with provider key: ${activeUser.username}`);
     const prov = new StandardSMMv2Provider(
       activeUser.providerConfig.apiUrl,
       activeUser.providerConfig.apiKey

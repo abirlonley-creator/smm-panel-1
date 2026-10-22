@@ -4,6 +4,8 @@ import { runMonitoringTick } from "@/lib/monitoring/engine";
 import { runScheduledJobsTick } from "@/lib/scheduler/job-runner";
 import { prisma } from "@/lib/prisma";
 
+export const maxDuration = 60;
+
 export async function POST() {
   try {
     const monitoringResult = await runMonitoringTick();

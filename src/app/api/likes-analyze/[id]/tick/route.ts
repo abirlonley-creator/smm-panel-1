@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { runMonitoringTick } from "@/lib/monitoring/engine";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 /**
  * POST /api/likes-analyze/[id]/tick

@@ -16,7 +16,7 @@ async function main() {
         role: k.role,
         status: k.status,
         expiresAt: k.expiresAt,
-        isExpired: k.isExpired,
+        isExpired: k.expiresAt ? k.expiresAt < new Date() : false,
         createdAt: k.createdAt,
         userId: k.userId,
         userRole: k.user?.role,
