@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { KeyRound, ArrowRight, ShieldCheck, AlertCircle, Eye, EyeOff, Send, Lock } from "lucide-react";
+import { KeyRound, ArrowRight, Eye, EyeOff, AlertCircle, Send } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -13,32 +13,21 @@ export default function LoginPage() {
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
-    if (!passkey.trim()) {
-      setError("Please enter your passkey.");
-      return;
-    }
-
+    if (!passkey.trim()) { setError("Please enter your passkey."); return; }
     setLoading(true);
     setError(null);
-
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ passkey: passkey.trim() }),
       });
-
       const data = await res.json();
-
       if (!res.ok || !data.success) {
-        setError(data.error || "Authentication failed. Invalid or expired passkey.");
+        setError(data.error || "Invalid or expired passkey.");
         return;
       }
-
-      // Trigger navigation event so balance and navigation items update
       window.dispatchEvent(new CustomEvent("auth-changed", { detail: data }));
-
-      // Redirect to panel dashboard
       router.push("/");
       router.refresh();
     } catch (err: any) {
@@ -49,66 +38,98 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#141624] flex flex-col justify-center items-center px-4 sm:px-6 lg:px-8 py-12 relative overflow-hidden select-none">
-      {/* Background Glows */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-[#3A4EFB]/15 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-10 right-10 w-80 h-80 bg-[#E3FF3B]/10 rounded-full blur-3xl pointer-events-none" />
+    <div className="min-h-screen bg-[#0E1018] flex items-center justify-center px-4 relative overflow-hidden">
 
-      {/* Main Container */}
-      <div className="w-full max-w-md relative z-10 space-y-6">
-        {/* Branding Header */}
-        <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[#3A4EFB] text-white shadow-lg shadow-[#3A4EFB]/30 mb-2">
-            <span className="text-2xl font-black tracking-tight">A</span>
+      {/* ── Background ── */}
+      {/* Top-centre blue radial */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(ellipse 70% 50% at 50% -10%, rgba(58,78,251,0.18) 0%, transparent 70%)",
+        }}
+      />
+      {/* Bottom-right lime accent */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute bottom-0 right-0 w-[500px] h-[300px] opacity-[0.06]"
+        style={{
+          background:
+            "radial-gradient(ellipse at 100% 100%, #E3FF3B 0%, transparent 60%)",
+        }}
+      />
+      {/* Subtle dot grid */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 opacity-[0.025]"
+        style={{
+          backgroundImage: "radial-gradient(circle, #ffffff 1px, transparent 1px)",
+          backgroundSize: "28px 28px",
+        }}
+      />
+
+      {/* ── Card ── */}
+      <div className="relative z-10 w-full max-w-[400px] animate-loginIn">
+
+        {/* Logo + wordmark */}
+        <div className="flex flex-col items-center gap-4 mb-8">
+          <div className="relative">
+            <div className="w-12 h-12 rounded-2xl bg-[#3A4EFB] flex items-center justify-center shadow-lg shadow-[#3A4EFB]/40">
+              <span className="text-[22px] font-black text-white tracking-tighter leading-none">A</span>
+            </div>
+            {/* Small lime pulse dot */}
+            <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-[#E3FF3B] border-2 border-[#0E1018]" />
           </div>
-          <h1 className="text-2xl font-extrabold text-white tracking-tight flex items-center justify-center gap-2">
-            AuraSMM
-            <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-[#E3FF3B] text-[#252943]">
-              v2
-            </span>
-          </h1>
-          <p className="text-xs text-[#DEE0ED]/65 font-medium">
-            Minimalist SMM Panel & Growth Planner
-          </p>
+          <div className="text-center space-y-1">
+            <h1 className="text-[22px] font-extrabold tracking-tight text-white">
+              AuraSMM
+            </h1>
+            <p className="text-[12px] text-[#6B7280] font-medium">
+              SMM Panel &amp; Growth Planner
+            </p>
+          </div>
         </div>
 
-        {/* Auth Card */}
-        <div className="bg-[#1A1D31] border border-[#323758] rounded-3xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl relative">
-          <div className="flex items-center justify-between pb-5 border-b border-[#323758]/60 mb-5">
-            <div className="flex items-center gap-2 text-white">
-              <Lock className="w-4 h-4 text-[#E3FF3B]" />
-              <h2 className="text-sm font-bold tracking-tight">Enter Your Passkey</h2>
-            </div>
-            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#DEE0ED]/70 px-2.5 py-1 rounded-full bg-[#252943] border border-[#323758]">
-              <ShieldCheck className="w-3.5 h-3.5 text-[#3A4EFB]" />
-              Protected
-            </span>
+        {/* Auth card */}
+        <div className="rounded-2xl border border-[#1F2437] bg-[#131726] shadow-2xl shadow-black/50 overflow-hidden">
+
+          {/* Card header strip */}
+          <div className="px-6 pt-6 pb-5 border-b border-[#1F2437]">
+            <p className="text-[13px] font-semibold text-white">Sign in with passkey</p>
+            <p className="text-[11px] text-[#6B7280] mt-0.5">
+              Enter the access key shared with you to continue.
+            </p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label htmlFor="passkey-input" className="block text-xs font-semibold text-[#DEE0ED]/80 mb-2">
-                Access Passkey
+          <form onSubmit={handleLogin} className="px-6 py-5 space-y-4">
+
+            {/* Input */}
+            <div className="space-y-1.5">
+              <label
+                htmlFor="passkey-input"
+                className="block text-[11px] font-semibold uppercase tracking-widest text-[#6B7280]"
+              >
+                Passkey
               </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#DEE0ED]/40">
-                  <KeyRound className="w-4 h-4" />
-                </div>
+              <div className="relative group">
+                <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#3A4EFB]/70 pointer-events-none transition-colors group-focus-within:text-[#3A4EFB]" />
                 <input
                   id="passkey-input"
                   type={showKey ? "text" : "password"}
                   value={passkey}
-                  onChange={(e) => setPasskey(e.target.value)}
-                  placeholder="Enter your passkey..."
+                  onChange={(e) => { setPasskey(e.target.value); setError(null); }}
+                  placeholder="Enter your passkey"
                   autoFocus
                   autoComplete="current-password"
                   disabled={loading}
-                  className="w-full bg-[#141624] text-white text-sm rounded-xl pl-10 pr-10 py-3 border border-[#323758] focus:border-[#3A4EFB] focus:ring-1 focus:ring-[#3A4EFB] outline-none transition-all placeholder:text-[#DEE0ED]/30 font-mono"
+                  className="w-full bg-[#0E1018] text-white text-sm font-mono rounded-xl pl-10 pr-11 py-3 border border-[#1F2437] focus:border-[#3A4EFB] focus:ring-1 focus:ring-[#3A4EFB]/40 outline-none transition-all placeholder:text-[#374151] disabled:opacity-50"
                 />
                 <button
                   type="button"
+                  tabIndex={-1}
                   onClick={() => setShowKey(!showKey)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-[#DEE0ED]/50 hover:text-white transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-[#374151] hover:text-[#9CA3AF] transition-colors"
                   aria-label={showKey ? "Hide passkey" : "Show passkey"}
                 >
                   {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -116,26 +137,25 @@ export default function LoginPage() {
               </div>
             </div>
 
+            {/* Error */}
             {error && (
-              <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs flex items-start gap-2.5 animate-fadeIn">
-                <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-                <div className="leading-relaxed">
-                  <span className="font-semibold block">Authentication Failed</span>
-                  {error}
-                </div>
+              <div className="flex items-start gap-2.5 rounded-xl bg-red-500/8 border border-red-500/20 px-3.5 py-3 animate-loginIn">
+                <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
+                <p className="text-[11px] text-red-400 leading-relaxed">{error}</p>
               </div>
             )}
 
+            {/* Submit */}
             <button
               type="submit"
               id="enter-panel-btn"
               disabled={loading || !passkey.trim()}
-              className="w-full py-3 px-4 rounded-xl bg-[#3A4EFB] hover:bg-[#2F40DB] active:scale-[0.99] text-white text-sm font-bold transition-all shadow-lg shadow-[#3A4EFB]/25 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              className="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl bg-[#3A4EFB] hover:bg-[#2C3FE0] active:scale-[0.98] text-white text-[13px] font-bold transition-all shadow-lg shadow-[#3A4EFB]/20 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
               {loading ? (
                 <>
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span>Verifying Passkey...</span>
+                  <span className="w-4 h-4 border-2 border-white/25 border-t-white rounded-full animate-spin" />
+                  <span>Verifying…</span>
                 </>
               ) : (
                 <>
@@ -144,37 +164,39 @@ export default function LoginPage() {
                 </>
               )}
             </button>
+
           </form>
 
-          {/* Telegram Support Notice */}
-          <div className="mt-6 pt-5 border-t border-[#323758]/60 text-center">
-            <div className="flex items-center justify-center gap-1.5 text-xs text-[#DEE0ED]/70 mb-1">
-              <Send className="w-3.5 h-3.5 text-[#3A4EFB]" />
-              <span>Need access or assistance?</span>
+          {/* Footer */}
+          <div className="px-6 pb-6 pt-1">
+            <div className="rounded-xl bg-[#0E1018] border border-[#1F2437] px-4 py-3 flex items-start gap-3">
+              <Send className="w-3.5 h-3.5 text-[#3A4EFB] shrink-0 mt-0.5" />
+              <p className="text-[11px] text-[#6B7280] leading-relaxed">
+                Need a passkey?{" "}
+                <a
+                  href="https://t.me/Ghostfinds"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[#3A4EFB] font-semibold hover:text-[#7B8FFF] transition-colors"
+                >
+                  @Ghostfinds
+                </a>{" "}
+                on Telegram.
+              </p>
             </div>
-            <p className="text-xs text-[#DEE0ED]/60 leading-relaxed">
-              Need to purchase a passkey or get help setting up your provider API? Message{" "}
-              <a
-                href="https://t.me/Ghostfinds"
-                target="_blank"
-                rel="noreferrer"
-                className="text-[#3A4EFB] font-semibold underline hover:text-blue-400 transition-colors"
-              >
-                @Ghostfinds
-              </a>{" "}
-              on Telegram.
-            </p>
           </div>
         </div>
 
-        {/* Whop Botters Badge */}
-        <div className="flex items-center justify-center gap-2 text-xs text-[#DEE0ED]/40">
-          <span>Made for Whop Botters</span>
-          <span>•</span>
-          <span>Encrypted Passkeys</span>
-          <span>•</span>
-          <span>Isolated Provider APIs</span>
+        {/* Bottom trust row */}
+        <div className="flex items-center justify-center gap-4 mt-6">
+          {["Encrypted Keys", "Isolated APIs", "No Tracking"].map((t, i) => (
+            <React.Fragment key={t}>
+              <span className="text-[10px] text-[#374151] font-medium">{t}</span>
+              {i < 2 && <span className="w-1 h-1 rounded-full bg-[#1F2437]" />}
+            </React.Fragment>
+          ))}
         </div>
+
       </div>
     </div>
   );

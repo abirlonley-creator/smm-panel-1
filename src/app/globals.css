@@ -63,6 +63,15 @@ body, input, button, select, textarea {
   animation: fadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+@keyframes loginIn {
+  from { opacity: 0; transform: translateY(12px) scale(0.99); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.animate-loginIn {
+  animation: loginIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 /* Subtle bg for glassmorphism-lite overlay panels */
 .bg-white\/8  { background-color: rgba(255,255,255,0.08); }
 .bg-white\/12 { background-color: rgba(255,255,255,0.12); }
