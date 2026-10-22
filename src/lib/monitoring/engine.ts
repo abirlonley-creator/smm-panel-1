@@ -158,72 +158,96 @@ export async function createMonitoringSession(
   // (sequence 1, at t=0). Checkpoints run until they would exceed expiry.
   const checkpointCount = Math.floor(durationMinutes / intervalMinutes) + 1;
 
-  const session = await prisma.$transaction(async (tx) => {
-    const order = await tx.order.create({
-      data: {
-        orderRef,
-        serviceId: service.id,
-        targetUrl: videoUrl.trim(),
-        requestedQuantity: effectiveQuantityCap,
-        submittedQuantity: 0,
-        deliveredQuantity: 0,
-        remainingQuantity: effectiveQuantityCap,
-        failedQuantity: 0,
-        unitCost,
-        totalCost: fullCapCost,
-        isScheduled: true,
-        scheduleMode: "ADAPTIVE",
-        status: "SCHEDULED",
-        userId: userId || null,
-        notes: `Likes Analyze monitoring session. Duration ${durationMinutes}m, checkpoint every ${intervalMinutes}m. Scheduled work is reassessed at every checkpoint against confirmed delivery, remaining time, budget ${effectiveBudgetCap} and quantity limit ${effectiveQuantityCap}.`,
-      },
-    });
+  // Build checkpoint data array upfront — avoids iterating inside the transaction.
+  const checkpointData = Array.from({ length: checkpointCount }, (_, i) => ({
+    sequence: i + 1,
+    plannedAt: new Date(start.getTime() + i * intervalMinutes * 60 * 1000),
+    status: "PENDING" as const,
+  }));
 
-    const created = await tx.monitoringSession.create({
-      data: {
-        orderRef,
-        serviceId: service.id,
-        orderId: order.id,
-        videoUrl: videoUrl.trim(),
-        videoIdentifier: extractVideoIdentifier(videoUrl.trim()),
-        durationMinutes,
-        intervalMinutes,
-        budgetCap: effectiveBudgetCap,
-        quantityCap: effectiveQuantityCap,
-        status: "RUNNING",
-        analyticsSource: analyticsAdapter.name,
-        startedAt: start,
-        expiresAt,
-        nextCheckpointAt: start,
-        userId: userId || null,
-      },
-    });
+  // Use a short-timeout transaction just for the two parent rows + audit event.
+  // All checkpoints are inserted in a single createMany AFTER the transaction
+  // commits — this avoids Prisma interactive-transaction timeouts on Vercel/Supabase
+  // serverless when checkpoint counts are large (e.g. 69 for 24h / 21m).
+  let createdSession: MonitoringSession;
+  let createdOrderId: string;
 
-    const checkpoints: MonitoringCheckpoint[] = [];
-    for (let i = 0; i < checkpointCount; i++) {
-      const plannedAt = new Date(start.getTime() + i * intervalMinutes * 60 * 1000);
-      checkpoints.push(
-        await tx.monitoringCheckpoint.create({
-          data: {
-            sessionId: created.id,
-            sequence: i + 1,
-            plannedAt,
-            status: "PENDING",
-          },
-        })
-      );
-    }
+  const txResult = await prisma.$transaction(
+    async (tx) => {
+      const order = await tx.order.create({
+        data: {
+          orderRef,
+          serviceId: service.id,
+          targetUrl: videoUrl.trim(),
+          requestedQuantity: effectiveQuantityCap,
+          submittedQuantity: 0,
+          deliveredQuantity: 0,
+          remainingQuantity: effectiveQuantityCap,
+          failedQuantity: 0,
+          unitCost,
+          totalCost: fullCapCost,
+          isScheduled: true,
+          scheduleMode: "ADAPTIVE",
+          status: "SCHEDULED",
+          userId: userId || null,
+          notes: `Likes Analyze monitoring session. Duration ${durationMinutes}m, checkpoint every ${intervalMinutes}m. Scheduled work is reassessed at every checkpoint against confirmed delivery, remaining time, budget ${effectiveBudgetCap} and quantity limit ${effectiveQuantityCap}.`,
+        },
+      });
 
-    await tx.monitoringAuditEvent.create({
-      data: {
-        sessionId: created.id,
-        action: "SESSION_CREATED",
-        details: `Monitoring session ${orderRef} created. Checkpoints: ${checkpointCount} (initial snapshot at t=0 counts as checkpoint #1), interval ${intervalMinutes}m, duration ${durationMinutes}m, budget cap ${budgetCap}, quantity cap ${quantityCap}, expiry ${expiresAt.toISOString()}.`,
-      },
-    });
+      const sess = await tx.monitoringSession.create({
+        data: {
+          orderRef,
+          serviceId: service.id,
+          orderId: order.id,
+          videoUrl: videoUrl.trim(),
+          videoIdentifier: extractVideoIdentifier(videoUrl.trim()),
+          durationMinutes,
+          intervalMinutes,
+          budgetCap: effectiveBudgetCap,
+          quantityCap: effectiveQuantityCap,
+          status: "RUNNING",
+          analyticsSource: analyticsAdapter.name,
+          startedAt: start,
+          expiresAt,
+          nextCheckpointAt: start,
+          userId: userId || null,
+        },
+      });
 
-    return { ...created, checkpoints };
+      await tx.monitoringAuditEvent.create({
+        data: {
+          sessionId: sess.id,
+          action: "SESSION_CREATED",
+          details: `Monitoring session ${orderRef} created. Checkpoints: ${checkpointCount} (initial snapshot at t=0 counts as checkpoint #1), interval ${intervalMinutes}m, duration ${durationMinutes}m, budget cap ${budgetCap}, quantity cap ${quantityCap}, expiry ${expiresAt.toISOString()}.`,
+        },
+      });
+
+      return { sess, orderId: order.id };
+    },
+    { timeout: 10_000 } // 10s — plenty for 3 inserts on Supabase
+  );
+
+  createdSession = txResult.sess;
+  createdOrderId = txResult.orderId;
+
+  // Bulk-insert all checkpoints in ONE SQL statement — fast regardless of count.
+  await prisma.monitoringCheckpoint.createMany({
+    data: checkpointData.map((c) => ({
+      sessionId: createdSession.id,
+      sequence: c.sequence,
+      plannedAt: c.plannedAt,
+      status: c.status,
+    })),
+    skipDuplicates: true,
   });
+
+  // Re-fetch checkpoints so the return shape matches the original contract.
+  const checkpoints = await prisma.monitoringCheckpoint.findMany({
+    where: { sessionId: createdSession.id },
+    orderBy: { sequence: "asc" },
+  });
+
+  const session = { ...createdSession, checkpoints };
 
   return { ok: true, session };
 }
