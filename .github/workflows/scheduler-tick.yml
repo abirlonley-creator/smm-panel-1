@@ -1,0 +1,26 @@
+name: 24-7 Cloud Scheduler Tick
+
+on:
+  schedule:
+    # Trigger tick every 5 minutes around the clock
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  tick:
+    name: Run Cloud Tick Cycle
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Ping Scheduler Tick Endpoint
+        run: |
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" https://smm-panel-1.vercel.app/api/scheduler/tick)
+          echo "$RESPONSE"
+          STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS:" | cut -d':' -f2)
+          if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 300 ]; then
+            echo "Tick completed successfully."
+            exit 0
+          else
+            echo "Tick returned HTTP $STATUS"
+            exit 1
+          fi
