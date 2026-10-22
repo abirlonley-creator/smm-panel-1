@@ -406,10 +406,33 @@ export function LikesAnalyzeMonitor({ service, targetUrl }: LikesAnalyzeMonitorP
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || "Failed to start.");
+
+      const sessionId = data.session?.id;
+
       await loadSessions();
       setSelectedSessionId(null);
       setState(null);
-      setActionMsg({ text: "Monitoring session started.", type: "success" });
+      setActionMsg({ text: "Monitoring session started. Taking first snapshot…", type: "success" });
+
+      // Trigger the first tick asynchronously — do not await in the UI.
+      // The analytics call takes 8-15s, so we fire it and let the user see results on next poll.
+      if (sessionId) {
+        fetch(`/api/likes-analyze/${sessionId}/tick`, { method: "POST" })
+          .then(async (r) => {
+            const td = await r.json().catch(() => ({}));
+            if (r.ok && td.success) {
+              await loadSessions();
+              if (sessionId) await loadSessionState(sessionId);
+              setActionMsg({ text: "First snapshot complete. Monitoring active.", type: "success" });
+            }
+          })
+          .catch(() => {
+            // Tick error is logged server-side; UI will pick up state on next poll
+          });
+
+        // Also select this session for immediate display
+        setSelectedSessionId(sessionId);
+      }
     } catch (err: any) {
       setCreateError(err.message || "Failed to start.");
     } finally { setCreating(false); }
