@@ -27,8 +27,8 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Allow health check endpoint for monitoring probes
-  if (pathname === "/api/health") {
+  // Allow health check and scheduler tick endpoints for monitoring & automated crons
+  if (pathname === "/api/health" || pathname === "/api/scheduler/tick") {
     return NextResponse.next();
   }
 
