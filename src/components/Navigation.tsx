@@ -22,6 +22,7 @@ import {
   Clock,
   Shield,
   KeyRound,
+  Tag,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { DEFAULT_PROVIDER_BALANCE_REFRESH_INTERVAL_MS } from "@/lib/provider/balance";
@@ -29,6 +30,7 @@ import { formatProviderBalance } from "@/lib/currency";
 
 const ALL_NAV_ITEMS = [
   { href: "/", label: "Overview", icon: Compass, adminOnly: false },
+  { href: "/pricing", label: "Plans & Pricing", icon: Tag, adminOnly: false },
   { href: "/order", label: "New Order", icon: PlusCircle, adminOnly: false },
   { href: "/engagement", label: "Full Engagement", icon: TrendingUp, adminOnly: false },
   { href: "/combos", label: "Combo Orders", icon: Boxes, adminOnly: false },

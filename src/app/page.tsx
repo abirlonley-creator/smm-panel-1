@@ -12,6 +12,7 @@ import {
   Zap,
   Activity,
   BarChart3,
+  Tag,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -117,6 +118,13 @@ export default async function OverviewPage() {
               >
                 <TrendingUp className="w-4 h-4 text-[#E3FF3B]" />
                 Growth Planner
+              </Link>
+              <Link
+                href="/pricing"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-[#E3FF3B]/15 border border-[#E3FF3B]/30 px-3.5 py-2.5 text-xs font-semibold text-[#E3FF3B] hover:bg-[#E3FF3B]/25 transition-all press-scale"
+              >
+                <Tag className="w-3.5 h-3.5" />
+                Plans & Pricing
               </Link>
               <Link
                 href="/services"

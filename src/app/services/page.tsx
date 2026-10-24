@@ -15,6 +15,9 @@ import {
   Ban,
   Tag,
   RefreshCw,
+  Sparkles,
+  ArrowRight,
+  TrendingUp,
 } from "lucide-react";
 
 interface ServiceItem {
@@ -211,6 +214,33 @@ export default function ServicesPage() {
                 : `Showing ${firstResult}–${lastResult} of ${totalServices} services`}
           </div>
         </div>
+      </div>
+
+      {/* ── Plan Comparison Banner ────────────────────────────── */}
+      <div className="bg-gradient-to-r from-[#252943] via-[#2A2E4B] to-[#323758] rounded-2xl p-4 sm:p-5 text-white border border-[#323758] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-subtle">
+        <div className="flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0 border border-white/10">
+            <Sparkles className="w-5 h-5 text-[#E3FF3B]" />
+          </div>
+          <div>
+            <h2 className="text-sm font-bold flex items-center gap-2">
+              <span>Comparing Delivery Architectures?</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#E3FF3B] text-[#252943]">
+                Visual Guide
+              </span>
+            </h2>
+            <p className="text-xs text-[#DEE0ED]/70 mt-0.5">
+              Explore our structured comparison between Instant Execution, Drip-Feed Pacing, and Natural S-Curve Engagement.
+            </p>
+          </div>
+        </div>
+        <Link
+          href="/pricing"
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#3A4EFB] hover:bg-[#2C3FE0] text-xs font-bold text-white transition-all press-scale shrink-0 shadow-sm"
+        >
+          <span>Compare Plans & Pricing</span>
+          <ArrowRight className="w-3.5 h-3.5 text-[#E3FF3B]" />
+        </Link>
       </div>
 
       {/* Search Bar with Dedicated Search Button */}
