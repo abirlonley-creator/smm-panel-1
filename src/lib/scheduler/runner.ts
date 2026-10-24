@@ -148,7 +148,7 @@ export async function runSchedulerTick(): Promise<SchedulerTickResult> {
       }
 
       const submission = await adapter.createOrder({
-        serviceExternalId: step.order.service.externalId,
+        serviceExternalId: step.order.service.providerServiceId || step.order.service.externalId,
         targetUrl: step.order.targetUrl,
         quantity: step.quantity,
       });

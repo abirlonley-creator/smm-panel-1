@@ -30,11 +30,13 @@ import { formatProviderBalance } from "@/lib/currency";
 const ALL_NAV_ITEMS = [
   { href: "/", label: "Overview", icon: Compass, adminOnly: false },
   { href: "/order", label: "New Order", icon: PlusCircle, adminOnly: false },
+  { href: "/engagement", label: "Full Engagement", icon: TrendingUp, adminOnly: false },
   { href: "/combos", label: "Combo Orders", icon: Boxes, adminOnly: false },
-  { href: "/planner", label: "Growth Planner", icon: TrendingUp, adminOnly: false },
+  { href: "/planner", label: "Growth Planner", icon: Clock, adminOnly: false },
   { href: "/likes-analyze", label: "Likes Analyze", icon: Radar, adminOnly: false },
   { href: "/orders", label: "Orders", icon: Layers, adminOnly: false },
   { href: "/services", label: "Services Catalog", icon: ListTree, adminOnly: false },
+  { href: "/wallet", label: "Wallet", icon: Wallet, adminOnly: false },
   { href: "/settings", label: "Settings", icon: Settings, adminOnly: false },
   { href: "/admin", label: "Administration", icon: ShieldCheck, adminOnly: true },
 ];

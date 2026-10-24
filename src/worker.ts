@@ -6,6 +6,8 @@ import { runSchedulerTick } from "./lib/scheduler/runner";
 import { reconcileScheduledOrderStatus } from "./lib/scheduler/scheduled-order-status";
 import { runMonitoringTick } from "./lib/monitoring/engine";
 import { runScheduledJobsTick } from "./lib/scheduler/job-runner";
+import { runEngagementTick } from "./lib/engagement/worker";
+import { runDripFeedTick } from "./lib/orders/drip-feed-worker";
 
 interface WorkerStats {
   ticks: number;
@@ -181,6 +183,12 @@ export async function executeWorkerCycle(): Promise<{
 
   // 1b. Run due persistent future-scheduled orders (Single, Bulk, Combo)
   const scheduledJobsRes = await runScheduledJobsTick();
+
+  // 1c. Run due Full Engagement organic runs (S-curve batches)
+  const engagementRes = await runEngagementTick();
+
+  // 1d. Run due Drip Feed random range runs (staggered batches)
+  await runDripFeedTick();
 
   // 2. Sync active order statuses with provider
   const ordersSynced = await syncActiveOrders(adapter);

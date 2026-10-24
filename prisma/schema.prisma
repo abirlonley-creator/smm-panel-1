@@ -22,34 +22,57 @@ model ProviderConfig {
   updatedAt   DateTime  @updatedAt
 }
 
+model Provider {
+  id              String          @id @default(cuid())
+  name            String          // e.g. "Zeofame", "xmedia", "Standard SMM Provider"
+  apiUrl          String
+  apiKeyEncrypted String?         // AES-256-GCM encrypted
+  isMock          Boolean         @default(false)
+  active          Boolean         @default(true)
+  currency        String          @default("USD")
+  balance         Float?
+  lastSyncAt      DateTime?
+  services        Service[]
+  orders          Order[]
+  engagementRuns  EngagementRun[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
 model Service {
-  id                  String   @id @default(cuid())
+  id                  String          @id @default(cuid())
   externalId          String
   name                String
-  type                String   @default("Default")
+  type                String          @default("Default")
   platform            String
   category            String
   description         String
   minQuantity         Int
   maxQuantity         Int
   ratePer1000         Float
-  refillSupported     Boolean  @default(false)
-  cancelSupported     Boolean  @default(true)
-  dripFeedSupported   Boolean  @default(false)
-  dripFeedMinInterval Int      @default(10)
-  dripFeedMaxInterval Int      @default(1440)
+  refillSupported     Boolean         @default(false)
+  cancelSupported     Boolean         @default(true)
+  dripFeedSupported   Boolean         @default(false)
+  dripFeedMinInterval Int             @default(10)
+  dripFeedMaxInterval Int             @default(1440)
   restrictions        String?
   providerEndpoint    String?
-  isMock              Boolean  @default(false)
-  active              Boolean  @default(true)
+  isMock              Boolean         @default(false)
+  active              Boolean         @default(true)
+  providerId          String?
+  provider            Provider?       @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  providerServiceId   String?
   orders              Order[]
   monitoringSessions  MonitoringSession[]
   comboItems          ComboItem[]
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  engagementRuns      EngagementRun[]
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
 
   @@index([providerEndpoint, active])
   @@index([externalId])
+  @@index([providerId])
+  @@unique([providerId, externalId])
 }
 
 model Order {
@@ -57,6 +80,8 @@ model Order {
   orderRef          String                  @unique
   serviceId         String
   service           Service                 @relation(fields: [serviceId], references: [id])
+  providerId        String?
+  provider          Provider?               @relation(fields: [providerId], references: [id], onDelete: SetNull)
   targetUrl         String
   requestedQuantity Int
   submittedQuantity Int                     @default(0)
@@ -66,7 +91,7 @@ model Order {
   unitCost          Float
   totalCost         Float
   isScheduled       Boolean                 @default(false)
-  scheduleMode      String?                 // "INSTANT", "EVEN_DRIP", "FRONT_LOADED", "GRADUAL_RAMP", "CUSTOM", "ADAPTIVE"
+  scheduleMode      String?                 // "INSTANT", "EVEN_DRIP", "FRONT_LOADED", "GRADUAL_RAMP", "CUSTOM", "ADAPTIVE", "DRIP_FEED"
   status            String                  @default("PENDING") // DRAFT, SCHEDULED, PENDING, PROCESSING, PAUSED, COMPLETED, PARTIAL, FAILED, CANCELLED, REQUIRES_RECONCILIATION
   providerOrderId   String?
   refillId          String?
@@ -84,10 +109,12 @@ model Order {
   steps             ScheduledDeliveryStep[]
   providerRecords   ProviderRequestRecord[]
   monitoringSession MonitoringSession?
+  dripFeedRuns      DripFeedRun[]
   createdAt         DateTime                @default(now())
   updatedAt         DateTime                @updatedAt
 
   @@index([userId])
+  @@index([providerId])
 }
 
 model ScheduledDeliveryStep {
@@ -123,22 +150,26 @@ model ProviderRequestRecord {
 }
 
 model User {
-  id             String              @id @default(cuid())
-  username       String              @unique
-  role           String              @default("USER") // ADMIN | USER
-  status         String              @default("ACTIVE") // ACTIVE | DISABLED | REVOKED | EXPIRED
-  passkeys       Passkey[]
-  sessions       Session[]
-  providerConfig UserProviderConfig?
+  id                 String                  @id @default(cuid())
+  username           String                  @unique
+  role               String                  @default("USER") // ADMIN | USER
+  status             String                  @default("ACTIVE") // ACTIVE | DISABLED | REVOKED | EXPIRED
+  walletBalance      Float                   @default(1000.0) // INR wallet balance
+  passkeys           Passkey[]
+  sessions           Session[]
+  providerConfig     UserProviderConfig?
+  providerConnections UserProviderConnection[]
+  walletTransactions WalletTransaction[]
   orders             Order[]
+  engagementOrders   EngagementOrder[]
   scheduledJobs      ScheduledOrderJob[]
   auditLogs          AuditLog[]
   monitoringSessions MonitoringSession[]
   combos             Combo[]
   comboExecutions    ComboExecution[]
   bulkBatches        BulkBatch[]
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
 }
 
 model Passkey {
@@ -189,6 +220,40 @@ model UserProviderConfig {
   lastError  String?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
+}
+
+model UserProviderConnection {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String    // e.g. "Zeofame", "xmedia"
+  apiUrl          String
+  apiKeyEncrypted String?   // AES-256-GCM encrypted
+  isMock          Boolean   @default(false)
+  active          Boolean   @default(true)
+  balance         Float?
+  currency        String    @default("USD")
+  lastSyncAt      DateTime?
+  lastError       String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([userId, name])
+  @@index([userId, active])
+}
+
+model WalletTransaction {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type         String    // "CREDIT" | "DEBIT" | "REFUND" | "RESERVATION"
+  amount       Float     // in INR
+  balanceAfter Float
+  referenceId  String?   // orderRef, runId, or rechargeRef
+  description  String
+  createdAt    DateTime  @default(now())
+
+  @@index([userId, createdAt])
 }
 
 model WorkerStatus {
@@ -419,4 +484,86 @@ model ScheduledOrderJob {
 
   @@index([status, scheduledFor])
   @@index([userId])
+}
+
+// =====================================================================
+// Full Engagement (Organic S-Curve Delivery)
+// =====================================================================
+
+model EngagementOrder {
+  id                String          @id @default(cuid())
+  orderRef          String          @unique // e.g. "ENG-102938"
+  userId            String?
+  user              User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  targetUrl         String
+  platform          String          // "Instagram" | "TikTok"
+  baseViews         Int
+  durationHours     Int             @default(24)
+  seed              String          // Mulberry32 seed for 100% reproducible curves
+  status            String          @default("PROCESSING") // PENDING, PROCESSING, COMPLETED, PARTIAL, FAILED, CANCELLED
+  totalCost         Float           @default(0)
+  refundedAmount    Float           @default(0)
+  plannedViews      Int             @default(0)
+  plannedLikes      Int             @default(0)
+  plannedShares     Int             @default(0)
+  plannedSaves      Int             @default(0)
+  plannedComments   Int             @default(0)
+  deliveredViews    Int             @default(0)
+  deliveredLikes    Int             @default(0)
+  deliveredShares   Int             @default(0)
+  deliveredSaves    Int             @default(0)
+  deliveredComments Int             @default(0)
+  runs              EngagementRun[]
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+model EngagementRun {
+  id                String          @id @default(cuid())
+  engagementOrderId String
+  engagementOrder   EngagementOrder @relation(fields: [engagementOrderId], references: [id], onDelete: Cascade)
+  engagementType    String          // "views" | "likes" | "shares" | "saves" | "comments"
+  serviceId         String?
+  service           Service?        @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  providerId        String?
+  provider          Provider?       @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  scheduledAt       DateTime
+  quantity          Int
+  status            String          @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED
+  providerOrderId   String?
+  attempts          Int             @default(0)
+  lastAttemptAt     DateTime?
+  errorMessage      String?
+  cost              Float           @default(0)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([status, scheduledAt])
+  @@index([engagementOrderId, engagementType])
+}
+
+// =====================================================================
+// Drip Feed Random Range Runs
+// =====================================================================
+
+model DripFeedRun {
+  id              String    @id @default(cuid())
+  orderId         String
+  order           Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  runNumber       Int
+  scheduledAt     DateTime
+  quantity        Int
+  status          String    @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED
+  providerOrderId String?
+  attempts        Int       @default(0)
+  errorMessage    String?
+  cost            Float     @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([status, scheduledAt])
+  @@index([orderId])
 }

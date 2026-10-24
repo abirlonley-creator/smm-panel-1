@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { runSchedulerTick } from "@/lib/scheduler/runner";
 import { runMonitoringTick } from "@/lib/monitoring/engine";
 import { runScheduledJobsTick } from "@/lib/scheduler/job-runner";
+import { runEngagementTick } from "@/lib/engagement/worker";
+import { runDripFeedTick } from "@/lib/orders/drip-feed-worker";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -12,17 +14,23 @@ export const maxDuration = 60;
  * 1. Likes Analyze monitoring sessions (claims due checkpoints, captures snapshots, computes view batches)
  * 2. Scheduled delivery steps (submits due view batches to provider)
  * 3. Scheduled order jobs (bulk orders, combo jobs)
+ * 4. Full Engagement organic runs (S-curve batches and auto-refunds)
+ * 5. Drip Feed random range runs (staggered batches and auto-refunds)
  */
 async function executeTickCycle() {
   const monitoringResult = await runMonitoringTick();
   const result = await runSchedulerTick();
   const scheduledJobsResult = await runScheduledJobsTick();
+  const engagementResult = await runEngagementTick();
+  const dripFeedResult = await runDripFeedTick();
   return {
     success: true,
     timestamp: new Date().toISOString(),
     monitoring: monitoringResult,
     deliverySteps: result,
     scheduledJobs: scheduledJobsResult,
+    engagementRuns: engagementResult,
+    dripFeedRuns: dripFeedResult,
     ...result,
   };
 }

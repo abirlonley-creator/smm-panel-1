@@ -20,6 +20,9 @@ import {
 interface ServiceItem {
   id: string;
   externalId: string;
+  providerServiceId?: string;
+  providerId?: string;
+  providerName?: string;
   name: string;
   type?: string;
   platform: string;
@@ -67,6 +70,8 @@ export default function ServicesPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [selectedPlatform, setSelectedPlatform] = useState("All");
+  const [selectedProviderId, setSelectedProviderId] = useState("");
+  const [providers, setProviders] = useState<{ id: string; name: string; currency: string }[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [providerInfo, setProviderInfo] = useState<ProviderInfo | null>(null);
   
@@ -79,6 +84,7 @@ export default function ServicesPage() {
     searchParam: string,
     page: number,
     platform: string,
+    providerId: string,
     signal: AbortSignal,
     forceRefresh: boolean = false
   ) => {
@@ -90,6 +96,7 @@ export default function ServicesPage() {
         params.set("search", searchParam.trim());
       }
       if (platform !== "All") params.set("platform", platform);
+      if (providerId) params.set("providerId", providerId);
       params.set("page", String(page));
       params.set("pageSize", String(PAGE_SIZE));
       if (forceRefresh) params.set("refresh", "true");
@@ -106,6 +113,7 @@ export default function ServicesPage() {
         setServices(data.services);
         setTotalServices(data.totalServices ?? data.services.length);
         if (data.provider) setProviderInfo(data.provider);
+        if (Array.isArray(data.providers)) setProviders(data.providers);
       }
     } catch (err) {
       if (!signal.aborted) {
@@ -121,15 +129,15 @@ export default function ServicesPage() {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetchServices(activeQuery, currentPage, selectedPlatform, controller.signal);
+    fetchServices(activeQuery, currentPage, selectedPlatform, selectedProviderId, controller.signal);
     return () => controller.abort();
-  }, [activeQuery, currentPage, selectedPlatform, fetchServices, loadAttempt]);
+  }, [activeQuery, currentPage, selectedPlatform, selectedProviderId, fetchServices, loadAttempt]);
 
   async function handleManualSync() {
     setRefreshing(true);
     try {
       const controller = new AbortController();
-      await fetchServices(activeQuery, currentPage, selectedPlatform, controller.signal, true);
+      await fetchServices(activeQuery, currentPage, selectedPlatform, selectedProviderId, controller.signal, true);
     } finally {
       setRefreshing(false);
     }
@@ -272,8 +280,29 @@ export default function ServicesPage() {
             ))}
           </div>
 
-          {/* Quick ID shortcuts */}
-          <div className="flex items-center gap-1.5 text-[11px] text-[#252943]/60 flex-wrap">
+          {/* Provider Filter & Quick ID shortcuts */}
+          <div className="flex items-center gap-3 text-[11px] text-[#252943]/60 flex-wrap">
+            {providers.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                <span className="font-semibold text-[#252943]/60">Provider:</span>
+                <select
+                  value={selectedProviderId}
+                  onChange={(e) => {
+                    setSelectedProviderId(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="bg-[#F8F9FD] border border-[#DEE0ED] rounded-lg px-2 py-1 text-xs font-semibold text-[#252943] focus:border-[#3A4EFB]"
+                >
+                  <option value="">All Providers</option>
+                  {providers.map((pr) => (
+                    <option key={pr.id} value={pr.id}>
+                      {pr.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <span className="font-medium text-[#252943]/50">Quick IDs:</span>
             {["1", "2", "101", "201", "301", "401"].map((id) => (
               <button
@@ -358,24 +387,31 @@ export default function ServicesPage() {
               <tbody className="divide-y divide-[#DEE0ED]/60">
                 {filtered.map((s) => (
                   <tr key={s.id} className="hover:bg-[#F8F9FD]/60 transition-colors">
-                    {/* Service ID with Quick Copy */}
+                    {/* Service ID with Quick Copy & Provider Badge */}
                     <td className="py-3.5 px-4 font-bold text-[#252943]">
-                      <button
-                        onClick={() => {
-                          navigator.clipboard.writeText(s.externalId);
-                          setCopiedId(s.externalId);
-                          setTimeout(() => setCopiedId(null), 1500);
-                        }}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#DEE0ED]/60 hover:bg-[#DEE0ED] text-xs font-bold text-[#252943] transition-colors"
-                        title="Click to copy Service ID"
-                      >
-                        <span>#{s.externalId}</span>
-                        {copiedId === s.externalId ? (
-                          <Check className="w-3 h-3 text-emerald-600" />
-                        ) : (
-                          <Copy className="w-3 h-3 text-[#252943]/40" />
+                      <div className="flex flex-col gap-1 items-start">
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(s.externalId);
+                            setCopiedId(s.externalId);
+                            setTimeout(() => setCopiedId(null), 1500);
+                          }}
+                          className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#DEE0ED]/60 hover:bg-[#DEE0ED] text-xs font-bold text-[#252943] transition-colors"
+                          title="Click to copy Service ID"
+                        >
+                          <span>#{s.externalId}</span>
+                          {copiedId === s.externalId ? (
+                            <Check className="w-3 h-3 text-emerald-600" />
+                          ) : (
+                            <Copy className="w-3 h-3 text-[#252943]/40" />
+                          )}
+                        </button>
+                        {s.providerName && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200">
+                            {s.providerName}
+                          </span>
                         )}
-                      </button>
+                      </div>
                     </td>
 
                     <td className="py-3.5 px-4 max-w-sm">

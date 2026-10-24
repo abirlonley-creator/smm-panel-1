@@ -4,15 +4,17 @@ import { getActiveProvider } from "@/lib/provider/adapter";
 import { getAuthSession } from "@/lib/auth/session";
 import { calculateGrowthPlan } from "@/lib/scheduler/calculator";
 import { ScheduleMode } from "@/lib/types";
+import { generateDripFeedSequence } from "@/lib/orders/drip-feed-randomizer";
 import { z } from "zod";
 
 const createOrderSchema = z.object({
   serviceId: z.string().min(1, "Service ID is required"),
   targetUrl: z.string().url("A valid target URL is required"),
-  requestedQuantity: z.number().int().positive("Quantity must be greater than 0"),
+  requestedQuantity: z.number().int().positive("Quantity must be greater than 0").optional().default(100),
   scheduleMode: z
     .enum([
       "INSTANT",
+      "DRIP_FEED",
       "EVEN_DRIP",
       "FRONT_LOADED",
       "GRADUAL_RAMP",
@@ -29,6 +31,10 @@ const createOrderSchema = z.object({
       "LONG_TAIL",
     ])
     .default("INSTANT"),
+  dripMinQuantity: z.number().int().positive().optional(),
+  dripMaxQuantity: z.number().int().positive().optional(),
+  dripRuns: z.number().int().min(1).max(100).optional(),
+  dripIntervalMinutes: z.number().int().min(1).max(10080).optional(),
   timingMode: z.enum(["MODE_A", "MODE_B", "CUSTOM"]).optional().default("MODE_B"),
   stepsCount: z.number().int().min(1).max(30).optional().default(1),
   intervalMinutes: z.number().int().min(5).max(10080).optional().default(60),
@@ -80,25 +86,27 @@ export async function POST(request: Request) {
       );
     }
 
-    // Validate quantities strictly against service rules
-    if (requestedQuantity < service.minQuantity) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Minimum allowed order quantity for this service is ${service.minQuantity.toLocaleString()}.`,
-        },
-        { status: 400 }
-      );
-    }
+    // Validate quantities strictly against service rules for standard/scheduled orders
+    if (scheduleMode !== "DRIP_FEED") {
+      if (requestedQuantity < service.minQuantity) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Minimum allowed order quantity for this service is ${service.minQuantity.toLocaleString()}.`,
+          },
+          { status: 400 }
+        );
+      }
 
-    if (requestedQuantity > service.maxQuantity) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Maximum allowed order quantity for this service is ${service.maxQuantity.toLocaleString()}.`,
-        },
-        { status: 400 }
-      );
+      if (requestedQuantity > service.maxQuantity) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Maximum allowed order quantity for this service is ${service.maxQuantity.toLocaleString()}.`,
+          },
+          { status: 400 }
+        );
+      }
     }
 
     const session = await getAuthSession(request);
@@ -135,14 +143,130 @@ export async function POST(request: Request) {
     }
 
     const unitCost = service.ratePer1000 / 1000;
-    const totalCost = Number(((requestedQuantity / 1000) * service.ratePer1000).toFixed(4));
     const orderRef = `SMM-${Math.floor(100000 + Math.random() * 900000)}`;
+
+    // Case 0: Drip Feed Random Range Order
+    if (scheduleMode === "DRIP_FEED") {
+      const minQty = parsed.data.dripMinQuantity ?? service.minQuantity;
+      const maxQty = parsed.data.dripMaxQuantity ?? minQty;
+      const runs = parsed.data.dripRuns ?? 5;
+      const interval = parsed.data.dripIntervalMinutes ?? 60;
+
+      let dripPlan;
+      try {
+        dripPlan = generateDripFeedSequence({
+          minQuantityPerRun: minQty,
+          maxQuantityPerRun: maxQty,
+          runsCount: runs,
+          intervalMinutes: interval,
+          serviceMin: service.minQuantity,
+          serviceMax: service.maxQuantity,
+          ratePer1000: service.ratePer1000,
+        });
+      } catch (err: any) {
+        return NextResponse.json(
+          { success: false, error: err.message || "Failed to generate drip feed plan" },
+          { status: 400 }
+        );
+      }
+
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      const currentBalance = user?.walletBalance ?? 0;
+      if (currentBalance < dripPlan.actualFinalCharge) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Insufficient wallet balance. Total cost is ₹${dripPlan.actualFinalCharge.toFixed(2)}, but your current balance is ₹${currentBalance.toFixed(2)}. Please recharge your wallet.`,
+            required: dripPlan.actualFinalCharge,
+            currentBalance,
+          },
+          { status: 402 }
+        );
+      }
+
+      const order = await prisma.$transaction(async (tx) => {
+        const updatedUser = await tx.user.update({
+          where: { id: userId },
+          data: { walletBalance: { decrement: dripPlan.actualFinalCharge } },
+        });
+
+        await tx.walletTransaction.create({
+          data: {
+            userId,
+            type: "DEBIT",
+            amount: dripPlan.actualFinalCharge,
+            balanceAfter: updatedUser.walletBalance,
+            referenceId: orderRef,
+            description: `Drip Feed order ${orderRef} (${dripPlan.runsCount} runs, total ${dripPlan.actualTotalQuantity} units)`,
+          },
+        });
+
+        const newOrder = await tx.order.create({
+          data: {
+            orderRef,
+            serviceId: service.id,
+            providerId: service.providerId,
+            targetUrl,
+            requestedQuantity: dripPlan.actualTotalQuantity,
+            submittedQuantity: 0,
+            deliveredQuantity: 0,
+            remainingQuantity: dripPlan.actualTotalQuantity,
+            failedQuantity: 0,
+            unitCost,
+            totalCost: dripPlan.actualFinalCharge,
+            isScheduled: true,
+            scheduleMode: "DRIP_FEED",
+            status: "SCHEDULED",
+            userId,
+          },
+        });
+
+        const now = new Date();
+        for (let i = 0; i < dripPlan.quantities.length; i++) {
+          const runQty = dripPlan.quantities[i];
+          const scheduledAt = new Date(now.getTime() + i * dripPlan.intervalMinutes * 60 * 1000);
+          const runCost = Number(((runQty / 1000) * service.ratePer1000).toFixed(4));
+
+          await tx.dripFeedRun.create({
+            data: {
+              orderId: newOrder.id,
+              runNumber: i + 1,
+              scheduledAt,
+              quantity: runQty,
+              status: "PENDING",
+              cost: runCost,
+            },
+          });
+        }
+
+        return newOrder;
+      });
+
+      await prisma.auditLog.create({
+        data: {
+          action: "DRIP_FEED_ORDER_PLACED",
+          actor: "Customer",
+          details: `Drip Feed order ${orderRef} created with ${dripPlan.runsCount} runs (range ${minQty}-${maxQty})`,
+          userId,
+        },
+      });
+
+      const fullOrder = await prisma.order.findUnique({
+        where: { id: order.id },
+        include: { service: true, dripFeedRuns: { orderBy: { runNumber: "asc" } } },
+      });
+
+      return NextResponse.json({ success: true, order: fullOrder, dripPlan });
+    }
+
+    const totalCost = Number(((requestedQuantity / 1000) * service.ratePer1000).toFixed(4));
 
     // Case A: Instant Order Submission
     if (scheduleMode === "INSTANT" || stepsCount === 1) {
       const { adapter } = await getActiveProvider(userId);
+      const targetProviderServiceId = service.providerServiceId || service.externalId;
       const providerRes = await adapter.createOrder({
-        serviceExternalId: service.externalId,
+        serviceExternalId: targetProviderServiceId,
         targetUrl,
         quantity: requestedQuantity,
       });
@@ -153,6 +277,7 @@ export async function POST(request: Request) {
           data: {
             orderRef,
             serviceId: service.id,
+            providerId: service.providerId,
             targetUrl,
             requestedQuantity,
             submittedQuantity: 0,
@@ -193,6 +318,7 @@ export async function POST(request: Request) {
         data: {
           orderRef,
           serviceId: service.id,
+          providerId: service.providerId,
           targetUrl,
           requestedQuantity,
           submittedQuantity: requestedQuantity,
@@ -253,6 +379,7 @@ export async function POST(request: Request) {
         data: {
           orderRef,
           serviceId: service.id,
+          providerId: service.providerId,
           targetUrl,
           requestedQuantity,
           submittedQuantity: 0,

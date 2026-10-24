@@ -61,6 +61,9 @@ export interface GeneratedOrderItem {
 interface ServiceItem {
   id: string;
   externalId: string;
+  providerServiceId?: string;
+  providerId?: string;
+  providerName?: string;
   name: string;
   type?: string;
   platform: string;
@@ -142,6 +145,15 @@ function NewOrderPageContent() {
   const [quantity, setQuantity] = useState<number | "">("");
   const [isPacingMode, setIsPacingMode] = useState(false);
   const [pacingPlan, setPacingPlan] = useState<ScheduleCalculationResult | null>(null);
+
+  // Feature 3: Drip Feed Random Range State
+  const [deliveryStrategy, setDeliveryStrategy] = useState<"INSTANT" | "PACING" | "DRIP_FEED">("INSTANT");
+  const [dripMinQty, setDripMinQty] = useState<number>(10);
+  const [dripMaxQty, setDripMaxQty] = useState<number>(16);
+  const [dripRunsCount, setDripRunsCount] = useState<number>(6);
+  const [dripInterval, setDripInterval] = useState<number>(60);
+  const [dripPreviewPlan, setDripPreviewPlan] = useState<any>(null);
+  const [loadingDripPreview, setLoadingDripPreview] = useState(false);
 
   // Live Balance State
   const [providerBalance, setProviderBalance] = useState<number | null>(null);
@@ -338,8 +350,42 @@ function NewOrderPageContent() {
       if (generatedOrders.length === 0) {
         setBulkDefaultQty(activeService.minQuantity);
       }
+      setDripMinQty(activeService.minQuantity);
+      setDripMaxQty(Math.min(activeService.maxQuantity, Math.max(activeService.minQuantity, activeService.minQuantity + 6)));
     }
   }, [activeService?.id]);
+
+  async function refreshDripPreview() {
+    if (!activeService) return;
+    try {
+      setLoadingDripPreview(true);
+      const res = await fetch("/api/orders/drip-preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          serviceId: activeService.id,
+          minQuantity: Number(dripMinQty) || activeService.minQuantity,
+          maxQuantity: Number(dripMaxQty) || activeService.minQuantity,
+          runs: Number(dripRunsCount) || 5,
+          intervalMinutes: Number(dripInterval) || 60,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.plan) {
+        setDripPreviewPlan(data.plan);
+      }
+    } catch (err) {
+      console.warn("Failed to generate drip preview", err);
+    } finally {
+      setLoadingDripPreview(false);
+    }
+  }
+
+  useEffect(() => {
+    if (deliveryStrategy === "DRIP_FEED" && activeService) {
+      refreshDripPreview();
+    }
+  }, [deliveryStrategy, activeService?.id, dripMinQty, dripMaxQty, dripRunsCount, dripInterval]);
 
   // Quick ID Lookup Handler
   function handleIdLookup(e?: React.FormEvent) {
@@ -751,6 +797,10 @@ function NewOrderPageContent() {
         0
       );
     }
+  } else if (deliveryStrategy === "DRIP_FEED") {
+    totalOrdersCount = dripRunsCount;
+    totalOrderQuantity = dripPreviewPlan ? dripPreviewPlan.actualTotalQuantity : (dripMinQty * dripRunsCount);
+    effectiveCost = dripPreviewPlan ? dripPreviewPlan.actualFinalCharge : Number(((totalOrderQuantity / 1000) * (activeService?.ratePer1000 || 0)).toFixed(4));
   } else {
     totalOrdersCount = numQty > 0 ? 1 : 0;
     totalOrderQuantity = numQty;
@@ -772,6 +822,15 @@ function NewOrderPageContent() {
     }
   } else if (comboMakerEnabled) {
     canProceed = Boolean(activeCombo && comboTargetUrl.trim().length > 5);
+  } else if (deliveryStrategy === "DRIP_FEED") {
+    canProceed = Boolean(
+      activeService &&
+      targetUrl.trim().length > 5 &&
+      dripMinQty >= activeService.minQuantity &&
+      dripMaxQty <= activeService.maxQuantity &&
+      dripMinQty <= dripMaxQty &&
+      dripRunsCount >= 1
+    );
   } else {
     canProceed = Boolean(
       activeService && targetUrl.trim().length > 5 && (isPacingMode ? pacingPlan?.valid : isValidQty)
@@ -977,6 +1036,32 @@ function NewOrderPageContent() {
             `Scheduled order job #${data.job.jobRef} registered successfully! The persistent backend worker will execute it at ${new Date(data.job.scheduledFor).toLocaleString()} (${userTimezone}) even if you close this browser.`
           );
           await loadScheduledJobs();
+        } else if (deliveryStrategy === "DRIP_FEED") {
+          const payload = {
+            serviceId: activeService.id,
+            targetUrl: targetUrl.trim(),
+            scheduleMode: "DRIP_FEED",
+            dripMinQuantity: Number(dripMinQty),
+            dripMaxQuantity: Number(dripMaxQty),
+            dripRuns: Number(dripRunsCount),
+            dripIntervalMinutes: Number(dripInterval),
+          };
+
+          const res = await fetch("/api/orders", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+
+          const data = await res.json();
+          if (!res.ok || !data.success) {
+            throw new Error(data.error || "Drip Feed order placement failed");
+          }
+
+          window.dispatchEvent(new Event("balance-updated"));
+          setShowConfirmModal(false);
+          router.push(`/orders/${data.order.id}`);
+          return;
         } else {
           const payload: any = isPacingMode && pacingPlan ? {
             serviceId: activeService.id,
@@ -1396,7 +1481,7 @@ function NewOrderPageContent() {
                 >
                   {filteredServices.map((s) => (
                     <option key={s.id} value={s.id}>
-                      #{s.externalId} — [{s.platform}] {s.name} (₹{s.ratePer1000.toFixed(2)}/1k)
+                      {s.providerName ? `[${s.providerName}] ` : ""}#{s.externalId} — [{s.platform}] {s.name} (₹{s.ratePer1000.toFixed(2)}/1k)
                     </option>
                   ))}
                 </select>
@@ -1406,7 +1491,7 @@ function NewOrderPageContent() {
               {activeService && (
                 <div className="p-4 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED]/80 text-xs space-y-2.5">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <button
                         type="button"
                         onClick={() => {
@@ -1420,6 +1505,11 @@ function NewOrderPageContent() {
                         <span>ID #{activeService.externalId}</span>
                         {copiedId ? <Check className="w-3 h-3 text-[#E3FF3B]" /> : <Copy className="w-3 h-3 text-white/60" />}
                       </button>
+                      {activeService.providerName && (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200">
+                          {activeService.providerName}
+                        </span>
+                      )}
                       <span className="text-[11px] px-2.5 py-0.5 rounded-md bg-[#3A4EFB]/10 text-[#3A4EFB] font-semibold">
                         {activeService.type || "Default"}
                       </span>
@@ -1836,59 +1926,64 @@ function NewOrderPageContent() {
 
                 {!comboMakerEnabled && (
                   <>
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <label htmlFor="quantity-input" className="text-xs font-medium text-[#252943]">
-                          Requested Quantity
-                        </label>
-                        {activeService && (
-                          <span className="text-[11px] text-[#252943]/60 font-medium">
-                            Allowed: {activeService.minQuantity.toLocaleString()} – {activeService.maxQuantity.toLocaleString()}
-                          </span>
+                    {deliveryStrategy !== "DRIP_FEED" && (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label htmlFor="quantity-input" className="text-xs font-medium text-[#252943]">
+                            Requested Quantity
+                          </label>
+                          {activeService && (
+                            <span className="text-[11px] text-[#252943]/60 font-medium">
+                              Allowed: {activeService.minQuantity.toLocaleString()} – {activeService.maxQuantity.toLocaleString()}
+                            </span>
+                          )}
+                        </div>
+                        <input
+                          id="quantity-input"
+                          type="number"
+                          min={activeService?.minQuantity || 1}
+                          max={activeService?.maxQuantity || 100000}
+                          placeholder={`e.g. ${activeService?.minQuantity || 100}`}
+                          value={quantity}
+                          onChange={(e) => {
+                            const val = e.target.value === "" ? "" : parseInt(e.target.value, 10);
+                            setQuantity(isNaN(val as number) ? "" : val);
+                          }}
+                          className={`w-full bg-[#F8F9FD] border rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-[#252943] font-semibold focus:bg-white transition-colors ${
+                            isBelowMin || isAboveMax
+                              ? "border-red-400 focus:border-red-500"
+                              : "border-[#DEE0ED] focus:border-[#3A4EFB]"
+                          }`}
+                        />
+                        {isBelowMin && (
+                          <p className="text-xs text-red-600 flex items-center gap-1 mt-1 font-medium">
+                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                            Quantity is below minimum allowed ({activeService?.minQuantity.toLocaleString()}).
+                          </p>
+                        )}
+                        {isAboveMax && (
+                          <p className="text-xs text-red-600 flex items-center gap-1 mt-1 font-medium">
+                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                            Quantity exceeds maximum allowed ({activeService?.maxQuantity.toLocaleString()}).
+                          </p>
                         )}
                       </div>
-                      <input
-                        id="quantity-input"
-                        type="number"
-                        min={activeService?.minQuantity || 1}
-                        max={activeService?.maxQuantity || 100000}
-                        placeholder={`e.g. ${activeService?.minQuantity || 100}`}
-                        value={quantity}
-                        onChange={(e) => {
-                          const val = e.target.value === "" ? "" : parseInt(e.target.value, 10);
-                          setQuantity(isNaN(val as number) ? "" : val);
-                        }}
-                        className={`w-full bg-[#F8F9FD] border rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-[#252943] font-semibold focus:bg-white transition-colors ${
-                          isBelowMin || isAboveMax
-                            ? "border-red-400 focus:border-red-500"
-                            : "border-[#DEE0ED] focus:border-[#3A4EFB]"
-                        }`}
-                      />
-                      {isBelowMin && (
-                        <p className="text-xs text-red-600 flex items-center gap-1 mt-1 font-medium">
-                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                          Quantity is below minimum allowed ({activeService?.minQuantity.toLocaleString()}).
-                        </p>
-                      )}
-                      {isAboveMax && (
-                        <p className="text-xs text-red-600 flex items-center gap-1 mt-1 font-medium">
-                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                          Quantity exceeds maximum allowed ({activeService?.maxQuantity.toLocaleString()}).
-                        </p>
-                      )}
-                    </div>
+                    )}
 
                     {/* Delivery Strategy Selector */}
                     <div className="space-y-2.5 pt-3 border-t border-[#DEE0ED]">
                       <label className="text-xs font-semibold text-[#252943] block">
                         Delivery Strategy
                       </label>
-                      <div className="grid grid-cols-2 gap-2.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                         <button
                           type="button"
-                          onClick={() => setIsPacingMode(false)}
+                          onClick={() => {
+                            setDeliveryStrategy("INSTANT");
+                            setIsPacingMode(false);
+                          }}
                           className={`p-3 rounded-xl border text-left transition-all press-scale ${
-                            !isPacingMode
+                            deliveryStrategy === "INSTANT"
                               ? "border-[#3A4EFB] bg-[#3A4EFB]/10 text-[#3A4EFB] font-semibold"
                               : "border-[#DEE0ED] bg-[#F8F9FD] text-[#252943]/70 hover:bg-[#DEE0ED]/30"
                           }`}
@@ -1897,29 +1992,53 @@ function NewOrderPageContent() {
                             <Zap className="w-3.5 h-3.5 text-[#3A4EFB]" /> Instant Delivery
                           </div>
                           <div className="text-[10px] text-[#252943]/50 font-normal mt-0.5">
-                            Submit in a single immediate batch
+                            Submit single immediate batch
                           </div>
                         </button>
 
                         <button
                           type="button"
-                          onClick={() => setIsPacingMode(true)}
+                          onClick={() => {
+                            setDeliveryStrategy("PACING");
+                            setIsPacingMode(true);
+                          }}
                           className={`p-3 rounded-xl border text-left transition-all press-scale ${
-                            isPacingMode
+                            deliveryStrategy === "PACING"
                               ? "border-[#3A4EFB] bg-[#3A4EFB]/10 text-[#3A4EFB] font-semibold"
                               : "border-[#DEE0ED] bg-[#F8F9FD] text-[#252943]/70 hover:bg-[#DEE0ED]/30"
                           }`}
                         >
                           <div className="flex items-center gap-1.5 font-bold text-xs">
-                            <TrendingUp className="w-3.5 h-3.5 text-[#3A4EFB]" /> Delivery Pacing Strategy
+                            <TrendingUp className="w-3.5 h-3.5 text-[#3A4EFB]" /> Delivery Pacing
                           </div>
                           <div className="text-[10px] text-[#252943]/50 font-normal mt-0.5">
-                            Paced batches across customized timeline
+                            Smooth algorithmic growth curves
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDeliveryStrategy("DRIP_FEED");
+                            setIsPacingMode(false);
+                          }}
+                          className={`p-3 rounded-xl border text-left transition-all press-scale ${
+                            deliveryStrategy === "DRIP_FEED"
+                              ? "border-[#3A4EFB] bg-[#3A4EFB]/10 text-[#3A4EFB] font-semibold ring-2 ring-[#3A4EFB]/20"
+                              : "border-[#DEE0ED] bg-[#F8F9FD] text-[#252943]/70 hover:bg-[#DEE0ED]/30"
+                          }`}
+                        >
+                          <div className="flex items-center gap-1.5 font-bold text-xs">
+                            <CalendarClock className="w-3.5 h-3.5 text-[#3A4EFB]" /> Drip Feed (Random)
+                          </div>
+                          <div className="text-[10px] text-[#252943]/50 font-normal mt-0.5">
+                            Random range anti-monotone batches
                           </div>
                         </button>
                       </div>
 
-                      {isPacingMode && activeService && (
+                      {/* Delivery Pacing Mode */}
+                      {deliveryStrategy === "PACING" && activeService && (
                         <div className="pt-2 animate-fadeIn">
                           <DeliveryPacingEditor
                             service={activeService}
@@ -1928,6 +2047,148 @@ function NewOrderPageContent() {
                             targetUrl={targetUrl}
                             onPlanChange={(plan) => setPacingPlan(plan)}
                           />
+                        </div>
+                      )}
+
+                      {/* Drip Feed Random Range Mode */}
+                      {deliveryStrategy === "DRIP_FEED" && activeService && (
+                        <div className="pt-3 p-4 bg-gradient-to-br from-[#F8F9FD] to-indigo-50/40 rounded-xl border border-indigo-200/80 space-y-4 animate-fadeIn">
+                          <div className="flex items-center justify-between pb-2 border-b border-indigo-100">
+                            <div>
+                              <h4 className="text-xs font-bold text-[#252943] flex items-center gap-1.5">
+                                <Sparkles className="w-3.5 h-3.5 text-[#3A4EFB]" />
+                                Drip Feed Random Range Configuration
+                              </h4>
+                              <p className="text-[11px] text-[#252943]/60">
+                                Each run receives an independent random quantity within your range. Anti-monotone constraint guarantees no streaks &gt; 2.
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={refreshDripPreview}
+                              disabled={loadingDripPreview}
+                              className="px-2.5 py-1 text-xs font-bold bg-[#3A4EFB] text-white rounded-lg hover:bg-[#2A3EDB] transition-all flex items-center gap-1 shrink-0"
+                            >
+                              <RotateCcw className={`w-3 h-3 ${loadingDripPreview ? "animate-spin" : ""}`} />
+                              <span>Re-draw Pattern</span>
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                            <div>
+                              <label className="text-[11px] font-semibold text-[#252943] block mb-1">
+                                Min Per Run
+                              </label>
+                              <input
+                                type="number"
+                                min={activeService.minQuantity}
+                                max={dripMaxQty}
+                                value={dripMinQty}
+                                onChange={(e) => setDripMinQty(Number(e.target.value))}
+                                className="w-full bg-white border border-[#DEE0ED] rounded-lg px-2.5 py-1.5 text-xs font-semibold text-[#252943] focus:border-[#3A4EFB]"
+                              />
+                              <span className="text-[10px] text-[#252943]/50">Min: {activeService.minQuantity}</span>
+                            </div>
+
+                            <div>
+                              <label className="text-[11px] font-semibold text-[#252943] block mb-1">
+                                Max Per Run
+                              </label>
+                              <input
+                                type="number"
+                                min={dripMinQty}
+                                max={activeService.maxQuantity}
+                                value={dripMaxQty}
+                                onChange={(e) => setDripMaxQty(Number(e.target.value))}
+                                className="w-full bg-white border border-[#DEE0ED] rounded-lg px-2.5 py-1.5 text-xs font-semibold text-[#252943] focus:border-[#3A4EFB]"
+                              />
+                              <span className="text-[10px] text-[#252943]/50">Max: {activeService.maxQuantity}</span>
+                            </div>
+
+                            <div>
+                              <label className="text-[11px] font-semibold text-[#252943] block mb-1">
+                                Number of Runs
+                              </label>
+                              <input
+                                type="number"
+                                min={1}
+                                max={50}
+                                value={dripRunsCount}
+                                onChange={(e) => setDripRunsCount(Number(e.target.value))}
+                                className="w-full bg-white border border-[#DEE0ED] rounded-lg px-2.5 py-1.5 text-xs font-semibold text-[#252943] focus:border-[#3A4EFB]"
+                              />
+                              <span className="text-[10px] text-[#252943]/50">Runs to schedule</span>
+                            </div>
+
+                            <div>
+                              <label className="text-[11px] font-semibold text-[#252943] block mb-1">
+                                Interval (Minutes)
+                              </label>
+                              <input
+                                type="number"
+                                min={1}
+                                max={1440}
+                                value={dripInterval}
+                                onChange={(e) => setDripInterval(Number(e.target.value))}
+                                className="w-full bg-white border border-[#DEE0ED] rounded-lg px-2.5 py-1.5 text-xs font-semibold text-[#252943] focus:border-[#3A4EFB]"
+                              />
+                              <span className="text-[10px] text-[#252943]/50">Between each run</span>
+                            </div>
+                          </div>
+
+                          {/* Estimated Range & Final Price Summary Card */}
+                          <div className="p-3 bg-white rounded-xl border border-indigo-100 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                            <div>
+                              <span className="text-[10px] uppercase font-bold text-[#252943]/50 block">Est. Total Range</span>
+                              <span className="font-bold text-[#252943]">
+                                {(dripMinQty * dripRunsCount).toLocaleString()} – {(dripMaxQty * dripRunsCount).toLocaleString()} units
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] uppercase font-bold text-[#252943]/50 block">Est. Price Range</span>
+                              <span className="font-bold text-[#252943]">
+                                ₹{(((dripMinQty * dripRunsCount) / 1000) * activeService.ratePer1000).toFixed(2)} – ₹{(((dripMaxQty * dripRunsCount) / 1000) * activeService.ratePer1000).toFixed(2)}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] uppercase font-bold text-indigo-600 block">Actual Generated Total</span>
+                              <span className="font-bold text-indigo-700">
+                                {dripPreviewPlan ? `${dripPreviewPlan.actualTotalQuantity.toLocaleString()} units` : "Generating..."}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] uppercase font-bold text-emerald-600 block">Actual Final Charge</span>
+                              <span className="font-extrabold text-emerald-700 text-sm">
+                                ₹{dripPreviewPlan ? dripPreviewPlan.actualFinalCharge.toFixed(2) : "0.00"}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Generated Sequence Chips */}
+                          {dripPreviewPlan && Array.isArray(dripPreviewPlan.quantities) && (
+                            <div className="space-y-1.5">
+                              <div className="flex items-center justify-between text-[11px]">
+                                <span className="font-semibold text-[#252943]">Generated Execution Sequence:</span>
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  Anti-monotone pattern: Verified (streak &le; 2)
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {dripPreviewPlan.quantities.map((qty: number, idx: number) => (
+                                  <div
+                                    key={idx}
+                                    className="px-2.5 py-1.5 rounded-lg bg-white border border-[#DEE0ED] shadow-sm flex items-center gap-1.5 text-xs font-mono"
+                                  >
+                                    <span className="text-[10px] font-bold text-[#3A4EFB]">#{idx + 1}</span>
+                                    <span className="font-bold text-[#252943]">{qty}</span>
+                                    <span className="text-[10px] text-[#252943]/40">
+                                      (+{idx * dripInterval}m)
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

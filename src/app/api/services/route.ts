@@ -90,13 +90,18 @@ export async function GET(request: Request) {
       }
     }
 
+    const filterProviderId = searchParams.get("providerId")?.trim();
+
     // 5. Build filter query
     const where: any = { active: true };
 
-    if (config.isMock) {
+    if (filterProviderId) {
+      where.providerId = filterProviderId;
+    } else if (config.isMock) {
       where.OR = [
         { providerEndpoint: "mock" },
         { isMock: true },
+        { provider: { isMock: true } },
       ];
     } else {
       where.providerEndpoint = activeEndpoint;
@@ -111,6 +116,7 @@ export async function GET(request: Request) {
         {
           OR: [
             { externalId: { contains: search, mode: "insensitive" } },
+            { providerServiceId: { contains: search, mode: "insensitive" } },
             { name: { contains: search, mode: "insensitive" } },
             { category: { contains: search, mode: "insensitive" } },
             { description: { contains: search, mode: "insensitive" } },
@@ -120,15 +126,25 @@ export async function GET(request: Request) {
       ];
     }
 
-    const [services, totalServices] = await Promise.all([
+    const [services, totalServices, activeProviders] = await Promise.all([
       prisma.service.findMany({
         where,
-        orderBy: [{ externalId: "asc" }, { ratePer1000: "asc" }],
+        include: {
+          provider: {
+            select: { id: true, name: true, currency: true },
+          },
+        },
+        orderBy: [{ providerId: "asc" }, { externalId: "asc" }, { ratePer1000: "asc" }],
         ...(paginationRequested
           ? { skip: (page - 1) * pageSize, take: pageSize }
           : {}),
       }),
       prisma.service.count({ where }),
+      prisma.provider.findMany({
+        where: { active: true },
+        select: { id: true, name: true, currency: true },
+        orderBy: { name: "asc" },
+      }),
     ]);
 
     // If no services were found and a sync error occurred, communicate the failure clearly
@@ -150,6 +166,13 @@ export async function GET(request: Request) {
       );
     }
 
+    const enrichedServices = services.map((s) => ({
+      ...s,
+      providerId: s.providerId,
+      providerName: s.provider?.name || (s.isMock ? "Mock SMM Provider" : "Standard Provider"),
+      providerServiceId: s.providerServiceId || s.externalId,
+    }));
+
     return NextResponse.json({
       success: true,
       provider: {
@@ -161,7 +184,8 @@ export async function GET(request: Request) {
         lastSyncAt: config.lastSyncAt,
         warning: syncError || undefined,
       },
-      services,
+      providers: activeProviders,
+      services: enrichedServices,
       totalServices,
       ...(paginationRequested
         ? {
