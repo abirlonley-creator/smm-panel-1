@@ -1,14 +1,25 @@
 import { NextResponse } from "next/server";
-import { generateOrganicPlan, DEFAULT_SERVICE_SPECS } from "@/lib/engagement/planner";
+import {
+  generateOrganicPlan,
+  generateUniqueOrganicPlan,
+  type DurationPreset,
+  type EngagementType,
+} from "@/lib/engagement/planner";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
 const previewSchema = z.object({
-  platform: z.enum(["Instagram", "TikTok"]),
+  platform: z.enum(["Instagram", "TikTok"]).default("Instagram"),
   baseViews: z.number().int().min(100).max(10000000),
-  durationHours: z.number().int().min(1).max(168).default(24),
-  seed: z.string().optional(),
-  peakHourWeighting: z.boolean().default(false),
+  durationPreset: z.enum(["24h", "72h", "168h"]).default("72h"),
+  durationHours: z.number().int().min(1).max(168).optional(),
+  seed: z.union([z.string(), z.number()]).optional(),
+  targetTz: z.string().default("Asia/Kolkata"),
+  startTime: z.string().optional(),
+  enabledTypes: z.array(z.enum(["views", "likes", "shares", "saves", "comments"])).optional(),
+  peakHourWeighting: z.boolean().default(true),
+  customRatios: z.record(z.string(), z.number()).optional(),
+  previousFingerprint: z.string().optional(),
 });
 
 export async function POST(request: Request) {
@@ -35,7 +46,9 @@ export async function POST(request: Request) {
 
     const servicesMap: any = {};
     for (const type of ["views", "likes", "shares", "saves", "comments"] as const) {
-      const match = dbServices.find((s) => s.category.toLowerCase().includes(type) || s.name.toLowerCase().includes(type));
+      const match = dbServices.find(
+        (s) => s.category.toLowerCase().includes(type) || s.name.toLowerCase().includes(type)
+      );
       if (match) {
         servicesMap[type] = {
           id: match.id,
@@ -48,14 +61,24 @@ export async function POST(request: Request) {
       }
     }
 
-    const plan = generateOrganicPlan({
+    const planOptions = {
       platform: parsed.platform,
       baseViews: parsed.baseViews,
+      durationPreset: parsed.durationPreset as DurationPreset,
       durationHours: parsed.durationHours,
       seed: parsed.seed,
+      targetTz: parsed.targetTz,
+      startTime: parsed.startTime,
+      enabledTypes: parsed.enabledTypes as EngagementType[] | undefined,
       peakHourWeighting: parsed.peakHourWeighting,
       services: Object.keys(servicesMap).length > 0 ? servicesMap : undefined,
-    });
+      customRatios: parsed.customRatios as Partial<Record<EngagementType, number>> | undefined,
+    };
+
+    // If previousFingerprint is passed (e.g. "New Pattern" button clicked), guarantee distinct plan
+    const plan = parsed.previousFingerprint
+      ? generateUniqueOrganicPlan(planOptions, parsed.previousFingerprint)
+      : generateOrganicPlan(planOptions);
 
     return NextResponse.json({
       success: true,

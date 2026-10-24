@@ -11,6 +11,7 @@
     "test:dhansmm": "tsx test/dhansmm-features.test.ts",
     "test:isolation": "tsx test/provider-isolation.test.ts",
     "test:organic": "tsx --test test/organic-pacing.test.ts",
+    "test:pacing": "tsx --test test/organic-pacing-plan.test.ts",
     "test:balance": "tsx --test test/provider-balance.test.ts",
     "test:orders": "tsx --test test/order-cancellation.test.ts",
     "worker": "tsx src/worker-bootstrap.ts",

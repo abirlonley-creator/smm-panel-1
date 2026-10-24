@@ -1,16 +1,24 @@
 import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
-import { generateOrganicPlan } from "@/lib/engagement/planner";
+import {
+  generateOrganicPlan,
+  type DurationPreset,
+  type EngagementType,
+} from "@/lib/engagement/planner";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
 const createEngagementOrderSchema = z.object({
   targetUrl: z.string().url("Valid post or video URL required"),
-  platform: z.enum(["Instagram", "TikTok"]),
+  platform: z.enum(["Instagram", "TikTok"]).default("Instagram"),
   baseViews: z.number().int().min(100).max(10000000),
-  durationHours: z.number().int().min(1).max(168).default(24),
-  seed: z.string().min(1),
-  peakHourWeighting: z.boolean().default(false),
+  durationPreset: z.enum(["24h", "72h", "168h"]).default("72h"),
+  durationHours: z.number().int().min(1).max(168).optional(),
+  seed: z.union([z.string(), z.number()]).default(() => String(Math.floor(Math.random() * 100000000))),
+  targetTz: z.string().default("Asia/Kolkata"),
+  peakHourWeighting: z.boolean().default(true),
+  enabledTypes: z.array(z.enum(["views", "likes", "shares", "saves", "comments"])).optional(),
+  customRatios: z.record(z.string(), z.number()).optional(),
 });
 
 export async function POST(request: Request) {
@@ -42,7 +50,9 @@ export async function POST(request: Request) {
 
     const servicesMap: any = {};
     for (const type of ["views", "likes", "shares", "saves", "comments"] as const) {
-      const match = dbServices.find((s) => s.category.toLowerCase().includes(type) || s.name.toLowerCase().includes(type));
+      const match = dbServices.find(
+        (s) => s.category.toLowerCase().includes(type) || s.name.toLowerCase().includes(type)
+      );
       if (match) {
         servicesMap[type] = {
           id: match.id,
@@ -59,9 +69,13 @@ export async function POST(request: Request) {
     const plan = generateOrganicPlan({
       platform: parsed.platform,
       baseViews: parsed.baseViews,
+      durationPreset: parsed.durationPreset as DurationPreset,
       durationHours: parsed.durationHours,
       seed: parsed.seed,
+      targetTz: parsed.targetTz,
       peakHourWeighting: parsed.peakHourWeighting,
+      enabledTypes: parsed.enabledTypes as EngagementType[] | undefined,
+      customRatios: parsed.customRatios as Partial<Record<EngagementType, number>> | undefined,
       services: Object.keys(servicesMap).length > 0 ? servicesMap : undefined,
     });
 
@@ -100,7 +114,7 @@ export async function POST(request: Request) {
           amount: -totalCost,
           balanceAfter: newBalance,
           referenceId: orderRef,
-          description: `Full Organic Engagement: ${parsed.platform} (${parsed.baseViews.toLocaleString()} Base Views)`,
+          description: `Full Organic Engagement: ${parsed.platform} (${parsed.baseViews.toLocaleString()} Base Views, ${plan.durationPreset})`,
         },
       });
 
@@ -112,16 +126,16 @@ export async function POST(request: Request) {
           targetUrl: parsed.targetUrl.trim(),
           platform: parsed.platform,
           baseViews: parsed.baseViews,
-          durationHours: parsed.durationHours,
-          seed: plan.seed,
+          durationHours: plan.durationHours,
+          seed: String(plan.seed),
           status: "PROCESSING",
           totalCost,
           refundedAmount: 0,
-          plannedViews: plan.plans.views.totalQuantity,
-          plannedLikes: plan.plans.likes.totalQuantity,
-          plannedShares: plan.plans.shares.totalQuantity,
-          plannedSaves: plan.plans.saves.totalQuantity,
-          plannedComments: plan.plans.comments.totalQuantity,
+          plannedViews: plan.plans.views?.totalQuantity ?? 0,
+          plannedLikes: plan.plans.likes?.totalQuantity ?? 0,
+          plannedShares: plan.plans.shares?.totalQuantity ?? 0,
+          plannedSaves: plan.plans.saves?.totalQuantity ?? 0,
+          plannedComments: plan.plans.comments?.totalQuantity ?? 0,
         },
       });
 
@@ -148,6 +162,8 @@ export async function POST(request: Request) {
       success: true,
       orderId: result.id,
       orderRef: result.orderRef,
+      seed: plan.seed,
+      archetype: plan.params.archetype,
       totalCost,
       remainingBalance: newBalance,
       runsCount: plan.allRuns.length,
