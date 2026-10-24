@@ -10,8 +10,10 @@ import {
 } from "../types";
 import { prisma } from "../prisma";
 import { parseProviderBalanceResponse, ProviderBalance } from "./balance";
+import { validateProviderEndpointUrl } from "../security/ssrf";
 
 export interface SMMProviderAdapter {
+  readonly apiUrl?: string;
   getServices(): Promise<ProviderService[]>;
   createOrder(params: CreateOrderParams): Promise<CreateOrderResult>;
   getOrderStatus(providerOrderId: string): Promise<OrderStatusResult>;
@@ -27,6 +29,7 @@ export interface SMMProviderAdapter {
  * Implements the exact same response schema as the user's SMM API specification.
  */
 export class MockSMMProvider implements SMMProviderAdapter {
+  public readonly apiUrl: string = "mock";
   private mockServices: ProviderService[] = [
     {
       id: "1",
@@ -216,25 +219,20 @@ export class MockSMMProvider implements SMMProviderAdapter {
 
   async createOrder(params: CreateOrderParams): Promise<CreateOrderResult> {
     const service = this.mockServices.find((s) => s.id === params.serviceExternalId);
-    if (!service) {
-      return {
-        success: false,
-        error: `Provider service #${params.serviceExternalId} not found in catalog`,
-      };
-    }
+    if (service) {
+      if (params.quantity < service.minQuantity) {
+        return {
+          success: false,
+          error: `Requested quantity ${params.quantity} is below provider minimum of ${service.minQuantity}`,
+        };
+      }
 
-    if (params.quantity < service.minQuantity) {
-      return {
-        success: false,
-        error: `Requested quantity ${params.quantity} is below provider minimum of ${service.minQuantity}`,
-      };
-    }
-
-    if (params.quantity > service.maxQuantity) {
-      return {
-        success: false,
-        error: `Requested quantity ${params.quantity} exceeds provider maximum of ${service.maxQuantity}`,
-      };
+      if (params.quantity > service.maxQuantity) {
+        return {
+          success: false,
+          error: `Requested quantity ${params.quantity} exceeds provider maximum of ${service.maxQuantity}`,
+        };
+      }
     }
 
     // Exact response matching: { "order": 23501 }
@@ -310,15 +308,20 @@ export class MockSMMProvider implements SMMProviderAdapter {
  * - action=balance -> { "balance": "100.84292", "currency": "USD" }
  */
 export class StandardSMMv2Provider implements SMMProviderAdapter {
-  private apiUrl: string;
+  public readonly apiUrl: string;
   private apiKey: string;
 
   constructor(apiUrl: string, apiKey: string) {
-    this.apiUrl = apiUrl;
-    this.apiKey = apiKey;
+    this.apiUrl = apiUrl.trim();
+    this.apiKey = apiKey.trim();
   }
 
   private async postRequest(action: string, extraParams: Record<string, string | number> = {}) {
+    const urlValidation = validateProviderEndpointUrl(this.apiUrl);
+    if (!urlValidation.valid) {
+      throw new Error(`SSRF Security Guard blocked request: ${urlValidation.error}`);
+    }
+
     const startTime = Date.now();
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 12000); // 12s timeout
@@ -683,7 +686,7 @@ export class StandardSMMv2Provider implements SMMProviderAdapter {
  */
 export async function getActiveProvider(userId?: string): Promise<{
   adapter: SMMProviderAdapter;
-  config: { id: string; name: string; isMock: boolean; apiUrl: string; userId?: string };
+  config: { id: string; name: string; isMock: boolean; apiUrl: string; userId?: string; lastSyncAt?: Date | null };
 }> {
   if (userId) {
     const userConfig = await prisma.userProviderConfig.findUnique({
@@ -700,6 +703,7 @@ export async function getActiveProvider(userId?: string): Promise<{
             isMock: true,
             apiUrl: userConfig.apiUrl,
             userId: userConfig.userId,
+            lastSyncAt: userConfig.lastSyncAt,
           },
         };
       }
@@ -712,12 +716,27 @@ export async function getActiveProvider(userId?: string): Promise<{
           isMock: false,
           apiUrl: userConfig.apiUrl,
           userId: userConfig.userId,
+          lastSyncAt: userConfig.lastSyncAt,
         },
       };
     }
+
+    // Requirement #3 & #8: If a user has no provider configured, NEVER fall back to
+    // a global or live system provider. Return a mock adapter with isMock: true.
+    return {
+      adapter: new MockSMMProvider(),
+      config: {
+        id: `mock-${userId}`,
+        name: "Standard SMM Mock Adapter",
+        isMock: true,
+        apiUrl: "https://mock-provider.smm.internal/v2",
+        userId,
+        lastSyncAt: null,
+      },
+    };
   }
 
-  // Fallback to system-level configuration
+  // Fallback to system-level configuration (only when no userId is specified)
   let config = await prisma.providerConfig.findFirst({
     where: { active: true },
   });
@@ -742,6 +761,7 @@ export async function getActiveProvider(userId?: string): Promise<{
         name: config.name,
         isMock: true,
         apiUrl: config.apiUrl,
+        lastSyncAt: config.lastSyncAt,
       },
     };
   }
@@ -753,6 +773,7 @@ export async function getActiveProvider(userId?: string): Promise<{
       name: config.name,
       isMock: false,
       apiUrl: config.apiUrl,
+      lastSyncAt: config.lastSyncAt,
     },
   };
 }

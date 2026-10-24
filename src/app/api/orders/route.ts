@@ -110,6 +110,30 @@ export async function POST(request: Request) {
     }
     const userId = session.user.id;
 
+    // -----------------------------------------------------------------------
+    // Provider-Endpoint Ownership Guard
+    // A live service (providerEndpoint set, not mock) must belong to the
+    // requesting user's own active provider. This prevents cross-user catalog
+    // injection: User A cannot submit orders via User B's provider services.
+    // -----------------------------------------------------------------------
+    if (service.providerEndpoint && service.providerEndpoint !== "mock" && !service.isMock) {
+      const { config: userProviderConfig } = await getActiveProvider(userId);
+      const userEndpoint = userProviderConfig.isMock
+        ? "mock"
+        : userProviderConfig.apiUrl.trim();
+
+      if (userEndpoint !== service.providerEndpoint) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "The selected service does not belong to your connected provider. Please choose a service from your own provider catalog.",
+          },
+          { status: 403 }
+        );
+      }
+    }
+
     const unitCost = service.ratePer1000 / 1000;
     const totalCost = Number(((requestedQuantity / 1000) * service.ratePer1000).toFixed(4));
     const orderRef = `SMM-${Math.floor(100000 + Math.random() * 900000)}`;

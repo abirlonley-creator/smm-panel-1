@@ -59,14 +59,13 @@ export async function runEnhancementTests(customAssert?: (cond: boolean, name: s
   }
 
   try {
-    // Ensure test services exist in database matching MockSMMProvider catalog
-    let tiktokService = await prisma.service.findFirst({
-      where: { externalId: "302", active: true },
-    });
+  let tiktokService = await prisma.service.findFirst({
+    where: { platform: "TikTok", category: "Likes", minQuantity: { lte: 50 }, maxQuantity: { gte: 1000 }, active: true },
+  });
   if (!tiktokService) {
     tiktokService = await prisma.service.create({
       data: {
-        externalId: "302",
+        externalId: "mock_tiktok_302",
         name: "TikTok Video Likes — Fast & Safe",
         platform: "TikTok",
         category: "Likes",
@@ -81,12 +80,12 @@ export async function runEnhancementTests(customAssert?: (cond: boolean, name: s
   }
 
   let igLikesService = await prisma.service.findFirst({
-    where: { externalId: "101", active: true },
+    where: { platform: "Instagram", category: "Likes", active: true },
   });
   if (!igLikesService) {
     igLikesService = await prisma.service.create({
       data: {
-        externalId: "101",
+        externalId: "mock_ig_likes_101",
         name: "Instagram Likes — Instant & Natural Pace",
         platform: "Instagram",
         category: "Likes",
@@ -101,12 +100,12 @@ export async function runEnhancementTests(customAssert?: (cond: boolean, name: s
   }
 
   let igFollowersService = await prisma.service.findFirst({
-    where: { externalId: "1", active: true },
+    where: { platform: "Instagram", category: "Followers", active: true },
   });
   if (!igFollowersService) {
     igFollowersService = await prisma.service.create({
       data: {
-        externalId: "1",
+        externalId: "mock_ig_followers_1",
         name: "Instagram Followers — High Quality / Non-Drop",
         platform: "Instagram",
         category: "Followers",
@@ -604,12 +603,12 @@ export async function runEnhancementTests(customAssert?: (cond: boolean, name: s
 
   // Step 1: Create a TikTok Combo with 2 distinct TikTok services
   let ttViewsService = await prisma.service.findFirst({
-    where: { externalId: "301", active: true },
+    where: { platform: "TikTok", category: "Views", active: true, id: { not: tiktokService.id } },
   });
   if (!ttViewsService) {
     ttViewsService = await prisma.service.create({
       data: {
-        externalId: "301",
+        externalId: "mock_tiktok_views_301",
         name: "TikTok Video Views — High Speed",
         platform: "TikTok",
         category: "Views",

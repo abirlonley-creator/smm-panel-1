@@ -13,7 +13,8 @@ import {
   X,
   RotateCcw,
   Ban,
-  Tag
+  Tag,
+  RefreshCw,
 } from "lucide-react";
 
 interface ServiceItem {
@@ -48,14 +49,26 @@ const PLATFORMS = [
   "Other",
 ];
 
+interface ProviderInfo {
+  name: string;
+  apiUrl: string;
+  isMock: boolean;
+  isLive: boolean;
+  cached: boolean;
+  lastSyncAt: string | null;
+  warning?: string;
+}
+
 export default function ServicesPage() {
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [totalServices, setTotalServices] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [selectedPlatform, setSelectedPlatform] = useState("All");
   const [currentPage, setCurrentPage] = useState(1);
+  const [providerInfo, setProviderInfo] = useState<ProviderInfo | null>(null);
   
   // Search state
   const [searchInput, setSearchInput] = useState("");
@@ -66,7 +79,8 @@ export default function ServicesPage() {
     searchParam: string,
     page: number,
     platform: string,
-    signal: AbortSignal
+    signal: AbortSignal,
+    forceRefresh: boolean = false
   ) => {
     setLoading(true);
     setLoadError(null);
@@ -78,6 +92,8 @@ export default function ServicesPage() {
       if (platform !== "All") params.set("platform", platform);
       params.set("page", String(page));
       params.set("pageSize", String(PAGE_SIZE));
+      if (forceRefresh) params.set("refresh", "true");
+
       const res = await fetch(`/api/services?${params.toString()}`, {
         signal,
         cache: "no-store",
@@ -89,6 +105,7 @@ export default function ServicesPage() {
       if (!signal.aborted) {
         setServices(data.services);
         setTotalServices(data.totalServices ?? data.services.length);
+        if (data.provider) setProviderInfo(data.provider);
       }
     } catch (err) {
       if (!signal.aborted) {
@@ -107,6 +124,16 @@ export default function ServicesPage() {
     fetchServices(activeQuery, currentPage, selectedPlatform, controller.signal);
     return () => controller.abort();
   }, [activeQuery, currentPage, selectedPlatform, fetchServices, loadAttempt]);
+
+  async function handleManualSync() {
+    setRefreshing(true);
+    try {
+      const controller = new AbortController();
+      await fetchServices(activeQuery, currentPage, selectedPlatform, controller.signal, true);
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   function handlePlatformChange(platform: string) {
     // Switch the visible selection immediately and discard stale results while

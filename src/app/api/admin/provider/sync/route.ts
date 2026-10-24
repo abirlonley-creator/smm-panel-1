@@ -10,8 +10,11 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { adapter } = await getActiveProvider();
-    const result = await syncProviderServices(adapter, session.label || "Admin");
+    const { adapter, config } = await getActiveProvider();
+    const result = await syncProviderServices(adapter, session.label || "Admin", {
+      providerEndpoint: config.isMock ? "mock" : config.apiUrl,
+      providerName: config.name,
+    });
 
     return NextResponse.json(result);
   } catch (error: any) {

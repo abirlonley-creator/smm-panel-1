@@ -13,7 +13,12 @@ export async function POST(request: Request) {
     const { adapter, config } = await getActiveProvider(session.user.id);
     const result = await syncProviderServices(
       adapter,
-      session.user.username || session.user.id
+      session.user.username || session.user.id,
+      {
+        providerEndpoint: config.isMock ? "mock" : config.apiUrl,
+        providerName: config.name,
+        userId: session.user.id,
+      }
     );
 
     return NextResponse.json(result);

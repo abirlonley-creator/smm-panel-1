@@ -3,6 +3,8 @@ import { getAdminSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { getActiveProvider } from "@/lib/provider/adapter";
 import { getProviderBalanceRefreshIntervalMs } from "@/lib/provider/balance";
+import { validateProviderEndpointUrl } from "@/lib/security/ssrf";
+import { syncProviderServices } from "@/lib/provider/service-sync";
 import { z } from "zod";
 
 const updateProviderSchema = z.object({
@@ -91,16 +93,25 @@ export async function POST(request: Request) {
 
     const { name, apiUrl, apiKey, isMock, active } = parsed.data;
 
+    const urlValidation = validateProviderEndpointUrl(apiUrl, { allowMock: isMock });
+    if (!urlValidation.valid) {
+      return NextResponse.json(
+        { success: false, error: `Invalid provider endpoint: ${urlValidation.error}` },
+        { status: 400 }
+      );
+    }
+    const cleanApiUrl = urlValidation.normalizedUrl || apiUrl.trim();
+
     let config = await prisma.providerConfig.findFirst();
     const incomingApiKey = apiKey?.trim();
     const providerIdentityChanged =
       !config ||
-      config.apiUrl !== apiUrl ||
+      config.apiUrl !== cleanApiUrl ||
       config.isMock !== isMock ||
       Boolean(incomingApiKey && incomingApiKey !== config.apiKey);
     const updateData: any = {
-      name,
-      apiUrl,
+      name: name.trim(),
+      apiUrl: cleanApiUrl,
       isMock,
       active,
     };
@@ -126,20 +137,28 @@ export async function POST(request: Request) {
       });
     }
 
-    // Immediately query live balance upon connecting or updating provider API
-    try {
-      const { adapter } = await getActiveProvider();
-      const bal = await adapter.getBalance();
-      config = await prisma.providerConfig.update({
-        where: { id: config.id },
-        data: {
-          balance: bal.balance,
-          currency: bal.currency,
-          lastSyncAt: new Date(),
-        },
-      });
-    } catch (balErr: unknown) {
-      console.warn("[ADMIN] Could not fetch balance immediately upon provider update:", balErr);
+    // Immediately sync balance and services upon connecting or updating provider API
+    if (!config.isMock && config.apiKey) {
+      try {
+        const { adapter } = await getActiveProvider();
+        const bal = await adapter.getBalance();
+        config = await prisma.providerConfig.update({
+          where: { id: config.id },
+          data: {
+            balance: bal.balance,
+            currency: bal.currency,
+            lastSyncAt: new Date(),
+          },
+        });
+
+        // Auto-sync services for the newly configured system provider
+        await syncProviderServices(adapter, session.label || "Admin", {
+          providerEndpoint: config.apiUrl,
+          providerName: config.name,
+        });
+      } catch (provErr: unknown) {
+        console.warn("[ADMIN] Could not auto-sync live provider immediately:", provErr);
+      }
     }
 
     await prisma.auditLog.create({

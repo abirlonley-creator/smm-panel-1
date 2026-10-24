@@ -596,7 +596,10 @@ async function runTests() {
   });
 
   // Test 7.3: POST /api/orders/[id]/pause
-  const pauseReq = new Request(`http://localhost:3000/api/orders/${testSchedOrder.id}/pause`, { method: "POST" });
+  const pauseReq = new Request(`http://localhost:3000/api/orders/${testSchedOrder.id}/pause`, {
+    method: "POST",
+    headers: { "x-passkey": "abir90" },
+  });
   const pauseRes = await pausePost(pauseReq, { params: { id: testSchedOrder.id } });
   const pauseData = await pauseRes.json();
   assert(pauseData.success === true, "POST /api/orders/[id]/pause successfully pauses schedule");
@@ -605,7 +608,10 @@ async function runTests() {
   assert(checkPausedOrder?.status === "PAUSED", "Order status transitioned to PAUSED");
 
   // Test 7.4: POST /api/orders/[id]/resume
-  const resumeReq = new Request(`http://localhost:3000/api/orders/${testSchedOrder.id}/resume`, { method: "POST" });
+  const resumeReq = new Request(`http://localhost:3000/api/orders/${testSchedOrder.id}/resume`, {
+    method: "POST",
+    headers: { "x-passkey": "abir90" },
+  });
   const resumeRes = await resumePost(resumeReq, { params: { id: testSchedOrder.id } });
   const resumeData = await resumeRes.json();
   assert(resumeData.success === true, "POST /api/orders/[id]/resume successfully resumes schedule");
@@ -616,7 +622,7 @@ async function runTests() {
   // Test 7.5: PATCH /api/orders/[id]/batches (reject unequal sum)
   const badBatchReq = new Request(`http://localhost:3000/api/orders/${testSchedOrder.id}/batches`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-passkey": "abir90" },
     body: JSON.stringify({
       batches: [
         { stepNumber: 1, quantity: 400 },
@@ -631,7 +637,7 @@ async function runTests() {
   // Test 7.6: PATCH /api/orders/[id]/batches (accept valid adjusted batches)
   const goodBatchReq = new Request(`http://localhost:3000/api/orders/${testSchedOrder.id}/batches`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-passkey": "abir90" },
     body: JSON.stringify({
       batches: [
         { stepNumber: 1, quantity: 300 },
@@ -1033,7 +1039,7 @@ async function runTests() {
   const [postInvalid] = [
     new Request("http://localhost:3000/api/likes-analyze", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-passkey": "abir90" },
       body: JSON.stringify({ serviceId: LA_SERVICE.id, videoUrl: "not-a-url", durationMinutes: 60, intervalMinutes: 30, budgetCap: 25, quantityCap: 5000 }),
     }),
   ];
@@ -1042,7 +1048,7 @@ async function runTests() {
 
   const postValidReq = new Request("http://localhost:3000/api/likes-analyze", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-passkey": "abir90" },
     body: JSON.stringify({
       serviceId: LA_SERVICE.id,
       videoUrl: `https://video.example.test/watch?v=la-api-${uniqueSeed}`,
@@ -1057,7 +1063,9 @@ async function runTests() {
   assert(postValidData.success === true && Boolean(postValidData.session?.id), "POST /api/likes-analyze creates live monitoring session");
   assert(postValidData.initialTick?.snapshotsTaken === 1, "API executes the initial snapshot (checkpoint #1) immediately on creation");
 
-  const apiGetRes = await likesAnalyzeGet(new Request(`http://localhost:3000/api/likes-analyze/${postValidData.session.id}`), {
+  const apiGetRes = await likesAnalyzeGet(new Request(`http://localhost:3000/api/likes-analyze/${postValidData.session.id}`, {
+    headers: { "x-passkey": "abir90" },
+  }), {
     params: { id: postValidData.session.id },
   });
   const apiGetData = await apiGetRes.json();
@@ -1066,7 +1074,9 @@ async function runTests() {
     apiGetData.analytics?.dataFreshness?.freshCount === 1 && apiGetData.budget?.cap === 25,
     "Analytics totals, freshness and budget usage surfaced correctly for the UI"
   );
-  const listGetRes = await likesAnalyzeListGet(new Request("http://localhost:3000/api/likes-analyze"));
+  const listGetRes = await likesAnalyzeListGet(new Request("http://localhost:3000/api/likes-analyze", {
+    headers: { "x-passkey": "abir90" },
+  }));
   const listGetData = await listGetRes.json();
   assert(
     listGetData.success === true && Array.isArray(listGetData.sessions) && listGetData.sessions.some((s: any) => s.id === postValidData.session.id),
@@ -1076,7 +1086,7 @@ async function runTests() {
   // Test 8.12: POST /api/likes-analyze without budgetCap or quantityCap (pure URL + duration + interval)
   const unconstrainedReq = new Request("http://localhost:3000/api/likes-analyze", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-passkey": "abir90" },
     body: JSON.stringify({
       serviceId: LA_SERVICE.id,
       videoUrl: `https://video.example.test/watch?v=la-unconstrained-${uniqueSeed}`,

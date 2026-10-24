@@ -39,6 +39,7 @@ model Service {
   dripFeedMinInterval Int      @default(10)
   dripFeedMaxInterval Int      @default(1440)
   restrictions        String?
+  providerEndpoint    String?
   isMock              Boolean  @default(false)
   active              Boolean  @default(true)
   orders              Order[]
@@ -46,6 +47,9 @@ model Service {
   comboItems          ComboItem[]
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
+
+  @@index([providerEndpoint, active])
+  @@index([externalId])
 }
 
 model Order {

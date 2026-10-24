@@ -1,6 +1,8 @@
 import { prisma } from "../prisma";
 import { StandardSMMv2Provider, MockSMMProvider, SMMProviderAdapter } from "./adapter";
 import { getProviderBalanceRefreshIntervalMs } from "./balance";
+import { validateProviderEndpointUrl } from "../security/ssrf";
+import { syncProviderServices } from "./service-sync";
 
 export interface UserProviderDTO {
   id: string;
@@ -90,6 +92,12 @@ export async function saveUserProviderConfig(
     active?: boolean;
   }
 ): Promise<UserProviderDTO> {
+  const urlValidation = validateProviderEndpointUrl(data.apiUrl, { allowMock: data.isMock });
+  if (!urlValidation.valid) {
+    throw new Error(`Invalid provider endpoint: ${urlValidation.error}`);
+  }
+  const cleanApiUrl = urlValidation.normalizedUrl || data.apiUrl.trim();
+
   const existing = await prisma.userProviderConfig.findUnique({
     where: { userId },
   });
@@ -104,7 +112,7 @@ export async function saveUserProviderConfig(
     create: {
       userId,
       name: data.name?.trim() || "My SMM Provider",
-      apiUrl: data.apiUrl.trim(),
+      apiUrl: cleanApiUrl,
       apiKey,
       isMock: data.isMock,
       active: data.active ?? true,
@@ -114,7 +122,7 @@ export async function saveUserProviderConfig(
     },
     update: {
       name: data.name?.trim() || existing?.name || "My SMM Provider",
-      apiUrl: data.apiUrl.trim(),
+      apiUrl: cleanApiUrl,
       apiKey,
       isMock: data.isMock,
       active: data.active ?? true,
@@ -131,6 +139,25 @@ export async function saveUserProviderConfig(
       details: `Updated provider configuration "${updated.name}" (${updated.apiUrl}) - Mock Mode: ${updated.isMock}`,
     },
   });
+
+  // If live provider credentials are provided, proactively sync services
+  if (!updated.isMock && apiKey) {
+    try {
+      const provider = new StandardSMMv2Provider(updated.apiUrl, apiKey);
+      await syncProviderServices(provider, "Settings Save", {
+        providerEndpoint: updated.apiUrl,
+        providerName: updated.name,
+        userId,
+      });
+    } catch (syncErr: any) {
+      const msg = syncErr instanceof Error ? syncErr.message : String(syncErr);
+      console.warn("[USER_PROVIDER] Auto-sync on save warning:", msg);
+      await prisma.userProviderConfig.update({
+        where: { id: updated.id },
+        data: { lastError: msg },
+      }).catch(() => {});
+    }
+  }
 
   return getUserProviderConfig(userId);
 }
@@ -149,6 +176,14 @@ export async function testProviderConnection(
   servicesCount?: number;
   error?: string;
 }> {
+  const urlValidation = validateProviderEndpointUrl(apiUrl, { allowMock: isMock });
+  if (!urlValidation.valid) {
+    return {
+      success: false,
+      error: `Security restriction: ${urlValidation.error}`,
+    };
+  }
+
   if (isMock || apiKey?.toLowerCase().includes("mock") || apiUrl?.toLowerCase().includes("mock")) {
     return {
       success: true,
@@ -159,7 +194,8 @@ export async function testProviderConnection(
   }
 
   try {
-    const provider = new StandardSMMv2Provider(apiUrl.trim(), apiKey.trim());
+    const cleanUrl = urlValidation.normalizedUrl || apiUrl.trim();
+    const provider = new StandardSMMv2Provider(cleanUrl, apiKey.trim());
     
     // Test services first
     const services = await provider.getServices();

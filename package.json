@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "test": "tsx test/suite.ts",
+    "test:isolation": "tsx test/provider-isolation.test.ts",
     "test:organic": "tsx --test test/organic-pacing.test.ts",
     "test:balance": "tsx --test test/provider-balance.test.ts",
     "test:orders": "tsx --test test/order-cancellation.test.ts",
