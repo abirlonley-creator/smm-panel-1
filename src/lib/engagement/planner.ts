@@ -4,13 +4,26 @@
  * Generates natural-looking, realistic S-curve delivery schedules
  * for views, likes, saves, shares, and comments.
  * 
+ * Config-driven architecture supporting:
+ * - TikTok FYP videos
+ * - Instagram Reels (multi-wave organic algorithm)
+ * - Instagram Posts (front-loaded photo/carousel feed delivery)
+ * - Any future platform profile added purely by data/config.
+ * 
  * Pure, deterministic, well-tested module shared directly between
  * the backend worker and frontend live preview (preview == real delivery).
  */
 
+import {
+  getPlatformProfile,
+  PlatformProfile,
+  ProfilePresetKey,
+  resolvePlatformService,
+} from "./platform-profiles";
+
 export type EngagementType = "views" | "likes" | "shares" | "saves" | "comments";
 
-export type DurationPreset = "24h" | "72h" | "168h";
+export type DurationPreset = "24h" | "48h" | "72h" | "96h" | "168h";
 
 export type PatternArchetype =
   | "classic"
@@ -22,6 +35,7 @@ export type PatternArchetype =
 export interface ServiceSpec {
   id?: string;
   providerId?: string;
+  providerServiceId?: string;
   name: string;
   minQuantity: number;
   maxQuantity: number;
@@ -38,7 +52,9 @@ export interface PlannedRun {
   cost: number;
   serviceId?: string;
   providerId?: string;
+  providerServiceId?: string;
   minQuantityOverrideNote?: string;
+  isPeak?: boolean;
 }
 
 export interface TypeDeliveryPlan {
@@ -65,6 +81,28 @@ export interface CurvePoint {
   comments: number;
 }
 
+export interface RatioPoint {
+  minutes: number;
+  timeLabel: string;
+  likesRatioPct: number;
+  savesRatioPct: number;
+  sharesRatioPct: number;
+  commentsRatioPct: number;
+  targetLikesPct: number;
+  targetSavesPct: number;
+  targetSharesPct: number;
+  targetCommentsPct: number;
+}
+
+export interface BatchTimelineEntry {
+  type: EngagementType;
+  runIndex: number;
+  minutes: number;
+  scheduledAt: string;
+  quantity: number;
+  isPeak: boolean;
+}
+
 export interface PlanParams {
   seed: number;
   k: number;
@@ -74,6 +112,8 @@ export interface PlanParams {
   durationPreset: DurationPreset;
   durationHours: number;
   targetTz: string;
+  profileId: string;
+  profileName: string;
   ratios: Record<EngagementType, number>;
   startLagsMinutes: Record<EngagementType, number>;
   plannedRunCounts: Record<EngagementType, number>;
@@ -85,7 +125,9 @@ export interface PlanParams {
 export interface OrganicPlanResult {
   seed: number;
   seedString: string;
-  platform: "Instagram" | "TikTok";
+  platform: string;
+  profileId: string;
+  profileName: string;
   baseViews: number;
   durationPreset: DurationPreset;
   durationHours: number;
@@ -95,16 +137,29 @@ export interface OrganicPlanResult {
   plans: Record<EngagementType, TypeDeliveryPlan>;
   allRuns: PlannedRun[];
   curvePoints: CurvePoint[];
+  ratioPoints: RatioPoint[];
+  batchTimeline: BatchTimelineEntry[];
+  summaryChips: {
+    totalViews: number;
+    totalRuns: number;
+    durationHours: number;
+    durationLabel: string;
+    archetype: string;
+    preset: string;
+    totalCost: number;
+  };
 }
 
 export interface PlanOptions {
-  platform?: "Instagram" | "TikTok";
+  platform?: "Instagram" | "TikTok" | string;
+  profileId?: string; // "instagram_reel" | "instagram_post" | "tiktok"
+  presetKey?: ProfilePresetKey; // "fast" | "normal" | "slow"
   baseViews: number;
   seed?: number | string;
   startTime?: Date | string;
   targetTz?: string;
   durationPreset?: DurationPreset;
-  durationHours?: number; // legacy support: 24, 72, 168
+  durationHours?: number; // legacy support: 24, 48, 72, 96, 168
   enabledTypes?: EngagementType[];
   peakHourWeighting?: boolean;
   services?: Partial<Record<EngagementType, ServiceSpec>>;
@@ -155,23 +210,6 @@ export function createSeededRng(seed: number): () => number {
   };
 }
 
-export const DEFAULT_SERVICE_SPECS: Record<"Instagram" | "TikTok", Record<EngagementType, ServiceSpec>> = {
-  Instagram: {
-    views: { name: "Instagram Real Views — Organic Pace", minQuantity: 100, maxQuantity: 5000000, ratePer1000: 0.15 },
-    likes: { name: "Instagram HQ Natural Likes", minQuantity: 20, maxQuantity: 250000, ratePer1000: 0.85 },
-    shares: { name: "Instagram Real Post Shares", minQuantity: 10, maxQuantity: 50000, ratePer1000: 2.10 },
-    saves: { name: "Instagram Post Saves & Bookmarks", minQuantity: 10, maxQuantity: 100000, ratePer1000: 1.40 },
-    comments: { name: "Instagram Verified English Comments", minQuantity: 1, maxQuantity: 2500, ratePer1000: 8.50 },
-  },
-  TikTok: {
-    views: { name: "TikTok High Retention For You Views", minQuantity: 200, maxQuantity: 10000000, ratePer1000: 0.18 },
-    likes: { name: "TikTok Feed Boost Likes", minQuantity: 20, maxQuantity: 500000, ratePer1000: 0.95 },
-    shares: { name: "TikTok Viral Post Shares", minQuantity: 15, maxQuantity: 100000, ratePer1000: 1.80 },
-    saves: { name: "TikTok Favorites & Saves", minQuantity: 10, maxQuantity: 150000, ratePer1000: 1.25 },
-    comments: { name: "TikTok Relevant Engaging Comments", minQuantity: 1, maxQuantity: 3000, ratePer1000: 9.00 },
-  },
-};
-
 /**
  * Normalized logistic S-curve component:
  * L(t) = 1 / (1 + exp(-k * (t - m)))
@@ -194,7 +232,6 @@ export function normalizedLogistic(t: number, k: number, m: number): number {
 function generateValueNoise(rng: () => number, pointsCount = 10, maxAmplitude = 0.026): (t: number) => number {
   const nodes: number[] = [0]; // at t=0, noise=0
   for (let i = 1; i < pointsCount - 1; i++) {
-    // Noise strictly inside [-maxAmplitude, +maxAmplitude]
     nodes.push((rng() * 2 - 1) * maxAmplitude);
   }
   nodes.push(0); // at t=1, noise=0
@@ -230,15 +267,25 @@ export function getHourInAudienceTz(date: Date, targetTz: string): number {
 }
 
 /**
- * Determines peak hour multiplier for audience time zone:
- * +40% during 12:00-14:00 (lunch peak) and 19:00-23:00 (evening peak).
+ * Determines peak hour multiplier for audience time zone based on platform profile.
+ * Default: +40% during 12:00-14:00 (lunch peak) and 19:00-23:00 (evening peak).
  */
-export function getPeakHourMultiplier(date: Date, targetTz: string, enabled: boolean): number {
+export function getPeakHourMultiplier(
+  date: Date,
+  targetTz: string,
+  enabled: boolean,
+  profile?: PlatformProfile
+): number {
   if (!enabled) return 1.0;
   const hour = getHourInAudienceTz(date, targetTz);
-  const isLunchPeak = hour >= 12 && hour < 14;
-  const isEveningPeak = hour >= 19 && hour < 23;
-  return isLunchPeak || isEveningPeak ? 1.4 : 1.0;
+  const windows = profile?.peakHours?.windows || [
+    { startHour: 12, endHour: 14 },
+    { startHour: 19, endHour: 23 },
+  ];
+  const mult = profile?.peakHours?.multiplier ?? 1.4;
+
+  const isPeak = windows.some((w) => hour >= w.startHour && hour < w.endHour);
+  return isPeak ? mult : 1.0;
 }
 
 /**
@@ -297,41 +344,56 @@ function allocateIntegersLargestRemainder(unrounded: number[], targetTotal: numb
 }
 
 /**
- * Merges sub-minimum batches with neighbor and splits batches exceeding maxQuantity.
+ * Enforces Provider Minimum & Maximum Order Size Rules:
+ * Algorithm:
+ * - While any run < min, merge it into its nearest neighbor (prefer later neighbor so engagement lags views).
+ * - If number of runs drops below 1, make a single run equal to the total.
+ * - Runs above max are split.
+ * - The final plan delivers exactly the planned total per type without dropping quantity.
  */
-function enforceServiceBatchBounds(
-  batches: { minute: number; quantity: number }[],
+export function mergeSubMinimumRuns(
+  runs: { minute: number; quantity: number }[],
   minQuantity: number,
   maxQuantity: number,
   targetTotal: number
 ): { minute: number; quantity: number }[] {
-  if (batches.length === 0) return [];
+  if (runs.length === 0) return [];
 
-  // 1. Merge sub-minimum batches
-  let current = [...batches];
-  const merged: { minute: number; quantity: number }[] = [];
+  if (runs.length === 1) {
+    return [{ minute: runs[0].minute, quantity: targetTotal }];
+  }
 
-  for (let i = 0; i < current.length; i++) {
-    const b = current[i];
-    if (b.quantity < minQuantity) {
-      if (merged.length > 0) {
-        merged[merged.length - 1].quantity += b.quantity;
-      } else {
-        merged.push({ ...b });
+  let list = runs.map((r) => ({ ...r }));
+
+  // While any run < min, merge it into its nearest neighbor (prefer later neighbor)
+  let changed = true;
+  while (changed && list.length > 1) {
+    changed = false;
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].quantity < minQuantity) {
+        if (i < list.length - 1) {
+          // Prefer later neighbor (i + 1)
+          list[i + 1].quantity += list[i].quantity;
+          list.splice(i, 1);
+        } else {
+          // Last run has no later neighbor, merge with previous (i - 1)
+          list[i - 1].quantity += list[i].quantity;
+          list.splice(i, 1);
+        }
+        changed = true;
+        break; // restart scan
       }
-    } else {
-      merged.push({ ...b });
     }
   }
 
-  if (merged.length > 1 && merged[0].quantity < minQuantity) {
-    merged[1].quantity += merged[0].quantity;
-    merged.shift();
+  // If number of runs dropped to 1, make a single run equal to the total
+  if (list.length === 1) {
+    list[0].quantity = targetTotal;
   }
 
-  // 2. Split batches exceeding maxQuantity
+  // Split runs above maxQuantity
   const bounded: { minute: number; quantity: number }[] = [];
-  for (const b of merged) {
+  for (const b of list) {
     if (maxQuantity > 0 && b.quantity > maxQuantity) {
       let rem = b.quantity;
       let offset = 0;
@@ -346,7 +408,7 @@ function enforceServiceBatchBounds(
     }
   }
 
-  // 3. Exact conservation check
+  // Final exact total conservation check
   const sum = bounded.reduce((acc, b) => acc + b.quantity, 0);
   if (sum !== targetTotal && bounded.length > 0) {
     bounded[bounded.length - 1].quantity += targetTotal - sum;
@@ -356,23 +418,64 @@ function enforceServiceBatchBounds(
 }
 
 /**
+ * Backward compatibility spec mapping
+ */
+export const DEFAULT_SERVICE_SPECS: Record<"Instagram" | "TikTok", Record<EngagementType, ServiceSpec>> = {
+  Instagram: {
+    views: { name: "Instagram Real Views — Organic Pace", minQuantity: 100, maxQuantity: 5000000, ratePer1000: 0.15 },
+    likes: { name: "Instagram HQ Natural Likes", minQuantity: 20, maxQuantity: 250000, ratePer1000: 0.85 },
+    shares: { name: "Instagram Real Post Shares", minQuantity: 10, maxQuantity: 50000, ratePer1000: 2.10 },
+    saves: { name: "Instagram Post Saves & Bookmarks", minQuantity: 10, maxQuantity: 100000, ratePer1000: 1.40 },
+    comments: { name: "Instagram Verified English Comments", minQuantity: 1, maxQuantity: 2500, ratePer1000: 8.50 },
+  },
+  TikTok: {
+    views: { name: "TikTok High Retention For You Views", minQuantity: 200, maxQuantity: 10000000, ratePer1000: 0.18 },
+    likes: { name: "TikTok Feed Boost Likes", minQuantity: 20, maxQuantity: 500000, ratePer1000: 0.95 },
+    shares: { name: "TikTok Viral Post Shares", minQuantity: 15, maxQuantity: 100000, ratePer1000: 1.80 },
+    saves: { name: "TikTok Favorites & Saves", minQuantity: 10, maxQuantity: 150000, ratePer1000: 1.25 },
+    comments: { name: "TikTok Relevant Engaging Comments", minQuantity: 1, maxQuantity: 3000, ratePer1000: 9.00 },
+  },
+};
+
+/**
  * Generates the deterministic organic delivery plan.
+ * Pure, config-driven, and shared between worker and preview.
  */
 export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
-  const platform = options.platform || "Instagram";
+  // Resolve Config-Driven Platform Profile
+  const profileId = options.profileId || (options.platform?.toLowerCase() === "tiktok" ? "tiktok" : "instagram_reel");
+  const profile = getPlatformProfile(profileId);
+  const platform = profile.platform;
+
   const baseViews = Math.max(1, Math.round(options.baseViews));
   const rawSeed = options.seed ?? Math.floor(Math.random() * 100000000);
   const seedInt = normalizeSeed(rawSeed);
 
-  // Preset resolution: 24h, 72h (default), 168h
-  let durationPreset: DurationPreset = options.durationPreset || "72h";
-  if (!options.durationPreset && options.durationHours) {
-    if (options.durationHours <= 36) durationPreset = "24h";
-    else if (options.durationHours <= 96) durationPreset = "72h";
+  // Preset Resolution (fast, normal, slow, or explicit hours)
+  let durationHours: number;
+  let durationPreset: DurationPreset;
+
+  if (options.presetKey && profile.presets[options.presetKey]) {
+    const opt = profile.presets[options.presetKey];
+    durationHours = opt.hours;
+    durationPreset = opt.durationPreset;
+  } else if (options.durationPreset) {
+    durationPreset = options.durationPreset;
+    durationHours = durationPreset === "24h" ? 24 : durationPreset === "48h" ? 48 : durationPreset === "96h" ? 96 : durationPreset === "168h" ? 168 : 72;
+  } else if (options.durationHours) {
+    durationHours = options.durationHours;
+    if (durationHours <= 30) durationPreset = "24h";
+    else if (durationHours <= 60) durationPreset = "48h";
+    else if (durationHours <= 80) durationPreset = "72h";
+    else if (durationHours <= 120) durationPreset = "96h";
     else durationPreset = "168h";
+  } else {
+    // Default preset from profile
+    const defPreset = profile.presets[profile.defaultPreset] || profile.presets.normal;
+    durationHours = defPreset.hours;
+    durationPreset = defPreset.durationPreset;
   }
 
-  const durationHours = durationPreset === "24h" ? 24 : durationPreset === "168h" ? 168 : 72;
   const durationMinutes = durationHours * 60;
   const targetTz = options.targetTz || "Asia/Kolkata";
   const startTime = options.startTime ? new Date(options.startTime) : new Date();
@@ -382,51 +485,68 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
     ? options.enabledTypes
     : ["views", "likes", "saves", "shares", "comments"];
 
+  // Backend service resolution from profile settings
   const services: Record<EngagementType, ServiceSpec> = {
-    views: options.services?.views || DEFAULT_SERVICE_SPECS[platform].views,
-    likes: options.services?.likes || DEFAULT_SERVICE_SPECS[platform].likes,
-    shares: options.services?.shares || DEFAULT_SERVICE_SPECS[platform].shares,
-    saves: options.services?.saves || DEFAULT_SERVICE_SPECS[platform].saves,
-    comments: options.services?.comments || DEFAULT_SERVICE_SPECS[platform].comments,
+    views: options.services?.views || resolvePlatformService(profile.id, "views"),
+    likes: options.services?.likes || resolvePlatformService(profile.id, "likes"),
+    shares: options.services?.shares || resolvePlatformService(profile.id, "shares"),
+    saves: options.services?.saves || resolvePlatformService(profile.id, "saves"),
+    comments: options.services?.comments || resolvePlatformService(profile.id, "comments"),
   };
 
   // Main RNG for high-level parameters
   const mainRng = createSeededRng(hashSubSeed(seedInt, "archetype_and_envelope"));
 
-  // 1. Pick Pattern Archetype
-  // Weights: classic 40%, double-wave 25%, stall-and-surge 15%, slow-ramp 10%, early-spike 10%
+  // 1. Pick Pattern Archetype from Profile Weights
+  const weights = profile.archetypeWeights;
   const archRoll = mainRng();
   let archetype: PatternArchetype = "classic";
-  if (archRoll < 0.40) archetype = "classic";
-  else if (archRoll < 0.65) archetype = "double-wave";
-  else if (archRoll < 0.80) archetype = "stall-and-surge";
-  else if (archRoll < 0.90) archetype = "slow-ramp";
+
+  const wClassic = weights.classic;
+  const wDouble = wClassic + weights.doubleWave;
+  const wStall = wDouble + weights.stallAndSurge;
+  const wSlow = wStall + weights.slowRamp;
+
+  if (archRoll < wClassic) archetype = "classic";
+  else if (archRoll < wDouble) archetype = "double-wave";
+  else if (archRoll < wStall) archetype = "stall-and-surge";
+  else if (archRoll < wSlow) archetype = "slow-ramp";
   else archetype = "early-spike";
 
-  // 2. Steepness k in [6, 8] and Midpoint m in [0.25, 0.30]
+  // 2. Steepness k and Midpoint m within Profile Envelope
+  const [kMin, kMax] = profile.viewsEnvelope.kRange;
+  const [mMin, mMax] = profile.viewsEnvelope.mRange;
+  const kSpan = kMax - kMin;
+  const mSpan = mMax - mMin;
+
   let k: number;
   let m: number;
 
   if (archetype === "slow-ramp") {
-    k = 6.0 + mainRng() * 0.6; // [6.0, 6.6]
-    m = 0.28 + mainRng() * 0.02; // [0.28, 0.30]
+    // k at low end, m at high end
+    k = kMin + mainRng() * (kSpan * 0.35);
+    m = mMin + mSpan * 0.65 + mainRng() * (mSpan * 0.35);
   } else if (archetype === "early-spike") {
-    k = 7.4 + mainRng() * 0.6; // [7.4, 8.0]
-    m = 0.25 + mainRng() * 0.02; // [0.25, 0.27]
+    // k at high end, m at low end
+    k = kMin + kSpan * 0.65 + mainRng() * (kSpan * 0.35);
+    m = mMin + mainRng() * (mSpan * 0.35);
   } else {
-    k = 6.0 + mainRng() * 2.0; // [6.0, 8.0]
-    m = 0.25 + mainRng() * 0.05; // [0.25, 0.30]
+    k = kMin + mainRng() * kSpan;
+    m = mMin + mainRng() * mSpan;
   }
 
-  // Archetype specific parameters
-  const doubleWaveM2 = 0.45 + mainRng() * 0.15; // [0.45, 0.60]
-  const doubleWaveK2 = 6.0 + mainRng() * 2.0;
+  // Double wave parameters
+  const secondCenterRange = profile.doubleWaveConfig?.secondWaveCenterRange || [0.45, 0.65];
+  const secondWeightRange = profile.doubleWaveConfig?.secondWaveWeightRange || [0.25, 0.35];
+  const doubleWaveM2 = secondCenterRange[0] + mainRng() * (secondCenterRange[1] - secondCenterRange[0]);
+  const doubleWaveWeight2 = secondWeightRange[0] + mainRng() * (secondWeightRange[1] - secondWeightRange[0]);
+  const doubleWaveK2 = kMin + mainRng() * kSpan;
 
   const stallPlateauCenter = 0.35 + mainRng() * 0.20; // [0.35, 0.55]
-  const stallPlateauWidth = 0.03 + mainRng() * 0.05; // [0.03, 0.08]
+  const stallPlateauWidth = 0.03 + mainRng() * 0.05;  // [0.03, 0.08]
 
   // Value noise within ±3%
-  const noiseAmp = 0.022 + mainRng() * 0.005; // strictly <= 0.027 < 0.030
+  const noiseAmp = Math.min(profile.viewsEnvelope.noiseAmplitudeMax, 0.022 + mainRng() * 0.005);
   const noiseFunc = generateValueNoise(createSeededRng(hashSubSeed(seedInt, "views_noise")), 10, noiseAmp);
 
   // Unified Archetype Curve Function F(t)
@@ -436,9 +556,8 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
 
     let base: number;
     if (archetype === "double-wave") {
-      base = 0.70 * normalizedLogistic(t, k, m) + 0.30 * normalizedLogistic(t, doubleWaveK2, doubleWaveM2);
+      base = (1 - doubleWaveWeight2) * normalizedLogistic(t, k, m) + doubleWaveWeight2 * normalizedLogistic(t, doubleWaveK2, doubleWaveM2);
     } else if (archetype === "stall-and-surge") {
-      // Smooth monotonic time-warp with plateau around stallPlateauCenter
       const p = stallPlateauCenter;
       const w = stallPlateauWidth;
       const sigma = w / 2;
@@ -483,48 +602,59 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
     return denseViewsCumulative[idx] + (denseViewsCumulative[idx + 1] - denseViewsCumulative[idx]) * rem;
   };
 
-  // 3. Sub-Seed Ratio Calculations (Sliding scale for views)
-  // Likes: ~7% under 5k, ~6% at 5k-100k, ~3.5% above 100k, before ±25%
-  let baseLikesRatio = 0.06;
-  if (baseViews < 5000) baseLikesRatio = 0.07;
-  else if (baseViews > 100000) baseLikesRatio = 0.035;
+  // 3. Sub-Seed Ratio Calculations (Sliding scale from profile)
+  const typeConfigs = profile.types;
+  const likesCfg = typeConfigs.likes;
+  let baseLikesRatio = likesCfg.baseRatio;
+
+  if (likesCfg.slidingScale) {
+    const sc = likesCfg.slidingScale;
+    if (baseViews < sc.lowViewsThreshold) baseLikesRatio = sc.lowViewsRatio;
+    else if (baseViews > sc.highViewsThreshold) baseLikesRatio = sc.highViewsRatio;
+    else baseLikesRatio = sc.midRatio;
+  }
 
   const likesRng = createSeededRng(hashSubSeed(seedInt, "likes"));
   const savesRng = createSeededRng(hashSubSeed(seedInt, "saves"));
   const sharesRng = createSeededRng(hashSubSeed(seedInt, "shares"));
   const commentsRng = createSeededRng(hashSubSeed(seedInt, "comments"));
 
+  const sampleRatioWithVariance = (base: number, variance: number, rng: () => number) => {
+    // e.g. variance 0.25 => [1 - 0.25, 1 + 0.25]
+    return base * (1 - variance + rng() * (variance * 2));
+  };
+
   const sampledRatios: Record<EngagementType, number> = {
     views: 1.0,
-    // Likes: ratio ±25% => [0.75, 1.25]
-    likes: options.customRatios?.likes ?? (baseLikesRatio * (0.75 + likesRng() * 0.50)),
-    // Saves: 1% ±30% => [0.007, 0.013]
-    saves: options.customRatios?.saves ?? (0.010 * (0.70 + savesRng() * 0.60)),
-    // Shares: 0.5% ±30% => [0.0035, 0.0065]
-    shares: options.customRatios?.shares ?? (0.005 * (0.70 + sharesRng() * 0.60)),
-    // Comments: 0.2% ±40% => [0.0012, 0.0028]
-    comments: options.customRatios?.comments ?? (0.002 * (0.60 + commentsRng() * 0.80)),
+    likes: options.customRatios?.likes ?? sampleRatioWithVariance(baseLikesRatio, likesCfg.ratioVariance, likesRng),
+    saves: options.customRatios?.saves ?? sampleRatioWithVariance(typeConfigs.saves.baseRatio, typeConfigs.saves.ratioVariance, savesRng),
+    shares: options.customRatios?.shares ?? sampleRatioWithVariance(typeConfigs.shares.baseRatio, typeConfigs.shares.ratioVariance, sharesRng),
+    comments: options.customRatios?.comments ?? sampleRatioWithVariance(typeConfigs.comments.baseRatio, typeConfigs.comments.ratioVariance, commentsRng),
   };
 
   // 4. Start lags per type
+  const sampleLag = (range: [number, number], rng: () => number) => {
+    return Math.round(range[0] + rng() * (range[1] - range[0]));
+  };
+
   const sampledLagsMinutes: Record<EngagementType, number> = {
     views: 0,
-    likes: Math.round(5 + likesRng() * 10), // 5-15 min
-    saves: Math.round(30 + savesRng() * 30), // 30-60 min
-    shares: Math.round(60 + sharesRng() * 120), // 1-3 h (60-180 min)
-    comments: Math.round(120 + commentsRng() * 240), // 2-6 h (120-360 min)
+    likes: sampleLag(likesCfg.lagMinutesRange, likesRng),
+    saves: sampleLag(typeConfigs.saves.lagMinutesRange, savesRng),
+    shares: sampleLag(typeConfigs.shares.lagMinutesRange, sharesRng),
+    comments: sampleLag(typeConfigs.comments.lagMinutesRange, commentsRng),
   };
 
   // 5. Run counts scaled by duration preset
-  const presetScale = durationPreset === "24h" ? 0.6 : durationPreset === "168h" ? 1.5 : 1.0;
+  const presetScale = durationHours / 72; // normal baseline is 72h
   const viewsRng = createSeededRng(hashSubSeed(seedInt, "views"));
 
   const nominalRunCounts: Record<EngagementType, number> = {
-    views: Math.round(presetScale * (40 + viewsRng() * 40)), // 40-80 base
-    likes: Math.round(presetScale * (15 + likesRng() * 15)), // 15-30 base
-    saves: Math.round(presetScale * (6 + savesRng() * 9)),   // 6-15 base
-    shares: Math.round(presetScale * (6 + sharesRng() * 9)), // 6-15 base
-    comments: Math.round(presetScale * (5 + commentsRng() * 7)), // 5-12 base
+    views: Math.max(12, Math.round(presetScale * (40 + viewsRng() * 40))),
+    likes: Math.max(6, Math.round(presetScale * (15 + likesRng() * 15))),
+    saves: Math.max(3, Math.round(presetScale * (6 + savesRng() * 9))),
+    shares: Math.max(3, Math.round(presetScale * (6 + sharesRng() * 9))),
+    comments: Math.max(2, Math.round(presetScale * (5 + commentsRng() * 7))),
   };
 
   const pausesCount = Math.floor(viewsRng() * 4); // 0-3 pauses
@@ -539,12 +669,13 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
     comments: Math.floor(baseViews * sampledRatios.comments + 1e-9),
   };
 
-  // Step 8 validation: If total is below provider minimum, return validation error
+  // Provider Minimum Rule: Return clear validation error if total < provider service minimum
   for (const t of enabledTypes) {
     const srv = services[t];
     if (plannedTotals[t] < srv.minQuantity) {
+      const typeLabel = t.charAt(0).toUpperCase() + t.slice(1);
       throw new Error(
-        `Validation error: Planned total of ${plannedTotals[t].toLocaleString()} ${t} is below the provider service minimum of ${srv.minQuantity.toLocaleString()}. Please increase base views or adjust ratio.`
+        `Validation error: ${typeLabel} need at least ${srv.minQuantity.toLocaleString()} for this service. Increase views or turn ${typeLabel} off.`
       );
     }
   }
@@ -558,13 +689,11 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
 
   // Inverse-transform sampling of quantile points
   const rawViewMinutes: number[] = [];
-  // Ensure run 1 starts very early (2-5 mins) to establish headroom for secondary types
   const firstViewMin = Math.round(2 + viewsRng() * 3);
   rawViewMinutes.push(firstViewMin);
 
   for (let i = 2; i <= viewsRunCount; i++) {
     const qTarget = i / (viewsRunCount + 0.5);
-    // Find t where getMonotoneViewsFraction(t) >= qTarget
     let low = 0;
     let high = 1;
     for (let iter = 0; iter < 18; iter++) {
@@ -580,7 +709,7 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
   }
   rawViewMinutes.sort((a, b) => a - b);
 
-  // Apply Pauses (0-3 short pauses) and Bursts (0-2 bursts)
+  // Apply Pauses and Bursts
   for (let p = 0; p < pausesCount; p++) {
     const pauseIdx = Math.floor(viewsRng() * (rawViewMinutes.length - 2)) + 1;
     const pauseMins = Math.round(15 + viewsRng() * 25);
@@ -594,12 +723,11 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
   }
   rawViewMinutes.sort((a, b) => a - b);
 
-  // Compute Raw Batch Weights for Views from Log-Normal Skew & Peak-Hour Multipliers (+40%)
+  // Compute Raw Batch Weights for Views with Log-Normal Skew & Peak-Hour Multipliers
   const rawViewWeights: number[] = [];
   for (let i = 0; i < rawViewMinutes.length; i++) {
     const runDate = new Date(startTime.getTime() + rawViewMinutes[i] * 60000);
-    const peakMult = getPeakHourMultiplier(runDate, targetTz, peakHourEnabled);
-    // Log-normal skew / variance
+    const peakMult = getPeakHourMultiplier(runDate, targetTz, peakHourEnabled, profile);
     const skew = Math.exp((viewsRng() - 0.5) * 0.35);
     rawViewWeights.push(skew * peakMult);
   }
@@ -613,8 +741,8 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
     quantity: viewBatchQuantities[idx],
   }));
 
-  // Enforce provider service minimum and maximum bounds
-  const mergedViewsRuns = enforceServiceBatchBounds(
+  // Enforce Provider Minimum Algorithm
+  const mergedViewsRuns = mergeSubMinimumRuns(
     initialViewBatches,
     services.views.minQuantity,
     services.views.maxQuantity,
@@ -626,6 +754,7 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
   const viewsPlannedRuns: PlannedRun[] = mergedViewsRuns.map((r, idx) => {
     cumViews += r.quantity;
     const runTime = new Date(startTime.getTime() + r.minute * 60000);
+    const isPeak = getPeakHourMultiplier(runTime, targetTz, true, profile) > 1.0;
     return {
       engagementType: "views",
       runIndex: idx + 1,
@@ -636,10 +765,11 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
       cost: Number(((r.quantity / 1000) * services.views.ratePer1000).toFixed(4)),
       serviceId: services.views.id,
       providerId: services.views.providerId,
+      providerServiceId: services.views.providerServiceId,
+      isPeak,
     };
   });
 
-  // Query views delivered so far at any minute
   const getViewsDeliveredSoFar = (minute: number): number => {
     let delivered = 0;
     for (const v of viewsPlannedRuns) {
@@ -649,8 +779,7 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
     return delivered;
   };
 
-  // 8. Generate SECONDARY Engagement Types (likes, saves, shares, comments)
-  // Strictly Enforcing the Hard Rule: delivered_so_far(type, t) <= target_ratio(type) * views_delivered_so_far(t)
+  // 8. Generate Secondary Types & Enforce Hard Rule
   const typePlans: Record<EngagementType, TypeDeliveryPlan> = {} as any;
   const allRuns: PlannedRun[] = [...viewsPlannedRuns];
 
@@ -684,9 +813,8 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
       runCount = Math.max(1, Math.floor(totalQty / s.minQuantity));
     }
 
-    // Special Case: Comments with batch size 1-3
+    // Special Case: Comments with small batch sizes 1-3
     if (t === "comments" && s.minQuantity <= 3) {
-      // Draw batch sizes 1-3 until summing exactly to totalQty
       const commentBatchSizes: number[] = [];
       let currentCommentSum = 0;
       while (currentCommentSum < totalQty) {
@@ -695,7 +823,6 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
           commentBatchSizes.push(rem);
           currentCommentSum += rem;
         } else {
-          // Draw 1, 2, or 3
           const roll = typeRng();
           const sz = roll < 0.45 ? 1 : roll < 0.80 ? 2 : 3;
           commentBatchSizes.push(sz);
@@ -703,8 +830,6 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
         }
       }
 
-      // Generate long random gaps via Exponential distribution
-      // Exponential gaps: X = -ln(U) * meanGap
       const commentMinutes: number[] = [];
       const meanGap = Math.max(5, (durationMinutes - lagMinutes) / (commentBatchSizes.length + 1));
       let curMin = lagMinutes;
@@ -715,17 +840,15 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
       }
       commentMinutes.sort((a, b) => a - b);
 
-      // Build runs strictly enforcing the hard rule
+      // Build runs strictly enforcing the hard ratio rule
       const commentRuns: PlannedRun[] = [];
       let cumComments = 0;
       for (let i = 0; i < commentBatchSizes.length; i++) {
         let runMin = commentMinutes[i];
         const qty = commentBatchSizes[i];
 
-        // Ensure views delivered so far permits this batch
         let viewsAtMin = getViewsDeliveredSoFar(runMin);
         while (cumComments + qty > targetRatio * viewsAtMin + 1e-9 && runMin < durationMinutes) {
-          // Push forward to 1 minute after next view run
           const nextView = viewsPlannedRuns.find((v) => v.minutesFromStart >= runMin);
           if (nextView) {
             runMin = Math.min(durationMinutes, nextView.minutesFromStart + 1);
@@ -739,6 +862,7 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
 
         cumComments += qty;
         const runTime = new Date(startTime.getTime() + runMin * 60000);
+        const isPeak = getPeakHourMultiplier(runTime, targetTz, true, profile) > 1.0;
         commentRuns.push({
           engagementType: "comments",
           runIndex: i + 1,
@@ -749,6 +873,8 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
           cost: Number(((qty / 1000) * s.ratePer1000).toFixed(4)),
           serviceId: s.id,
           providerId: s.providerId,
+          providerServiceId: s.providerServiceId,
+          isPeak,
         });
       }
 
@@ -770,21 +896,14 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
       continue;
     }
 
-    // Standard Secondary Types (Likes, Saves, Shares, or high-min Comments)
-    // Distributed across [lagMinutes, durationMinutes]
+    // Standard Secondary Types
     const rawMinutes: number[] = [];
     const availableMinutes = Math.max(60, durationMinutes - lagMinutes);
+    const delayFrac = typeConfigs[t]?.curveDelayFraction ?? (t === "likes" ? 0.08 : 0.12);
 
     for (let i = 1; i <= runCount; i++) {
       const q = i / (runCount + 0.5);
-      // Delayed quantile
-      let delayT: number;
-      if (t === "likes") {
-        // Curve delayed by 10% of duration
-        delayT = Math.max(0.005, Math.min(0.995, q * 0.95 + 0.05));
-      } else {
-        delayT = Math.max(0.005, Math.min(0.995, q));
-      }
+      const delayT = Math.max(0.005, Math.min(0.995, q * (1 - delayFrac) + delayFrac));
       const jitter = (typeRng() - 0.5) * (0.4 / runCount);
       const frac = Math.max(0.01, Math.min(0.99, delayT + jitter));
       const minFromStart = Math.round(lagMinutes + frac * availableMinutes);
@@ -792,11 +911,10 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
     }
     rawMinutes.sort((a, b) => a - b);
 
-    // Compute weights with peak hour weighting
     const weights: number[] = [];
     for (let i = 0; i < rawMinutes.length; i++) {
       const runDate = new Date(startTime.getTime() + rawMinutes[i] * 60000);
-      const peakMult = getPeakHourMultiplier(runDate, targetTz, peakHourEnabled);
+      const peakMult = getPeakHourMultiplier(runDate, targetTz, peakHourEnabled, profile);
       const skew = Math.exp((typeRng() - 0.5) * 0.35);
       weights.push(peakMult * skew);
     }
@@ -809,17 +927,15 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
       quantity: batchQuantities[idx],
     }));
 
-    // Enforce provider service minimum and maximum bounds
-    const mergedBatches = enforceServiceBatchBounds(
+    // Provider Minimum Rule: Merge sub-min batches into nearest neighbor
+    const mergedBatches = mergeSubMinimumRuns(
       initialBatches,
       s.minQuantity,
       s.maxQuantity,
       totalQty
     );
 
-    // HARD RULE ENFORCEMENT & CLAMPING:
-    // delivered_so_far(type, t) <= target_ratio * views_delivered_so_far(t)
-    // Push excess forward in time, never drop it.
+    // Re-check Hard Rule after merging; push quantity later in time if a merge broke it
     let cumDelivered = 0;
     const finalRuns: PlannedRun[] = [];
 
@@ -827,7 +943,6 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
       let bMinute = mergedBatches[i].minute;
       let bQty = mergedBatches[i].quantity;
 
-      // Find earliest minute where views delivered allows this cumulative quantity
       let viewsAtTime = getViewsDeliveredSoFar(bMinute);
       while (cumDelivered + bQty > targetRatio * viewsAtTime + 1e-9 && bMinute < durationMinutes) {
         const nextViewRun = viewsPlannedRuns.find((v) => v.minutesFromStart >= bMinute);
@@ -835,7 +950,6 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
           bMinute = Math.min(durationMinutes, nextViewRun.minutesFromStart + 1);
           viewsAtTime = getViewsDeliveredSoFar(bMinute);
         } else {
-          // Clamped to final minute
           bMinute = durationMinutes;
           viewsAtTime = viewsTotal;
           break;
@@ -844,6 +958,8 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
 
       cumDelivered += bQty;
       const scheduledTime = new Date(startTime.getTime() + bMinute * 60000);
+      const isPeak = getPeakHourMultiplier(scheduledTime, targetTz, true, profile) > 1.0;
+
       finalRuns.push({
         engagementType: t,
         runIndex: i + 1,
@@ -854,10 +970,8 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
         cost: Number(((bQty / 1000) * s.ratePer1000).toFixed(4)),
         serviceId: s.id,
         providerId: s.providerId,
-        minQuantityOverrideNote:
-          t === "comments" && s.minQuantity > 3
-            ? `Comments batch size adjusted to meet provider minimum of ${s.minQuantity}`
-            : undefined,
+        providerServiceId: s.providerServiceId,
+        isPeak,
       });
     }
 
@@ -895,6 +1009,7 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
 
   // 9. Generate Smooth Preview Series for UI Charts (30 sample points)
   const curvePoints: CurvePoint[] = [];
+  const ratioPoints: RatioPoint[] = [];
   const SAMPLE_POINTS = 30;
   const sampledBuckets: number[] = [];
 
@@ -929,7 +1044,32 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
     if (s % 3 === 0) {
       sampledBuckets.push(Math.round(pt.views));
     }
+
+    // Ratio-Over-Time Series
+    const curV = Math.max(1, pt.views);
+    ratioPoints.push({
+      minutes: mins,
+      timeLabel,
+      likesRatioPct: Number(((pt.likes / curV) * 100).toFixed(2)),
+      savesRatioPct: Number(((pt.saves / curV) * 100).toFixed(2)),
+      sharesRatioPct: Number(((pt.shares / curV) * 100).toFixed(2)),
+      commentsRatioPct: Number(((pt.comments / curV) * 100).toFixed(2)),
+      targetLikesPct: Number((sampledRatios.likes * 100).toFixed(2)),
+      targetSavesPct: Number((sampledRatios.saves * 100).toFixed(2)),
+      targetSharesPct: Number((sampledRatios.shares * 100).toFixed(2)),
+      targetCommentsPct: Number((sampledRatios.comments * 100).toFixed(2)),
+    });
   }
+
+  // 10. Batch Timeline Entries
+  const batchTimeline: BatchTimelineEntry[] = allRuns.map((r) => ({
+    type: r.engagementType,
+    runIndex: r.runIndex,
+    minutes: r.minutesFromStart,
+    scheduledAt: r.scheduledAt,
+    quantity: r.quantity,
+    isPeak: Boolean(r.isPeak),
+  }));
 
   // Compute Uniqueness Fingerprint
   const fingerprint = computePlanFingerprint(archetype, k, m, sampledBuckets);
@@ -950,6 +1090,8 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
     durationPreset,
     durationHours,
     targetTz,
+    profileId: profile.id,
+    profileName: profile.name,
     ratios: sampledRatios,
     startLagsMinutes: sampledLagsMinutes,
     plannedRunCounts: nominalRunCounts,
@@ -958,10 +1100,22 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
     fingerprint,
   };
 
+  const summaryChips = {
+    totalViews: viewsTotal,
+    totalRuns: allRuns.length,
+    durationHours,
+    durationLabel: `${durationHours} Hours (${durationPreset})`,
+    archetype: archetype.charAt(0).toUpperCase() + archetype.slice(1),
+    preset: durationPreset,
+    totalCost: overallCost,
+  };
+
   return {
     seed: seedInt,
     seedString: String(rawSeed),
     platform,
+    profileId: profile.id,
+    profileName: profile.name,
     baseViews,
     durationPreset,
     durationHours,
@@ -971,6 +1125,9 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
     plans: typePlans,
     allRuns,
     curvePoints,
+    ratioPoints,
+    batchTimeline,
+    summaryChips,
   };
 }
 
@@ -992,12 +1149,10 @@ export function generateUniqueOrganicPlan(
   while (attempts < maxAttempts) {
     attempts++;
     const [prevArch] = previousFingerprint.split(":");
-    // If archetype differs, it's visibly distinct
     if (plan.params.archetype !== prevArch) {
       break;
     }
 
-    // Check curve area difference
     initialSeed = (initialSeed + 1013904223) >>> 0;
     const candidate = generateOrganicPlan({ ...options, seed: initialSeed });
     const dist = computeCurveDistance(plan, candidate);

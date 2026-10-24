@@ -1,0 +1,515 @@
+{
+  "instagram_reel": {
+    "id": "instagram_reel",
+    "platform": "Instagram",
+    "name": "Instagram Reel",
+    "badge": "Reel / Video",
+    "description": "Multi-wave organic algorithm pacing tailored for short-form Instagram Reels.",
+    "explainerText": "Instagram tests content in waves. Views come first, then likes, then saves and shares. Comments are rare. Our delivery follows this with smooth, uneven batches. Recommended: 72h for Reels, 48h for photo posts.",
+    "presets": {
+      "fast": {
+        "key": "fast",
+        "label": "Fast Paced (24h)",
+        "hours": 24,
+        "durationPreset": "24h"
+      },
+      "normal": {
+        "key": "normal",
+        "label": "Normal Pace (72h)",
+        "hours": 72,
+        "durationPreset": "72h",
+        "isDefault": true
+      },
+      "slow": {
+        "key": "slow",
+        "label": "Slow Organic (168h / 7d)",
+        "hours": 168,
+        "durationPreset": "168h"
+      }
+    },
+    "defaultPreset": "normal",
+    "viewsEnvelope": {
+      "kRange": [
+        5.5,
+        7.5
+      ],
+      "mRange": [
+        0.25,
+        0.35
+      ],
+      "noiseAmplitudeMax": 0.026
+    },
+    "archetypeWeights": {
+      "classic": 0.3,
+      "doubleWave": 0.4,
+      "stallAndSurge": 0.15,
+      "slowRamp": 0.1,
+      "earlySpike": 0.05
+    },
+    "doubleWaveConfig": {
+      "secondWaveCenterRange": [
+        0.5,
+        0.65
+      ],
+      "secondWaveWeightRange": [
+        0.25,
+        0.35
+      ]
+    },
+    "types": {
+      "views": {
+        "baseRatio": 1,
+        "ratioVariance": 0,
+        "lagMinutesRange": [
+          0,
+          0
+        ]
+      },
+      "likes": {
+        "baseRatio": 0.045,
+        "ratioVariance": 0.25,
+        "slidingScale": {
+          "lowViewsThreshold": 10000,
+          "lowViewsRatio": 0.05,
+          "highViewsThreshold": 100000,
+          "highViewsRatio": 0.035,
+          "midRatio": 0.045
+        },
+        "lagMinutesRange": [
+          5,
+          20
+        ],
+        "curveDelayFraction": 0.08
+      },
+      "saves": {
+        "baseRatio": 0.012,
+        "ratioVariance": 0.3,
+        "lagMinutesRange": [
+          45,
+          90
+        ],
+        "curveDelayFraction": 0.15,
+        "curveStretchFraction": 1.15
+      },
+      "shares": {
+        "baseRatio": 0.005,
+        "ratioVariance": 0.3,
+        "lagMinutesRange": [
+          60,
+          240
+        ],
+        "sparse": true
+      },
+      "comments": {
+        "baseRatio": 0.002,
+        "ratioVariance": 0.4,
+        "lagMinutesRange": [
+          120,
+          480
+        ],
+        "batchSizeRange": [
+          1,
+          3
+        ]
+      }
+    },
+    "peakHours": {
+      "enabled": true,
+      "multiplier": 1.4,
+      "windows": [
+        {
+          "startHour": 12,
+          "endHour": 14
+        },
+        {
+          "startHour": 19,
+          "endHour": 23
+        }
+      ]
+    },
+    "serviceMappings": {
+      "views": {
+        "id": "srv-ig-views",
+        "providerId": "prov-default",
+        "name": "Instagram Reel Views — Organic High Retention",
+        "minQuantity": 100,
+        "maxQuantity": 5000000,
+        "ratePer1000": 0.15
+      },
+      "likes": {
+        "id": "srv-custom-likes-v2",
+        "providerId": "prov-default",
+        "name": "Instagram Super HQ Likes v2",
+        "minQuantity": 25,
+        "maxQuantity": 250000,
+        "ratePer1000": 1.15,
+        "providerServiceId": "ext-99441"
+      },
+      "saves": {
+        "id": "srv-ig-saves",
+        "providerId": "prov-default",
+        "name": "Instagram Post Saves & Bookmarks",
+        "minQuantity": 10,
+        "maxQuantity": 100000,
+        "ratePer1000": 1.4
+      },
+      "shares": {
+        "id": "srv-ig-shares",
+        "providerId": "prov-default",
+        "name": "Instagram Real Post Shares",
+        "minQuantity": 10,
+        "maxQuantity": 50000,
+        "ratePer1000": 2.1
+      },
+      "comments": {
+        "id": "srv-ig-comments",
+        "providerId": "prov-default",
+        "name": "Instagram Verified English Comments",
+        "minQuantity": 1,
+        "maxQuantity": 2500,
+        "ratePer1000": 8.5
+      }
+    }
+  },
+  "instagram_post": {
+    "id": "instagram_post",
+    "platform": "Instagram",
+    "name": "Instagram Post (Photo/Carousel)",
+    "badge": "Photo / Carousel",
+    "description": "Front-loaded engagement distribution matching audience interactions on feed photos & carousels.",
+    "explainerText": "Photo and carousel posts receive the bulk of their impressions in the first 24-48 hours. Our profile front-loads early delivery with higher initial steepness before smoothly tapering off. Recommended: 48h.",
+    "presets": {
+      "fast": {
+        "key": "fast",
+        "label": "Fast Feed (24h)",
+        "hours": 24,
+        "durationPreset": "24h"
+      },
+      "normal": {
+        "key": "normal",
+        "label": "Normal Feed (48h)",
+        "hours": 48,
+        "durationPreset": "48h",
+        "isDefault": true
+      },
+      "slow": {
+        "key": "slow",
+        "label": "Extended Feed (96h)",
+        "hours": 96,
+        "durationPreset": "96h"
+      }
+    },
+    "defaultPreset": "normal",
+    "viewsEnvelope": {
+      "kRange": [
+        5.5,
+        7.5
+      ],
+      "mRange": [
+        0.18,
+        0.28
+      ],
+      "noiseAmplitudeMax": 0.026
+    },
+    "archetypeWeights": {
+      "classic": 0.35,
+      "doubleWave": 0.35,
+      "stallAndSurge": 0.15,
+      "slowRamp": 0.1,
+      "earlySpike": 0.05
+    },
+    "doubleWaveConfig": {
+      "secondWaveCenterRange": [
+        0.45,
+        0.6
+      ],
+      "secondWaveWeightRange": [
+        0.2,
+        0.3
+      ]
+    },
+    "types": {
+      "views": {
+        "baseRatio": 1,
+        "ratioVariance": 0,
+        "lagMinutesRange": [
+          0,
+          0
+        ]
+      },
+      "likes": {
+        "baseRatio": 0.045,
+        "ratioVariance": 0.25,
+        "slidingScale": {
+          "lowViewsThreshold": 10000,
+          "lowViewsRatio": 0.05,
+          "highViewsThreshold": 100000,
+          "highViewsRatio": 0.035,
+          "midRatio": 0.045
+        },
+        "lagMinutesRange": [
+          5,
+          15
+        ],
+        "curveDelayFraction": 0.07
+      },
+      "saves": {
+        "baseRatio": 0.012,
+        "ratioVariance": 0.3,
+        "lagMinutesRange": [
+          30,
+          60
+        ],
+        "curveDelayFraction": 0.12,
+        "curveStretchFraction": 1.1
+      },
+      "shares": {
+        "baseRatio": 0.005,
+        "ratioVariance": 0.3,
+        "lagMinutesRange": [
+          45,
+          180
+        ],
+        "sparse": true
+      },
+      "comments": {
+        "baseRatio": 0.002,
+        "ratioVariance": 0.4,
+        "lagMinutesRange": [
+          60,
+          300
+        ],
+        "batchSizeRange": [
+          1,
+          3
+        ]
+      }
+    },
+    "peakHours": {
+      "enabled": true,
+      "multiplier": 1.4,
+      "windows": [
+        {
+          "startHour": 12,
+          "endHour": 14
+        },
+        {
+          "startHour": 19,
+          "endHour": 23
+        }
+      ]
+    },
+    "serviceMappings": {
+      "views": {
+        "id": "srv-ig-post-views",
+        "providerId": "prov-default",
+        "name": "Instagram Feed Post Views — Organic Pace",
+        "minQuantity": 100,
+        "maxQuantity": 5000000,
+        "ratePer1000": 0.15
+      },
+      "likes": {
+        "id": "srv-ig-post-likes",
+        "providerId": "prov-default",
+        "name": "Instagram Feed Post Likes",
+        "minQuantity": 20,
+        "maxQuantity": 250000,
+        "ratePer1000": 0.85
+      },
+      "saves": {
+        "id": "srv-ig-post-saves",
+        "providerId": "prov-default",
+        "name": "Instagram Post Saves & Bookmarks",
+        "minQuantity": 10,
+        "maxQuantity": 100000,
+        "ratePer1000": 1.4
+      },
+      "shares": {
+        "id": "srv-ig-post-shares",
+        "providerId": "prov-default",
+        "name": "Instagram Real Post Shares",
+        "minQuantity": 10,
+        "maxQuantity": 50000,
+        "ratePer1000": 2.1
+      },
+      "comments": {
+        "id": "srv-ig-post-comments",
+        "providerId": "prov-default",
+        "name": "Instagram Verified English Comments",
+        "minQuantity": 1,
+        "maxQuantity": 2500,
+        "ratePer1000": 8.5
+      }
+    }
+  },
+  "tiktok": {
+    "id": "tiktok",
+    "platform": "TikTok",
+    "name": "TikTok Video",
+    "badge": "FYP Video",
+    "description": "Viral FYP surge and retention algorithm pacing for TikTok short-form videos.",
+    "explainerText": "TikTok's recommendation engine evaluates initial watch-time completion before pushing videos to broader FYP test clusters. Our pacing starts with early views, cascading into likes and rapid shares.",
+    "presets": {
+      "fast": {
+        "key": "fast",
+        "label": "Fast FYP (24h)",
+        "hours": 24,
+        "durationPreset": "24h"
+      },
+      "normal": {
+        "key": "normal",
+        "label": "Normal Growth (72h)",
+        "hours": 72,
+        "durationPreset": "72h",
+        "isDefault": true
+      },
+      "slow": {
+        "key": "slow",
+        "label": "Long Tail (168h / 7d)",
+        "hours": 168,
+        "durationPreset": "168h"
+      }
+    },
+    "defaultPreset": "normal",
+    "viewsEnvelope": {
+      "kRange": [
+        6,
+        8
+      ],
+      "mRange": [
+        0.25,
+        0.3
+      ],
+      "noiseAmplitudeMax": 0.026
+    },
+    "archetypeWeights": {
+      "classic": 0.4,
+      "doubleWave": 0.25,
+      "stallAndSurge": 0.15,
+      "slowRamp": 0.1,
+      "earlySpike": 0.1
+    },
+    "doubleWaveConfig": {
+      "secondWaveCenterRange": [
+        0.45,
+        0.6
+      ],
+      "secondWaveWeightRange": [
+        0.25,
+        0.35
+      ]
+    },
+    "types": {
+      "views": {
+        "baseRatio": 1,
+        "ratioVariance": 0,
+        "lagMinutesRange": [
+          0,
+          0
+        ]
+      },
+      "likes": {
+        "baseRatio": 0.06,
+        "ratioVariance": 0.25,
+        "slidingScale": {
+          "lowViewsThreshold": 5000,
+          "lowViewsRatio": 0.07,
+          "highViewsThreshold": 100000,
+          "highViewsRatio": 0.035,
+          "midRatio": 0.06
+        },
+        "lagMinutesRange": [
+          5,
+          15
+        ],
+        "curveDelayFraction": 0.1
+      },
+      "saves": {
+        "baseRatio": 0.01,
+        "ratioVariance": 0.3,
+        "lagMinutesRange": [
+          30,
+          60
+        ],
+        "curveDelayFraction": 0.12
+      },
+      "shares": {
+        "baseRatio": 0.005,
+        "ratioVariance": 0.3,
+        "lagMinutesRange": [
+          60,
+          180
+        ],
+        "sparse": true
+      },
+      "comments": {
+        "baseRatio": 0.002,
+        "ratioVariance": 0.4,
+        "lagMinutesRange": [
+          120,
+          360
+        ],
+        "batchSizeRange": [
+          1,
+          3
+        ]
+      }
+    },
+    "peakHours": {
+      "enabled": true,
+      "multiplier": 1.4,
+      "windows": [
+        {
+          "startHour": 12,
+          "endHour": 14
+        },
+        {
+          "startHour": 19,
+          "endHour": 23
+        }
+      ]
+    },
+    "serviceMappings": {
+      "views": {
+        "id": "srv-tt-views",
+        "providerId": "prov-default",
+        "name": "TikTok High Retention For You Views",
+        "minQuantity": 200,
+        "maxQuantity": 10000000,
+        "ratePer1000": 0.18
+      },
+      "likes": {
+        "id": "srv-tt-likes",
+        "providerId": "prov-default",
+        "name": "TikTok Feed Boost Likes",
+        "minQuantity": 20,
+        "maxQuantity": 500000,
+        "ratePer1000": 0.95
+      },
+      "saves": {
+        "id": "srv-tt-saves",
+        "providerId": "prov-default",
+        "name": "TikTok Favorites & Saves",
+        "minQuantity": 10,
+        "maxQuantity": 150000,
+        "ratePer1000": 1.25
+      },
+      "shares": {
+        "id": "srv-tt-shares",
+        "providerId": "prov-default",
+        "name": "TikTok Viral Post Shares",
+        "minQuantity": 15,
+        "maxQuantity": 100000,
+        "ratePer1000": 1.8
+      },
+      "comments": {
+        "id": "srv-tt-comments",
+        "providerId": "prov-default",
+        "name": "TikTok Relevant Engaging Comments",
+        "minQuantity": 1,
+        "maxQuantity": 3000,
+        "ratePer1000": 9
+      }
+    }
+  }
+}

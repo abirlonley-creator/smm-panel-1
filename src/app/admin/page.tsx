@@ -136,9 +136,12 @@ export default function AdminPage() {
   const [loggingIn, setLoggingIn] = useState(false);
 
   // Admin Data state
-  const [activeTab, setActiveTab] = useState<"keys" | "monitoring" | "provider" | "audit">("keys");
+  const [activeTab, setActiveTab] = useState<"keys" | "monitoring" | "provider" | "audit" | "engagement">("keys");
   const [passkeys, setPasskeys] = useState<PasskeyData[]>([]);
   const [diagnostics, setDiagnostics] = useState<DiagnosticsData | null>(null);
+  const [engagementProfiles, setEngagementProfiles] = useState<any[]>([]);
+  const [editingMapping, setEditingMapping] = useState<{ profileId: string; type: string; providerId: string; providerServiceId: string; name: string; minQuantity: number; maxQuantity: number; ratePer1000: number } | null>(null);
+  const [savingMapping, setSavingMapping] = useState(false);
   const [loadingData, setLoadingData] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(false);
 
@@ -206,14 +209,16 @@ export default function AdminPage() {
   async function loadAllAdminData() {
     setLoadingData(true);
     try {
-      const [keysRes, diagRes, provRes] = await Promise.all([
+      const [keysRes, diagRes, provRes, engRes] = await Promise.all([
         fetch("/api/admin/keys").then((r) => r.json()),
         fetch("/api/admin/diagnostics").then((r) => r.json()),
         fetch("/api/admin/provider").then((r) => r.json()),
+        fetch("/api/admin/engagement-profiles").then((r) => r.json()).catch(() => ({ success: false })),
       ]);
 
       if (keysRes.success) setPasskeys(keysRes.keys);
       if (diagRes.success) setDiagnostics(diagRes);
+      if (engRes.success && engRes.profiles) setEngagementProfiles(engRes.profiles);
       if (provRes.success && provRes.config) {
         setProviderConfig(provRes.config);
         setEditName(provRes.config.name);
@@ -224,6 +229,31 @@ export default function AdminPage() {
       console.error("Failed to load admin data", err);
     } finally {
       setLoadingData(false);
+    }
+  }
+
+  async function handleSaveEngagementMapping(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingMapping) return;
+    setSavingMapping(true);
+    setActionMsg(null);
+    try {
+      const res = await fetch("/api/admin/engagement-profiles", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editingMapping),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to update mapping");
+      }
+      setActionMsg({ text: data.message || "Mapping updated successfully", type: "success" });
+      setEditingMapping(null);
+      await loadAllAdminData();
+    } catch (err: any) {
+      setActionMsg({ text: err.message || "Failed to save mapping", type: "error" });
+    } finally {
+      setSavingMapping(false);
     }
   }
 
@@ -567,6 +597,19 @@ export default function AdminPage() {
         >
           <FileText className="w-4 h-4" />
           <span>Audit Log</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("engagement")}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${
+            activeTab === "engagement"
+              ? "border-[#3A4EFB] text-[#3A4EFB] bg-[#3A4EFB]/5"
+              : "border-transparent text-[#252943]/60 hover:text-[#252943]"
+          }`}
+        >
+          <Sliders className="w-4 h-4" />
+          <span>Full Engagement Profiles</span>
         </button>
       </div>
 
@@ -1081,6 +1124,223 @@ export default function AdminPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================================
+          TAB 5: FULL ENGAGEMENT PROFILES & SERVICE MAPPINGS
+      ====================================================================== */}
+      {activeTab === "engagement" && (
+        <div className="space-y-6 animate-fadeIn">
+          <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 sm:p-8 shadow-subtle space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#DEE0ED]">
+              <div>
+                <h2 className="text-base font-bold text-[#252943]">Platform Profiles & Provider Service Mappings</h2>
+                <p className="text-xs text-[#252943]/60">
+                  Config-driven pacing profiles. Each engagement type is mapped to a backend provider service with strictly enforced minimum batch sizes.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={loadAllAdminData}
+                disabled={loadingData}
+                className="px-3.5 py-2 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED] text-xs font-bold text-[#252943] hover:bg-[#DEE0ED]/50 flex items-center gap-1.5 self-start"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loadingData ? "animate-spin text-[#3A4EFB]" : ""}`} />
+                <span>Reload Config</span>
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              {engagementProfiles.map((prof: any) => (
+                <div key={prof.id} className="rounded-2xl border border-[#DEE0ED] p-5 space-y-4 bg-[#F8F9FD]/40">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#DEE0ED]/80">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-[#252943]">{prof.name}</span>
+                        <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold">
+                          {prof.badge}
+                        </span>
+                        <span className="text-[11px] font-mono text-[#252943]/50">ID: {prof.id}</span>
+                      </div>
+                      <p className="text-xs text-[#252943]/70 mt-0.5">{prof.description}</p>
+                    </div>
+
+                    <div className="flex items-center gap-3 text-xs text-[#252943]/70 font-medium">
+                      <span>k ∈ [{prof.viewsEnvelope.kRange.join(", ")}]</span>
+                      <span>•</span>
+                      <span>m ∈ [{prof.viewsEnvelope.mRange.join(", ")}]</span>
+                    </div>
+                  </div>
+
+                  {/* Service Mapping Table */}
+                  <div className="overflow-x-auto bg-white rounded-xl border border-[#DEE0ED]">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-[#F8F9FD] text-[#252943]/60 uppercase text-[10px] font-bold border-b border-[#DEE0ED]">
+                        <tr>
+                          <th className="px-3 py-2.5">Type</th>
+                          <th className="px-3 py-2.5">Mapped Service Name</th>
+                          <th className="px-3 py-2.5">Provider ID</th>
+                          <th className="px-3 py-2.5">External ID</th>
+                          <th className="px-3 py-2.5">Min / Max</th>
+                          <th className="px-3 py-2.5">Rate / 1k</th>
+                          <th className="px-3 py-2.5 text-right">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#DEE0ED]/60 font-medium">
+                        {Object.entries(prof.serviceMappings || {}).map(([type, srv]: any) => (
+                          <tr key={type} className="hover:bg-[#F8F9FD]">
+                            <td className="px-3 py-2 font-bold capitalize text-[#252943]">{type}</td>
+                            <td className="px-3 py-2 max-w-xs truncate text-[#252943]/90">{srv.name}</td>
+                            <td className="px-3 py-2 font-mono text-[11px] text-[#252943]/60">{srv.providerId || "default"}</td>
+                            <td className="px-3 py-2 font-mono text-[11px] font-bold text-[#3A4EFB]">{srv.providerServiceId || srv.id || "—"}</td>
+                            <td className="px-3 py-2">
+                              <span className="px-1.5 py-0.5 rounded bg-slate-100 text-[10px] font-bold">
+                                {srv.minQuantity} - {srv.maxQuantity?.toLocaleString()}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 font-bold text-[#252943]">₹{srv.ratePer1000}</td>
+                            <td className="px-3 py-2 text-right">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingMapping({
+                                    profileId: prof.id,
+                                    type,
+                                    providerId: srv.providerId || "prov-default",
+                                    providerServiceId: srv.providerServiceId || srv.id || "",
+                                    name: srv.name || "",
+                                    minQuantity: srv.minQuantity || 10,
+                                    maxQuantity: srv.maxQuantity || 100000,
+                                    ratePer1000: srv.ratePer1000 || 1.0,
+                                  });
+                                }}
+                                className="px-2.5 py-1 rounded-lg bg-[#F8F9FD] hover:bg-[#DEE0ED] text-[11px] font-bold text-[#3A4EFB] transition-colors"
+                              >
+                                Remap
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Remap Service Modal */}
+      {editingMapping && (
+        <div className="fixed inset-0 z-50 bg-[#252943]/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-[#DEE0ED] max-w-md w-full p-6 shadow-2xl space-y-4 animate-scaleUp">
+            <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
+              <div className="flex items-center gap-2">
+                <Sliders className="w-5 h-5 text-[#3A4EFB]" />
+                <h3 className="text-base font-bold text-[#252943]">
+                  Remap Service ({editingMapping.profileId} • {editingMapping.type})
+                </h3>
+              </div>
+              <button
+                onClick={() => setEditingMapping(null)}
+                className="text-[#252943]/40 hover:text-[#252943] text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEngagementMapping} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-bold text-[#252943] mb-1">Service Display Name</label>
+                <input
+                  type="text"
+                  required
+                  value={editingMapping.name}
+                  onChange={(e) => setEditingMapping({ ...editingMapping, name: e.target.value })}
+                  className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3 py-2 font-semibold text-[#252943]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-[#252943] mb-1">Provider ID</label>
+                  <input
+                    type="text"
+                    required
+                    value={editingMapping.providerId}
+                    onChange={(e) => setEditingMapping({ ...editingMapping, providerId: e.target.value })}
+                    className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3 py-2 font-mono text-[#252943]"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-[#252943] mb-1">Provider Service ID</label>
+                  <input
+                    type="text"
+                    required
+                    value={editingMapping.providerServiceId}
+                    onChange={(e) => setEditingMapping({ ...editingMapping, providerServiceId: e.target.value })}
+                    className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3 py-2 font-mono text-[#252943]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="block font-bold text-[#252943] mb-1">Min Batch</label>
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={editingMapping.minQuantity}
+                    onChange={(e) => setEditingMapping({ ...editingMapping, minQuantity: parseInt(e.target.value, 10) || 1 })}
+                    className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-2.5 py-2 font-semibold text-[#252943]"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-[#252943] mb-1">Max Batch</label>
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={editingMapping.maxQuantity}
+                    onChange={(e) => setEditingMapping({ ...editingMapping, maxQuantity: parseInt(e.target.value, 10) || 1000 })}
+                    className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-2.5 py-2 font-semibold text-[#252943]"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-[#252943] mb-1">Rate / 1k (₹)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    required
+                    value={editingMapping.ratePer1000}
+                    onChange={(e) => setEditingMapping({ ...editingMapping, ratePer1000: parseFloat(e.target.value) || 0.1 })}
+                    className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-2.5 py-2 font-semibold text-[#252943]"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingMapping(null)}
+                  className="px-4 py-2 rounded-xl border border-[#DEE0ED] text-xs font-semibold text-[#252943]/70 hover:bg-[#F8F9FD]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingMapping}
+                  className="px-5 py-2 rounded-xl bg-[#3A4EFB] text-white text-xs font-bold shadow-subtle hover:bg-[#2A3DE0]"
+                >
+                  {savingMapping ? "Saving..." : "Save Mapping"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

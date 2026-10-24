@@ -5,13 +5,15 @@ import {
   type DurationPreset,
   type EngagementType,
 } from "@/lib/engagement/planner";
-import { prisma } from "@/lib/prisma";
+import { getPlatformProfile } from "@/lib/engagement/platform-profiles";
 import { z } from "zod";
 
 const previewSchema = z.object({
-  platform: z.enum(["Instagram", "TikTok"]).default("Instagram"),
-  baseViews: z.number().int().min(100).max(10000000),
-  durationPreset: z.enum(["24h", "72h", "168h"]).default("72h"),
+  profileId: z.string().optional(),
+  platform: z.string().optional(),
+  baseViews: z.number().int().min(1).max(10000000),
+  presetKey: z.enum(["fast", "normal", "slow"]).optional(),
+  durationPreset: z.enum(["24h", "48h", "72h", "96h", "168h"]).optional(),
   durationHours: z.number().int().min(1).max(168).optional(),
   seed: z.union([z.string(), z.number()]).optional(),
   targetTz: z.string().default("Asia/Kolkata"),
@@ -27,55 +29,25 @@ export async function POST(request: Request) {
     const body = await request.json();
     const parsed = previewSchema.parse(body);
 
-    // Look for mapped services in DB for this platform if available
-    const dbServices = await prisma.service.findMany({
-      where: {
-        platform: parsed.platform,
-        active: true,
-      },
-      select: {
-        id: true,
-        providerId: true,
-        name: true,
-        category: true,
-        minQuantity: true,
-        maxQuantity: true,
-        ratePer1000: true,
-      },
-    });
-
-    const servicesMap: any = {};
-    for (const type of ["views", "likes", "shares", "saves", "comments"] as const) {
-      const match = dbServices.find(
-        (s) => s.category.toLowerCase().includes(type) || s.name.toLowerCase().includes(type)
-      );
-      if (match) {
-        servicesMap[type] = {
-          id: match.id,
-          providerId: match.providerId,
-          name: match.name,
-          minQuantity: match.minQuantity,
-          maxQuantity: match.maxQuantity,
-          ratePer1000: match.ratePer1000,
-        };
-      }
-    }
+    const profileId = parsed.profileId || (parsed.platform?.toLowerCase() === "tiktok" ? "tiktok" : "instagram_reel");
+    const profile = getPlatformProfile(profileId);
 
     const planOptions = {
-      platform: parsed.platform,
+      profileId: profile.id,
+      platform: profile.platform,
+      presetKey: parsed.presetKey,
       baseViews: parsed.baseViews,
-      durationPreset: parsed.durationPreset as DurationPreset,
+      durationPreset: parsed.durationPreset as DurationPreset | undefined,
       durationHours: parsed.durationHours,
       seed: parsed.seed,
       targetTz: parsed.targetTz,
       startTime: parsed.startTime,
       enabledTypes: parsed.enabledTypes as EngagementType[] | undefined,
       peakHourWeighting: parsed.peakHourWeighting,
-      services: Object.keys(servicesMap).length > 0 ? servicesMap : undefined,
+      services: profile.serviceMappings, // Backend-resolved service mappings
       customRatios: parsed.customRatios as Partial<Record<EngagementType, number>> | undefined,
     };
 
-    // If previousFingerprint is passed (e.g. "New Pattern" button clicked), guarantee distinct plan
     const plan = parsed.previousFingerprint
       ? generateUniqueOrganicPlan(planOptions, parsed.previousFingerprint)
       : generateOrganicPlan(planOptions);
@@ -83,6 +55,19 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       plan,
+      profile: {
+        id: profile.id,
+        name: profile.name,
+        badge: profile.badge,
+        description: profile.description,
+        explainerText: profile.explainerText,
+        presets: profile.presets,
+        defaultPreset: profile.defaultPreset,
+        serviceMappings: Object.entries(profile.serviceMappings).reduce((acc, [k, v]) => {
+          acc[k] = { min: v.minQuantity, max: v.maxQuantity, rate: v.ratePer1000 };
+          return acc;
+        }, {} as Record<string, { min: number; max: number; rate: number }>),
+      },
     });
   } catch (error: any) {
     return NextResponse.json(

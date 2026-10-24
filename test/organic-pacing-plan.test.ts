@@ -27,6 +27,7 @@ describe("Organic Pacing Plan Generator — Comprehensive Verification", () => {
       const preset: DurationPreset = s % 3 === 0 ? "24h" : s % 3 === 1 ? "72h" : "168h";
 
       const plan = generateOrganicPlan({
+        platform: "tiktok",
         baseViews,
         seed,
         durationPreset: preset,
@@ -298,7 +299,7 @@ describe("Organic Pacing Plan Generator — Comprehensive Verification", () => {
           seed: 42,
         });
       },
-      /Validation error: Planned total of 10 views is below the provider service minimum of 100/
+      /Validation error: Views need at least 100 for this service/
     );
   });
 });
