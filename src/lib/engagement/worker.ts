@@ -1,6 +1,10 @@
 import { prisma } from "../prisma";
 import { resolveServiceRouting, resolveProviderById } from "../provider/registry";
 import { MockSMMProvider, SMMProviderAdapter } from "../provider/adapter";
+import { classifyProviderError } from "./error-classifier";
+import { logOrderEvent } from "./event-logger";
+import { recordAdminAlert } from "./alert-service";
+import { runWatchdogCycle } from "./watchdog";
 
 export interface EngagementTickResult {
   processedRuns: number;
@@ -22,7 +26,8 @@ export function sanitizeProviderResponse(data: any): string {
   if (!data) return "";
   try {
     let str = typeof data === "string" ? data : JSON.stringify(data);
-    str = str.replace(/(["']?(?:api[_-]?key|key|token|secret|password|authorization)["']?\s*[:=]\s*["'])([^"'\s]+)(["'])/gi, '$1[REDACTED]$3');
+    str = str.replace(/(["']?(?:api[_-]?key|key|token|secret|password|authorization)["']?\s*[:=]\s*["'])([^"']+)(["'])/gi, '$1[REDACTED]$3');
+    str = str.replace(/Bearer\s+[A-Za-z0-9_\-\.]+/gi, 'Bearer [REDACTED]');
     return str.slice(0, 2000);
   } catch {
     return "[Unserializable]";
@@ -376,52 +381,59 @@ function isFatalProviderError(errMsg: string): boolean {
 export async function runEngagementTick(): Promise<EngagementTickResult> {
   const now = new Date();
 
-  // 1. Recover stale "sending" runs (stuck > 2 minutes due to crash or timeout)
-  const staleSendingCutoff = new Date(now.getTime() - 2 * 60 * 1000);
-  const staleRuns = await prisma.engagementRun.findMany({
-    where: {
-      status: "sending",
-      lastAttemptAt: { lte: staleSendingCutoff },
-    },
-    take: 10,
-  });
+  // 1. Worker Heartbeat: update singleton worker heartbeat timestamp every cycle
+  try {
+    await prisma.workerStatus.upsert({
+      where: { id: "singleton" },
+      update: { lastHeartbeatAt: now, status: "RUNNING" },
+      create: { id: "singleton", lastHeartbeatAt: now, status: "RUNNING" },
+    });
+  } catch {}
 
-  for (const stale of staleRuns) {
-    if (stale.providerOrderId) {
-      // Order ID was successfully saved before crash: mark as sent
-      await prisma.engagementRun.update({
-        where: { id: stale.id },
-        data: { status: "sent" },
-      });
-    } else {
-      // Crash happened during or before send: safely reset to delayed for retry
-      await prisma.engagementRun.update({
-        where: { id: stale.id },
-        data: {
-          status: "delayed",
-          scheduledAt: new Date(now.getTime() + 30 * 1000),
-          errorMessage: "Recovered from interrupted worker cycle",
-        },
-      });
-    }
+  // 2. Watchdog: check heartbeat age, recover runs stuck > 2m, and catch missed runs
+  try {
+    await runWatchdogCycle();
+  } catch (wdErr) {
+    console.warn("[WORKER] Watchdog cycle warning:", wdErr);
   }
 
-  // 2. Fetch due runs (scheduled_at <= now, status: scheduled or delayed)
-  const dueRuns = await prisma.engagementRun.findMany({
-    where: {
-      status: { in: ["scheduled", "delayed"] },
-      scheduledAt: { lte: now },
-    },
-    include: {
-      engagementOrder: {
-        include: { user: true },
+  // 3. Concurrently claim due runs using PostgreSQL SELECT ... FOR UPDATE SKIP LOCKED
+  let dueRunIds: string[] = [];
+  try {
+    const rawRows: { id: string }[] = await prisma.$queryRawUnsafe(`
+      SELECT id FROM runs
+      WHERE status IN ('scheduled', 'delayed')
+        AND "scheduledAt" <= NOW()
+      ORDER BY "scheduledAt" ASC
+      LIMIT 20
+      FOR UPDATE SKIP LOCKED
+    `);
+    dueRunIds = rawRows.map((r) => r.id);
+  } catch {
+    // Fallback if raw query is unavailable
+    const fallbackRuns = await prisma.engagementRun.findMany({
+      where: {
+        status: { in: ["scheduled", "delayed"] },
+        scheduledAt: { lte: now },
       },
-      service: true,
-      provider: true,
-    },
-    take: 20,
-    orderBy: { scheduledAt: "asc" },
-  });
+      select: { id: true },
+      take: 20,
+      orderBy: { scheduledAt: "asc" },
+    });
+    dueRunIds = fallbackRuns.map((r) => r.id);
+  }
+
+  const dueRuns = dueRunIds.length > 0
+    ? await prisma.engagementRun.findMany({
+        where: { id: { in: dueRunIds } },
+        include: {
+          engagementOrder: { include: { user: true } },
+          service: true,
+          provider: true,
+        },
+        orderBy: { scheduledAt: "asc" },
+      })
+    : [];
 
   let processedRuns = 0;
   let successfulRuns = 0;
@@ -432,17 +444,18 @@ export async function runEngagementTick(): Promise<EngagementTickResult> {
   let ordersCompleted = 0;
 
   for (const run of dueRuns) {
-    // 3. Measure lateness in seconds (target: sent within +/- 30s)
     const latenessSeconds = Math.max(0, Math.round((now.getTime() - run.scheduledAt.getTime()) / 1000));
+    const timeToStartMs = Math.max(0, now.getTime() - run.scheduledAt.getTime());
 
-    // 4. Atomic claim: transition scheduled/delayed -> sending
+    // 4. Status machine: transition scheduled/delayed -> claimed -> sending
     const claim = await prisma.engagementRun.updateMany({
       where: {
         id: run.id,
         status: { in: ["scheduled", "delayed"] },
       },
       data: {
-        status: "sending",
+        status: "claimed",
+        claimedAt: now,
         lastAttemptAt: now,
         attempts: { increment: 1 },
         latenessSeconds,
@@ -454,32 +467,36 @@ export async function runEngagementTick(): Promise<EngagementTickResult> {
       continue;
     }
 
+    // Immediately transition to sending
+    await prisma.engagementRun.update({
+      where: { id: run.id },
+      data: { status: "sending" },
+    });
+
     processedRuns++;
     const order = run.engagementOrder;
     const currentAttempt = run.attempts + 1;
 
-    // Check lateness alert (if late > 120s)
+    // Lateness Alert if delayed > 120s
     if (latenessSeconds > 120) {
-      await prisma.adminAlert.create({
-        data: {
-          severity: "medium",
-          type: "run_late",
-          orderId: order.id,
-          runId: run.id,
-          runNumber: run.runNumber,
-          userId: order.userId,
-          platform: order.platform,
-          engagementType: run.engagementType,
-          providerId: run.providerId || null,
-          providerName: run.provider?.name || "Provider",
-          reason: `Run #${run.runNumber} (${run.engagementType}) was sent ${latenessSeconds}s late (scheduled at ${run.scheduledAt.toISOString()}).`,
-          status: "open",
-        },
+      await recordAdminAlert({
+        severity: "medium",
+        type: "run_late",
+        orderId: order.id,
+        runId: run.id,
+        runNumber: run.runNumber,
+        userId: order.userId,
+        platform: order.platform,
+        engagementType: run.engagementType,
+        providerId: run.providerId || null,
+        providerName: run.provider?.name || "Provider",
+        reason: `Run #${run.runNumber} (${run.engagementType}) was sent ${latenessSeconds}s late.`,
+        suggestedAction: "Monitor provider latency and queue processing health.",
       });
     }
 
     try {
-      // 5. Pre-check health & resolve provider adapter
+      // 5. Provider resolution with concurrency isolation
       let adapter: SMMProviderAdapter;
       let targetServiceExtId: string = run.providerServiceId || "101";
 
@@ -505,28 +522,43 @@ export async function runEngagementTick(): Promise<EngagementTickResult> {
         adapter = new MockSMMProvider();
       }
 
-      // 6. Submit batch to upstream provider (Idempotency Key guarded)
+      // 6. Submit batch with duration tracking and idempotency
+      const callStart = Date.now();
       const providerRes = await adapter.createOrder({
         serviceExternalId: targetServiceExtId,
         targetUrl: order.targetUrl,
         quantity: run.quantity,
       });
+      const durationMs = Date.now() - callStart;
 
       if (providerRes.success && providerRes.providerOrderId) {
-        // Success: transition immediately to "sent" and record providerOrderId and sentAt
+        // Success: transition immediately to "sent", record providerOrderId and timings
         await prisma.engagementRun.update({
           where: { id: run.id },
           data: {
             status: "sent",
             sentAt: now,
+            timeToStartMs,
             providerOrderId: String(providerRes.providerOrderId),
             errorMessage: null,
+            rawResponse: sanitizeProviderResponse(providerRes),
           },
         });
 
         successfulRuns++;
 
-        // Increment delivered count on parent order
+        await logOrderEvent({
+          orderId: order.id,
+          runId: run.id,
+          eventType: "PROVIDER_CALL",
+          message: `Dispatched run #${run.runNumber} (${run.engagementType}) to ${run.provider?.name || "Provider"}`,
+          requestSummary: `POST /order service=${targetServiceExtId} qty=${run.quantity}`,
+          responseCode: 200,
+          rawResponse: providerRes,
+          durationMs,
+        });
+
+        // Increment delivered counter on parent order
         const typeField =
           run.engagementType === "views"
             ? "deliveredViews"
@@ -550,11 +582,22 @@ export async function runEngagementTick(): Promise<EngagementTickResult> {
       }
     } catch (err: any) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      const isFatal = isFatalProviderError(errMsg);
+      const classified = classifyProviderError(errMsg);
+      const isFatal = classified.isFatal || isFatalProviderError(errMsg);
       const isMaxAttempts = currentAttempt >= MAX_RUN_ATTEMPTS;
 
+      await logOrderEvent({
+        orderId: order.id,
+        runId: run.id,
+        eventType: "PROVIDER_CALL",
+        message: `Run #${run.runNumber} (${run.engagementType}) error: ${classified.plainLanguage}`,
+        requestSummary: `POST /order qty=${run.quantity}`,
+        responseCode: classified.httpStatus,
+        rawResponse: errMsg,
+      });
+
       if (isFatal || isMaxAttempts) {
-        // Permanent failure: refund run cost to user wallet, raise AdminAlert
+        // Permanent failure: transition to 'failed', refund run cost, log event, record deduplicated alert
         failedRuns++;
         refundedRuns++;
 
@@ -563,11 +606,14 @@ export async function runEngagementTick(): Promise<EngagementTickResult> {
             where: { id: run.id },
             data: {
               status: "failed",
+              errorType: classified.errorType,
+              httpStatus: classified.httpStatus,
               errorMessage: errMsg,
+              rawResponse: sanitizeProviderResponse(errMsg),
             },
           });
 
-          // Refund only the undelivered amount for this specific run
+          // Refund undelivered amount only
           if (order.userId && run.cost > 0) {
             const user = await tx.user.findUnique({
               where: { id: order.userId },
@@ -598,29 +644,39 @@ export async function runEngagementTick(): Promise<EngagementTickResult> {
                   refundedAmount: { increment: run.cost },
                 },
               });
+
+              await logOrderEvent({
+                orderId: order.id,
+                runId: run.id,
+                eventType: "REFUND",
+                message: `Refunded ₹${run.cost.toFixed(2)} to user for permanently failed run #${run.runNumber}.`,
+              });
             }
           }
+        });
 
-          // Raise Admin Alert for permanent failure
-          await tx.adminAlert.create({
-            data: {
-              severity: "high",
-              type: "run_failed",
-              orderId: order.id,
-              runId: run.id,
-              runNumber: run.runNumber,
-              userId: order.userId,
-              platform: order.platform,
-              engagementType: run.engagementType,
-              providerId: run.providerId || null,
-              providerName: run.provider?.name || "Provider",
-              reason: `Run #${run.runNumber} failed permanently after ${currentAttempt} attempt(s): ${errMsg}`,
-              status: "open",
-            },
-          });
+        await recordAdminAlert({
+          severity: "high",
+          type: "run_failed",
+          orderId: order.id,
+          runId: run.id,
+          runNumber: run.runNumber,
+          userId: order.userId,
+          platform: order.platform,
+          engagementType: run.engagementType,
+          providerId: run.providerId || null,
+          providerName: run.provider?.name || "Provider",
+          serviceId: run.serviceId || null,
+          errorType: classified.errorType,
+          planned: run.quantity,
+          delivered: run.deliveredQuantity ?? 0,
+          reason: `Run #${run.runNumber} failed permanently after ${currentAttempt} attempts: ${classified.plainLanguage}`,
+          rawResponse: errMsg,
+          retryCount: currentAttempt,
+          suggestedAction: classified.suggestedAction,
         });
       } else {
-        // Retryable error: set status to "delayed" with exponential backoff (30s, 1m, 2m, 5m, 10m)
+        // Retryable error: set status to 'delayed' with exponential backoff (30s, 1m, 2m, 5m, 10m)
         delayedRuns++;
         const backoffSec = BACKOFF_SECONDS[Math.min(currentAttempt - 1, BACKOFF_SECONDS.length - 1)];
         const nextScheduled = new Date(now.getTime() + backoffSec * 1000);
@@ -630,42 +686,44 @@ export async function runEngagementTick(): Promise<EngagementTickResult> {
           data: {
             status: "delayed",
             scheduledAt: nextScheduled,
+            errorType: classified.errorType,
+            httpStatus: classified.httpStatus,
             errorMessage: errMsg,
+            rawResponse: sanitizeProviderResponse(errMsg),
           },
         });
 
-        // Keep order in "delayed" status
+        // Parent order displays "DELAYED"
         await prisma.engagementOrder.update({
           where: { id: order.id },
           data: { status: "DELAYED" },
         });
 
-        // Raise or update Admin Alert for provider issue
-        await prisma.adminAlert.create({
-          data: {
-            severity: currentAttempt >= 3 ? "high" : "medium",
-            type: "provider_down",
-            orderId: order.id,
-            runId: run.id,
-            runNumber: run.runNumber,
-            userId: order.userId,
-            platform: order.platform,
-            engagementType: run.engagementType,
-            providerId: run.providerId || null,
-            providerName: run.provider?.name || "Provider",
-            planned: run.quantity,
-            delivered: run.deliveredQuantity ?? 0,
-            reason: `Run #${run.runNumber} delayed (attempt ${currentAttempt}/${MAX_RUN_ATTEMPTS}): ${errMsg}`,
-            rawResponse: sanitizeProviderResponse(errMsg),
-            retryCount: currentAttempt,
-            status: "retrying",
-          },
+        await recordAdminAlert({
+          severity: currentAttempt >= 3 ? "high" : "medium",
+          type: "provider_down",
+          orderId: order.id,
+          runId: run.id,
+          runNumber: run.runNumber,
+          userId: order.userId,
+          platform: order.platform,
+          engagementType: run.engagementType,
+          providerId: run.providerId || null,
+          providerName: run.provider?.name || "Provider",
+          serviceId: run.serviceId || null,
+          errorType: classified.errorType,
+          planned: run.quantity,
+          delivered: run.deliveredQuantity ?? 0,
+          reason: `Run #${run.runNumber} delayed (attempt ${currentAttempt}/${MAX_RUN_ATTEMPTS}): ${classified.plainLanguage}`,
+          rawResponse: errMsg,
+          retryCount: currentAttempt,
+          suggestedAction: classified.suggestedAction,
         });
       }
     }
   }
 
-  // 7. Poll provider status for sent runs to confirm completion and real delivered amounts (Change D)
+  // 7. Poll provider status for sent runs to confirm delivery and transition to 'confirmed'
   const sentRuns = await prisma.engagementRun.findMany({
     where: {
       status: "sent",
@@ -698,14 +756,27 @@ export async function runEngagementTick(): Promise<EngagementTickResult> {
 
         if (upstreamStatus === "completed" || upstreamStatus === "complete") {
           deliveredQty = sRun.quantity;
+          const timeToConfirmMs = sRun.sentAt
+            ? Math.max(0, now.getTime() - sRun.sentAt.getTime())
+            : null;
+
           await prisma.engagementRun.update({
             where: { id: sRun.id },
             data: {
-              status: "completed",
+              status: "confirmed",
+              confirmedAt: now,
+              timeToConfirmMs,
               deliveredQuantity: deliveredQty,
             },
           });
           syncedSentRuns++;
+
+          await logOrderEvent({
+            orderId: sRun.engagementOrderId,
+            runId: sRun.id,
+            eventType: "STATE_CHANGE",
+            message: `Run #${sRun.runNumber} (${sRun.engagementType}) confirmed delivered (${deliveredQty} units).`,
+          });
         } else if (upstreamStatus === "canceled" || upstreamStatus === "cancelled") {
           // Upstream cancelled: mark failed and refund
           await prisma.$transaction(async (tx) => {
@@ -800,4 +871,48 @@ export async function runEngagementTick(): Promise<EngagementTickResult> {
     syncedSentRuns,
     ordersCompleted,
   };
+}
+
+/**
+ * Re-plans all unsettled or delayed runs for an engagement order, smoothly spreading them out.
+ */
+export async function replanRemainingEngagementRuns(orderId: string, reason: string): Promise<number> {
+  const runs = await prisma.engagementRun.findMany({
+    where: {
+      engagementOrderId: orderId,
+      status: { in: ["scheduled", "delayed", "failed"] },
+    },
+    orderBy: { runNumber: "asc" },
+  });
+
+  if (runs.length === 0) return 0;
+
+  const now = Date.now();
+  const stepMs = 5 * 60 * 1000; // 5 minute spacing between runs
+
+  for (let i = 0; i < runs.length; i++) {
+    const run = runs[i];
+    const newScheduledAt = new Date(now + (i + 1) * stepMs);
+
+    await prisma.engagementRun.update({
+      where: { id: run.id },
+      data: {
+        status: "scheduled",
+        scheduledAt: newScheduledAt,
+        isReplan: true,
+        errorMessage: null,
+        errorType: null,
+      },
+    });
+  }
+
+  await logOrderEvent({
+    orderId,
+    eventType: "REPLAN",
+    requestSummary: `Re-planned ${runs.length} remaining runs`,
+    message: `Smoothly rescheduled ${runs.length} runs starting at +5m. Reason: ${reason}`,
+    metadata: { replannedCount: runs.length, reason },
+  });
+
+  return runs.length;
 }

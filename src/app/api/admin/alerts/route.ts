@@ -15,7 +15,7 @@ export async function GET(request: Request) {
     const [alerts, openCount, allRunsToday, providers] = await Promise.all([
       prisma.adminAlert.findMany({
         orderBy: { createdAt: "desc" },
-        take: 50,
+        take: 100,
       }),
       prisma.adminAlert.count({
         where: { status: "open" },
@@ -65,9 +65,35 @@ export async function GET(request: Request) {
     const onTimePercentage = completedRuns > 0 ? Number(((onTimeCount / completedRuns) * 100).toFixed(1)) : 100.0;
     const avgLatenessSeconds = completedRuns > 0 ? Math.round(totalLateness / completedRuns) : 0;
 
+    // Attach run details to alerts
+    const runIds = alerts.map((a) => a.runId).filter(Boolean) as string[];
+    const runs = runIds.length > 0
+      ? await prisma.engagementRun.findMany({
+          where: { id: { in: runIds } },
+          select: {
+            id: true,
+            scheduledAt: true,
+            sentAt: true,
+            quantity: true,
+            deliveredQuantity: true,
+            rawResponse: true,
+            errorType: true,
+            errorMessage: true,
+            providerOrderId: true,
+            latenessSeconds: true,
+          },
+        })
+      : [];
+    const runMap = new Map(runs.map((r) => [r.id, r]));
+
+    const enrichedAlerts = alerts.map((a) => ({
+      ...a,
+      run: a.runId ? runMap.get(a.runId) || null : null,
+    }));
+
     return NextResponse.json({
       success: true,
-      alerts,
+      alerts: enrichedAlerts,
       metrics: {
         openAlertsCount: openCount,
         onTimePercentage,

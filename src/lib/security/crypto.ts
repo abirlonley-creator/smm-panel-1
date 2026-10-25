@@ -3,7 +3,7 @@ import crypto from "crypto";
 const MASTER_SECRET =
   process.env.ENCRYPTION_SECRET ||
   process.env.ADMIN_SESSION_SECRET ||
-  "smm-aes256gcm-default-key-32bytes-hex-dhan";
+  "smm-aes256gcm-default-key-32bytes-hex-aura";
 
 // Derive deterministic 32-byte key from secret
 const CIPHER_KEY = crypto.createHash("sha256").update(MASTER_SECRET).digest();

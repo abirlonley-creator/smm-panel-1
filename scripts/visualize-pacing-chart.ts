@@ -29,7 +29,7 @@ const COLORS = [
 ];
 
 console.log("================================================================================");
-console.log(" DHANSMM ORGANIC PACING PLAN GENERATOR — 10 PLANS VISUAL CONFIRMATION");
+console.log(" AURASMM ORGANIC PACING PLAN GENERATOR — 10 PLANS VISUAL CONFIRMATION");
 console.log(" Base Views: 10,000 | Duration: 72 Hours | Platform: Instagram");
 console.log("================================================================================\n");
 
@@ -98,7 +98,7 @@ let svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} 
   <rect width="${width}" height="${height}" fill="url(#bgGlow)" />
 
   <!-- Title & Subtitle -->
-  <text x="${padLeft}" y="32" fill="#f8fafc" font-size="18" font-weight="700">DhanSMM Organic Pacing Plan Generator — 10 Distinct Plans (10,000 Views, 72h)</text>
+  <text x="${padLeft}" y="32" fill="#f8fafc" font-size="18" font-weight="700">AuraSMM Organic Pacing Plan Generator — 10 Distinct Plans (10,000 Views, 72h)</text>
   <text x="${padLeft}" y="50" fill="#94a3b8" font-size="12">Natural S-curve growth, bounded parameters (k ∈ [6, 8], m ∈ [0.25, 0.30]), ±3% smooth noise, peak-hour circadian boost</text>
 
   <!-- Grid Lines (Horizontal) -->

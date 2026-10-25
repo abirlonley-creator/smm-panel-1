@@ -1,0 +1,23 @@
+{
+  "name": "AuraSMM — Minimalist SMM Panel & Growth Planner",
+  "short_name": "AuraSMM",
+  "description": "A clean, reliable SMM ordering platform with third-party provider API integration, an intelligent delivery scheduler, and transparent delivery previews.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F8F9FD",
+  "theme_color": "#252943",
+  "icons": [
+    {
+      "src": "/whop-logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/whop-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

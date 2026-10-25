@@ -25,8 +25,11 @@ import {
   FileText,
   Calendar,
   ChevronDown,
+  Layers,
 } from "lucide-react";
 import { formatProviderBalance } from "@/lib/currency";
+import { OrderMonitorTab } from "@/components/admin/OrderMonitorTab";
+import { AlertsHealthTab } from "@/components/admin/AlertsHealthTab";
 
 interface PasskeyData {
   id: string;
@@ -136,7 +139,7 @@ export default function AdminPage() {
   const [loggingIn, setLoggingIn] = useState(false);
 
   // Admin Data state
-  const [activeTab, setActiveTab] = useState<"keys" | "monitoring" | "provider" | "audit" | "engagement" | "alerts">("keys");
+  const [activeTab, setActiveTab] = useState<"keys" | "ordermonitor" | "monitoring" | "provider" | "audit" | "engagement" | "alerts">("ordermonitor");
   const [passkeys, setPasskeys] = useState<PasskeyData[]>([]);
   const [diagnostics, setDiagnostics] = useState<DiagnosticsData | null>(null);
   const [engagementProfiles, setEngagementProfiles] = useState<any[]>([]);
@@ -643,6 +646,19 @@ export default function AdminPage() {
       <div className="flex items-center gap-2 border-b border-[#DEE0ED] pb-px overflow-x-auto">
         <button
           type="button"
+          onClick={() => setActiveTab("ordermonitor")}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${
+            activeTab === "ordermonitor"
+              ? "border-[#3A4EFB] text-[#3A4EFB] bg-[#3A4EFB]/5"
+              : "border-transparent text-[#252943]/60 hover:text-[#252943]"
+          }`}
+        >
+          <Layers className="w-4 h-4" />
+          <span>Order Monitor</span>
+        </button>
+
+        <button
+          type="button"
           onClick={() => setActiveTab("keys")}
           className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${
             activeTab === "keys"
@@ -727,6 +743,13 @@ export default function AdminPage() {
           ) : null}
         </button>
       </div>
+
+      {/* =====================================================================
+          TAB 0: ORDER MONITOR (Change H)
+      ====================================================================== */}
+      {activeTab === "ordermonitor" && (
+        <OrderMonitorTab />
+      )}
 
       {/* =====================================================================
           TAB 1: PASSKEY & USER MANAGEMENT
@@ -1443,268 +1466,10 @@ export default function AdminPage() {
       )}
 
       {/* =====================================================================
-          TAB 6: ALERTS & DELIVERY HEALTH
+          TAB 6: ALERTS & DELIVERY HEALTH (Change J)
       ====================================================================== */}
       {activeTab === "alerts" && (
-        <div className="space-y-6 animate-fadeIn">
-          {/* Overview Metric Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED] shadow-subtle">
-              <span className="text-[10px] uppercase font-bold text-[#252943]/60 block mb-1">On-Time Delivery (Today)</span>
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-black text-emerald-600">
-                  {alertsMetrics?.onTimePercentage ?? 100}%
-                </span>
-                <span className="text-[10px] font-bold text-[#252943]/50">target &plusmn;30s</span>
-              </div>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED] shadow-subtle">
-              <span className="text-[10px] uppercase font-bold text-[#252943]/60 block mb-1">Average Lateness</span>
-              <div className="flex items-baseline gap-1">
-                <span className="text-2xl font-black text-[#252943]">
-                  {alertsMetrics?.avgLatenessSeconds ?? 0}s
-                </span>
-                <span className="text-[10px] font-bold text-[#252943]/50">avg per batch</span>
-              </div>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED] shadow-subtle">
-              <span className="text-[10px] uppercase font-bold text-[#252943]/60 block mb-1">Failed Runs (Today)</span>
-              <span className={`text-2xl font-black ${(alertsMetrics?.failedRunsToday || 0) > 0 ? "text-rose-600" : "text-[#252943]"}`}>
-                {alertsMetrics?.failedRunsToday ?? 0}
-              </span>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED] shadow-subtle">
-              <span className="text-[10px] uppercase font-bold text-[#252943]/60 block mb-1">Open Incidents</span>
-              <span className={`text-2xl font-black ${(alertsMetrics?.openAlertsCount || 0) > 0 ? "text-rose-600 animate-pulse" : "text-emerald-600"}`}>
-                {alertsMetrics?.openAlertsCount ?? 0}
-              </span>
-            </div>
-          </div>
-
-          {/* Connected Providers Health & Balance */}
-          <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 shadow-subtle space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Server className="w-5 h-5 text-[#3A4EFB]" />
-                <h3 className="text-base font-bold text-[#252943]">Connected Providers Health & Balance</h3>
-              </div>
-              <button
-                type="button"
-                onClick={loadAlerts}
-                disabled={loadingAlerts}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#DEE0ED] text-xs font-bold text-[#252943] hover:border-[#3A4EFB]"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 text-[#3A4EFB] ${loadingAlerts ? "animate-spin" : ""}`} />
-                <span>Re-check Balance</span>
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {(alertsMetrics?.providersStatus || []).map((p: any) => (
-                <div key={p.id} className="p-3.5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] flex items-center justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-[#252943] capitalize">{p.name}</span>
-                      <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${p.active ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"}`}>
-                        {p.active ? "Active" : "Paused"}
-                      </span>
-                    </div>
-                    <span className="text-[11px] text-[#252943]/60 block mt-1">
-                      {p.isMock ? "Mock / Sandbox Mode" : "SMM API v2"}
-                    </span>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-sm font-extrabold text-[#252943] block">
-                      {p.balance !== null && p.balance !== undefined ? formatProviderBalance(p.balance, p.currency) : "—"}
-                    </span>
-                    <span className="text-[10px] font-bold text-[#252943]/40">Balance</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Incident Log & Actions */}
-          <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 shadow-subtle space-y-4">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-              <div>
-                <h3 className="text-base font-bold text-[#252943]">Live Incident & Alert Stream</h3>
-                <p className="text-xs text-[#252943]/60">Delivery lateness, provider outages, and automated refund events</p>
-              </div>
-
-              {/* Filter controls */}
-              <div className="flex items-center gap-2 text-xs">
-                <select
-                  value={filterSeverity}
-                  onChange={(e) => setFilterSeverity(e.target.value)}
-                  className="bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-2.5 py-1.5 font-bold text-[#252943] outline-none"
-                >
-                  <option value="all">All Severities</option>
-                  <option value="high">High Severity</option>
-                  <option value="medium">Medium Severity</option>
-                  <option value="low">Low Severity</option>
-                </select>
-
-                <select
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                  className="bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-2.5 py-1.5 font-bold text-[#252943] outline-none"
-                >
-                  <option value="all">All Statuses</option>
-                  <option value="open">Open</option>
-                  <option value="retrying">Retrying</option>
-                  <option value="resolved">Resolved</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Incidents Table */}
-            <div className="overflow-x-auto rounded-2xl border border-[#DEE0ED]">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-[#F8F9FD] text-[#252943]/70 font-bold border-b border-[#DEE0ED]">
-                  <tr>
-                    <th className="py-2.5 px-3">Time</th>
-                    <th className="py-2.5 px-3">Severity</th>
-                    <th className="py-2.5 px-3">Order / Platform</th>
-                    <th className="py-2.5 px-3">Run Details</th>
-                    <th className="py-2.5 px-3">Provider</th>
-                    <th className="py-2.5 px-3">Reason & Diagnostics</th>
-                    <th className="py-2.5 px-3">Status</th>
-                    <th className="py-2.5 px-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#DEE0ED]">
-                  {alerts
-                    .filter((a) => (filterSeverity === "all" ? true : a.severity === filterSeverity))
-                    .filter((a) => (filterStatus === "all" ? true : a.status === filterStatus))
-                    .map((alert) => (
-                      <tr key={alert.id} className="hover:bg-[#F8F9FD]/50 transition-colors">
-                        <td className="py-2.5 px-3 text-[11px] text-[#252943]/70 whitespace-nowrap">
-                          {new Date(alert.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-                        </td>
-                        <td className="py-2.5 px-3">
-                          <span
-                            className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase ${
-                              alert.severity === "high"
-                                ? "bg-rose-100 text-rose-800"
-                                : alert.severity === "medium"
-                                ? "bg-amber-100 text-amber-800"
-                                : "bg-blue-100 text-blue-800"
-                            }`}
-                          >
-                            {alert.severity}
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-3 font-semibold text-[#252943]">
-                          <div>{alert.orderId ? `Order #${alert.orderId.slice(-6)}` : "—"}</div>
-                          <span className="text-[10px] text-[#252943]/50">{alert.platform || "Platform"}</span>
-                        </td>
-                        <td className="py-2.5 px-3 font-semibold text-[#252943]">
-                          {alert.engagementType && (
-                            <span className="capitalize">{alert.engagementType}</span>
-                          )}
-                          {alert.runNumber !== null && alert.runNumber !== undefined && (
-                            <span className="text-[10px] text-[#252943]/50 block">Run #{alert.runNumber}</span>
-                          )}
-                        </td>
-                        <td className="py-2.5 px-3 text-[11px] font-bold text-[#252943]">
-                          {alert.providerName || "Provider"}
-                        </td>
-                        <td className="py-2.5 px-3 max-w-xs">
-                          <div className="font-semibold text-[#252943] truncate" title={alert.reason}>
-                            {alert.reason}
-                          </div>
-                          {alert.retryCount > 0 && (
-                            <span className="text-[10px] font-bold text-amber-600 block">
-                              Retry attempt #{alert.retryCount}
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-2.5 px-3">
-                          <span
-                            className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${
-                              alert.status === "open"
-                                ? "bg-rose-50 text-rose-700 border border-rose-200"
-                                : alert.status === "retrying"
-                                ? "bg-amber-50 text-amber-700 border border-amber-200"
-                                : "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                            }`}
-                          >
-                            {alert.status}
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-3 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            {alert.status !== "resolved" && (
-                              <button
-                                type="button"
-                                onClick={() => handleAlertAction(alert.id, "resolve")}
-                                disabled={actionLoadingId === alert.id}
-                                className="px-2 py-1 rounded-lg border border-[#DEE0ED] text-[10px] font-bold hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200"
-                              >
-                                Resolve
-                              </button>
-                            )}
-                            {alert.runId && alert.status !== "resolved" && (
-                              <button
-                                type="button"
-                                onClick={() => handleAlertAction(alert.id, "retry_run")}
-                                disabled={actionLoadingId === alert.id}
-                                className="px-2 py-1 rounded-lg bg-[#3A4EFB] text-white text-[10px] font-bold hover:bg-[#2A3DE0]"
-                              >
-                                Retry Run
-                              </button>
-                            )}
-                            {alert.providerId && alert.type === "provider_down" && (
-                              <button
-                                type="button"
-                                onClick={() => handleAlertAction(alert.id, "pause_provider")}
-                                disabled={actionLoadingId === alert.id}
-                                className="px-2 py-1 rounded-lg bg-amber-500 text-white text-[10px] font-bold hover:bg-amber-600"
-                              >
-                                Pause Provider
-                              </button>
-                            )}
-                            {alert.orderId && alert.status === "open" && (
-                              <button
-                                type="button"
-                                onClick={() => handleAlertAction(alert.id, "refund")}
-                                disabled={actionLoadingId === alert.id}
-                                className="px-2 py-1 rounded-lg bg-rose-500 text-white text-[10px] font-bold hover:bg-rose-600"
-                              >
-                                Refund
-                              </button>
-                            )}
-                            {alert.orderId && (
-                              <a
-                                href="/engagement/orders"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="px-2 py-1 rounded-lg border border-[#DEE0ED] text-[10px] font-bold text-[#252943]/80 hover:bg-[#F8F9FD]"
-                              >
-                                Open order
-                              </a>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  {alerts.length === 0 && (
-                    <tr>
-                      <td colSpan={8} className="py-8 text-center text-xs text-[#252943]/60">
-                        <CheckCircle2 className="w-6 h-6 text-emerald-500 mx-auto mb-1" />
-                        All systems operational. No active delivery incidents or health alerts.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+        <AlertsHealthTab />
       )}
 
       {/* Remap Service Modal */}

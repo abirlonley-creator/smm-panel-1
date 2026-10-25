@@ -28,7 +28,7 @@ const COLORS = [
 ];
 
 console.log("================================================================================");
-console.log(" DHANSMM INSTAGRAM ORGANIC PACING VISUALIZER — 10 PLANS (10,000 VIEWS)");
+console.log(" AURASMM INSTAGRAM ORGANIC PACING VISUALIZER — 10 PLANS (10,000 VIEWS)");
 console.log(" Platform: Instagram Reel (72h) vs Post (48h)");
 console.log("================================================================================\n");
 
@@ -86,7 +86,7 @@ const polylines = plans.map((item) => {
 let svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="100%" height="100%" style="background:#0f172a; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
   <rect width="${width}" height="${height}" fill="#0f172a" />
 
-  <text x="${padLeft}" y="32" fill="#f8fafc" font-size="18" font-weight="700">DhanSMM Instagram Organic Delivery — 10 Distinct Plans (10,000 Views)</text>
+  <text x="${padLeft}" y="32" fill="#f8fafc" font-size="18" font-weight="700">AuraSMM Instagram Organic Delivery — 10 Distinct Plans (10,000 Views)</text>
   <text x="${padLeft}" y="50" fill="#94a3b8" font-size="12">Multi-wave Reels (72h) vs front-loaded Feed Posts (48h) • S-curve k ∈ [5.5, 7.5], circadian peak weighting (+40%)</text>
 `;
 

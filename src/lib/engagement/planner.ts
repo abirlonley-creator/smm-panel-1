@@ -203,7 +203,7 @@ export function normalizeSeed(seed: number | string | undefined): number {
   if (typeof seed === "number" && Number.isFinite(seed)) {
     return (seed >>> 0) || 123456789;
   }
-  const str = String(seed || "dhansmm_seed_1");
+  const str = String(seed || "aurasmm_seed_1");
   let h = 0x811c9dc5;
   for (let i = 0; i < str.length; i++) {
     h ^= str.charCodeAt(i);

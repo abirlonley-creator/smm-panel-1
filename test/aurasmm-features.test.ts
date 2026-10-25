@@ -1,5 +1,5 @@
 /**
- * DhanSMM Automated Test Suite
+ * AuraSMM Automated Test Suite
  *
  * Verifies all 5 core features and acceptance criteria:
  * 1. S-curve plan: monotonic cumulative curve, non-linear pacing, exact totals,
@@ -33,9 +33,9 @@ function assert(condition: boolean, testName: string, detail?: string) {
   }
 }
 
-async function runDhanSMMTestSuite() {
+async function runAuraSMMTestSuite() {
   console.log("\n=================================================================");
-  console.log("   DHANSMM COMPREHENSIVE ARCHITECTURAL FEATURE TEST SUITE");
+  console.log("   AURASMM COMPREHENSIVE ARCHITECTURAL FEATURE TEST SUITE");
   console.log("=================================================================\n");
 
   // =========================================================================
@@ -431,7 +431,7 @@ async function runDhanSMMTestSuite() {
   }
 }
 
-runDhanSMMTestSuite().catch((err) => {
+runAuraSMMTestSuite().catch((err) => {
   console.error("Test Suite crashed:", err);
   process.exit(1);
 });

@@ -74,7 +74,7 @@ export default function FullEngagementPage() {
   const [targetUrl, setTargetUrl] = useState("");
   const [targetTz, setTargetTz] = useState("Asia/Kolkata");
   const [peakHourWeighting, setPeakHourWeighting] = useState<boolean>(true);
-  const [seed, setSeed] = useState<string>(() => `dhansmm_${Date.now()}`);
+  const [seed, setSeed] = useState<string>(() => `aurasmm_${Date.now()}`);
   const [showExplainer, setShowExplainer] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -145,7 +145,7 @@ export default function FullEngagementPage() {
   // Load last toggles per platform from localStorage
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(`dhansmm_toggles_${activePlatformTab.toLowerCase()}`);
+      const saved = localStorage.getItem(`aurasmm_toggles_${activePlatformTab.toLowerCase()}`);
       if (saved) {
         const parsed = JSON.parse(saved);
         setTypeToggles((prev) => ({ ...prev, ...parsed, views: true }));
@@ -159,7 +159,7 @@ export default function FullEngagementPage() {
     const updated = { ...typeToggles, [type]: nextVal };
     setTypeToggles(updated);
     try {
-      localStorage.setItem(`dhansmm_toggles_${activePlatformTab.toLowerCase()}`, JSON.stringify(updated));
+      localStorage.setItem(`aurasmm_toggles_${activePlatformTab.toLowerCase()}`, JSON.stringify(updated));
     } catch {}
   }
 
@@ -186,7 +186,7 @@ export default function FullEngagementPage() {
         }));
         setOpenServicePickerFor(null);
         // Force refresh preview pattern
-        setSeed(`dhansmm_${Date.now()}`);
+        setSeed(`aurasmm_${Date.now()}`);
       } else {
         setErrorMsg(data.error || "Failed to save service mapping");
       }
@@ -298,7 +298,7 @@ export default function FullEngagementPage() {
           platform: activePlatformTab,
           presetKey,
           baseViews: Number(baseViews),
-          seed: `dhansmm_${Date.now()}_${Math.floor(Math.random() * 100000)}`,
+          seed: `aurasmm_${Date.now()}_${Math.floor(Math.random() * 100000)}`,
           targetTz,
           peakHourWeighting,
           enabledTypes: activeTypes,
@@ -314,7 +314,7 @@ export default function FullEngagementPage() {
         setSeed(String(data.plan.seed));
       }
     } catch {
-      setSeed(`dhansmm_${Date.now()}_${Math.floor(Math.random() * 100000)}`);
+      setSeed(`aurasmm_${Date.now()}_${Math.floor(Math.random() * 100000)}`);
     } finally {
       setLoadingPlan(false);
     }

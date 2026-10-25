@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { formatProviderBalance } from "@/lib/currency";
+import { BRAND } from "@/lib/brand";
 
 interface ProviderBalanceCard {
   connectionId: string;
@@ -353,7 +354,7 @@ export default function WalletPage() {
       <div className="flex items-center justify-center min-h-[50vh]">
         <div className="flex items-center gap-2 text-sm text-[#252943]/60">
           <Loader2 className="w-5 h-5 animate-spin text-[#3A4EFB]" />
-          <span>Loading DhanSMM Wallet and connected provider balances...</span>
+          <span>Loading {BRAND.walletName} and connected provider balances...</span>
         </div>
       </div>
     );
@@ -420,7 +421,7 @@ export default function WalletPage() {
 
       {/* Main Grid: Left = INR Account Wallet Card, Right = Provider Manager Summary */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* DhanSMM INR Wallet Card */}
+        {/* AuraSMM INR Wallet Card */}
         <div className="md:col-span-1 bg-gradient-to-br from-[#252943] to-[#1A1D31] text-white rounded-3xl p-6 shadow-subtle flex flex-col justify-between relative overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-[#3A4EFB]/20 rounded-full blur-2xl pointer-events-none" />
           
@@ -977,7 +978,7 @@ export default function WalletPage() {
             <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
               <h3 className="text-sm font-bold text-[#252943] flex items-center gap-2">
                 <Wallet className="w-4 h-4 text-[#3A4EFB]" />
-                Add Funds to DhanSMM Wallet
+                Add Funds to {BRAND.walletName}
               </h3>
               <button
                 type="button"

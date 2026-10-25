@@ -575,6 +575,7 @@ model EngagementOrder {
   lastReplanReason  String?
   behindSince       DateTime?
   runs              EngagementRun[]
+  eventLogs         OrderEventLog[]
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
 
@@ -598,15 +599,22 @@ model EngagementRun {
   plannedCumulative Int?            // Expected cumulative delivered at this run
   deliveredQuantity Int?            // Confirmed quantity delivered
   deliveredCumulative Int?          // Confirmed cumulative delivered
+  claimedAt         DateTime?
   sentAt            DateTime?       // Actual send timestamp
+  confirmedAt       DateTime?       // Delivery confirmation timestamp
+  timeToStartMs     Int?            // Milliseconds from scheduled to sent
+  timeToConfirmMs   Int?            // Milliseconds from sent to confirmed
   isReplan          Boolean         @default(false)
-  status            String          @default("scheduled") // scheduled, sending, sent, delayed, failed, completed
+  status            String          @default("scheduled") // scheduled, claimed, sending, sent, confirmed, delayed, failed, cancelled
   providerOrderId   String?
   idempotencyKey    String?         @unique
   attempts          Int             @default(0)
   lastAttemptAt     DateTime?
   latenessSeconds   Int?
+  errorType         String?         // timeout, invalid_key, insufficient_funds, service_not_found, rate_limit, link_rejected, dns_tls, unknown
+  httpStatus        Int?
   errorMessage      String?
+  rawResponse       String?         // Sanitized (secrets removed)
   cost              Float           @default(0)
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
@@ -621,7 +629,7 @@ model AdminAlert {
   id              String    @id @default(cuid())
   createdAt       DateTime  @default(now())
   severity        String    // "high" | "medium" | "low"
-  type            String    // "provider_down" | "invalid_api_key" | "service_not_found" | "insufficient_balance" | "run_failed" | "run_late" | "order_refunded" | "replan"
+  type            String    // "provider_down" | "invalid_api_key" | "service_not_found" | "insufficient_balance" | "run_failed" | "run_late" | "order_refunded" | "replan" | "ahead" | "watchdog_stuck" | "watchdog_heartbeat"
   orderId         String?
   runId           String?
   runNumber       Int?
@@ -630,20 +638,47 @@ model AdminAlert {
   engagementType  String?   // "views" | "likes" | "saves" | "shares" | "comments"
   providerId      String?
   providerName    String?
+  serviceId       String?
   planned         Int?
   delivered       Int?
   deviationPercent Float?
+  errorType       String?   // timeout, invalid_key, insufficient_funds, etc.
+  dedupKey        String?   // Grouping key for alert deduplication
+  dedupCount      Int       @default(1)
+  lastSeenAt      DateTime?
   reason          String    // Plain-language reason
   rawResponse     String?   // Sanitized (secrets removed)
   retryCount      Int       @default(0)
   status          String    @default("open") // "open" | "retrying" | "resolved"
   actionTaken     String?
+  suggestedAction String?   // Plain-language suggested admin action
+  resolvedBy      String?
   resolvedAt      DateTime?
 
   @@index([status, severity])
   @@index([createdAt])
   @@index([providerId])
+  @@index([dedupKey])
   @@map("alerts")
+}
+
+model OrderEventLog {
+  id                String          @id @default(cuid())
+  engagementOrderId String
+  engagementOrder   EngagementOrder @relation(fields: [engagementOrderId], references: [id], onDelete: Cascade)
+  runId             String?
+  eventType         String          // "STATE_CHANGE" | "PROVIDER_CALL" | "REPLAN" | "WATCHDOG" | "REFUND"
+  message           String
+  requestSummary    String?
+  responseCode      Int?
+  rawResponse       String?         // Sanitized (secrets removed)
+  durationMs        Int?
+  metadata          String?         // JSON
+  createdAt         DateTime        @default(now())
+
+  @@index([engagementOrderId, createdAt])
+  @@index([eventType])
+  @@map("order_event_logs")
 }
 
 // =====================================================================

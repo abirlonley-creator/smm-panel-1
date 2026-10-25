@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
 const actionSchema = z.object({
-  action: z.enum(["resolve", "retry_run", "pause_provider", "refund"]),
+  action: z.enum(["resolve", "retry_run", "pause_provider", "refund", "replan"]),
 });
 
 export async function POST(
@@ -36,12 +36,54 @@ export async function POST(
         data: {
           status: "resolved",
           resolvedAt: new Date(),
+          resolvedBy: session.user?.username || session.label || "admin",
         },
       });
 
       return NextResponse.json({
         success: true,
         message: "Alert marked as resolved.",
+      });
+    }
+
+    if (action === "replan" && alert.orderId) {
+      const order = await prisma.engagementOrder.findUnique({
+        where: { id: alert.orderId },
+        include: { runs: true },
+      });
+
+      if (!order) {
+        return NextResponse.json({ success: false, error: "Order not found" }, { status: 404 });
+      }
+
+      // Re-schedule any delayed/failed runs into next slots spaced 5 minutes apart
+      const pendingOrFailed = order.runs.filter((r) => ["failed", "delayed"].includes(r.status));
+      let slotOffset = 1;
+      for (const r of pendingOrFailed) {
+        await prisma.engagementRun.update({
+          where: { id: r.id },
+          data: {
+            status: "scheduled",
+            scheduledAt: new Date(Date.now() + slotOffset * 5 * 60 * 1000),
+            errorMessage: null,
+            isReplan: true,
+          },
+        });
+        slotOffset++;
+      }
+
+      await prisma.adminAlert.update({
+        where: { id: alertId },
+        data: {
+          status: "resolved",
+          resolvedAt: new Date(),
+          resolvedBy: session.user?.username || session.label || "admin",
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: `Re-planned ${pendingOrFailed.length} runs starting in 5 minutes.`,
       });
     }
 
@@ -81,6 +123,7 @@ export async function POST(
         data: {
           status: "resolved",
           resolvedAt: new Date(),
+          resolvedBy: session.user?.username || session.label || "admin",
         },
       });
 
@@ -148,6 +191,7 @@ export async function POST(
         data: {
           status: "resolved",
           resolvedAt: new Date(),
+          resolvedBy: session.user?.username || session.label || "admin",
         },
       });
 
