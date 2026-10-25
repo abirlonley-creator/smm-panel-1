@@ -18,51 +18,62 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function OverviewPage() {
-  const session = await getAuthSession();
-  const userId = session.authenticated && session.user ? session.user.id : null;
-  const isAdmin = session.authenticated && session.role === "ADMIN";
+  let totalOrders = 0;
+  let activeOrders = 0;
+  let scheduledSteps = 0;
+  let servicesCount = 0;
+  let recentOrders: any[] = [];
+  let recentAuditLogs: any[] = [];
 
-  const orderWhere = userId && !isAdmin ? { userId } : userId && isAdmin ? {} : { userId: "unauthenticated-empty" };
-  const auditWhere = userId && !isAdmin ? { userId } : userId && isAdmin ? {} : { userId: "unauthenticated-empty" };
-  const stepWhere =
-    userId && !isAdmin
-      ? { status: "PENDING", order: { userId } }
-      : userId && isAdmin
-      ? { status: "PENDING" }
-      : { status: "PENDING", order: { userId: "unauthenticated-empty" } };
+  try {
+    const session = await getAuthSession();
+    const userId = session.authenticated && session.user ? session.user.id : null;
+    const isAdmin = session.authenticated && session.role === "ADMIN";
 
-  const [
-    totalOrders,
-    activeOrders,
-    scheduledSteps,
-    servicesCount,
-    recentOrders,
-    recentAuditLogs,
-  ] = await Promise.all([
-    userId ? prisma.order.count({ where: orderWhere }) : 0,
-    userId
-      ? prisma.order.count({
-          where: { ...orderWhere, status: { in: ["PENDING", "PROCESSING", "SCHEDULED"] } },
-        })
-      : 0,
-    userId ? prisma.scheduledDeliveryStep.count({ where: stepWhere }) : 0,
-    prisma.service.count({ where: { active: true } }),
-    userId
-      ? prisma.order.findMany({
-          where: orderWhere,
-          take: 6,
-          orderBy: { createdAt: "desc" },
-          include: { service: true },
-        })
-      : [],
-    userId
-      ? prisma.auditLog.findMany({
-          where: auditWhere,
-          take: 4,
-          orderBy: { createdAt: "desc" },
-        })
-      : [],
-  ]);
+    const orderWhere = userId && !isAdmin ? { userId } : userId && isAdmin ? {} : { userId: "unauthenticated-empty" };
+    const auditWhere = userId && !isAdmin ? { userId } : userId && isAdmin ? {} : { userId: "unauthenticated-empty" };
+    const stepWhere =
+      userId && !isAdmin
+        ? { status: "PENDING", order: { userId } }
+        : userId && isAdmin
+        ? { status: "PENDING" }
+        : { status: "PENDING", order: { userId: "unauthenticated-empty" } };
+
+    const results = await Promise.all([
+      userId ? prisma.order.count({ where: orderWhere }).catch(() => 0) : 0,
+      userId
+        ? prisma.order.count({
+            where: { ...orderWhere, status: { in: ["PENDING", "PROCESSING", "SCHEDULED"] } },
+          }).catch(() => 0)
+        : 0,
+      userId ? prisma.scheduledDeliveryStep.count({ where: stepWhere }).catch(() => 0) : 0,
+      prisma.service.count({ where: { active: true } }).catch(() => 0),
+      userId
+        ? prisma.order.findMany({
+            where: orderWhere,
+            take: 6,
+            orderBy: { createdAt: "desc" },
+            include: { service: true },
+          }).catch(() => [])
+        : [],
+      userId
+        ? prisma.auditLog.findMany({
+            where: auditWhere,
+            take: 4,
+            orderBy: { createdAt: "desc" },
+          }).catch(() => [])
+        : [],
+    ]);
+
+    totalOrders = results[0];
+    activeOrders = results[1];
+    scheduledSteps = results[2];
+    servicesCount = results[3];
+    recentOrders = results[4];
+    recentAuditLogs = results[5];
+  } catch (err) {
+    console.warn("Failed to load overview data:", err);
+  }
 
   return (
     <div className="space-y-6 animate-fadeIn max-w-6xl mx-auto">
@@ -236,7 +247,7 @@ export default async function OverviewPage() {
                         {order.orderRef}
                       </td>
                       <td className="py-3.5 px-4 max-w-[180px] truncate text-xs font-medium text-[#252943]">
-                        {order.service.name}
+                        {order.service?.name || "Standard Service"}
                       </td>
                       <td className="py-3.5 px-4 text-xs font-semibold text-[#252943] tabular-nums">
                         {order.requestedQuantity.toLocaleString()}
