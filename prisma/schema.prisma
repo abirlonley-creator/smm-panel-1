@@ -8,20 +8,6 @@ generator client {
   provider = "prisma-client-js"
 }
 
-model ProviderConfig {
-  id          String    @id @default(cuid())
-  name        String    @default("Standard SMM Provider")
-  apiUrl      String    @default("https://api.smmprovider.com/v2")
-  apiKey      String?
-  isMock      Boolean   @default(true)
-  active      Boolean   @default(true)
-  balance     Float?
-  currency    String    @default("INR")
-  lastSyncAt  DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-}
-
 model Provider {
   id              String          @id @default(cuid())
   name            String          // e.g. "Zeofame", "xmedia", "Standard SMM Provider"
@@ -40,39 +26,44 @@ model Provider {
 }
 
 model Service {
-  id                  String          @id @default(cuid())
+  id                  String                  @id @default(cuid())
   externalId          String
   name                String
-  type                String          @default("Default")
+  type                String                  @default("Default")
   platform            String
   category            String
   description         String
   minQuantity         Int
   maxQuantity         Int
   ratePer1000         Float
-  refillSupported     Boolean         @default(false)
-  cancelSupported     Boolean         @default(true)
-  dripFeedSupported   Boolean         @default(false)
-  dripFeedMinInterval Int             @default(10)
-  dripFeedMaxInterval Int             @default(1440)
+  refillSupported     Boolean                 @default(false)
+  cancelSupported     Boolean                 @default(true)
+  dripFeedSupported   Boolean                 @default(false)
+  dripFeedMinInterval Int                     @default(10)
+  dripFeedMaxInterval Int                     @default(1440)
   restrictions        String?
   providerEndpoint    String?
-  isMock              Boolean         @default(false)
-  active              Boolean         @default(true)
+  isMock              Boolean                 @default(false)
+  active              Boolean                 @default(true)
   providerId          String?
-  provider            Provider?       @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  provider            Provider?               @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  userProviderId      String?
+  userProvider        UserProviderConnection? @relation(fields: [userProviderId], references: [id], onDelete: Cascade)
   providerServiceId   String?
+  favourites          Favourite[]
   orders              Order[]
   monitoringSessions  MonitoringSession[]
   comboItems          ComboItem[]
   engagementRuns      EngagementRun[]
-  createdAt           DateTime        @default(now())
-  updatedAt           DateTime        @updatedAt
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
 
   @@index([providerEndpoint, active])
   @@index([externalId])
   @@index([providerId])
+  @@index([userProviderId])
   @@unique([providerId, externalId])
+  @@map("catalog_services")
 }
 
 model Order {
@@ -88,6 +79,7 @@ model Order {
   deliveredQuantity Int                     @default(0)
   remainingQuantity Int                     @default(0)
   failedQuantity    Int                     @default(0)
+  refundedAmount    Float                   @default(0)
   unitCost          Float
   totalCost         Float
   isScheduled       Boolean                 @default(false)
@@ -157,7 +149,10 @@ model User {
   walletBalance      Float                   @default(1000.0) // INR wallet balance
   passkeys           Passkey[]
   sessions           Session[]
-  providerConfig     UserProviderConfig?
+  preferences        UserPreference?
+  favourites         Favourite[]
+  favouritesSnapshot FavouritesSnapshot?
+  engagementMappings UserEngagementMapping[]
   providerConnections UserProviderConnection[]
   walletTransactions WalletTransaction[]
   orders             Order[]
@@ -205,41 +200,91 @@ model Session {
   @@index([token, expiresAt])
 }
 
-model UserProviderConfig {
-  id         String    @id @default(cuid())
-  userId     String    @unique
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name       String    @default("My SMM Provider")
-  apiUrl     String    @default("https://api.smmprovider.com/v2")
-  apiKey     String?
-  isMock     Boolean   @default(true)
-  active     Boolean   @default(true)
-  balance    Float?
-  currency   String    @default("INR")
-  lastSyncAt DateTime?
-  lastError  String?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-}
-
 model UserProviderConnection {
-  id              String    @id @default(cuid())
-  userId          String
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name            String    // e.g. "Zeofame", "xmedia"
-  apiUrl          String
-  apiKeyEncrypted String?   // AES-256-GCM encrypted
-  isMock          Boolean   @default(false)
-  active          Boolean   @default(true)
-  balance         Float?
-  currency        String    @default("USD")
-  lastSyncAt      DateTime?
-  lastError       String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id                 String                  @id @default(cuid())
+  userId             String
+  user               User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name               String                  // e.g. "Zeofame", "xmedia"
+  apiUrl             String
+  apiKeyEncrypted    String?                 // AES-256-GCM encrypted
+  isMock             Boolean                 @default(false)
+  active             Boolean                 @default(true)
+  balance            Float?
+  currency           String                  @default("USD")
+  servicesCount      Int                     @default(0)
+  lastSyncAt         DateTime?
+  lastError          String?
+  services           Service[]
+  engagementMappings UserEngagementMapping[]
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
 
   @@unique([userId, name])
   @@index([userId, active])
+  @@map("user_providers")
+}
+
+model UserPreference {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  onlyFavourites   Boolean  @default(false)
+  activeProviderId String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("user_preferences")
+}
+
+model Favourite {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  providerId        String
+  providerServiceId String
+  serviceId         String?
+  service           Service? @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  createdAt         DateTime @default(now())
+
+  @@unique([userId, providerId, providerServiceId])
+  @@index([userId])
+  @@map("favourites")
+}
+
+model FavouritesSnapshot {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  serviceKeys  String   @default("[]") // JSON string array of "providerId:providerServiceId"
+  serviceCount Int      @default(0)
+  confirmedAt  DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("favourites_snapshot")
+}
+
+model UserEngagementMapping {
+  id                String                 @id @default(cuid())
+  userId            String
+  user              User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platform          String                 // "Instagram", "TikTok"
+  engagementType    String                 // "views", "likes", "shares", "saves", "comments"
+  providerId        String
+  provider          UserProviderConnection @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  providerServiceId String
+  serviceName       String?
+  minQuantity       Int                    @default(10)
+  maxQuantity       Int                    @default(100000)
+  ratePer1000       Float                  @default(0)
+  active            Boolean                @default(true)
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+
+  @@unique([userId, platform, engagementType])
+  @@index([userId])
+  @@index([providerId])
+  @@map("engagement_mappings")
 }
 
 model WalletTransaction {
@@ -497,6 +542,8 @@ model EngagementOrder {
   user              User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
   targetUrl         String
   platform          String          // "Instagram" | "TikTok"
+  profileId         String?         // "instagram_reel" | "instagram_post" | "tiktok"
+  presetKey         String?         // "fast" | "normal" | "slow"
   baseViews         Int
   durationHours     Int             @default(24)
   seed              String          // Mulberry32 seed for 100% reproducible curves
@@ -508,11 +555,25 @@ model EngagementOrder {
   plannedShares     Int             @default(0)
   plannedSaves      Int             @default(0)
   plannedComments   Int             @default(0)
+  viewsSource       String          @default("suggested") // "suggested" | "custom"
+  likesSource       String          @default("suggested")
+  savesSource       String          @default("suggested")
+  sharesSource      String          @default("suggested")
+  commentsSource    String          @default("suggested")
+  enabledTypes      String?         // JSON string array of enabled types
   deliveredViews    Int             @default(0)
   deliveredLikes    Int             @default(0)
   deliveredShares   Int             @default(0)
   deliveredSaves    Int             @default(0)
   deliveredComments Int             @default(0)
+  planParams        String?         // Stored JSON configuration for deterministic reproduction
+  expectedCurve     String?         // Stored JSON of 100 curve points sampled across total duration
+  statusSamples     String?         // Stored JSON array of actual delivered cumulative status samples over time
+  deviationStatus   String          @default("on_track") // "on_track" | "slightly_behind" | "behind" | "ahead"
+  typeStatuses      String?         // Stored JSON record of deviation status per type
+  replanCount       Int             @default(0)
+  lastReplanReason  String?
+  behindSince       DateTime?
   runs              EngagementRun[]
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
@@ -530,12 +591,21 @@ model EngagementRun {
   service           Service?        @relation(fields: [serviceId], references: [id], onDelete: SetNull)
   providerId        String?
   provider          Provider?       @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  providerServiceId String?         // Provider's own numeric ID
+  runNumber         Int?            // Sequence index
   scheduledAt       DateTime
   quantity          Int
-  status            String          @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED
+  plannedCumulative Int?            // Expected cumulative delivered at this run
+  deliveredQuantity Int?            // Confirmed quantity delivered
+  deliveredCumulative Int?          // Confirmed cumulative delivered
+  sentAt            DateTime?       // Actual send timestamp
+  isReplan          Boolean         @default(false)
+  status            String          @default("scheduled") // scheduled, sending, sent, delayed, failed, completed
   providerOrderId   String?
+  idempotencyKey    String?         @unique
   attempts          Int             @default(0)
   lastAttemptAt     DateTime?
+  latenessSeconds   Int?
   errorMessage      String?
   cost              Float           @default(0)
   createdAt         DateTime        @default(now())
@@ -543,6 +613,37 @@ model EngagementRun {
 
   @@index([status, scheduledAt])
   @@index([engagementOrderId, engagementType])
+  @@index([providerId, providerServiceId])
+  @@map("runs")
+}
+
+model AdminAlert {
+  id              String    @id @default(cuid())
+  createdAt       DateTime  @default(now())
+  severity        String    // "high" | "medium" | "low"
+  type            String    // "provider_down" | "invalid_api_key" | "service_not_found" | "insufficient_balance" | "run_failed" | "run_late" | "order_refunded" | "replan"
+  orderId         String?
+  runId           String?
+  runNumber       Int?
+  userId          String?
+  platform        String?
+  engagementType  String?   // "views" | "likes" | "saves" | "shares" | "comments"
+  providerId      String?
+  providerName    String?
+  planned         Int?
+  delivered       Int?
+  deviationPercent Float?
+  reason          String    // Plain-language reason
+  rawResponse     String?   // Sanitized (secrets removed)
+  retryCount      Int       @default(0)
+  status          String    @default("open") // "open" | "retrying" | "resolved"
+  actionTaken     String?
+  resolvedAt      DateTime?
+
+  @@index([status, severity])
+  @@index([createdAt])
+  @@index([providerId])
+  @@map("alerts")
 }
 
 // =====================================================================

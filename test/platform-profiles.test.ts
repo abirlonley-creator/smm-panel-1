@@ -129,7 +129,7 @@ describe("Platform Profiles & Provider Minimum Rules Verification", () => {
     const prof = getPlatformProfile("instagram_reel");
     const plan = generateOrganicPlan({
       profileId: "instagram_reel",
-      baseViews: 1200, // 1200 * 0.045 = ~54 likes
+      baseViews: 3500, // 3,500 views gives ~60-70 likes in realistic tier model, permitting >= 1 batch of min 50
       seed: 888,
       enabledTypes: ["views", "likes"],
       services: {

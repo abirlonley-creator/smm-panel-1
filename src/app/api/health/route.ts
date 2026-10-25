@@ -9,7 +9,7 @@ export async function GET() {
 
   // 1. Database Health Check
   try {
-    const configCount = await prisma.providerConfig.count();
+    const configCount = await prisma.provider.count();
     checks.database = {
       status: "UP",
       latencyMs: Date.now() - startTime,
@@ -26,9 +26,9 @@ export async function GET() {
   // 2. Active Provider Health Check
   try {
     const { config } = await getActiveProvider();
-    const dbConfig = await prisma.providerConfig.findUnique({
+    const dbConfig = await prisma.provider.findUnique({
       where: { id: config.id },
-    });
+    }).catch(() => null);
     checks.provider = {
       status: "UP",
       name: config.name,

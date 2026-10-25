@@ -136,14 +136,24 @@ export default function AdminPage() {
   const [loggingIn, setLoggingIn] = useState(false);
 
   // Admin Data state
-  const [activeTab, setActiveTab] = useState<"keys" | "monitoring" | "provider" | "audit" | "engagement">("keys");
+  const [activeTab, setActiveTab] = useState<"keys" | "monitoring" | "provider" | "audit" | "engagement" | "alerts">("keys");
   const [passkeys, setPasskeys] = useState<PasskeyData[]>([]);
   const [diagnostics, setDiagnostics] = useState<DiagnosticsData | null>(null);
   const [engagementProfiles, setEngagementProfiles] = useState<any[]>([]);
+  const [engagementOrders, setEngagementOrders] = useState<any[]>([]);
   const [editingMapping, setEditingMapping] = useState<{ profileId: string; type: string; providerId: string; providerServiceId: string; name: string; minQuantity: number; maxQuantity: number; ratePer1000: number } | null>(null);
   const [savingMapping, setSavingMapping] = useState(false);
   const [loadingData, setLoadingData] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(false);
+
+  // Alerts & Delivery Health state
+  const [alerts, setAlerts] = useState<any[]>([]);
+  const [alertsMetrics, setAlertsMetrics] = useState<any>(null);
+  const [loadingAlerts, setLoadingAlerts] = useState(false);
+  const [filterSeverity, setFilterSeverity] = useState<string>("all");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupStatus, setLookupStatus] = useState<{ exists: boolean; message: string; service?: any } | null>(null);
 
   // Action status states
   const [actionMsg, setActionMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
@@ -202,23 +212,107 @@ export default function AdminPage() {
           if (data.success) setDiagnostics(data);
         })
         .catch(() => {});
+      loadAlerts();
     }, 15000);
     return () => clearInterval(interval);
   }, [autoRefresh, session?.authenticated]);
 
+  async function loadAlerts() {
+    setLoadingAlerts(true);
+    try {
+      const res = await fetch("/api/admin/alerts");
+      const data = await res.json();
+      if (data.success) {
+        setAlerts(data.alerts || []);
+        setAlertsMetrics(data.metrics || null);
+      }
+    } catch (err) {
+      console.error("Failed to load alerts", err);
+    } finally {
+      setLoadingAlerts(false);
+    }
+  }
+
+  async function handleAlertAction(alertId: string, action: string) {
+    setActionLoadingId(alertId);
+    setActionMsg(null);
+    try {
+      const res = await fetch(`/api/admin/alerts/${alertId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Action failed");
+      }
+      setActionMsg({ text: data.message || "Action completed", type: "success" });
+      await loadAlerts();
+    } catch (err: any) {
+      setActionMsg({ text: err.message || "Failed to execute action", type: "error" });
+    } finally {
+      setActionLoadingId(null);
+    }
+  }
+
+  async function handleLookupService(providerId: string, serviceId: string) {
+    if (!providerId || !serviceId) return;
+    setLookupLoading(true);
+    setLookupStatus(null);
+    try {
+      const res = await fetch(`/api/admin/engagement-profiles/lookup?providerId=${encodeURIComponent(providerId)}&serviceId=${encodeURIComponent(serviceId)}`);
+      const data = await res.json();
+      if (data.success && data.exists && data.service) {
+        setLookupStatus({
+          exists: true,
+          message: `Found: ${data.service.name}`,
+          service: data.service,
+        });
+        if (editingMapping) {
+          setEditingMapping((prev) => prev ? {
+            ...prev,
+            name: data.service.name,
+            minQuantity: data.service.minQuantity,
+            maxQuantity: data.service.maxQuantity,
+            ratePer1000: data.service.ratePer1000,
+          } : null);
+        }
+      } else {
+        setLookupStatus({
+          exists: false,
+          message: data.message || `Service ID "${serviceId}" does not exist on this provider`,
+        });
+      }
+    } catch (err: any) {
+      setLookupStatus({
+        exists: false,
+        message: err.message || "Verification request failed",
+      });
+    } finally {
+      setLookupLoading(false);
+    }
+  }
+
   async function loadAllAdminData() {
     setLoadingData(true);
     try {
-      const [keysRes, diagRes, provRes, engRes] = await Promise.all([
+      const [keysRes, diagRes, provRes, engRes, alertsRes, engOrdersRes] = await Promise.all([
         fetch("/api/admin/keys").then((r) => r.json()),
         fetch("/api/admin/diagnostics").then((r) => r.json()),
         fetch("/api/admin/provider").then((r) => r.json()),
         fetch("/api/admin/engagement-profiles").then((r) => r.json()).catch(() => ({ success: false })),
+        fetch("/api/admin/alerts").then((r) => r.json()).catch(() => ({ success: false })),
+        fetch("/api/engagement/orders").then((r) => r.json()).catch(() => ({ success: false })),
       ]);
 
       if (keysRes.success) setPasskeys(keysRes.keys);
       if (diagRes.success) setDiagnostics(diagRes);
       if (engRes.success && engRes.profiles) setEngagementProfiles(engRes.profiles);
+      if (engOrdersRes.success && Array.isArray(engOrdersRes.orders)) setEngagementOrders(engOrdersRes.orders);
+      if (alertsRes.success) {
+        setAlerts(alertsRes.alerts || []);
+        setAlertsMetrics(alertsRes.metrics || null);
+      }
       if (provRes.success && provRes.config) {
         setProviderConfig(provRes.config);
         setEditName(provRes.config.name);
@@ -610,6 +704,27 @@ export default function AdminPage() {
         >
           <Sliders className="w-4 h-4" />
           <span>Full Engagement Profiles</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab("alerts");
+            loadAlerts();
+          }}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${
+            activeTab === "alerts"
+              ? "border-[#3A4EFB] text-[#3A4EFB] bg-[#3A4EFB]/5"
+              : "border-transparent text-[#252943]/60 hover:text-[#252943]"
+          }`}
+        >
+          <AlertTriangle className="w-4 h-4" />
+          <span>Alerts & Delivery Health</span>
+          {alertsMetrics?.openAlertsCount ? (
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500 text-white animate-pulse">
+              {alertsMetrics.openAlertsCount}
+            </span>
+          ) : null}
         </button>
       </div>
 
@@ -1229,6 +1344,365 @@ export default function AdminPage() {
                 </div>
               ))}
             </div>
+
+            {/* Recent Campaigns with Custom vs Suggested Breakdown */}
+            <div className="bg-white rounded-2xl border border-[#DEE0ED] p-6 shadow-subtle space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-bold text-[#252943]">
+                    Active Natural-Looking Delivery Campaigns
+                  </h3>
+                  <p className="text-xs text-[#252943]/60">
+                    Live client orders showing breakdown quantities and user customization (Suggested vs Custom).
+                  </p>
+                </div>
+                <a
+                  href="/engagement/orders"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 rounded-xl border border-[#DEE0ED] text-xs font-bold text-[#3A4EFB] hover:bg-[#F8F9FD]"
+                >
+                  View All Orders
+                </a>
+              </div>
+
+              {engagementOrders.length === 0 ? (
+                <div className="p-8 text-center text-xs text-[#252943]/60">
+                  No active natural-looking delivery campaigns found.
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-xl border border-[#DEE0ED]">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-[#F8F9FD] text-[#252943]/70 font-bold border-b border-[#DEE0ED]">
+                      <tr>
+                        <th className="py-2.5 px-3">Order Ref</th>
+                        <th className="py-2.5 px-3">Platform</th>
+                        <th className="py-2.5 px-3">Views</th>
+                        <th className="py-2.5 px-3">Likes</th>
+                        <th className="py-2.5 px-3">Saves</th>
+                        <th className="py-2.5 px-3">Shares</th>
+                        <th className="py-2.5 px-3">Comments</th>
+                        <th className="py-2.5 px-3">Progress</th>
+                        <th className="py-2.5 px-3 text-right">Cost</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#DEE0ED]">
+                      {engagementOrders.slice(0, 10).map((ord: any) => (
+                        <tr key={ord.id} className="hover:bg-[#F8F9FD]/50">
+                          <td className="py-2.5 px-3 font-mono font-bold text-[#252943]">
+                            {ord.orderRef}
+                          </td>
+                          <td className="py-2.5 px-3 capitalize font-semibold text-[#252943]">
+                            {ord.platform?.replace(/_/g, " ")}
+                          </td>
+                          <td className="py-2.5 px-3 font-medium">
+                            <span className="font-bold">{ord.breakdown?.views?.planned?.toLocaleString()}</span>
+                            {ord.sources?.views === "custom" && (
+                              <span className="ml-1 px-1 py-0.2 rounded text-[9px] bg-amber-100 text-amber-800 font-bold">Custom</span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-3 font-medium">
+                            <span className="font-bold">{ord.breakdown?.likes?.planned?.toLocaleString()}</span>
+                            {ord.sources?.likes === "custom" && (
+                              <span className="ml-1 px-1 py-0.2 rounded text-[9px] bg-amber-100 text-amber-800 font-bold">Custom</span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-3 font-medium">
+                            <span className="font-bold">{ord.breakdown?.saves?.planned?.toLocaleString()}</span>
+                            {ord.sources?.saves === "custom" && (
+                              <span className="ml-1 px-1 py-0.2 rounded text-[9px] bg-amber-100 text-amber-800 font-bold">Custom</span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-3 font-medium">
+                            <span className="font-bold">{ord.breakdown?.shares?.planned?.toLocaleString()}</span>
+                            {ord.sources?.shares === "custom" && (
+                              <span className="ml-1 px-1 py-0.2 rounded text-[9px] bg-amber-100 text-amber-800 font-bold">Custom</span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-3 font-medium">
+                            <span className="font-bold">{ord.breakdown?.comments?.planned?.toLocaleString()}</span>
+                            {ord.sources?.comments === "custom" && (
+                              <span className="ml-1 px-1 py-0.2 rounded text-[9px] bg-amber-100 text-amber-800 font-bold">Custom</span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-3 font-semibold text-[#3A4EFB]">
+                            {ord.progressPercent}% ({ord.completedRuns}/{ord.runsCount})
+                          </td>
+                          <td className="py-2.5 px-3 font-bold text-right text-[#252943]">
+                            ₹{ord.totalCost?.toFixed(2)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================================
+          TAB 6: ALERTS & DELIVERY HEALTH
+      ====================================================================== */}
+      {activeTab === "alerts" && (
+        <div className="space-y-6 animate-fadeIn">
+          {/* Overview Metric Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED] shadow-subtle">
+              <span className="text-[10px] uppercase font-bold text-[#252943]/60 block mb-1">On-Time Delivery (Today)</span>
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-black text-emerald-600">
+                  {alertsMetrics?.onTimePercentage ?? 100}%
+                </span>
+                <span className="text-[10px] font-bold text-[#252943]/50">target &plusmn;30s</span>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED] shadow-subtle">
+              <span className="text-[10px] uppercase font-bold text-[#252943]/60 block mb-1">Average Lateness</span>
+              <div className="flex items-baseline gap-1">
+                <span className="text-2xl font-black text-[#252943]">
+                  {alertsMetrics?.avgLatenessSeconds ?? 0}s
+                </span>
+                <span className="text-[10px] font-bold text-[#252943]/50">avg per batch</span>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED] shadow-subtle">
+              <span className="text-[10px] uppercase font-bold text-[#252943]/60 block mb-1">Failed Runs (Today)</span>
+              <span className={`text-2xl font-black ${(alertsMetrics?.failedRunsToday || 0) > 0 ? "text-rose-600" : "text-[#252943]"}`}>
+                {alertsMetrics?.failedRunsToday ?? 0}
+              </span>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED] shadow-subtle">
+              <span className="text-[10px] uppercase font-bold text-[#252943]/60 block mb-1">Open Incidents</span>
+              <span className={`text-2xl font-black ${(alertsMetrics?.openAlertsCount || 0) > 0 ? "text-rose-600 animate-pulse" : "text-emerald-600"}`}>
+                {alertsMetrics?.openAlertsCount ?? 0}
+              </span>
+            </div>
+          </div>
+
+          {/* Connected Providers Health & Balance */}
+          <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 shadow-subtle space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Server className="w-5 h-5 text-[#3A4EFB]" />
+                <h3 className="text-base font-bold text-[#252943]">Connected Providers Health & Balance</h3>
+              </div>
+              <button
+                type="button"
+                onClick={loadAlerts}
+                disabled={loadingAlerts}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#DEE0ED] text-xs font-bold text-[#252943] hover:border-[#3A4EFB]"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-[#3A4EFB] ${loadingAlerts ? "animate-spin" : ""}`} />
+                <span>Re-check Balance</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {(alertsMetrics?.providersStatus || []).map((p: any) => (
+                <div key={p.id} className="p-3.5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-[#252943] capitalize">{p.name}</span>
+                      <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${p.active ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"}`}>
+                        {p.active ? "Active" : "Paused"}
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-[#252943]/60 block mt-1">
+                      {p.isMock ? "Mock / Sandbox Mode" : "SMM API v2"}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-sm font-extrabold text-[#252943] block">
+                      {p.balance !== null && p.balance !== undefined ? formatProviderBalance(p.balance, p.currency) : "—"}
+                    </span>
+                    <span className="text-[10px] font-bold text-[#252943]/40">Balance</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Incident Log & Actions */}
+          <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 shadow-subtle space-y-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-bold text-[#252943]">Live Incident & Alert Stream</h3>
+                <p className="text-xs text-[#252943]/60">Delivery lateness, provider outages, and automated refund events</p>
+              </div>
+
+              {/* Filter controls */}
+              <div className="flex items-center gap-2 text-xs">
+                <select
+                  value={filterSeverity}
+                  onChange={(e) => setFilterSeverity(e.target.value)}
+                  className="bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-2.5 py-1.5 font-bold text-[#252943] outline-none"
+                >
+                  <option value="all">All Severities</option>
+                  <option value="high">High Severity</option>
+                  <option value="medium">Medium Severity</option>
+                  <option value="low">Low Severity</option>
+                </select>
+
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className="bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-2.5 py-1.5 font-bold text-[#252943] outline-none"
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="open">Open</option>
+                  <option value="retrying">Retrying</option>
+                  <option value="resolved">Resolved</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Incidents Table */}
+            <div className="overflow-x-auto rounded-2xl border border-[#DEE0ED]">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[#F8F9FD] text-[#252943]/70 font-bold border-b border-[#DEE0ED]">
+                  <tr>
+                    <th className="py-2.5 px-3">Time</th>
+                    <th className="py-2.5 px-3">Severity</th>
+                    <th className="py-2.5 px-3">Order / Platform</th>
+                    <th className="py-2.5 px-3">Run Details</th>
+                    <th className="py-2.5 px-3">Provider</th>
+                    <th className="py-2.5 px-3">Reason & Diagnostics</th>
+                    <th className="py-2.5 px-3">Status</th>
+                    <th className="py-2.5 px-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#DEE0ED]">
+                  {alerts
+                    .filter((a) => (filterSeverity === "all" ? true : a.severity === filterSeverity))
+                    .filter((a) => (filterStatus === "all" ? true : a.status === filterStatus))
+                    .map((alert) => (
+                      <tr key={alert.id} className="hover:bg-[#F8F9FD]/50 transition-colors">
+                        <td className="py-2.5 px-3 text-[11px] text-[#252943]/70 whitespace-nowrap">
+                          {new Date(alert.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <span
+                            className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase ${
+                              alert.severity === "high"
+                                ? "bg-rose-100 text-rose-800"
+                                : alert.severity === "medium"
+                                ? "bg-amber-100 text-amber-800"
+                                : "bg-blue-100 text-blue-800"
+                            }`}
+                          >
+                            {alert.severity}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 font-semibold text-[#252943]">
+                          <div>{alert.orderId ? `Order #${alert.orderId.slice(-6)}` : "—"}</div>
+                          <span className="text-[10px] text-[#252943]/50">{alert.platform || "Platform"}</span>
+                        </td>
+                        <td className="py-2.5 px-3 font-semibold text-[#252943]">
+                          {alert.engagementType && (
+                            <span className="capitalize">{alert.engagementType}</span>
+                          )}
+                          {alert.runNumber !== null && alert.runNumber !== undefined && (
+                            <span className="text-[10px] text-[#252943]/50 block">Run #{alert.runNumber}</span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3 text-[11px] font-bold text-[#252943]">
+                          {alert.providerName || "Provider"}
+                        </td>
+                        <td className="py-2.5 px-3 max-w-xs">
+                          <div className="font-semibold text-[#252943] truncate" title={alert.reason}>
+                            {alert.reason}
+                          </div>
+                          {alert.retryCount > 0 && (
+                            <span className="text-[10px] font-bold text-amber-600 block">
+                              Retry attempt #{alert.retryCount}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <span
+                            className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${
+                              alert.status === "open"
+                                ? "bg-rose-50 text-rose-700 border border-rose-200"
+                                : alert.status === "retrying"
+                                ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                            }`}
+                          >
+                            {alert.status}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {alert.status !== "resolved" && (
+                              <button
+                                type="button"
+                                onClick={() => handleAlertAction(alert.id, "resolve")}
+                                disabled={actionLoadingId === alert.id}
+                                className="px-2 py-1 rounded-lg border border-[#DEE0ED] text-[10px] font-bold hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200"
+                              >
+                                Resolve
+                              </button>
+                            )}
+                            {alert.runId && alert.status !== "resolved" && (
+                              <button
+                                type="button"
+                                onClick={() => handleAlertAction(alert.id, "retry_run")}
+                                disabled={actionLoadingId === alert.id}
+                                className="px-2 py-1 rounded-lg bg-[#3A4EFB] text-white text-[10px] font-bold hover:bg-[#2A3DE0]"
+                              >
+                                Retry Run
+                              </button>
+                            )}
+                            {alert.providerId && alert.type === "provider_down" && (
+                              <button
+                                type="button"
+                                onClick={() => handleAlertAction(alert.id, "pause_provider")}
+                                disabled={actionLoadingId === alert.id}
+                                className="px-2 py-1 rounded-lg bg-amber-500 text-white text-[10px] font-bold hover:bg-amber-600"
+                              >
+                                Pause Provider
+                              </button>
+                            )}
+                            {alert.orderId && alert.status === "open" && (
+                              <button
+                                type="button"
+                                onClick={() => handleAlertAction(alert.id, "refund")}
+                                disabled={actionLoadingId === alert.id}
+                                className="px-2 py-1 rounded-lg bg-rose-500 text-white text-[10px] font-bold hover:bg-rose-600"
+                              >
+                                Refund
+                              </button>
+                            )}
+                            {alert.orderId && (
+                              <a
+                                href="/engagement/orders"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-2 py-1 rounded-lg border border-[#DEE0ED] text-[10px] font-bold text-[#252943]/80 hover:bg-[#F8F9FD]"
+                              >
+                                Open order
+                              </a>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  {alerts.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="py-8 text-center text-xs text-[#252943]/60">
+                        <CheckCircle2 className="w-6 h-6 text-emerald-500 mx-auto mb-1" />
+                        All systems operational. No active delivery incidents or health alerts.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -1245,14 +1719,17 @@ export default function AdminPage() {
                 </h3>
               </div>
               <button
-                onClick={() => setEditingMapping(null)}
+                onClick={() => {
+                  setEditingMapping(null);
+                  setLookupStatus(null);
+                }}
                 className="text-[#252943]/40 hover:text-[#252943] text-sm font-bold"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleSaveEngagementMapping} className="space-y-3 text-xs">
+            <form onSubmit={handleSaveEngagementMapping} className="space-y-3.5 text-xs">
               <div>
                 <label className="block font-bold text-[#252943] mb-1">Service Display Name</label>
                 <input
@@ -1266,60 +1743,107 @@ export default function AdminPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-[#252943] mb-1">Provider ID</label>
-                  <input
-                    type="text"
-                    required
+                  <label className="block font-bold text-[#252943] mb-1">Provider (Connected)</label>
+                  <select
                     value={editingMapping.providerId}
-                    onChange={(e) => setEditingMapping({ ...editingMapping, providerId: e.target.value })}
-                    className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3 py-2 font-mono text-[#252943]"
-                  />
+                    onChange={(e) => {
+                      const newProvId = e.target.value;
+                      setEditingMapping({ ...editingMapping, providerId: newProvId });
+                      handleLookupService(newProvId, editingMapping.providerServiceId);
+                    }}
+                    className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3 py-2 font-bold text-[#252943] outline-none"
+                  >
+                    {alertsMetrics?.providersStatus?.length > 0 ? (
+                      alertsMetrics.providersStatus.map((p: any) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} {p.active ? "• Active" : "• Paused"}
+                        </option>
+                      ))
+                    ) : (
+                      <option value="cmvm1iusy0000j5quq9ozboir">xmedia (Live)</option>
+                    )}
+                  </select>
                 </div>
                 <div>
-                  <label className="block font-bold text-[#252943] mb-1">Provider Service ID</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-[#252943]">Provider Service ID</label>
+                    <button
+                      type="button"
+                      onClick={() => handleLookupService(editingMapping.providerId, editingMapping.providerServiceId)}
+                      disabled={lookupLoading}
+                      className="text-[10px] text-[#3A4EFB] font-bold hover:underline flex items-center gap-1"
+                    >
+                      <RefreshCw className={`w-2.5 h-2.5 ${lookupLoading ? "animate-spin" : ""}`} />
+                      Re-sync
+                    </button>
+                  </div>
                   <input
                     type="text"
                     required
+                    placeholder="e.g. 101"
                     value={editingMapping.providerServiceId}
-                    onChange={(e) => setEditingMapping({ ...editingMapping, providerServiceId: e.target.value })}
-                    className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3 py-2 font-mono text-[#252943]"
+                    onChange={(e) => {
+                      const newSrvId = e.target.value;
+                      setEditingMapping({ ...editingMapping, providerServiceId: newSrvId });
+                    }}
+                    onBlur={() => handleLookupService(editingMapping.providerId, editingMapping.providerServiceId)}
+                    className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3 py-2 font-mono font-bold text-[#252943]"
                   />
                 </div>
               </div>
 
+              {/* Service Verification Status Display */}
+              {lookupLoading && (
+                <div className="p-2 rounded-xl bg-blue-50 border border-blue-200 flex items-center gap-2 text-xs font-semibold text-blue-800">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-[#3A4EFB]" />
+                  <span>Verifying service ID on provider...</span>
+                </div>
+              )}
+              {!lookupLoading && lookupStatus && (
+                <div
+                  className={`p-2.5 rounded-xl border flex items-center gap-2 text-xs font-semibold ${
+                    lookupStatus.exists
+                      ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                      : "bg-rose-50 border-rose-200 text-rose-800"
+                  }`}
+                >
+                  {lookupStatus.exists ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <XCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  )}
+                  <span>{lookupStatus.message}</span>
+                </div>
+              )}
+
+              {/* Read-only Min, Max and Rate per 1k */}
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <label className="block font-bold text-[#252943] mb-1">Min Batch</label>
+                  <label className="block font-bold text-[#252943]/60 mb-1">Min Batch (Read-only)</label>
                   <input
                     type="number"
-                    min="1"
-                    required
+                    readOnly
                     value={editingMapping.minQuantity}
-                    onChange={(e) => setEditingMapping({ ...editingMapping, minQuantity: parseInt(e.target.value, 10) || 1 })}
-                    className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-2.5 py-2 font-semibold text-[#252943]"
+                    className="w-full bg-gray-100/80 border border-[#DEE0ED] rounded-xl px-2.5 py-2 font-bold text-[#252943]/80 cursor-not-allowed"
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-[#252943] mb-1">Max Batch</label>
+                  <label className="block font-bold text-[#252943]/60 mb-1">Max Batch (Read-only)</label>
                   <input
                     type="number"
-                    min="1"
-                    required
+                    readOnly
                     value={editingMapping.maxQuantity}
-                    onChange={(e) => setEditingMapping({ ...editingMapping, maxQuantity: parseInt(e.target.value, 10) || 1000 })}
-                    className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-2.5 py-2 font-semibold text-[#252943]"
+                    className="w-full bg-gray-100/80 border border-[#DEE0ED] rounded-xl px-2.5 py-2 font-bold text-[#252943]/80 cursor-not-allowed"
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-[#252943] mb-1">Rate / 1k (₹)</label>
+                  <label className="block font-bold text-[#252943]/60 mb-1">Rate / 1k ₹ (Read-only)</label>
                   <input
                     type="number"
                     step="0.01"
-                    min="0.01"
-                    required
+                    readOnly
                     value={editingMapping.ratePer1000}
-                    onChange={(e) => setEditingMapping({ ...editingMapping, ratePer1000: parseFloat(e.target.value) || 0.1 })}
-                    className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-2.5 py-2 font-semibold text-[#252943]"
+                    className="w-full bg-gray-100/80 border border-[#DEE0ED] rounded-xl px-2.5 py-2 font-bold text-[#252943]/80 cursor-not-allowed"
                   />
                 </div>
               </div>
@@ -1327,15 +1851,18 @@ export default function AdminPage() {
               <div className="pt-2 flex items-center justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setEditingMapping(null)}
+                  onClick={() => {
+                    setEditingMapping(null);
+                    setLookupStatus(null);
+                  }}
                   className="px-4 py-2 rounded-xl border border-[#DEE0ED] text-xs font-semibold text-[#252943]/70 hover:bg-[#F8F9FD]"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={savingMapping}
-                  className="px-5 py-2 rounded-xl bg-[#3A4EFB] text-white text-xs font-bold shadow-subtle hover:bg-[#2A3DE0]"
+                  disabled={savingMapping || (lookupStatus !== null && !lookupStatus.exists)}
+                  className="px-5 py-2 rounded-xl bg-[#3A4EFB] text-white text-xs font-bold shadow-subtle hover:bg-[#2A3DE0] disabled:opacity-50"
                 >
                   {savingMapping ? "Saving..." : "Save Mapping"}
                 </button>

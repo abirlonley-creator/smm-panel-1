@@ -54,7 +54,7 @@ async function syncActiveOrders(defaultAdapter: any): Promise<number> {
         },
       ],
     },
-    include: { steps: { orderBy: { stepNumber: "asc" } } },
+    include: { steps: { orderBy: { stepNumber: "asc" } }, service: true },
     take: 25,
     orderBy: { updatedAt: "asc" },
   });
@@ -112,12 +112,44 @@ async function syncActiveOrders(defaultAdapter: any): Promise<number> {
         newStatus = "FAILED";
       }
 
+      // Change 14: If upstream returns Partial or Canceled, refund undelivered quantity automatically
+      let refundAmount = 0;
+      if ((newStatus === "PARTIAL" || newStatus === "CANCELLED") && (order.refundedAmount ?? 0) === 0 && order.userId) {
+        const undelivered = Math.max(0, order.requestedQuantity - delivered);
+        refundAmount = Number(((undelivered / 1000) * (order.service?.ratePer1000 ?? 0)).toFixed(4));
+        if (refundAmount > 0) {
+          try {
+            const u = await prisma.user.findUnique({ where: { id: order.userId } });
+            if (u) {
+              const newBal = Number(((u.walletBalance ?? 0) + refundAmount).toFixed(2));
+              await prisma.user.update({
+                where: { id: u.id },
+                data: { walletBalance: newBal },
+              });
+              await prisma.walletTransaction.create({
+                data: {
+                  userId: u.id,
+                  type: "REFUND",
+                  amount: refundAmount,
+                  balanceAfter: newBal,
+                  referenceId: order.orderRef,
+                  description: `Automatic refund for ${undelivered} undelivered units on ${newStatus} order ${order.orderRef}`,
+                },
+              });
+            }
+          } catch (rErr) {
+            console.error("[WORKER] Failed to execute auto-refund:", rErr);
+          }
+        }
+      }
+
       await prisma.order.update({
         where: { id: order.id },
         data: {
           status: newStatus,
           deliveredQuantity: delivered,
           remainingQuantity: remaining,
+          ...(refundAmount > 0 ? { refundedAmount: refundAmount } : {}),
           updatedAt: new Date(),
         },
       });
@@ -148,14 +180,26 @@ async function syncProviderBalance(
 ): Promise<{ balance: number; currency: string } | null> {
   try {
     const bal = await adapter.getBalance();
-    await prisma.providerConfig.update({
-      where: { id: configId },
-      data: {
-        balance: bal.balance,
-        currency: bal.currency,
-        lastSyncAt: new Date(),
-      },
-    });
+    if ((prisma as any).userProviderConnection) {
+      await (prisma as any).userProviderConnection.updateMany({
+        where: { id: configId },
+        data: {
+          balance: bal.balance,
+          currency: bal.currency,
+          lastSyncAt: new Date(),
+        },
+      });
+    }
+    if ((prisma as any).provider) {
+      await (prisma as any).provider.updateMany({
+        where: { id: configId },
+        data: {
+          balance: bal.balance,
+          currency: bal.currency,
+          lastSyncAt: new Date(),
+        },
+      });
+    }
     return { balance: bal.balance, currency: bal.currency };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);

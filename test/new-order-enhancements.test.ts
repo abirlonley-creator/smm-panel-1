@@ -49,10 +49,12 @@ export async function runEnhancementTests(customAssert?: (cond: boolean, name: s
   console.log("=======================================================\n");
 
   // Ensure mock sandbox is active for automated testing so we don't submit live orders
-  const existingConfig = await prisma.providerConfig.findFirst({ where: { active: true } });
+  const existingConfig = (prisma as any).providerConfig
+    ? await (prisma as any).providerConfig.findFirst({ where: { active: true } })
+    : null;
   const originalIsMock = existingConfig?.isMock ?? true;
-  if (existingConfig) {
-    await prisma.providerConfig.update({
+  if (existingConfig && (prisma as any).providerConfig) {
+    await (prisma as any).providerConfig.update({
       where: { id: existingConfig.id },
       data: { isMock: true },
     });
@@ -761,8 +763,8 @@ https://www.tiktok.com/@studyora.co/video/7698652584520813844
   await deleteCombo(tiktokCombo.id);
 
   } finally {
-    if (existingConfig) {
-      await prisma.providerConfig.update({
+    if (existingConfig && (prisma as any).providerConfig) {
+      await (prisma as any).providerConfig.update({
         where: { id: existingConfig.id },
         data: { isMock: originalIsMock },
       });
@@ -778,7 +780,9 @@ https://www.tiktok.com/@studyora.co/video/7698652584520813844
   }
 }
 
-runEnhancementTests().catch((err) => {
-  console.error("Test execution failed with unhandled exception:", err);
-  process.exit(1);
-});
+if (require.main === module) {
+  runEnhancementTests().catch((err) => {
+    console.error("Test execution failed with unhandled exception:", err);
+    process.exit(1);
+  });
+}

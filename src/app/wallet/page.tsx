@@ -11,15 +11,15 @@ import {
   CheckCircle2, 
   AlertCircle, 
   ArrowUpRight, 
-  ArrowDownLeft, 
   Loader2, 
   ShieldCheck, 
-  ExternalLink,
-  DollarSign,
+  Sparkles,
+  AlertTriangle,
+  X,
   TrendingUp,
-  X
 } from "lucide-react";
 import Link from "next/link";
+import { formatProviderBalance } from "@/lib/currency";
 
 interface ProviderBalanceCard {
   connectionId: string;
@@ -29,6 +29,7 @@ interface ProviderBalanceCard {
   balance: number | null;
   currency: string;
   lastSyncAt: string | null;
+  servicesCount?: number;
   error?: string;
   durationMs?: number;
 }
@@ -55,15 +56,35 @@ export default function WalletPage() {
   const [showConnectModal, setShowConnectModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
+  const [deleteWarningData, setDeleteWarningData] = useState<{
+    id: string;
+    name: string;
+    unsentCount: number;
+    warning: string;
+  } | null>(null);
   const [selectedConnection, setSelectedConnection] = useState<any>(null);
 
-  // Form States
+  // Form States for Add Provider
   const [providerName, setProviderName] = useState("");
   const [providerUrl, setProviderUrl] = useState("https://api.smmprovider.com/v2");
   const [providerKey, setProviderKey] = useState("");
   const [providerCurrency, setProviderCurrency] = useState("USD");
   const [isMock, setIsMock] = useState(false);
   const [depositAmount, setDepositAmount] = useState<number>(500);
+
+  // Test Connection State inside Add Provider
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [testResult, setTestResult] = useState<{
+    tested: boolean;
+    success: boolean;
+    balance?: number | null;
+    currency?: string;
+    servicesCount?: number;
+    error?: string;
+  } | null>(null);
+
+  // Progress state for instant service import
+  const [importStatus, setImportStatus] = useState<string | null>(null);
 
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
@@ -72,7 +93,9 @@ export default function WalletPage() {
   async function loadWalletData(forceRefresh = false) {
     try {
       if (forceRefresh) setRefreshingAll(true);
-      const res = await fetch(`/api/wallet${forceRefresh ? "?refresh=true" : ""}`);
+      const res = await fetch(`/api/wallet${forceRefresh ? "?refresh=true" : ""}`, {
+        cache: "no-store",
+      });
       const data = await res.json();
       if (data.success) {
         setWalletBalance(data.wallet.balance);
@@ -90,6 +113,47 @@ export default function WalletPage() {
   useEffect(() => {
     loadWalletData();
   }, []);
+
+  async function handleTestConnectionBeforeSave() {
+    setTestingConnection(true);
+    setTestResult(null);
+    try {
+      const res = await fetch("/api/user/providers/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          apiUrl: providerUrl.trim(),
+          apiKey: providerKey.trim(),
+          currency: providerCurrency.trim().toUpperCase(),
+          isMock,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setTestResult({
+          tested: true,
+          success: true,
+          balance: data.balance,
+          currency: data.currency,
+          servicesCount: data.servicesCount,
+        });
+      } else {
+        setTestResult({
+          tested: true,
+          success: false,
+          error: data.error || "Connection test failed",
+        });
+      }
+    } catch (err: any) {
+      setTestResult({
+        tested: true,
+        success: false,
+        error: err.message || "Failed to test connection",
+      });
+    } finally {
+      setTestingConnection(false);
+    }
+  }
 
   async function handleRefreshSingleProvider(connectionId: string) {
     setRefreshingId(connectionId);
@@ -112,6 +176,7 @@ export default function WalletPage() {
               : p
           )
         );
+        window.dispatchEvent(new CustomEvent("balance-updated"));
       } else {
         setProviderBalances((prev) =>
           prev.map((p) =>
@@ -128,18 +193,47 @@ export default function WalletPage() {
     }
   }
 
-  async function handleDisconnectProvider(connectionId: string, name: string) {
-    if (!confirm(`Are you sure you want to disconnect provider "${name}"?`)) return;
-
+  async function handleDeleteProviderClick(connectionId: string, name: string) {
+    setActionError(null);
     try {
-      const res = await fetch(`/api/user/providers/${connectionId}`, { method: "DELETE" });
+      // 1. Check if provider has unsent batches
+      const checkRes = await fetch(`/api/user/providers/${connectionId}`);
+      const checkData = await checkRes.json();
+      if (checkData.success && checkData.unsentCount > 0) {
+        setDeleteWarningData({
+          id: connectionId,
+          name,
+          unsentCount: checkData.unsentCount,
+          warning: checkData.warning,
+        });
+        return;
+      }
+
+      // If no unsent batches, prompt standard confirm
+      if (!confirm(`Are you sure you want to disconnect provider "${name}"? This will remove its imported services from the catalog.`)) {
+        return;
+      }
+
+      await executeDeleteProvider(connectionId, name, false);
+    } catch (err: any) {
+      setActionError(err.message || "Failed to inspect provider before deletion");
+    }
+  }
+
+  async function executeDeleteProvider(connectionId: string, name: string, force: boolean) {
+    try {
+      const res = await fetch(`/api/user/providers/${connectionId}${force ? "?force=true" : ""}`, {
+        method: "DELETE",
+      });
       const data = await res.json();
       if (data.success) {
-        setActionSuccess(`Disconnected "${name}" successfully`);
-        setTimeout(() => setActionSuccess(null), 3000);
+        setDeleteWarningData(null);
+        setActionSuccess(`Disconnected provider "${name}" successfully. Historical orders retained.`);
+        setTimeout(() => setActionSuccess(null), 4000);
         await loadWalletData(true);
+        window.dispatchEvent(new CustomEvent("balance-updated"));
       } else {
-        setActionError(data.error || "Failed to disconnect");
+        setActionError(data.error || data.warning || "Failed to disconnect provider");
       }
     } catch (err: any) {
       setActionError(err.message || "Failed to disconnect provider");
@@ -150,6 +244,7 @@ export default function WalletPage() {
     e.preventDefault();
     setSubmitting(true);
     setActionError(null);
+    setImportStatus("Testing provider connection action=balance...");
 
     try {
       const res = await fetch("/api/user/providers", {
@@ -169,14 +264,22 @@ export default function WalletPage() {
         throw new Error(data.error || "Failed to connect provider");
       }
 
-      setShowConnectModal(false);
-      setProviderName("");
-      setProviderKey("");
+      setImportStatus(`Importing services... ${data.servicesCount || 0} found`);
+      setTimeout(() => {
+        setShowConnectModal(false);
+        setProviderName("");
+        setProviderKey("");
+        setTestResult(null);
+        setImportStatus(null);
+      }, 1000);
+
       setActionSuccess(data.message || "Connected provider successfully!");
       setTimeout(() => setActionSuccess(null), 4000);
       await loadWalletData(true);
+      window.dispatchEvent(new CustomEvent("balance-updated"));
     } catch (err: any) {
       setActionError(err.message || "Failed to connect provider");
+      setImportStatus(null);
     } finally {
       setSubmitting(false);
     }
@@ -193,7 +296,7 @@ export default function WalletPage() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          apiUrl: providerUrl.trim(),
+          apiUrl: providerUrl.trim() || undefined,
           apiKey: providerKey.trim() || undefined,
           currency: providerCurrency.trim().toUpperCase(),
         }),
@@ -207,9 +310,10 @@ export default function WalletPage() {
       setShowEditModal(false);
       setSelectedConnection(null);
       setProviderKey("");
-      setActionSuccess("Updated provider credentials successfully!");
+      setActionSuccess("Updated provider credentials and verified balance successfully!");
       setTimeout(() => setActionSuccess(null), 3000);
       await loadWalletData(true);
+      window.dispatchEvent(new CustomEvent("balance-updated"));
     } catch (err: any) {
       setActionError(err.message || "Failed to update credentials");
     } finally {
@@ -262,10 +366,10 @@ export default function WalletPage() {
         <div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#252943] flex items-center gap-2">
             <Wallet className="w-6 h-6 text-[#3A4EFB]" />
-            DhanSMM Wallet & Provider Balances
+            SMM Provider Manager & Wallet
           </h1>
           <p className="text-xs text-[#252943]/60 mt-0.5">
-            Manage your DhanSMM INR wallet balance and view live balances for all connected SMM provider accounts.
+            Connect upstream SMM providers, test credentials, and monitor individual live balances. There is no summed balance.
           </p>
         </div>
 
@@ -277,29 +381,33 @@ export default function WalletPage() {
             className="px-3.5 py-2 rounded-xl border border-[#DEE0ED] text-xs font-semibold text-[#252943]/80 hover:bg-[#F8F9FD] flex items-center gap-1.5 transition-colors disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 text-[#3A4EFB] ${refreshingAll ? "animate-spin" : ""}`} />
-            <span>{refreshingAll ? "Refreshing All..." : "Refresh All Balances"}</span>
+            <span>{refreshingAll ? "Refreshing..." : "Refresh Balances"}</span>
           </button>
 
           <button
             type="button"
-            onClick={() => setShowConnectModal(true)}
+            id="connect-provider-btn"
+            onClick={() => {
+              setTestResult(null);
+              setShowConnectModal(true);
+            }}
             className="px-4 py-2 rounded-xl bg-[#3A4EFB] hover:bg-[#2C3FE0] text-white text-xs font-bold transition-all press-scale shadow-subtle flex items-center gap-1.5"
           >
             <PlusCircle className="w-4 h-4 text-[#E3FF3B]" />
-            <span>Connect SMM Provider</span>
+            <span>Add Provider</span>
           </button>
         </div>
       </div>
 
       {/* Global Alerts */}
       {actionSuccess && (
-        <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-medium text-emerald-800 flex items-center gap-2">
+        <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-medium text-emerald-800 flex items-center gap-2 animate-fadeIn">
           <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
           <span>{actionSuccess}</span>
         </div>
       )}
       {actionError && (
-        <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-xs font-medium text-rose-800 flex items-center justify-between gap-2">
+        <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-xs font-medium text-rose-800 flex items-center justify-between gap-2 animate-fadeIn">
           <div className="flex items-center gap-2">
             <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
             <span>{actionError}</span>
@@ -310,16 +418,16 @@ export default function WalletPage() {
         </div>
       )}
 
-      {/* Main Grid: Left = INR Wallet Card, Right = Provider Cards Overview */}
+      {/* Main Grid: Left = INR Account Wallet Card, Right = Provider Manager Summary */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* DhanSMM INR Wallet Card */}
-        <div className="md:col-span-1 bg-gradient-to-br from-[#252943] to-[#1A1D31] text-white rounded-2xl p-6 shadow-subtle flex flex-col justify-between relative overflow-hidden">
+        <div className="md:col-span-1 bg-gradient-to-br from-[#252943] to-[#1A1D31] text-white rounded-3xl p-6 shadow-subtle flex flex-col justify-between relative overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-[#3A4EFB]/20 rounded-full blur-2xl pointer-events-none" />
           
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold uppercase tracking-wider text-[#E3FF3B]">
-                DhanSMM Account Wallet
+                Internal Account Wallet
               </span>
               <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-white/10 text-white/80">
                 INR (₹)
@@ -327,14 +435,14 @@ export default function WalletPage() {
             </div>
 
             <div>
-              <p className="text-xs text-white/60">Available Balance</p>
+              <p className="text-xs text-white/60">Available INR Balance</p>
               <h2 className="text-3xl font-black tracking-tight text-white mt-1">
                 ₹{walletBalance.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </h2>
             </div>
             
             <p className="text-[11px] text-white/60 leading-relaxed">
-              Used to pay for Full Organic Engagement schedules, automatic drip-feeds, and single orders upfront.
+              Used to fund automated schedule steps, organic S-curve pacing, and combos upfront.
             </p>
           </div>
 
@@ -358,35 +466,35 @@ export default function WalletPage() {
         </div>
 
         {/* Connected Providers Overview Stats */}
-        <div className="md:col-span-2 bg-white rounded-2xl border border-[#DEE0ED] p-6 shadow-subtle flex flex-col justify-between space-y-4">
+        <div className="md:col-span-2 bg-white rounded-3xl border border-[#DEE0ED] p-6 shadow-subtle flex flex-col justify-between space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
             <span className="text-xs font-bold uppercase tracking-wider text-[#252943] flex items-center gap-2">
               <Server className="w-4 h-4 text-[#3A4EFB]" />
-              Connected Provider Balances
+              Independent Provider Connections
             </span>
-            <span className="text-xs text-[#252943]/60 font-medium">
+            <span className="text-xs text-[#252943]/60 font-semibold">
               {providerBalances.length} Connected Provider{providerBalances.length === 1 ? "" : "s"}
             </span>
           </div>
 
           <p className="text-xs text-[#252943]/70 leading-relaxed">
-            Orders placed through individual provider services are submitted directly to that provider&apos;s API. Each provider operates concurrently and independently: a timeout on one provider never blocks or delays orders on another.
+            All orders route directly through the provider that owns the chosen service using encrypted credentials. Providers execute independently and concurrently: a slow or unreachable provider will never block or delay orders on another provider.
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-            <div className="p-3 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED] flex items-center justify-between">
+            <div className="p-3.5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] flex items-center justify-between">
               <div>
-                <span className="text-[11px] text-[#252943]/60">Total Upstream Providers</span>
-                <p className="text-lg font-bold text-[#252943]">{providerBalances.length}</p>
+                <span className="text-[11px] text-[#252943]/60 font-medium">Total Connected Providers</span>
+                <p className="text-xl font-black text-[#252943]">{providerBalances.length}</p>
               </div>
               <Server className="w-6 h-6 text-[#3A4EFB]/40" />
             </div>
 
-            <div className="p-3 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED] flex items-center justify-between">
+            <div className="p-3.5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] flex items-center justify-between">
               <div>
-                <span className="text-[11px] text-[#252943]/60">Active Live Endpoints</span>
-                <p className="text-lg font-bold text-emerald-600">
-                  {providerBalances.filter((p) => p.success).length} of {providerBalances.length} Active
+                <span className="text-[11px] text-[#252943]/60 font-medium">Active Live Endpoints</span>
+                <p className="text-xl font-black text-emerald-600">
+                  {providerBalances.filter((p) => p.success).length} of {providerBalances.length} Online
                 </p>
               </div>
               <ShieldCheck className="w-6 h-6 text-emerald-500/40" />
@@ -400,22 +508,22 @@ export default function WalletPage() {
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-bold text-[#252943] flex items-center gap-2">
             <Server className="w-4 h-4 text-[#3A4EFB]" />
-            Your Connected SMM Provider Accounts
+            Connected Upstream SMM Providers
           </h3>
-          <span className="text-xs text-[#252943]/50">30s cached balance with instant refresh</span>
+          <span className="text-xs text-[#252943]/50">Balances shown in provider&apos;s own currency (No combined sum)</span>
         </div>
 
         {providerBalances.length === 0 ? (
-          <div className="p-12 text-center bg-white rounded-2xl border border-[#DEE0ED] space-y-3 shadow-subtle">
+          <div className="p-12 text-center bg-white rounded-3xl border border-[#DEE0ED] space-y-3 shadow-subtle">
             <Server className="w-10 h-10 text-[#3A4EFB]/40 mx-auto" />
-            <h4 className="text-sm font-bold text-[#252943]">No Provider Accounts Connected Yet</h4>
+            <h4 className="text-sm font-bold text-[#252943]">No SMM Providers Connected</h4>
             <p className="text-xs text-[#252943]/60 max-w-md mx-auto">
-              Connect your external SMM provider accounts (e.g. Zeofame, xmedia, or any SMM v2 provider) to check live balances and route orders.
+              Add your upstream SMM provider (e.g. Zeofame, xmedia, or any SMM v2 endpoint) to import services and route orders.
             </p>
             <button
               type="button"
               onClick={() => setShowConnectModal(true)}
-              className="px-4 py-2 rounded-xl bg-[#3A4EFB] text-white text-xs font-bold hover:bg-[#2C3FE0] transition-colors inline-flex items-center gap-1.5"
+              className="px-4 py-2 rounded-xl bg-[#3A4EFB] text-white text-xs font-bold hover:bg-[#2C3FE0] transition-colors inline-flex items-center gap-1.5 shadow-subtle"
             >
               <PlusCircle className="w-4 h-4 text-[#E3FF3B]" />
               <span>Connect First Provider</span>
@@ -429,7 +537,7 @@ export default function WalletPage() {
               return (
                 <div
                   key={provider.connectionId}
-                  className="bg-white rounded-2xl border border-[#DEE0ED] p-5 shadow-subtle flex flex-col justify-between space-y-4 hover:border-[#3A4EFB]/30 transition-all"
+                  className="bg-white rounded-3xl border border-[#DEE0ED] p-5 shadow-subtle flex flex-col justify-between space-y-4 hover:border-[#3A4EFB]/30 transition-all"
                 >
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
@@ -455,15 +563,15 @@ export default function WalletPage() {
                             setProviderCurrency(provider.currency);
                             setShowEditModal(true);
                           }}
-                          title="Reconnect or update API Key"
+                          title="Update API Key"
                           className="p-1.5 rounded-lg text-[#252943]/60 hover:text-[#3A4EFB] hover:bg-[#F8F9FD] transition-colors"
                         >
                           <Edit3 className="w-3.5 h-3.5" />
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleDisconnectProvider(provider.connectionId, provider.providerName)}
-                          title="Disconnect provider"
+                          onClick={() => handleDeleteProviderClick(provider.connectionId, provider.providerName)}
+                          title="Delete provider"
                           className="p-1.5 rounded-lg text-[#252943]/60 hover:text-rose-600 hover:bg-rose-50 transition-colors"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -473,18 +581,15 @@ export default function WalletPage() {
 
                     <div>
                       <span className="text-[11px] text-[#252943]/60 block font-medium">
-                        {provider.providerName} Balance
+                        Live Balance
                       </span>
                       <div className="flex items-baseline gap-1.5 mt-0.5">
                         <span className="text-2xl font-black tracking-tight text-[#252943]">
                           {provider.balance !== null ? (
-                            provider.currency === "USD" ? `$${provider.balance.toFixed(3)}` : `${provider.currency} ${provider.balance.toFixed(2)}`
+                            formatProviderBalance(provider.balance, provider.currency)
                           ) : (
-                            <span className="text-sm font-semibold text-[#252943]/40">Unavailable</span>
+                            <span className="text-sm font-semibold text-amber-700">Unavailable</span>
                           )}
-                        </span>
-                        <span className="text-xs font-semibold text-[#252943]/50">
-                          {provider.currency}
                         </span>
                       </div>
                     </div>
@@ -497,7 +602,7 @@ export default function WalletPage() {
                     ) : (
                       <div className="flex items-center justify-between text-[11px] text-[#252943]/50 pt-1">
                         <span className="flex items-center gap-1 text-emerald-600 font-semibold">
-                          <CheckCircle2 className="w-3 h-3" /> Live & Connected
+                          <CheckCircle2 className="w-3 h-3" /> Online & Verified
                         </span>
                         <span>
                           {provider.lastSyncAt ? new Date(provider.lastSyncAt).toLocaleTimeString() : "Pending"}
@@ -507,9 +612,9 @@ export default function WalletPage() {
                   </div>
 
                   <div className="pt-3 border-t border-[#DEE0ED]/60 flex items-center justify-between text-[11px]">
-                    <span className="text-[#252943]/60">Endpoint Status:</span>
+                    <span className="text-[#252943]/60">Status:</span>
                     <span className="font-semibold text-[#3A4EFB]">
-                      {provider.cached ? "30s Cached" : "Fresh Read"}
+                      {provider.cached ? "Cached" : "Live Read"}
                     </span>
                   </div>
                 </div>
@@ -520,7 +625,7 @@ export default function WalletPage() {
       </div>
 
       {/* Wallet Transactions History Table */}
-      <div className="bg-white rounded-2xl border border-[#DEE0ED] shadow-subtle p-6 space-y-4">
+      <div className="bg-white rounded-3xl border border-[#DEE0ED] shadow-subtle p-6 space-y-4">
         <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
           <h3 className="text-sm font-bold text-[#252943] flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-[#3A4EFB]" />
@@ -587,14 +692,14 @@ export default function WalletPage() {
         )}
       </div>
 
-      {/* Connect Provider Modal */}
+      {/* Add Provider Modal with Test Connection & Instant Import Feedback */}
       {showConnectModal && (
         <div className="fixed inset-0 z-50 bg-[#252943]/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-scaleUp">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-scaleUp">
             <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
               <h3 className="text-sm font-bold text-[#252943] flex items-center gap-2">
                 <Server className="w-4 h-4 text-[#3A4EFB]" />
-                Connect SMM Provider Account
+                Add SMM Provider Account
               </h3>
               <button
                 type="button"
@@ -605,7 +710,7 @@ export default function WalletPage() {
               </button>
             </div>
 
-            <form onSubmit={handleConnectProvider} className="space-y-3 text-xs">
+            <form onSubmit={handleConnectProvider} className="space-y-3.5 text-xs">
               <div className="space-y-1">
                 <label className="font-semibold text-[#252943]">Provider Name</label>
                 <input
@@ -619,14 +724,14 @@ export default function WalletPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="font-semibold text-[#252943]">Provider API URL</label>
+                <label className="font-semibold text-[#252943]">Provider API URL (v2 endpoint)</label>
                 <input
                   type="url"
                   required
                   placeholder="https://provider.com/api/v2"
                   value={providerUrl}
                   onChange={(e) => setProviderUrl(e.target.value)}
-                  className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3.5 py-2 text-xs text-[#252943] focus:border-[#3A4EFB]"
+                  className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3.5 py-2 text-xs font-mono text-[#252943] focus:border-[#3A4EFB]"
                 />
               </div>
 
@@ -637,25 +742,28 @@ export default function WalletPage() {
                   required
                   placeholder="Paste your SMM API key"
                   value={providerKey}
-                  onChange={(e) => setProviderKey(e.target.value)}
-                  className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3.5 py-2 text-xs text-[#252943] focus:border-[#3A4EFB]"
+                  onChange={(e) => {
+                    setProviderKey(e.target.value);
+                    setTestResult(null);
+                  }}
+                  className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3.5 py-2 text-xs font-mono text-[#252943] focus:border-[#3A4EFB]"
                 />
                 <span className="text-[10px] text-[#252943]/50">
-                  Stored securely using AES-256-GCM encryption. Never returned in plaintext.
+                  Encrypted at rest with AES-256-GCM. Masked in UI and never returned by endpoints.
                 </span>
               </div>
 
               <div className="grid grid-cols-2 gap-3 pt-1">
                 <div className="space-y-1">
-                  <label className="font-semibold text-[#252943]">Provider Currency</label>
+                  <label className="font-semibold text-[#252943]">Currency</label>
                   <select
                     value={providerCurrency}
                     onChange={(e) => setProviderCurrency(e.target.value)}
                     className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3 py-2 text-xs text-[#252943] focus:border-[#3A4EFB]"
                   >
                     <option value="USD">USD ($)</option>
-                    <option value="INR">INR (₹)</option>
                     <option value="EUR">EUR (€)</option>
+                    <option value="INR">INR (₹)</option>
                     <option value="GBP">GBP (£)</option>
                   </select>
                 </div>
@@ -673,7 +781,68 @@ export default function WalletPage() {
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-[#DEE0ED] flex items-center justify-end gap-2">
+              {/* Test Connection Button */}
+              <div className="pt-2">
+                <button
+                  type="button"
+                  id="test-provider-connection-btn"
+                  onClick={handleTestConnectionBeforeSave}
+                  disabled={testingConnection || !providerUrl || !providerKey}
+                  className="w-full py-2 px-3 rounded-xl bg-[#252943] hover:bg-[#1A1D31] text-white text-xs font-semibold transition-all press-scale flex items-center justify-center gap-1.5 disabled:opacity-40"
+                >
+                  {testingConnection ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Testing action=balance...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-3.5 h-3.5 text-[#E3FF3B]" />
+                      <span>Test Connection (action=balance)</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Test Connection Result Feedback */}
+              {testResult && (
+                <div
+                  className={`p-3 rounded-xl border text-xs leading-relaxed animate-fadeIn ${
+                    testResult.success
+                      ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+                      : "bg-rose-50 border-rose-200 text-rose-900"
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5 font-bold mb-0.5">
+                    {testResult.success ? (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    ) : (
+                      <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                    )}
+                    <span>{testResult.success ? "Connection Verified!" : "Connection Test Failed"}</span>
+                  </div>
+                  {testResult.success ? (
+                    <p>
+                      Balance: <strong>{formatProviderBalance(testResult.balance ?? null, testResult.currency || "USD")}</strong>
+                      {typeof testResult.servicesCount === "number" && testResult.servicesCount > 0 && (
+                        <span> · {testResult.servicesCount} services available</span>
+                      )}
+                    </p>
+                  ) : (
+                    <p>{testResult.error}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Progress State during save & import */}
+              {importStatus && (
+                <div className="p-2.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs flex items-center gap-2 animate-fadeIn">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-[#3A4EFB]" />
+                  <span>{importStatus}</span>
+                </div>
+              )}
+
+              <div className="pt-3 border-t border-[#DEE0ED] flex items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setShowConnectModal(false)}
@@ -683,11 +852,12 @@ export default function WalletPage() {
                 </button>
                 <button
                   type="submit"
+                  id="save-provider-btn"
                   disabled={submitting}
                   className="px-4 py-2 rounded-xl bg-[#3A4EFB] hover:bg-[#2C3FE0] text-white text-xs font-bold transition-all press-scale disabled:opacity-50 flex items-center gap-1.5"
                 >
                   {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  <span>Connect & Verify</span>
+                  <span>Save Provider</span>
                 </button>
               </div>
             </form>
@@ -695,10 +865,49 @@ export default function WalletPage() {
         </div>
       )}
 
-      {/* Reconnect / Update Key Modal */}
+      {/* Delete Confirmation Warning Modal (Change 10 requirement) */}
+      {deleteWarningData && (
+        <div className="fixed inset-0 z-50 bg-[#252943]/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-scaleUp">
+            <div className="flex items-center gap-2.5 text-rose-600 pb-2 border-b border-rose-100">
+              <AlertTriangle className="w-5 h-5 shrink-0" />
+              <h3 className="text-sm font-bold text-[#252943]">Scheduled Batches Warning</h3>
+            </div>
+
+            <div className="space-y-2 text-xs text-[#252943]/80 leading-relaxed">
+              <p className="font-semibold text-rose-700 bg-rose-50 p-3 rounded-xl border border-rose-200">
+                &ldquo;{deleteWarningData.warning}&rdquo;
+              </p>
+              <p>
+                Disconnecting provider <strong>{deleteWarningData.name}</strong> will remove all its catalog services, favourites, and engagement mappings. Historical orders will be preserved for your records.
+              </p>
+            </div>
+
+            <div className="pt-3 border-t border-[#DEE0ED] flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeleteWarningData(null)}
+                className="px-3.5 py-2 rounded-xl border border-[#DEE0ED] text-xs font-semibold text-[#252943]/70 hover:bg-[#F8F9FD]"
+              >
+                Keep Provider
+              </button>
+              <button
+                type="button"
+                id="confirm-force-delete-provider-btn"
+                onClick={() => executeDeleteProvider(deleteWarningData.id, deleteWarningData.name, true)}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all press-scale"
+              >
+                Confirm Delete & Cleanup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Update Key Modal */}
       {showEditModal && selectedConnection && (
         <div className="fixed inset-0 z-50 bg-[#252943]/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-scaleUp">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-scaleUp">
             <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
               <h3 className="text-sm font-bold text-[#252943] flex items-center gap-2">
                 <Edit3 className="w-4 h-4 text-[#3A4EFB]" />
@@ -713,7 +922,7 @@ export default function WalletPage() {
               </button>
             </div>
 
-            <form onSubmit={handleUpdateProviderKey} className="space-y-3 text-xs">
+            <form onSubmit={handleUpdateProviderKey} className="space-y-3.5 text-xs">
               <div className="space-y-1">
                 <label className="font-semibold text-[#252943]">New API Key (Leave empty to keep existing)</label>
                 <input
@@ -721,25 +930,25 @@ export default function WalletPage() {
                   placeholder="Enter new SMM API key..."
                   value={providerKey}
                   onChange={(e) => setProviderKey(e.target.value)}
-                  className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3.5 py-2 text-xs text-[#252943] focus:border-[#3A4EFB]"
+                  className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3.5 py-2 text-xs font-mono text-[#252943] focus:border-[#3A4EFB]"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="font-semibold text-[#252943]">Provider Currency</label>
+                <label className="font-semibold text-[#252943]">Currency</label>
                 <select
                   value={providerCurrency}
                   onChange={(e) => setProviderCurrency(e.target.value)}
                   className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3 py-2 text-xs text-[#252943] focus:border-[#3A4EFB]"
                 >
                   <option value="USD">USD ($)</option>
-                  <option value="INR">INR (₹)</option>
                   <option value="EUR">EUR (€)</option>
+                  <option value="INR">INR (₹)</option>
                   <option value="GBP">GBP (£)</option>
                 </select>
               </div>
 
-              <div className="pt-4 border-t border-[#DEE0ED] flex items-center justify-end gap-2">
+              <div className="pt-3 border-t border-[#DEE0ED] flex items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setShowEditModal(false)}
@@ -753,7 +962,7 @@ export default function WalletPage() {
                   className="px-4 py-2 rounded-xl bg-[#3A4EFB] hover:bg-[#2C3FE0] text-white text-xs font-bold transition-all press-scale disabled:opacity-50 flex items-center gap-1.5"
                 >
                   {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  <span>Save & Reconnect</span>
+                  <span>Save & Verify Key</span>
                 </button>
               </div>
             </form>
@@ -764,7 +973,7 @@ export default function WalletPage() {
       {/* Deposit INR Modal */}
       {showDepositModal && (
         <div className="fixed inset-0 z-50 bg-[#252943]/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl space-y-4 animate-scaleUp">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 animate-scaleUp">
             <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
               <h3 className="text-sm font-bold text-[#252943] flex items-center gap-2">
                 <Wallet className="w-4 h-4 text-[#3A4EFB]" />
@@ -779,7 +988,7 @@ export default function WalletPage() {
               </button>
             </div>
 
-            <form onSubmit={handleDepositFunds} className="space-y-3 text-xs">
+            <form onSubmit={handleDepositFunds} className="space-y-3.5 text-xs">
               <div className="space-y-1">
                 <label className="font-semibold text-[#252943]">Deposit Amount (INR ₹)</label>
                 <input
@@ -799,14 +1008,14 @@ export default function WalletPage() {
                     key={amt}
                     type="button"
                     onClick={() => setDepositAmount(amt)}
-                    className="flex-1 py-1 rounded-lg bg-[#F8F9FD] border border-[#DEE0ED] text-xs font-semibold hover:border-[#3A4EFB] text-[#252943]"
+                    className="flex-1 py-1.5 rounded-lg border border-[#DEE0ED] hover:bg-[#F8F9FD] text-[11px] font-semibold text-[#252943]"
                   >
                     +₹{amt}
                   </button>
                 ))}
               </div>
 
-              <div className="pt-4 border-t border-[#DEE0ED] flex items-center justify-end gap-2">
+              <div className="pt-3 border-t border-[#DEE0ED] flex items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setShowDepositModal(false)}
@@ -817,10 +1026,10 @@ export default function WalletPage() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-4 py-2 rounded-xl bg-[#3A4EFB] hover:bg-[#2C3FE0] text-white text-xs font-bold transition-all press-scale disabled:opacity-50 flex items-center gap-1.5"
+                  className="px-4 py-2 rounded-xl bg-[#E3FF3B] text-[#252943] text-xs font-bold hover:bg-[#d6f228] transition-colors flex items-center gap-1.5"
                 >
                   {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  <span>Confirm Deposit</span>
+                  <span>Add Funds Now</span>
                 </button>
               </div>
             </form>

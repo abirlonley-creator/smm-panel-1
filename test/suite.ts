@@ -18,6 +18,7 @@ import {
 } from "../src/lib/scheduler/organic-presets";
 import { runEnhancementTests } from "./new-order-enhancements.test";
 import { runMultiUserAuthTests } from "./multi-user-auth.test";
+import { runUserProvidersAndFavouritesTests } from "./user-providers-and-favourites.test";
 
 let passed = 0;
 let failed = 0;
@@ -257,10 +258,12 @@ async function runTests() {
   console.log("\nTest Suite 5: Order Lifecycle, Queue Execution & API Client");
 
   // Ensure mock sandbox is active for automated testing so we don't submit live orders
-  const existingConfig = await prisma.providerConfig.findFirst({ where: { active: true } });
+  const existingConfig = (prisma as any).providerConfig
+    ? await (prisma as any).providerConfig.findFirst({ where: { active: true } })
+    : null;
   const originalIsMock = existingConfig?.isMock ?? true;
-  if (existingConfig) {
-    await prisma.providerConfig.update({
+  if (existingConfig && (prisma as any).providerConfig) {
+    await (prisma as any).providerConfig.update({
       where: { id: existingConfig.id },
       data: { isMock: true },
     });
@@ -323,8 +326,8 @@ async function runTests() {
   // Test 5.5: Cleanup test records & restore configuration
   await prisma.scheduledDeliveryStep.deleteMany({ where: { orderId: testOrder.id } });
   await prisma.order.delete({ where: { id: testOrder.id } });
-  if (existingConfig) {
-    await prisma.providerConfig.update({
+  if (existingConfig && (prisma as any).providerConfig) {
+    await (prisma as any).providerConfig.update({
       where: { id: existingConfig.id },
       data: { isMock: originalIsMock },
     });
@@ -1213,6 +1216,11 @@ async function runTests() {
   // 11. Multi-User, Passkey Auth & Provider Isolation Tests
   // -----------------------------------------------------------
   await runMultiUserAuthTests();
+
+  // -----------------------------------------------------------
+  // 12. User Providers, Favourites & Reliable Orders (Changes 9–15)
+  // -----------------------------------------------------------
+  await runUserProvidersAndFavouritesTests();
 
   console.log("\n=======================================================");
   console.log(`TEST RESULTS: ${passed} PASSED, ${failed} FAILED`);

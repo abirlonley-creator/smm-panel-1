@@ -136,7 +136,7 @@ export async function runMultiUserAuthTests() {
   console.log("\nTest Suite 17: Multi-User Provider API Isolation");
 
   // Clean up any previous test artifacts
-  await prisma.userProviderConfig.deleteMany({
+  await prisma.userProviderConnection.deleteMany({
     where: { user: { username: { in: ["botter_alpha", "botter_beta"] } } },
   });
   await prisma.user.deleteMany({
@@ -279,7 +279,7 @@ export async function runMultiUserAuthTests() {
   assert(!loggedOutSession.valid, "Session is immediately invalidated upon logout");
 
   // Clean up test users
-  await prisma.userProviderConfig.deleteMany({ where: { userId: { in: [userA.id, userB.id] } } });
+  await prisma.userProviderConnection.deleteMany({ where: { userId: { in: [userA.id, userB.id] } } });
   await prisma.user.deleteMany({ where: { id: { in: [userA.id, userB.id] } } });
   await prisma.passkey.deleteMany({ where: { id: { in: [userPasskeyRes.id, activeUserPasskey.id] } } });
 

@@ -32,7 +32,7 @@ export async function GET(request: Request) {
       recentAuditLogs,
       userProviders,
     ] = await Promise.all([
-      prisma.providerConfig.findFirst({ where: { active: true } }),
+      prisma.provider.findFirst({ where: { active: true } }),
       prisma.order.groupBy({
         by: ["status"],
         _count: { id: true },
@@ -48,12 +48,12 @@ export async function GET(request: Request) {
       prisma.user.count(),
       prisma.user.count({ where: { status: "ACTIVE" } }),
       prisma.user.count({ where: { status: { in: ["DISABLED", "EXPIRED", "REVOKED"] } } }),
-      prisma.userProviderConfig.count({
-        where: { apiKey: { not: null } },
+      prisma.userProviderConnection.count({
+        where: { apiKeyEncrypted: { not: null } },
       }),
-      prisma.userProviderConfig.count({
+      prisma.userProviderConnection.count({
         where: {
-          apiKey: { not: null },
+          apiKeyEncrypted: { not: null },
           balance: { not: null },
         },
       }),
@@ -89,7 +89,7 @@ export async function GET(request: Request) {
         take: 20,
         orderBy: { createdAt: "desc" },
       }),
-      prisma.userProviderConfig.findMany({
+      prisma.userProviderConnection.findMany({
         include: { user: { select: { username: true, role: true } } },
         take: 10,
         orderBy: { updatedAt: "desc" },

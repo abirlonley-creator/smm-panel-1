@@ -13,6 +13,7 @@
     "test:organic": "tsx --test test/organic-pacing.test.ts",
     "test:pacing": "tsx --test test/organic-pacing-plan.test.ts",
     "test:profiles": "tsx --test test/platform-profiles.test.ts",
+    "test:lifecycle": "tsx --test test/engagement-lifecycle.test.ts",
     "test:balance": "tsx --test test/provider-balance.test.ts",
     "test:orders": "tsx --test test/order-cancellation.test.ts",
     "worker": "tsx src/worker-bootstrap.ts",

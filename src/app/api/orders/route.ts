@@ -261,9 +261,101 @@ export async function POST(request: Request) {
 
     const totalCost = Number(((requestedQuantity / 1000) * service.ratePer1000).toFixed(4));
 
-    // Case A: Instant Order Submission
+    // -----------------------------------------------------------------------
+    // Change 14: Comprehensive Pre-Order Validation Suite
+    // Reject BEFORE charging anything with a clear, calm message explaining what to fix.
+    // -----------------------------------------------------------------------
+
+    // 1. Link format validation (valid URL and matching platform syntax)
+    const platform = service.platform?.toLowerCase() || "";
+    const lowerUrl = targetUrl.toLowerCase();
+    if (platform.includes("instagram") && !lowerUrl.includes("instagram.com")) {
+      return NextResponse.json(
+        { success: false, error: "Please enter a valid Instagram post or reel link (e.g. https://www.instagram.com/p/...)" },
+        { status: 400 }
+      );
+    }
+    if (platform.includes("tiktok") && !lowerUrl.includes("tiktok.com")) {
+      return NextResponse.json(
+        { success: false, error: "Please enter a valid TikTok video link (e.g. https://www.tiktok.com/@user/video/...)" },
+        { status: 400 }
+      );
+    }
+    if (platform.includes("youtube") && !lowerUrl.includes("youtube.com") && !lowerUrl.includes("youtu.be")) {
+      return NextResponse.json(
+        { success: false, error: "Please enter a valid YouTube video link" },
+        { status: 400 }
+      );
+    }
+
+    // 2. Fetch User & Validate User Wallet Balance
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      return NextResponse.json({ success: false, error: "User account not found." }, { status: 404 });
+    }
+    const currentBalance = user.walletBalance ?? 0;
+    if (currentBalance < totalCost) {
+      const needed = Number((totalCost - currentBalance).toFixed(2));
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Insufficient wallet balance. Total cost is ₹${totalCost.toFixed(2)}, but your balance is ₹${currentBalance.toFixed(2)}. Please add ₹${needed.toFixed(2)} to continue.`,
+          required: totalCost,
+          currentBalance,
+          needed,
+        },
+        { status: 402 }
+      );
+    }
+
+    // 3. Resolve Chosen Provider & Validate Status, Key, and Upstream Balance
+    const targetProviderId = service.userProviderId || service.providerId;
+    let providerConnection = null;
+    if (targetProviderId) {
+      providerConnection = await prisma.userProviderConnection.findFirst({
+        where: { id: targetProviderId, userId },
+      });
+    }
+    if (!providerConnection) {
+      providerConnection = await prisma.userProviderConnection.findFirst({
+        where: { userId, active: true },
+      });
+    }
+
+    if (!providerConnection || !providerConnection.active) {
+      return NextResponse.json(
+        { success: false, error: "The chosen provider is currently disconnected or paused. Please check your Wallet tab." },
+        { status: 400 }
+      );
+    }
+
+    const { adapter } = await getActiveProvider(userId, providerConnection.id);
+
+    // Validate provider API key
+    if (!providerConnection.isMock) {
+      const { decryptApiKey } = await import("@/lib/security/crypto");
+      const decryptedKey = decryptApiKey(providerConnection.apiKeyEncrypted);
+      if (!decryptedKey || decryptedKey.trim() === "") {
+        return NextResponse.json(
+          { success: false, error: `Provider "${providerConnection.name}" API key is invalid or unconfigured. Please update your key in the Wallet tab.` },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Validate provider balance if known
+    if (providerConnection.balance !== null && providerConnection.balance < totalCost && !providerConnection.isMock) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Insufficient balance on provider "${providerConnection.name}". Available: ${providerConnection.currency} ${providerConnection.balance.toFixed(2)}, Needed: ${totalCost.toFixed(2)}. Please recharge your provider account.`,
+        },
+        { status: 400 }
+      );
+    }
+
+    // Case A: Instant Order Submission (Sent immediately to provider)
     if (scheduleMode === "INSTANT" || stepsCount === 1) {
-      const { adapter } = await getActiveProvider(userId);
       const targetProviderServiceId = service.providerServiceId || service.externalId;
       const providerRes = await adapter.createOrder({
         serviceExternalId: targetProviderServiceId,
@@ -272,68 +364,56 @@ export async function POST(request: Request) {
       });
 
       if (!providerRes.success) {
-        // Never fake success when provider fails!
-        const failedOrder = await prisma.order.create({
-          data: {
-            orderRef,
-            serviceId: service.id,
-            providerId: service.providerId,
-            targetUrl,
-            requestedQuantity,
-            submittedQuantity: 0,
-            deliveredQuantity: 0,
-            remainingQuantity: requestedQuantity,
-            failedQuantity: requestedQuantity,
-            unitCost,
-            totalCost,
-            isScheduled: false,
-            scheduleMode: "INSTANT",
-            status: "FAILED",
-            errorMessage: providerRes.error || "Provider rejected order placement.",
-            userId: userId || null,
-          },
-          include: { service: true },
-        });
-
-        await prisma.auditLog.create({
-          data: {
-            action: "ORDER_FAILED_SUBMISSION",
-            actor: "Customer",
-            details: `Order ${orderRef} failed: ${providerRes.error}`,
-          },
-        });
-
+        // Upstream rejected: DO NOT CHARGE USER! Reject before charging.
         return NextResponse.json(
           {
             success: false,
-            error: providerRes.error || "Provider rejected order placement.",
-            order: failedOrder,
+            error: providerRes.error || "Provider rejected order placement. Nothing was charged.",
           },
           { status: 422 }
         );
       }
 
-      // Success
-      const order = await prisma.order.create({
-        data: {
-          orderRef,
-          serviceId: service.id,
-          providerId: service.providerId,
-          targetUrl,
-          requestedQuantity,
-          submittedQuantity: requestedQuantity,
-          deliveredQuantity: 0,
-          remainingQuantity: requestedQuantity,
-          failedQuantity: 0,
-          unitCost,
-          totalCost,
-          isScheduled: false,
-          scheduleMode: "INSTANT",
-          status: "PROCESSING",
-          providerOrderId: providerRes.providerOrderId,
-          userId: userId || null,
-        },
-        include: { service: true },
+      // Success: Transactionally debit user wallet and record order
+      const newBal = Number((currentBalance - totalCost).toFixed(2));
+      const order = await prisma.$transaction(async (tx) => {
+        await tx.user.update({
+          where: { id: userId },
+          data: { walletBalance: newBal },
+        });
+
+        await tx.walletTransaction.create({
+          data: {
+            userId,
+            type: "DEBIT",
+            amount: -totalCost,
+            balanceAfter: newBal,
+            referenceId: orderRef,
+            description: `Order ${orderRef} (${service.name}, ${requestedQuantity.toLocaleString()} units)`,
+          },
+        });
+
+        return tx.order.create({
+          data: {
+            orderRef,
+            serviceId: service.id,
+            providerId: providerConnection.id,
+            targetUrl,
+            requestedQuantity,
+            submittedQuantity: requestedQuantity,
+            deliveredQuantity: 0,
+            remainingQuantity: requestedQuantity,
+            failedQuantity: 0,
+            unitCost,
+            totalCost,
+            isScheduled: false,
+            scheduleMode: "INSTANT",
+            status: "PROCESSING",
+            providerOrderId: String(providerRes.providerOrderId),
+            userId,
+          },
+          include: { service: true },
+        });
       });
 
       await prisma.auditLog.create({
@@ -341,6 +421,7 @@ export async function POST(request: Request) {
           action: "ORDER_SUBMITTED",
           actor: "Customer",
           details: `Order ${orderRef} successfully submitted to provider (${providerRes.providerOrderId})`,
+          userId,
         },
       });
 
@@ -362,7 +443,7 @@ export async function POST(request: Request) {
       seed: parsed.data.seed,
       smoothness: parsed.data.smoothness,
       spikeIntensity: parsed.data.spikeIntensity,
-      enforceExactAllocation: true, // Strict validation on final submission
+      enforceExactAllocation: true,
       startDate: new Date(),
     });
 
@@ -373,13 +454,30 @@ export async function POST(request: Request) {
       );
     }
 
-    // Create Order and persistent steps in a transaction
+    // Transactionally debit wallet and create Order + persistent steps
+    const newBal = Number((currentBalance - totalCost).toFixed(2));
     const order = await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: userId },
+        data: { walletBalance: newBal },
+      });
+
+      await tx.walletTransaction.create({
+        data: {
+          userId,
+          type: "DEBIT",
+          amount: -totalCost,
+          balanceAfter: newBal,
+          referenceId: orderRef,
+          description: `Scheduled Growth Order ${orderRef} (${stepsCount} steps, ${requestedQuantity.toLocaleString()} units)`,
+        },
+      });
+
       const newOrder = await tx.order.create({
         data: {
           orderRef,
           serviceId: service.id,
-          providerId: service.providerId,
+          providerId: providerConnection.id,
           targetUrl,
           requestedQuantity,
           submittedQuantity: 0,
@@ -391,7 +489,7 @@ export async function POST(request: Request) {
           isScheduled: true,
           scheduleMode,
           status: "SCHEDULED",
-          userId: userId || null,
+          userId,
         },
       });
 
@@ -416,6 +514,7 @@ export async function POST(request: Request) {
         action: "GROWTH_PLAN_SCHEDULED",
         actor: "Customer",
         details: `Growth plan ${orderRef} created with ${plan.steps.length} persistent steps across ${intervalMinutes}m intervals`,
+        userId,
       },
     });
 

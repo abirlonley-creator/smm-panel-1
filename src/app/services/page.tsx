@@ -12,12 +12,12 @@ import {
   Check,
   X,
   RotateCcw,
-  Ban,
-  Tag,
-  RefreshCw,
   Sparkles,
   ArrowRight,
-  TrendingUp,
+  Star,
+  MoreVertical,
+  AlertTriangle,
+  ExternalLink,
 } from "lucide-react";
 
 interface ServiceItem {
@@ -40,10 +40,12 @@ interface ServiceItem {
   dripFeedMinInterval: number;
   restrictions?: string;
   isMock: boolean;
+  isFavourite?: boolean;
 }
 
 const PAGE_SIZE = 15;
 const PLATFORMS = [
+  "Favourites",
   "All",
   "Instagram",
   "YouTube",
@@ -77,7 +79,12 @@ export default function ServicesPage() {
   const [providers, setProviders] = useState<{ id: string; name: string; currency: string }[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [providerInfo, setProviderInfo] = useState<ProviderInfo | null>(null);
+  const [onlyFavouritesMode, setOnlyFavouritesMode] = useState(false);
+  const [snapshotCount, setSnapshotCount] = useState(0);
   
+  // 3-dot dropdown active ID
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+
   // Search state
   const [searchInput, setSearchInput] = useState("");
   const [activeQuery, setActiveQuery] = useState("");
@@ -98,7 +105,11 @@ export default function ServicesPage() {
       if (searchParam && searchParam.trim()) {
         params.set("search", searchParam.trim());
       }
-      if (platform !== "All") params.set("platform", platform);
+      if (platform === "Favourites") {
+        params.set("onlyFavourites", "true");
+      } else if (platform !== "All") {
+        params.set("platform", platform);
+      }
       if (providerId) params.set("providerId", providerId);
       params.set("page", String(page));
       params.set("pageSize", String(PAGE_SIZE));
@@ -117,6 +128,8 @@ export default function ServicesPage() {
         setTotalServices(data.totalServices ?? data.services.length);
         if (data.provider) setProviderInfo(data.provider);
         if (Array.isArray(data.providers)) setProviders(data.providers);
+        setOnlyFavouritesMode(Boolean(data.onlyFavouritesMode));
+        setSnapshotCount(data.snapshotCount ?? 0);
       }
     } catch (err) {
       if (!signal.aborted) {
@@ -136,19 +149,49 @@ export default function ServicesPage() {
     return () => controller.abort();
   }, [activeQuery, currentPage, selectedPlatform, selectedProviderId, fetchServices, loadAttempt]);
 
-  async function handleManualSync() {
-    setRefreshing(true);
+  async function handleToggleFavourite(service: ServiceItem) {
+    const pId = service.providerId || "prov-default";
+    const pSrvId = service.providerServiceId || service.externalId;
+    const isNowFav = !service.isFavourite;
+
+    // Optimistic UI update
+    setServices((prev) =>
+      prev.map((s) => (s.id === service.id ? { ...s, isFavourite: isNowFav } : s))
+    );
+    setActiveMenuId(null);
+
     try {
-      const controller = new AbortController();
-      await fetchServices(activeQuery, currentPage, selectedPlatform, selectedProviderId, controller.signal, true);
-    } finally {
-      setRefreshing(false);
+      if (isNowFav) {
+        await fetch("/api/favourites", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            providerId: pId,
+            providerServiceId: pSrvId,
+            serviceId: service.id,
+          }),
+        });
+      } else {
+        await fetch("/api/favourites", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            providerId: pId,
+            providerServiceId: pSrvId,
+          }),
+        });
+      }
+      window.dispatchEvent(new CustomEvent("favourites-updated"));
+    } catch (err) {
+      console.error("Failed to update favourite status:", err);
+      // Revert on error
+      setServices((prev) =>
+        prev.map((s) => (s.id === service.id ? { ...s, isFavourite: !isNowFav } : s))
+      );
     }
   }
 
   function handlePlatformChange(platform: string) {
-    // Switch the visible selection immediately and discard stale results while
-    // the page-one results for the new category are being fetched.
     setSelectedPlatform(platform);
     setCurrentPage(1);
     setSearchInput("");
@@ -158,7 +201,6 @@ export default function ServicesPage() {
     setLoadError(null);
     setLoading(true);
 
-    // Clicking the already-selected category retries its request.
     if (platform === selectedPlatform) {
       setLoadAttempt((attempt) => attempt + 1);
     }
@@ -188,7 +230,7 @@ export default function ServicesPage() {
   const lastResult = Math.min(currentPage * PAGE_SIZE, totalServices);
 
   return (
-    <div className="space-y-6 animate-fadeIn max-w-6xl mx-auto">
+    <div className="space-y-6 animate-fadeIn max-w-6xl mx-auto pb-16">
       {/* Header */}
       <div>
         <div className="inline-flex items-center gap-1.5 text-xs text-[#252943]/60 mb-1">
@@ -200,7 +242,7 @@ export default function ServicesPage() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[#252943] flex items-center gap-2">
               <ListTree className="w-6 h-6 text-[#3A4EFB]" />
-              Verified Services Catalog
+              Services Catalog
             </h1>
             <p className="text-xs sm:text-sm text-[#252943]/60 mt-0.5">
               Browse platform capabilities, minimums, maximums, pricing, and scheduling availability.
@@ -216,7 +258,33 @@ export default function ServicesPage() {
         </div>
       </div>
 
-      {/* ── Plan Comparison Banner ────────────────────────────── */}
+      {/* Only-Favourites Mode Active Banner (Change 12) */}
+      {onlyFavouritesMode && (
+        <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-subtle animate-fadeIn">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-amber-200 text-amber-900 flex items-center justify-center font-bold shrink-0">
+              <Star className="w-4 h-4 fill-amber-500 text-amber-600" />
+            </div>
+            <div>
+              <h2 className="text-xs font-bold text-amber-900">
+                Favourites-Only Mode Active ({snapshotCount} confirmed services in snapshot)
+              </h2>
+              <p className="text-[11px] text-amber-800 mt-0.5">
+                Only your confirmed favourites snapshot is shown. Other imported services stay hidden unless favourited and confirmed.
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/settings"
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-900 bg-white/80 hover:bg-white px-3 py-1.5 rounded-xl border border-amber-300 transition-colors shrink-0"
+          >
+            <span>Manage in Settings</span>
+            <ExternalLink className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+      )}
+
+      {/* Plan Comparison Banner */}
       <div className="bg-gradient-to-r from-[#252943] via-[#2A2E4B] to-[#323758] rounded-2xl p-4 sm:p-5 text-white border border-[#323758] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-subtle">
         <div className="flex items-center gap-3.5">
           <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0 border border-white/10">
@@ -224,13 +292,13 @@ export default function ServicesPage() {
           </div>
           <div>
             <h2 className="text-sm font-bold flex items-center gap-2">
-              <span>Comparing Delivery Architectures?</span>
+              <span>Natural Organic Pacing vs Instant</span>
               <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#E3FF3B] text-[#252943]">
-                Visual Guide
+                Pacing Guide
               </span>
             </h2>
             <p className="text-xs text-[#DEE0ED]/70 mt-0.5">
-              Explore our structured comparison between Instant Execution, Drip-Feed Pacing, and Natural S-Curve Engagement.
+              Explore natural-looking delivery architectures with Mulberry32 organic S-curves.
             </p>
           </div>
         </div>
@@ -290,24 +358,35 @@ export default function ServicesPage() {
           </div>
         </form>
 
-        {/* Quick ID Chips & Platform Tabs */}
+        {/* Quick ID Chips & Platform Tabs (Favourites Chip first) */}
         <div className="pt-2 border-t border-[#DEE0ED]/60 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
-          {/* Platform Filter Tabs */}
+          {/* Platform Filter Tabs with Favourites First */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full">
-            {PLATFORMS.map((p) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => handlePlatformChange(p)}
-                className={`text-xs px-3 py-1.5 rounded-lg whitespace-nowrap transition-all press-scale ${
-                  selectedPlatform === p
-                    ? "bg-[#252943] text-white font-medium shadow-subtle"
-                    : "bg-[#F8F9FD] text-[#252943]/70 hover:bg-[#DEE0ED]/50"
-                }`}
-              >
-                {p}
-              </button>
-            ))}
+            {PLATFORMS.map((p) => {
+              const isFavChip = p === "Favourites";
+              const isSelected = selectedPlatform === p;
+
+              return (
+                <button
+                  key={p}
+                  type="button"
+                  id={`filter-chip-${p.toLowerCase()}`}
+                  onClick={() => handlePlatformChange(p)}
+                  className={`text-xs px-3 py-1.5 rounded-lg whitespace-nowrap transition-all press-scale flex items-center gap-1.5 ${
+                    isSelected
+                      ? isFavChip
+                        ? "bg-amber-400 text-[#252943] font-bold shadow-subtle"
+                        : "bg-[#252943] text-white font-medium shadow-subtle"
+                      : isFavChip
+                      ? "bg-amber-50 text-amber-800 hover:bg-amber-100 font-bold border border-amber-200"
+                      : "bg-[#F8F9FD] text-[#252943]/70 hover:bg-[#DEE0ED]/50"
+                  }`}
+                >
+                  {isFavChip && <Star className="w-3.5 h-3.5 fill-current text-amber-500" />}
+                  <span>{p}</span>
+                </button>
+              );
+            })}
           </div>
 
           {/* Provider Filter & Quick ID shortcuts */}
@@ -326,7 +405,7 @@ export default function ServicesPage() {
                   <option value="">All Providers</option>
                   {providers.map((pr) => (
                     <option key={pr.id} value={pr.id}>
-                      {pr.name}
+                      {pr.name} ({pr.currency})
                     </option>
                   ))}
                 </select>
@@ -390,7 +469,7 @@ export default function ServicesPage() {
           <div className="p-12 text-center space-y-3">
             <p className="text-sm font-medium text-[#252943]">No services matched your query</p>
             <p className="text-xs text-[#252943]/60">
-              No service matching &quot;{activeQuery || searchInput}&quot;. Try another ID (e.g. 1, 2, 101) or clearing filters.
+              No service matching &quot;{activeQuery || searchInput}&quot;. Try clearing filters or checking Settings.
             </p>
             <button
               onClick={handleClearSearch}
@@ -404,7 +483,8 @@ export default function ServicesPage() {
             <table className="w-full text-left text-xs">
               <thead className="bg-[#F8F9FD] border-b border-[#DEE0ED] text-[#252943]/60 font-medium">
                 <tr>
-                  <th className="py-3 px-4 w-20">Service ID</th>
+                  <th className="py-3 px-3 w-10 text-center">★</th>
+                  <th className="py-3 px-4 w-28">Service ID</th>
                   <th className="py-3 px-4">Service Name & Type</th>
                   <th className="py-3 px-4">Category</th>
                   <th className="py-3 px-4 text-right">Min / Max</th>
@@ -416,7 +496,33 @@ export default function ServicesPage() {
               </thead>
               <tbody className="divide-y divide-[#DEE0ED]/60">
                 {filtered.map((s) => (
-                  <tr key={s.id} className="hover:bg-[#F8F9FD]/60 transition-colors">
+                  <tr
+                    key={s.id}
+                    className={`transition-colors ${
+                      s.isFavourite
+                        ? "bg-amber-50/30 hover:bg-amber-50/60"
+                        : "hover:bg-[#F8F9FD]/60"
+                    }`}
+                  >
+                    {/* Favourite Star Quick Toggle */}
+                    <td className="py-3.5 px-3 text-center">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleFavourite(s)}
+                        title={s.isFavourite ? "Remove from favourites" : "Add to favourites"}
+                        aria-label={s.isFavourite ? `Remove ${s.name} from favourites` : `Add ${s.name} to favourites`}
+                        className="p-1 rounded-lg text-gray-300 hover:text-amber-500 transition-colors press-scale"
+                      >
+                        <Star
+                          className={`w-4 h-4 ${
+                            s.isFavourite
+                              ? "fill-amber-400 text-amber-500"
+                              : "text-gray-300 hover:text-amber-400"
+                          }`}
+                        />
+                      </button>
+                    </td>
+
                     {/* Service ID with Quick Copy & Provider Badge */}
                     <td className="py-3.5 px-4 font-bold text-[#252943]">
                       <div className="flex flex-col gap-1 items-start">
@@ -450,6 +556,11 @@ export default function ServicesPage() {
                           {s.platform}
                         </span>
                         <span className="font-semibold text-[#252943]">{s.name}</span>
+                        {s.isFavourite && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800">
+                            Favourite
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-[11px] text-[#3A4EFB] font-semibold bg-[#3A4EFB]/10 px-2 py-0.5 rounded">
@@ -500,22 +611,58 @@ export default function ServicesPage() {
                     </td>
 
                     <td className="py-3.5 px-4 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
+                      <div className="flex items-center justify-end gap-1.5 relative">
                         <Link
                           href={`/order?serviceId=${s.id}`}
                           className="px-2.5 py-1 rounded-lg bg-[#3A4EFB] hover:bg-[#2C3FE0] text-white text-[11px] font-semibold transition-all press-scale"
                         >
                           Order
                         </Link>
-                        {s.dripFeedSupported && (
-                          <Link
-                            href={`/planner?serviceId=${s.id}`}
-                            className="px-2.5 py-1 rounded-lg bg-[#252943] hover:bg-[#1A1D31] text-white text-[11px] font-semibold transition-all press-scale"
-                            title="Open in Growth Planner"
+
+                        {/* 3-Dot Context Menu (Change 11 Requirement) */}
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => setActiveMenuId(activeMenuId === s.id ? null : s.id)}
+                            className="p-1 rounded-lg text-[#252943]/60 hover:text-[#252943] hover:bg-[#DEE0ED]/60 transition-colors"
+                            title="More options"
+                            aria-label={`More options for ${s.name}`}
                           >
-                            Plan
-                          </Link>
-                        )}
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+
+                          {activeMenuId === s.id && (
+                            <div className="absolute right-0 mt-1 w-48 bg-white rounded-xl border border-[#DEE0ED] shadow-xl p-1.5 z-50 text-left animate-scaleUp">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleFavourite(s)}
+                                className="w-full px-2.5 py-1.5 text-xs font-semibold text-[#252943] hover:bg-[#F8F9FD] rounded-lg flex items-center gap-2 text-left"
+                              >
+                                <Star
+                                  className={`w-3.5 h-3.5 ${
+                                    s.isFavourite
+                                      ? "fill-amber-400 text-amber-500"
+                                      : "text-[#252943]/60"
+                                  }`}
+                                />
+                                <span>
+                                  {s.isFavourite
+                                    ? "Remove from favourites"
+                                    : "Add to favourites"}
+                                </span>
+                              </button>
+
+                              {s.dripFeedSupported && (
+                                <Link
+                                  href={`/planner?serviceId=${s.id}`}
+                                  className="w-full px-2.5 py-1.5 text-xs font-semibold text-[#252943] hover:bg-[#F8F9FD] rounded-lg flex items-center gap-2 text-left"
+                                >
+                                  <span>Open Growth Planner</span>
+                                </Link>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </td>
                   </tr>

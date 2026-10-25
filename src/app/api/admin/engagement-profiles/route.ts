@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/auth/session";
+import { prisma } from "@/lib/prisma";
 import {
   getAllPlatformProfiles,
   getPlatformProfile,
@@ -50,16 +51,39 @@ export async function PUT(request: Request) {
     const body = await request.json();
     const parsed = updateMappingSchema.parse(body);
 
+    let name = parsed.name;
+    let minQuantity = parsed.minQuantity;
+    let maxQuantity = parsed.maxQuantity;
+    let ratePer1000 = parsed.ratePer1000;
+
+    if (parsed.providerId && parsed.providerServiceId && (!minQuantity || !ratePer1000 || !name)) {
+      const match = await prisma.service.findFirst({
+        where: {
+          providerId: parsed.providerId,
+          OR: [
+            { externalId: parsed.providerServiceId },
+            { providerServiceId: parsed.providerServiceId },
+          ],
+        },
+      });
+      if (match) {
+        name = name || match.name;
+        minQuantity = minQuantity || match.minQuantity;
+        maxQuantity = maxQuantity || match.maxQuantity;
+        ratePer1000 = ratePer1000 || match.ratePer1000;
+      }
+    }
+
     const updated = updateEngagementServiceMapping(
       parsed.profileId,
       parsed.type as EngagementType,
       {
         providerId: parsed.providerId,
         providerServiceId: parsed.providerServiceId,
-        name: parsed.name,
-        minQuantity: parsed.minQuantity,
-        maxQuantity: parsed.maxQuantity,
-        ratePer1000: parsed.ratePer1000,
+        name,
+        minQuantity,
+        maxQuantity,
+        ratePer1000,
       }
     );
 

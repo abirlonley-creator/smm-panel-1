@@ -131,12 +131,41 @@ export async function POST(
       const delivered = statusRes.deliveredQuantity ?? order.deliveredQuantity;
       const remains = statusRes.remains ?? Math.max(0, order.requestedQuantity - delivered);
 
+      // Change 14: If upstream returns Partial or Canceled, calculate undelivered quantity and refund difference automatically
+      let refundAmount = 0;
+      const isPartialOrCanceled = statusRes.status === "PARTIAL" || statusRes.status === "CANCELLED" || ((statusRes.status as string) === "CANCELED");
+      if (isPartialOrCanceled && (order.refundedAmount ?? 0) === 0 && order.userId) {
+        const undelivered = Math.max(0, order.requestedQuantity - delivered);
+        refundAmount = Number(((undelivered / 1000) * (order.service?.ratePer1000 ?? 0)).toFixed(4));
+        if (refundAmount > 0) {
+          const user = await prisma.user.findUnique({ where: { id: order.userId } });
+          if (user) {
+            const newBal = Number(((user.walletBalance ?? 0) + refundAmount).toFixed(2));
+            await prisma.user.update({
+              where: { id: user.id },
+              data: { walletBalance: newBal },
+            });
+            await prisma.walletTransaction.create({
+              data: {
+                userId: user.id,
+                type: "REFUND",
+                amount: refundAmount,
+                balanceAfter: newBal,
+                referenceId: order.orderRef,
+                description: `Automatic refund for ${undelivered} undelivered units on ${statusRes.status} order ${order.orderRef}`,
+              },
+            });
+          }
+        }
+      }
+
       await prisma.order.update({
         where: { id: order.id },
         data: {
           status: statusRes.status,
           deliveredQuantity: delivered,
           remainingQuantity: remains,
+          ...(refundAmount > 0 ? { refundedAmount: refundAmount } : {}),
         },
       });
 
@@ -152,7 +181,7 @@ export async function POST(
         data: {
           action: "RECONCILE_ORDER_STATUS",
           actor: "Customer / Admin",
-          details: `Reconciled order ${order.orderRef}: status is now ${statusRes.status}`,
+          details: `Reconciled order ${order.orderRef}: status is now ${statusRes.status}${refundAmount > 0 ? ` (Refunded ₹${refundAmount.toFixed(2)})` : ""}`,
         },
       });
 

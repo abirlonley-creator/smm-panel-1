@@ -27,6 +27,7 @@ import {
 import { useState, useEffect, useRef } from "react";
 import { DEFAULT_PROVIDER_BALANCE_REFRESH_INTERVAL_MS } from "@/lib/provider/balance";
 import { formatProviderBalance } from "@/lib/currency";
+import { ProviderBalanceSwitcher } from "@/components/ProviderBalanceSwitcher";
 
 const ALL_NAV_ITEMS = [
   { href: "/", label: "Overview", icon: Compass, adminOnly: false },
@@ -325,50 +326,8 @@ export function Navigation() {
           </Link>
         </div>
 
-        {/* Live Balance Card */}
-        <div className="mx-3.5 mt-4 p-3.5 rounded-2xl bg-[#1A1D31] border border-[#323758] flex items-center justify-between shadow-subtle">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-[#3A4EFB]/20 border border-[#3A4EFB]/30 text-[#E3FF3B] flex items-center justify-center shrink-0">
-              <Wallet className="w-4 h-4" />
-            </div>
-            <div>
-              <span className="text-[10px] uppercase tracking-wider text-[#DEE0ED]/60 font-semibold block leading-none mb-1">
-                Provider Balance
-              </span>
-              {loadingBalance ? (
-                <span className="text-xs text-[#DEE0ED]/60 font-medium">Checking...</span>
-              ) : balance !== null ? (
-                <div>
-                  <span className="text-sm font-bold text-white tracking-tight">
-                    {formatProviderBalance(balance, currency)}
-                  </span>
-                  {balanceStale && (
-                    <span className="mt-1 flex items-center gap-1 text-[10px] font-medium text-amber-300" title={balanceWarning || "Last verified balance is stale"}>
-                      <AlertTriangle className="h-3 w-3" /> Stale
-                    </span>
-                  )}
-                </div>
-              ) : (
-                <Link
-                  href="/settings"
-                  className="text-xs font-bold text-[#E3FF3B] hover:underline flex items-center gap-1 mt-0.5"
-                >
-                  Connect API →
-                </Link>
-              )}
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => fetchBalance(true)}
-            disabled={refreshingBalance}
-            title={balanceWarning || "Refresh provider balance"}
-            aria-label="Refresh provider balance"
-            className="p-1.5 rounded-lg text-[#DEE0ED]/70 hover:text-white hover:bg-[#323758] transition-colors press-scale"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 text-[#E3FF3B] ${refreshingBalance ? "animate-spin" : ""}`} />
-          </button>
-        </div>
+        {/* Live Balance Card & Multi-Provider Switcher */}
+        <ProviderBalanceSwitcher variant="sidebar" />
 
         {/* Navigation Links */}
         <nav className="flex-1 px-3.5 py-4 space-y-1 overflow-y-auto">

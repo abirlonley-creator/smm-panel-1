@@ -202,7 +202,7 @@ export async function runSchedulerTick(): Promise<SchedulerTickResult> {
             },
           });
         } else {
-          // Max retries exceeded
+          // Max retries exceeded: Mark failed, refund undelivered amount, and raise admin alert
           await prisma.scheduledDeliveryStep.update({
             where: { id: step.id },
             data: {
@@ -220,6 +220,48 @@ export async function runSchedulerTick(): Promise<SchedulerTickResult> {
               errorMessage: `Step #${step.stepNumber} failed repeatedly: ${errMsg}`,
             },
           });
+
+          // Change 14: Refund undelivered amount immediately to user's wallet
+          const stepCost = Number(((step.quantity / 1000) * step.order.service.ratePer1000).toFixed(4));
+          if (step.order.userId && stepCost > 0) {
+            try {
+              const u = await prisma.user.findUnique({ where: { id: step.order.userId } });
+              if (u) {
+                const newBal = Number(((u.walletBalance ?? 0) + stepCost).toFixed(2));
+                await prisma.user.update({
+                  where: { id: u.id },
+                  data: { walletBalance: newBal },
+                });
+                await prisma.walletTransaction.create({
+                  data: {
+                    userId: u.id,
+                    type: "REFUND",
+                    amount: stepCost,
+                    balanceAfter: newBal,
+                    referenceId: step.order.orderRef,
+                    description: `Refund for undelivered batch #${step.stepNumber} on order ${step.order.orderRef}`,
+                  },
+                });
+              }
+            } catch (refErr) {
+              console.error("[SCHEDULER] Failed to refund step cost:", refErr);
+            }
+          }
+
+          // Raise Admin Alert
+          try {
+            await prisma.adminAlert.create({
+              data: {
+                severity: "high",
+                type: "run_failed",
+                orderId: step.order.id,
+                runNumber: step.stepNumber,
+                userId: step.order.userId || null,
+                reason: `Scheduled batch #${step.stepNumber} failed permanently: ${errMsg}`,
+                status: "open",
+              },
+            });
+          } catch {}
         }
       }
     } catch (err: unknown) {
@@ -227,9 +269,6 @@ export async function runSchedulerTick(): Promise<SchedulerTickResult> {
       const errorMessage = err instanceof Error ? err.message : String(err);
       errors.push(`Step ${step.id} exception: ${errorMessage}`);
 
-      // Apply the same bounded retry policy as provider rejects: transient
-      // network failures/timeouts are retried with backoff instead of
-      // instantly failing the step and flagging the order.
       const nextRetryCount = step.retryCount + 1;
       const maxRetries = 3;
 
@@ -265,6 +304,48 @@ export async function runSchedulerTick(): Promise<SchedulerTickResult> {
             errorMessage: `Step #${step.stepNumber} failed repeatedly: ${errorMessage}`,
           },
         });
+
+        // Change 14: Refund undelivered amount immediately to user's wallet
+        const stepCost = Number(((step.quantity / 1000) * step.order.service.ratePer1000).toFixed(4));
+        if (step.order.userId && stepCost > 0) {
+          try {
+            const u = await prisma.user.findUnique({ where: { id: step.order.userId } });
+            if (u) {
+              const newBal = Number(((u.walletBalance ?? 0) + stepCost).toFixed(2));
+              await prisma.user.update({
+                where: { id: u.id },
+                data: { walletBalance: newBal },
+              });
+              await prisma.walletTransaction.create({
+                data: {
+                  userId: u.id,
+                  type: "REFUND",
+                  amount: stepCost,
+                  balanceAfter: newBal,
+                  referenceId: step.order.orderRef,
+                  description: `Refund for undelivered batch #${step.stepNumber} on order ${step.order.orderRef}`,
+                },
+              });
+            }
+          } catch (refErr) {
+            console.error("[SCHEDULER] Failed to refund step cost:", refErr);
+          }
+        }
+
+        // Raise Admin Alert
+        try {
+          await prisma.adminAlert.create({
+            data: {
+              severity: "high",
+              type: "run_failed",
+              orderId: step.order.id,
+              runNumber: step.stepNumber,
+              userId: step.order.userId || null,
+              reason: `Scheduled batch #${step.stepNumber} failed permanently: ${errorMessage}`,
+              status: "open",
+            },
+          });
+        } catch {}
       }
     }
   }

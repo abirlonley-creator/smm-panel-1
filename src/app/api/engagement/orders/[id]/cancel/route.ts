@@ -34,8 +34,10 @@ export async function POST(
       );
     }
 
-    // Identify pending runs to cancel
-    const pendingRuns = order.runs.filter((r) => r.status === "PENDING");
+    // Identify runs eligible to cancel (not yet sent to upstream provider)
+    const pendingRuns = order.runs.filter(
+      (r) => r.status === "PENDING" || r.status === "scheduled" || r.status === "delayed"
+    );
     if (pendingRuns.length === 0) {
       await prisma.engagementOrder.update({
         where: { id: order.id },
@@ -58,11 +60,11 @@ export async function POST(
       : null;
 
     await prisma.$transaction(async (tx) => {
-      // 1. Mark pending runs as CANCELLED
+      // 1. Mark undelivered runs as CANCELLED
       for (const run of pendingRuns) {
         await tx.engagementRun.update({
           where: { id: run.id },
-          data: { status: "CANCELLED" },
+          data: { status: "cancelled" },
         });
       }
 

@@ -1,5 +1,6 @@
 import { prisma } from "../src/lib/prisma";
 import { StandardSMMv2Provider } from "../src/lib/provider/adapter";
+import { encryptApiKey } from "../src/lib/security/crypto";
 
 async function main() {
   console.log("Starting service sync test...");
@@ -13,26 +14,32 @@ async function main() {
   const services = await prov.getServices();
   console.log(`Fetched ${services.length} services from provider in ${Date.now() - start}ms`);
 
-  // Also update system-level ProviderConfig with the real provider details
-  await prisma.providerConfig.upsert({
-    where: { id: (await prisma.providerConfig.findFirst())?.id || "default" },
-    create: {
-      name: "XMedia SMM",
-      apiUrl: "https://xmediasmm.in/api/v2",
-      apiKey: "0fcb714fb4297125c51c7fe2cb65293f",
-      isMock: false,
-      active: true,
-      lastSyncAt: new Date(),
-    },
-    update: {
-      name: "XMedia SMM",
-      apiUrl: "https://xmediasmm.in/api/v2",
-      apiKey: "0fcb714fb4297125c51c7fe2cb65293f",
-      isMock: false,
-      active: true,
-      lastSyncAt: new Date(),
-    },
-  });
+  // Also update system-level Provider with the real provider details
+  const existingProvider = await prisma.provider.findFirst();
+  if (existingProvider) {
+    await prisma.provider.update({
+      where: { id: existingProvider.id },
+      data: {
+        name: "XMedia SMM",
+        apiUrl: "https://xmediasmm.in/api/v2",
+        apiKeyEncrypted: encryptApiKey("0fcb714fb4297125c51c7fe2cb65293f"),
+        isMock: false,
+        active: true,
+        lastSyncAt: new Date(),
+      },
+    });
+  } else {
+    await prisma.provider.create({
+      data: {
+        name: "XMedia SMM",
+        apiUrl: "https://xmediasmm.in/api/v2",
+        apiKeyEncrypted: encryptApiKey("0fcb714fb4297125c51c7fe2cb65293f"),
+        isMock: false,
+        active: true,
+        lastSyncAt: new Date(),
+      },
+    });
+  }
 
   // Check existing services in DB
   const existing = await prisma.service.findMany({

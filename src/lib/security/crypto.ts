@@ -56,9 +56,10 @@ export function decryptApiKey(encryptedText?: string | null): string {
  * Never exposes the full plaintext.
  */
 export function maskApiKey(key?: string | null): string {
-  if (!key || key.trim() === "") return "Not configured";
-  const decrypted = decryptApiKey(key);
-  if (!decrypted || decrypted.length <= 4) return "••••••••";
+  if (!key || key.trim() === "") return "None configured";
+  const decrypted = decryptApiKey(key) || key;
+  if (!decrypted || decrypted.length <= 8) return "••••••••";
+  const prefix = decrypted.slice(0, 4);
   const suffix = decrypted.slice(-4);
-  return `••••••••${suffix}`;
+  return `${prefix}••••••••${suffix}`;
 }

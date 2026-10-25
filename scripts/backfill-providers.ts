@@ -5,7 +5,7 @@ export async function backfillProviders() {
   console.log("=== Fast Atomic Backfill of Providers and Composite Keys ===");
 
   // 1. Fetch or create the Primary System Provider
-  const existingConfig = await prisma.providerConfig.findFirst();
+  const existingConfig = await (prisma as any).providerConfig?.findFirst?.().catch(() => null) ?? null;
 
   let primaryProvider = await prisma.provider.findFirst({
     where: { active: true },

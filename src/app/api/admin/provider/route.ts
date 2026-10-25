@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getActiveProvider } from "@/lib/provider/adapter";
 import { getProviderBalanceRefreshIntervalMs } from "@/lib/provider/balance";
 import { validateProviderEndpointUrl } from "@/lib/security/ssrf";
+import { encryptApiKey, maskApiKey } from "@/lib/security/crypto";
 import { syncProviderServices } from "@/lib/provider/service-sync";
 import { z } from "zod";
 
@@ -22,15 +23,16 @@ export async function GET(request: Request) {
   }
 
   try {
-    let config = await prisma.providerConfig.findFirst({
+    let config = await prisma.provider.findFirst({
       where: { active: true },
     });
 
     if (!config) {
-      config = await prisma.providerConfig.create({
+      config = await prisma.provider.create({
         data: {
           name: "Standard SMM Mock Adapter",
           apiUrl: "https://mock-provider.smm.internal/v2",
+          apiKeyEncrypted: null,
           isMock: true,
           active: true,
           balance: null,
@@ -56,8 +58,8 @@ export async function GET(request: Request) {
         id: config.id,
         name: config.name,
         apiUrl: config.apiUrl,
-        hasApiKey: Boolean(config.apiKey),
-        maskedKey: config.apiKey ? `${config.apiKey.slice(0, 4)}••••••••${config.apiKey.slice(-4)}` : "None configured (Mock Mode)",
+        hasApiKey: Boolean(config.apiKeyEncrypted),
+        maskedKey: maskApiKey(config.apiKeyEncrypted),
         isMock: config.isMock,
         active: config.active,
         balance: config.balance,
@@ -102,13 +104,13 @@ export async function POST(request: Request) {
     }
     const cleanApiUrl = urlValidation.normalizedUrl || apiUrl.trim();
 
-    let config = await prisma.providerConfig.findFirst();
+    let config = await prisma.provider.findFirst();
     const incomingApiKey = apiKey?.trim();
     const providerIdentityChanged =
       !config ||
       config.apiUrl !== cleanApiUrl ||
       config.isMock !== isMock ||
-      Boolean(incomingApiKey && incomingApiKey !== config.apiKey);
+      Boolean(incomingApiKey);
     const updateData: any = {
       name: name.trim(),
       apiUrl: cleanApiUrl,
@@ -123,26 +125,26 @@ export async function POST(request: Request) {
 
     // Only update apiKey if non-empty string provided
     if (incomingApiKey) {
-      updateData.apiKey = incomingApiKey;
+      updateData.apiKeyEncrypted = encryptApiKey(incomingApiKey);
     }
 
     if (config) {
-      config = await prisma.providerConfig.update({
+      config = await prisma.provider.update({
         where: { id: config.id },
         data: updateData,
       });
     } else {
-      config = await prisma.providerConfig.create({
+      config = await prisma.provider.create({
         data: updateData,
       });
     }
 
     // Immediately sync balance and services upon connecting or updating provider API
-    if (!config.isMock && config.apiKey) {
+    if (!config.isMock && config.apiKeyEncrypted) {
       try {
         const { adapter } = await getActiveProvider();
         const bal = await adapter.getBalance();
-        config = await prisma.providerConfig.update({
+        config = await prisma.provider.update({
           where: { id: config.id },
           data: {
             balance: bal.balance,
@@ -188,7 +190,8 @@ export async function POST(request: Request) {
         name: config.name,
         apiUrl: config.apiUrl,
         isMock: config.isMock,
-        hasApiKey: Boolean(config.apiKey),
+        hasApiKey: Boolean(config.apiKeyEncrypted),
+        maskedKey: maskApiKey(config.apiKeyEncrypted),
         balance: config.balance,
         currency: config.currency,
         lastSyncAt: config.lastSyncAt,

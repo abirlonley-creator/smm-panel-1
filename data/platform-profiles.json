@@ -56,6 +56,98 @@
         0.35
       ]
     },
+    "tiers": {
+      "views1k": {
+        "likes": {
+          "min": 10,
+          "max": 15
+        },
+        "saves": {
+          "min": 2,
+          "max": 14
+        },
+        "shares": {
+          "min": 5,
+          "max": 12
+        },
+        "comments": {
+          "min": 0,
+          "max": 2
+        }
+      },
+      "views2k": {
+        "likes": {
+          "min": 20,
+          "max": 32
+        },
+        "saves": {
+          "min": 8,
+          "max": 24
+        },
+        "shares": {
+          "min": 10,
+          "max": 22
+        },
+        "comments": {
+          "min": 1,
+          "max": 3
+        }
+      },
+      "views5k": {
+        "likes": {
+          "min": 80,
+          "max": 220
+        },
+        "saves": {
+          "min": 30,
+          "max": 75
+        },
+        "shares": {
+          "min": 20,
+          "max": 55
+        },
+        "comments": {
+          "min": 3,
+          "max": 10
+        }
+      },
+      "views10k": {
+        "likes": {
+          "min": 250,
+          "max": 520
+        },
+        "saves": {
+          "min": 70,
+          "max": 180
+        },
+        "shares": {
+          "min": 30,
+          "max": 90
+        },
+        "comments": {
+          "min": 8,
+          "max": 25
+        }
+      },
+      "views50kPlusRatios": {
+        "likes": {
+          "min": 0.035,
+          "max": 0.045
+        },
+        "saves": {
+          "min": 0.01,
+          "max": 0.015
+        },
+        "shares": {
+          "min": 0.004,
+          "max": 0.007
+        },
+        "comments": {
+          "min": 0.001,
+          "max": 0.002
+        }
+      }
+    },
     "types": {
       "views": {
         "baseRatio": 1,
@@ -68,13 +160,6 @@
       "likes": {
         "baseRatio": 0.045,
         "ratioVariance": 0.25,
-        "slidingScale": {
-          "lowViewsThreshold": 10000,
-          "lowViewsRatio": 0.05,
-          "highViewsThreshold": 100000,
-          "highViewsRatio": 0.035,
-          "midRatio": 0.045
-        },
         "lagMinutesRange": [
           5,
           20
@@ -129,55 +214,59 @@
     },
     "serviceMappings": {
       "views": {
-        "id": "srv-ig-views",
-        "providerId": "prov-default",
+        "id": "cmvm1iusy0000j5quq9ozboir:101",
+        "providerId": "cmvm1iusy0000j5quq9ozboir",
+        "providerServiceId": "101",
         "name": "Instagram Reel Views — Organic High Retention",
         "minQuantity": 100,
         "maxQuantity": 5000000,
-        "ratePer1000": 0.15
+        "ratePer1000": 0.84
       },
       "likes": {
         "id": "srv-custom-likes-v2",
-        "providerId": "prov-default",
+        "providerId": "cmvm1iusy0000j5quq9ozboir",
+        "providerServiceId": "ext-99441",
         "name": "Instagram Super HQ Likes v2",
         "minQuantity": 25,
         "maxQuantity": 250000,
-        "ratePer1000": 1.15,
-        "providerServiceId": "ext-99441"
+        "ratePer1000": 1.15
       },
       "saves": {
-        "id": "srv-ig-saves",
-        "providerId": "prov-default",
+        "id": "cmvm1iusy0000j5quq9ozboir:103",
+        "providerId": "cmvm1iusy0000j5quq9ozboir",
+        "providerServiceId": "103",
         "name": "Instagram Post Saves & Bookmarks",
         "minQuantity": 10,
         "maxQuantity": 100000,
-        "ratePer1000": 1.4
+        "ratePer1000": 1.45
       },
       "shares": {
-        "id": "srv-ig-shares",
-        "providerId": "prov-default",
+        "id": "cmvm1iusy0000j5quq9ozboir:104",
+        "providerId": "cmvm1iusy0000j5quq9ozboir",
+        "providerServiceId": "104",
         "name": "Instagram Real Post Shares",
         "minQuantity": 10,
         "maxQuantity": 50000,
-        "ratePer1000": 2.1
+        "ratePer1000": 2.2
       },
       "comments": {
-        "id": "srv-ig-comments",
-        "providerId": "prov-default",
+        "id": "cmvm1iusy0000j5quq9ozboir:105",
+        "providerId": "cmvm1iusy0000j5quq9ozboir",
+        "providerServiceId": "105",
         "name": "Instagram Verified English Comments",
         "minQuantity": 1,
         "maxQuantity": 2500,
-        "ratePer1000": 8.5
+        "ratePer1000": 8
       }
     }
   },
   "instagram_post": {
     "id": "instagram_post",
     "platform": "Instagram",
-    "name": "Instagram Post (Photo/Carousel)",
-    "badge": "Photo / Carousel",
-    "description": "Front-loaded engagement distribution matching audience interactions on feed photos & carousels.",
-    "explainerText": "Photo and carousel posts receive the bulk of their impressions in the first 24-48 hours. Our profile front-loads early delivery with higher initial steepness before smoothly tapering off. Recommended: 48h.",
+    "name": "Instagram Photo / Carousel",
+    "badge": "Post (Photo)",
+    "description": "Front-loaded organic curve tailored for standard photo, carousel and grid posts.",
+    "explainerText": "Photo and carousel feed posts experience the vast majority of interactions within the first 48 hours. Our post pacing is front-loaded to match feed impression velocity.",
     "presets": {
       "fast": {
         "key": "fast",
@@ -187,14 +276,14 @@
       },
       "normal": {
         "key": "normal",
-        "label": "Normal Feed (48h)",
+        "label": "Normal Pace (48h)",
         "hours": 48,
         "durationPreset": "48h",
         "isDefault": true
       },
       "slow": {
         "key": "slow",
-        "label": "Extended Feed (96h)",
+        "label": "Sustained (96h / 4d)",
         "hours": 96,
         "durationPreset": "96h"
       }
@@ -213,20 +302,102 @@
     },
     "archetypeWeights": {
       "classic": 0.35,
-      "doubleWave": 0.35,
+      "doubleWave": 0.3,
       "stallAndSurge": 0.15,
       "slowRamp": 0.1,
-      "earlySpike": 0.05
+      "earlySpike": 0.1
     },
-    "doubleWaveConfig": {
-      "secondWaveCenterRange": [
-        0.45,
-        0.6
-      ],
-      "secondWaveWeightRange": [
-        0.2,
-        0.3
-      ]
+    "tiers": {
+      "views1k": {
+        "likes": {
+          "min": 12,
+          "max": 16
+        },
+        "saves": {
+          "min": 1,
+          "max": 10
+        },
+        "shares": {
+          "min": 4,
+          "max": 10
+        },
+        "comments": {
+          "min": 0,
+          "max": 2
+        }
+      },
+      "views2k": {
+        "likes": {
+          "min": 24,
+          "max": 36
+        },
+        "saves": {
+          "min": 6,
+          "max": 18
+        },
+        "shares": {
+          "min": 8,
+          "max": 18
+        },
+        "comments": {
+          "min": 1,
+          "max": 3
+        }
+      },
+      "views5k": {
+        "likes": {
+          "min": 90,
+          "max": 230
+        },
+        "saves": {
+          "min": 25,
+          "max": 65
+        },
+        "shares": {
+          "min": 18,
+          "max": 45
+        },
+        "comments": {
+          "min": 3,
+          "max": 9
+        }
+      },
+      "views10k": {
+        "likes": {
+          "min": 280,
+          "max": 550
+        },
+        "saves": {
+          "min": 60,
+          "max": 160
+        },
+        "shares": {
+          "min": 25,
+          "max": 80
+        },
+        "comments": {
+          "min": 8,
+          "max": 22
+        }
+      },
+      "views50kPlusRatios": {
+        "likes": {
+          "min": 0.035,
+          "max": 0.045
+        },
+        "saves": {
+          "min": 0.009,
+          "max": 0.014
+        },
+        "shares": {
+          "min": 0.003,
+          "max": 0.006
+        },
+        "comments": {
+          "min": 0.001,
+          "max": 0.002
+        }
+      }
     },
     "types": {
       "views": {
@@ -240,35 +411,28 @@
       "likes": {
         "baseRatio": 0.045,
         "ratioVariance": 0.25,
-        "slidingScale": {
-          "lowViewsThreshold": 10000,
-          "lowViewsRatio": 0.05,
-          "highViewsThreshold": 100000,
-          "highViewsRatio": 0.035,
-          "midRatio": 0.045
-        },
         "lagMinutesRange": [
           5,
-          15
+          20
         ],
-        "curveDelayFraction": 0.07
+        "curveDelayFraction": 0.08
       },
       "saves": {
         "baseRatio": 0.012,
         "ratioVariance": 0.3,
         "lagMinutesRange": [
-          30,
-          60
+          45,
+          90
         ],
-        "curveDelayFraction": 0.12,
-        "curveStretchFraction": 1.1
+        "curveDelayFraction": 0.15,
+        "curveStretchFraction": 1.15
       },
       "shares": {
         "baseRatio": 0.005,
         "ratioVariance": 0.3,
         "lagMinutesRange": [
-          45,
-          180
+          60,
+          240
         ],
         "sparse": true
       },
@@ -276,8 +440,8 @@
         "baseRatio": 0.002,
         "ratioVariance": 0.4,
         "lagMinutesRange": [
-          60,
-          300
+          120,
+          480
         ],
         "batchSizeRange": [
           1,
@@ -301,44 +465,49 @@
     },
     "serviceMappings": {
       "views": {
-        "id": "srv-ig-post-views",
-        "providerId": "prov-default",
-        "name": "Instagram Feed Post Views — Organic Pace",
+        "id": "cmvm1iusy0000j5quq9ozboir:111",
+        "providerId": "cmvm1iusy0000j5quq9ozboir",
+        "providerServiceId": "111",
+        "name": "Instagram Post Impressions & Views",
         "minQuantity": 100,
-        "maxQuantity": 5000000,
-        "ratePer1000": 0.15
+        "maxQuantity": 10000000,
+        "ratePer1000": 0.84
       },
       "likes": {
-        "id": "srv-ig-post-likes",
-        "providerId": "prov-default",
-        "name": "Instagram Feed Post Likes",
-        "minQuantity": 20,
+        "id": "cmvm1iusy0000j5quq9ozboir:112",
+        "providerId": "cmvm1iusy0000j5quq9ozboir",
+        "providerServiceId": "112",
+        "name": "Instagram Post Real Likes",
+        "minQuantity": 10,
         "maxQuantity": 250000,
-        "ratePer1000": 0.85
+        "ratePer1000": 1.1
       },
       "saves": {
-        "id": "srv-ig-post-saves",
-        "providerId": "prov-default",
+        "id": "cmvm1iusy0000j5quq9ozboir:113",
+        "providerId": "cmvm1iusy0000j5quq9ozboir",
+        "providerServiceId": "113",
         "name": "Instagram Post Saves & Bookmarks",
         "minQuantity": 10,
         "maxQuantity": 100000,
-        "ratePer1000": 1.4
+        "ratePer1000": 1.45
       },
       "shares": {
-        "id": "srv-ig-post-shares",
-        "providerId": "prov-default",
+        "id": "cmvm1iusy0000j5quq9ozboir:114",
+        "providerId": "cmvm1iusy0000j5quq9ozboir",
+        "providerServiceId": "114",
         "name": "Instagram Real Post Shares",
         "minQuantity": 10,
         "maxQuantity": 50000,
-        "ratePer1000": 2.1
+        "ratePer1000": 2.2
       },
       "comments": {
-        "id": "srv-ig-post-comments",
-        "providerId": "prov-default",
+        "id": "cmvm1iusy0000j5quq9ozboir:115",
+        "providerId": "cmvm1iusy0000j5quq9ozboir",
+        "providerServiceId": "115",
         "name": "Instagram Verified English Comments",
         "minQuantity": 1,
         "maxQuantity": 2500,
-        "ratePer1000": 8.5
+        "ratePer1000": 8
       }
     }
   },
@@ -399,6 +568,98 @@
         0.35
       ]
     },
+    "tiers": {
+      "views1k": {
+        "likes": {
+          "min": 12,
+          "max": 16
+        },
+        "saves": {
+          "min": 0,
+          "max": 12
+        },
+        "shares": {
+          "min": 6,
+          "max": 14
+        },
+        "comments": {
+          "min": 0,
+          "max": 2
+        }
+      },
+      "views2k": {
+        "likes": {
+          "min": 25,
+          "max": 35
+        },
+        "saves": {
+          "min": 5,
+          "max": 20
+        },
+        "shares": {
+          "min": 12,
+          "max": 25
+        },
+        "comments": {
+          "min": 1,
+          "max": 4
+        }
+      },
+      "views5k": {
+        "likes": {
+          "min": 100,
+          "max": 250
+        },
+        "saves": {
+          "min": 25,
+          "max": 60
+        },
+        "shares": {
+          "min": 25,
+          "max": 60
+        },
+        "comments": {
+          "min": 4,
+          "max": 12
+        }
+      },
+      "views10k": {
+        "likes": {
+          "min": 300,
+          "max": 600
+        },
+        "saves": {
+          "min": 50,
+          "max": 150
+        },
+        "shares": {
+          "min": 30,
+          "max": 100
+        },
+        "comments": {
+          "min": 10,
+          "max": 30
+        }
+      },
+      "views50kPlusRatios": {
+        "likes": {
+          "min": 0.04,
+          "max": 0.05
+        },
+        "saves": {
+          "min": 0.008,
+          "max": 0.012
+        },
+        "shares": {
+          "min": 0.004,
+          "max": 0.007
+        },
+        "comments": {
+          "min": 0.001,
+          "max": 0.002
+        }
+      }
+    },
     "types": {
       "views": {
         "baseRatio": 1,
@@ -411,27 +672,19 @@
       "likes": {
         "baseRatio": 0.06,
         "ratioVariance": 0.25,
-        "slidingScale": {
-          "lowViewsThreshold": 5000,
-          "lowViewsRatio": 0.07,
-          "highViewsThreshold": 100000,
-          "highViewsRatio": 0.035,
-          "midRatio": 0.06
-        },
         "lagMinutesRange": [
           5,
-          15
+          20
         ],
-        "curveDelayFraction": 0.1
+        "curveDelayFraction": 0.08
       },
       "saves": {
         "baseRatio": 0.01,
         "ratioVariance": 0.3,
         "lagMinutesRange": [
           30,
-          60
-        ],
-        "curveDelayFraction": 0.12
+          90
+        ]
       },
       "shares": {
         "baseRatio": 0.005,
@@ -471,40 +724,45 @@
     },
     "serviceMappings": {
       "views": {
-        "id": "srv-tt-views",
-        "providerId": "prov-default",
+        "id": "cmvm1iusy0000j5quq9ozboir:201",
+        "providerId": "cmvm1iusy0000j5quq9ozboir",
+        "providerServiceId": "201",
         "name": "TikTok High Retention For You Views",
         "minQuantity": 200,
         "maxQuantity": 10000000,
         "ratePer1000": 0.18
       },
       "likes": {
-        "id": "srv-tt-likes",
-        "providerId": "prov-default",
+        "id": "cmvm1iusy0000j5quq9ozboir:202",
+        "providerId": "cmvm1iusy0000j5quq9ozboir",
+        "providerServiceId": "202",
         "name": "TikTok Feed Boost Likes",
         "minQuantity": 20,
         "maxQuantity": 500000,
         "ratePer1000": 0.95
       },
       "saves": {
-        "id": "srv-tt-saves",
-        "providerId": "prov-default",
+        "id": "cmvm1iusy0000j5quq9ozboir:203",
+        "providerId": "cmvm1iusy0000j5quq9ozboir",
+        "providerServiceId": "203",
         "name": "TikTok Favorites & Saves",
         "minQuantity": 10,
         "maxQuantity": 150000,
         "ratePer1000": 1.25
       },
       "shares": {
-        "id": "srv-tt-shares",
-        "providerId": "prov-default",
+        "id": "cmvm1iusy0000j5quq9ozboir:204",
+        "providerId": "cmvm1iusy0000j5quq9ozboir",
+        "providerServiceId": "204",
         "name": "TikTok Viral Post Shares",
         "minQuantity": 15,
         "maxQuantity": 100000,
         "ratePer1000": 1.8
       },
       "comments": {
-        "id": "srv-tt-comments",
-        "providerId": "prov-default",
+        "id": "cmvm1iusy0000j5quq9ozboir:205",
+        "providerId": "cmvm1iusy0000j5quq9ozboir",
+        "providerServiceId": "205",
         "name": "TikTok Relevant Engaging Comments",
         "minQuantity": 1,
         "maxQuantity": 3000,

@@ -1,58 +1,59 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import {
-  Server,
-  Key,
   ShieldCheck,
-  RefreshCw,
+  Clock,
+  Send,
+  Star,
   CheckCircle2,
   AlertTriangle,
-  Send,
-  Eye,
-  EyeOff,
+  Server,
+  ArrowRight,
+  RefreshCw,
   Wallet,
-  Clock,
-  Layers,
   Sparkles,
-  ExternalLink,
+  Layers,
+  Check,
+  X,
 } from "lucide-react";
-import { formatProviderBalance } from "@/lib/currency";
+
+interface DiffDetail {
+  key: string;
+  providerId: string;
+  providerServiceId: string;
+  name: string;
+  platform: string;
+}
+
+interface PreferencesState {
+  onlyFavourites: boolean;
+  activeProviderId: string | null;
+  snapshotConfirmedAt: string | null;
+  snapshotCount: number;
+  currentCount: number;
+  hasSnapshot: boolean;
+  hasDiff: boolean;
+  diff: {
+    addedCount: number;
+    removedCount: number;
+    added: string[];
+    removed: string[];
+    addedDetails: DiffDetail[];
+    removedDetails: DiffDetail[];
+  };
+}
 
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [refreshingBal, setRefreshingBal] = useState(false);
-
-  // User & Passkey state
+  const [confirmingDiff, setConfirmingDiff] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [userSession, setUserSession] = useState<any>(null);
 
-  // Form state
-  const [providerName, setProviderName] = useState("My SMM Provider");
-  const [apiUrl, setApiUrl] = useState("https://api.smmprovider.com/v2");
-  const [apiKey, setApiKey] = useState("");
-  const [hasApiKey, setHasApiKey] = useState(false);
-  const [maskedKey, setMaskedKey] = useState("");
-  const [showKey, setShowKey] = useState(false);
-  const [isMock, setIsMock] = useState(true);
-
-  // Balance & Status
-  const [balance, setBalance] = useState<number | null>(null);
-  const [currency, setCurrency] = useState("INR");
-  const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
-  const [lastError, setLastError] = useState<string | null>(null);
-
-  // Feedback notifications
+  const [prefData, setPrefData] = useState<PreferencesState | null>(null);
   const [notification, setNotification] = useState<{ type: "success" | "error"; message: string } | null>(null);
-  const [testResult, setTestResult] = useState<{
-    tested: boolean;
-    success: boolean;
-    servicesCount?: number;
-    balance?: number | null;
-    currency?: string | null;
-    error?: string;
-  } | null>(null);
 
   async function loadData() {
     setLoading(true);
@@ -64,20 +65,11 @@ export default function SettingsPage() {
         setUserSession(sessData);
       }
 
-      // 2. Load provider config
-      const provRes = await fetch("/api/provider");
-      const provData = await provRes.json();
-      if (provData.success && provData.config) {
-        const c = provData.config;
-        setProviderName(c.name || "My SMM Provider");
-        setApiUrl(c.apiUrl || "https://api.smmprovider.com/v2");
-        setHasApiKey(c.hasApiKey);
-        setMaskedKey(c.maskedKey || "");
-        setIsMock(c.isMock);
-        setBalance(c.balance);
-        setCurrency(c.currency || "INR");
-        setLastSyncAt(c.lastSyncAt);
-        setLastError(c.lastError);
+      // 2. Load preferences & favourites snapshot diff
+      const prefRes = await fetch("/api/user/preferences");
+      const pData = await prefRes.json();
+      if (pData.success) {
+        setPrefData(pData);
       }
     } catch (err: any) {
       console.warn("Error loading settings:", err);
@@ -90,109 +82,62 @@ export default function SettingsPage() {
     loadData();
   }, []);
 
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleToggleOnlyFavourites(enabled: boolean) {
     setSaving(true);
     setNotification(null);
-
     try {
-      const payload: any = {
-        name: providerName.trim(),
-        apiUrl: apiUrl.trim(),
-        isMock,
-        active: true,
-      };
-
-      if (apiKey.trim()) {
-        payload.apiKey = apiKey.trim();
-      }
-
-      const res = await fetch("/api/provider", {
-        method: "POST",
+      const res = await fetch("/api/user/preferences", {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ onlyFavourites: enabled }),
       });
-
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.error || "Failed to save configuration");
+        throw new Error(data.error || "Failed to update preference");
       }
 
-      setNotification({ type: "success", message: "Provider configuration saved successfully!" });
-      setHasApiKey(data.config.hasApiKey);
-      setMaskedKey(data.config.maskedKey);
-      setApiKey(""); // clear plain text input
+      setNotification({
+        type: "success",
+        message: enabled
+          ? "Favourites-only mode enabled! Only confirmed favourite services will appear in pickers and catalog."
+          : "Favourites-only mode disabled. Full catalog will now be visible.",
+      });
 
-      // Trigger global balance update event
-      window.dispatchEvent(new CustomEvent("balance-updated"));
+      // Reload fresh diff
+      await loadData();
+      window.dispatchEvent(new CustomEvent("preferences-updated"));
     } catch (err: any) {
-      setNotification({ type: "error", message: err.message || "Failed to save" });
+      setNotification({ type: "error", message: err.message || "Failed to save preference" });
     } finally {
       setSaving(false);
     }
   }
 
-  async function handleTestConnection() {
-    setTesting(true);
-    setTestResult(null);
-
+  async function handleConfirmSnapshot() {
+    setConfirmingDiff(true);
     try {
-      const payload: any = { apiUrl: apiUrl.trim() };
-      if (apiKey.trim()) {
-        payload.apiKey = apiKey.trim();
-      }
-
-      const res = await fetch("/api/provider/test", {
-        method: "POST",
+      const res = await fetch("/api/user/preferences", {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ action: "confirmSnapshot" }),
       });
-
       const data = await res.json();
       if (!res.ok || !data.success) {
-        setTestResult({
-          tested: true,
-          success: false,
-          error: data.error || "Connection failed. Please verify API URL and Key.",
-        });
-      } else {
-        setTestResult({
-          tested: true,
-          success: true,
-          servicesCount: data.servicesCount,
-          balance: data.balance,
-          currency: data.currency,
-        });
+        throw new Error(data.error || "Failed to update snapshot");
       }
-    } catch (err: any) {
-      setTestResult({
-        tested: true,
-        success: false,
-        error: err.message || "Connection error occurred.",
-      });
-    } finally {
-      setTesting(false);
-    }
-  }
 
-  async function handleRefreshBalance() {
-    setRefreshingBal(true);
-    try {
-      const res = await fetch("/api/balance?refresh=true");
-      const data = await res.json();
-      if (typeof data.balance === "number") {
-        setBalance(data.balance);
-        setCurrency(data.currency || currency);
-        setLastSyncAt(new Date().toISOString());
-        setLastError(null);
-      } else {
-        setLastError(data.warning || "Live balance unavailable");
-      }
-      window.dispatchEvent(new CustomEvent("balance-updated"));
+      setShowConfirmModal(false);
+      setNotification({
+        type: "success",
+        message: "Favourites-only view updated successfully! Your catalog view now matches your current favourites.",
+      });
+
+      await loadData();
+      window.dispatchEvent(new CustomEvent("preferences-updated"));
     } catch (err: any) {
-      setLastError(err.message || "Balance refresh failed");
+      setNotification({ type: "error", message: err.message || "Failed to update snapshot" });
     } finally {
-      setRefreshingBal(false);
+      setConfirmingDiff(false);
     }
   }
 
@@ -201,13 +146,13 @@ export default function SettingsPage() {
       {/* Header */}
       <div>
         <div className="flex items-center gap-2 mb-1">
-          <span className="text-xs font-bold uppercase tracking-wider text-[#3A4EFB]">Account & Integrations</span>
+          <span className="text-xs font-bold uppercase tracking-wider text-[#3A4EFB]">User Preferences</span>
         </div>
         <h1 className="text-2xl sm:text-3xl font-extrabold text-[#252943] tracking-tight">
-          Settings & Provider API
+          Settings & Preferences
         </h1>
         <p className="text-xs sm:text-sm text-[#252943]/60 mt-1">
-          Configure your independent SMM provider connection, manage your API credentials, and monitor passkey access.
+          Customize your catalog display preferences and review your active passkey session access.
         </p>
       </div>
 
@@ -228,224 +173,136 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* Grid: Left Provider Form, Right Passkey & Help */}
+      {/* Grid: Left Preferences, Right Passkey & Wallet Shortcut */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Provider API Configuration (Col-span-2) */}
+        {/* Left Column: Preferences (Col-span-2) */}
         <div className="lg:col-span-2 space-y-6">
+          {/* Provider Management Moved Notice */}
+          <div className="bg-gradient-to-r from-[#252943] to-[#1A1D31] rounded-3xl p-6 text-white border border-[#323758] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-subtle">
+            <div className="flex items-center gap-3.5">
+              <div className="w-10 h-10 rounded-2xl bg-[#3A4EFB]/20 border border-[#3A4EFB]/30 flex items-center justify-center shrink-0">
+                <Wallet className="w-5 h-5 text-[#E3FF3B]" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold flex items-center gap-2">
+                  <span>SMM Providers Managed in Wallet</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#E3FF3B] text-[#252943]">
+                    Multi-Provider
+                  </span>
+                </h3>
+                <p className="text-xs text-[#DEE0ED]/75 mt-0.5">
+                  Connect multiple SMM providers, test credentials, and monitor individual live balances in the Wallet tab.
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/wallet"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#3A4EFB] hover:bg-[#2C3FE0] text-xs font-bold text-white transition-all press-scale shrink-0 shadow-sm"
+            >
+              <span>Open Wallet Tab</span>
+              <ArrowRight className="w-3.5 h-3.5 text-[#E3FF3B]" />
+            </Link>
+          </div>
+
+          {/* Preferences Card */}
           <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 sm:p-7 shadow-subtle space-y-6">
             <div className="flex items-center justify-between pb-4 border-b border-[#DEE0ED]">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-[#3A4EFB]/10 text-[#3A4EFB] flex items-center justify-center">
-                  <Server className="w-5 h-5" />
+                  <Star className="w-5 h-5" />
                 </div>
                 <div>
                   <h2 className="text-base font-bold text-[#252943] tracking-tight">
-                    Dedicated SMM Provider API
+                    Catalog Display Mode
                   </h2>
                   <p className="text-xs text-[#252943]/60">
-                    All your orders route exclusively through your private provider credentials.
+                    Control which services are shown in your Services Catalog and order pickers.
                   </p>
                 </div>
               </div>
               <span
                 className={`text-[11px] font-bold px-2.5 py-1 rounded-full border ${
-                  isMock
-                    ? "bg-amber-50 text-amber-800 border-amber-200"
-                    : hasApiKey
-                    ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                    : "bg-gray-100 text-gray-700 border-gray-300"
+                  prefData?.onlyFavourites
+                    ? "bg-amber-50 text-amber-800 border-amber-300"
+                    : "bg-blue-50 text-blue-800 border-blue-200"
                 }`}
               >
-                {isMock ? "Mock Sandbox" : hasApiKey ? "Live Provider Active" : "No Key Set"}
+                {prefData?.onlyFavourites ? "Favourites Only" : "Full Catalog"}
               </span>
             </div>
 
-            <form onSubmit={handleSave} className="space-y-4">
-              {/* Provider Name */}
-              <div>
-                <label className="block text-xs font-bold text-[#252943] mb-1.5">
-                  Provider Label
-                </label>
+            {/* Toggle Switch */}
+            <div className="p-4 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] flex items-center justify-between gap-4">
+              <div className="space-y-0.5">
+                <span className="text-xs font-bold text-[#252943] block">
+                  Show only my favourite services
+                </span>
+                <p className="text-[11px] text-[#252943]/60 leading-relaxed">
+                  When enabled, the catalog and all order pickers show only services from your confirmed favourites snapshot. New providers still import all services in the background, but they stay hidden until favourited and confirmed.
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer shrink-0">
                 <input
-                  type="text"
-                  value={providerName}
-                  onChange={(e) => setProviderName(e.target.value)}
-                  placeholder="e.g. PeakSMM / SMMKings"
-                  className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3.5 py-2.5 text-xs font-semibold text-[#252943] focus:border-[#3A4EFB] outline-none transition-colors"
+                  type="checkbox"
+                  checked={prefData?.onlyFavourites ?? false}
+                  disabled={saving || loading}
+                  onChange={(e) => handleToggleOnlyFavourites(e.target.checked)}
+                  className="sr-only peer"
                 />
-              </div>
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3A4EFB]"></div>
+              </label>
+            </div>
 
-              {/* API URL */}
-              <div>
-                <label className="block text-xs font-bold text-[#252943] mb-1.5">
-                  Provider API URL (v2 endpoint)
-                </label>
-                <input
-                  type="url"
-                  required
-                  value={apiUrl}
-                  onChange={(e) => setApiUrl(e.target.value)}
-                  placeholder="https://provider-domain.com/api/v2"
-                  className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3.5 py-2.5 text-xs font-mono font-semibold text-[#252943] focus:border-[#3A4EFB] outline-none transition-colors"
-                />
+            {/* Snapshot Status Card */}
+            <div className="p-4 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] space-y-3">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-[#252943]/60 font-semibold">Active Snapshot Count:</span>
+                <span className="font-bold text-[#252943]">
+                  {prefData?.snapshotCount ?? 0} confirmed service{prefData?.snapshotCount === 1 ? "" : "s"}
+                </span>
               </div>
-
-              {/* API Key */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-bold text-[#252943]">
-                    Provider API Key
-                  </label>
-                  {hasApiKey && (
-                    <span className="text-[11px] text-[#252943]/50 font-mono">
-                      Current: {maskedKey}
-                    </span>
-                  )}
-                </div>
-                <div className="relative">
-                  <input
-                    type={showKey ? "text" : "password"}
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    placeholder={hasApiKey ? "Enter new API key to replace existing" : "Paste your provider API key"}
-                    className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3.5 py-2.5 pr-10 text-xs font-mono text-[#252943] focus:border-[#3A4EFB] outline-none transition-colors"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowKey(!showKey)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-[#252943]/40 hover:text-[#252943]"
-                  >
-                    {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-[#252943]/60 font-semibold">Current Favourites Count:</span>
+                <span className="font-bold text-[#3A4EFB]">
+                  {prefData?.currentCount ?? 0} service{prefData?.currentCount === 1 ? "" : "s"}
+                </span>
               </div>
-
-              {/* Sandbox Toggle */}
-              <div className="p-3.5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] flex items-center justify-between">
-                <div>
-                  <span className="text-xs font-bold text-[#252943] block">
-                    Mock Sandbox Mode
-                  </span>
-                  <span className="text-[11px] text-[#252943]/60">
-                    Simulate orders and services without spending real funds.
+              {prefData?.snapshotConfirmedAt && (
+                <div className="flex items-center justify-between text-xs pt-1 border-t border-[#DEE0ED]/60">
+                  <span className="text-[#252943]/60">Last Confirmed:</span>
+                  <span className="text-[#252943]/80 font-medium">
+                    {new Date(prefData.snapshotConfirmedAt).toLocaleString()}
                   </span>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={isMock}
-                    onChange={(e) => setIsMock(e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3A4EFB]"></div>
-                </label>
-              </div>
+              )}
+            </div>
 
-              {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-[#3A4EFB] hover:bg-[#2F40DB] text-white text-xs font-bold transition-all shadow-subtle press-scale flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  {saving ? (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="w-3.5 h-3.5 text-[#E3FF3B]" />
-                      Save Configuration
-                    </>
-                  )}
-                </button>
+            {/* Yellow Diff Notice & Confirm Button (Change 12 Requirement) */}
+            {prefData?.hasDiff && (
+              <div className="p-4 rounded-2xl bg-amber-50 border border-amber-300 text-amber-900 space-y-3 animate-fadeIn">
+                <div className="flex items-center gap-2 font-bold text-xs">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>Your favourites changed since your last confirmed view</span>
+                </div>
+                <p className="text-xs text-amber-800 leading-relaxed">
+                  You have {prefData.diff.addedCount} newly favourited service{prefData.diff.addedCount === 1 ? "" : "s"} and {prefData.diff.removedCount} removed service{prefData.diff.removedCount === 1 ? "" : "s"}. Your catalog currently displays the previous snapshot until you update it.
+                </p>
 
                 <button
                   type="button"
-                  onClick={handleTestConnection}
-                  disabled={testing}
-                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#252943] hover:bg-[#1A1D31] text-white text-xs font-bold transition-all shadow-subtle press-scale flex items-center justify-center gap-2 disabled:opacity-50"
+                  id="update-favourites-snapshot-btn"
+                  onClick={() => setShowConfirmModal(true)}
+                  className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-500 text-[#252943] font-bold text-xs transition-all shadow-subtle press-scale flex items-center gap-2"
                 >
-                  {testing ? (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      Testing API...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-3.5 h-3.5 text-[#E3FF3B]" />
-                      Test Connection
-                    </>
-                  )}
+                  <Sparkles className="w-4 h-4 text-[#252943]" />
+                  <span>Your favourites changed. Update the favourites-only view?</span>
                 </button>
-              </div>
-            </form>
-
-            {/* Test Connection Output */}
-            {testResult && (
-              <div
-                className={`p-4 rounded-2xl border text-xs leading-relaxed animate-fadeIn ${
-                  testResult.success
-                    ? "bg-emerald-50 border-emerald-200 text-emerald-900"
-                    : "bg-red-50 border-red-200 text-red-900"
-                }`}
-              >
-                <div className="flex items-center gap-2 font-bold mb-1">
-                  {testResult.success ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  ) : (
-                    <AlertTriangle className="w-4 h-4 text-red-600" />
-                  )}
-                  <span>
-                    {testResult.success
-                      ? "Connection Verified Successfully!"
-                      : "Connection Failed"}
-                  </span>
-                </div>
-                {testResult.success ? (
-                  <p>
-                    Verified <strong>{testResult.servicesCount ?? 0} services</strong> from provider.
-                    {typeof testResult.balance === "number" && (
-                      <span className="block mt-0.5">
-                        Provider Balance:{" "}
-                        <strong>{formatProviderBalance(testResult.balance, testResult.currency || "USD")}</strong>
-                      </span>
-                    )}
-                  </p>
-                ) : (
-                  <p>{testResult.error}</p>
-                )}
               </div>
             )}
           </div>
-
-          {/* Telegram Assistance Banner */}
-          <div className="bg-[#1A1D31] border border-[#323758] rounded-3xl p-5 text-white shadow-subtle flex items-start gap-3.5">
-            <div className="w-9 h-9 rounded-xl bg-[#3A4EFB]/20 border border-[#3A4EFB]/40 text-[#E3FF3B] flex items-center justify-center shrink-0 mt-0.5">
-              <Send className="w-4 h-4" />
-            </div>
-            <div className="space-y-1">
-              <h3 className="text-sm font-bold tracking-tight text-white">
-                Need Help Setting Up Your Provider API?
-              </h3>
-              <p className="text-xs text-[#DEE0ED]/75 leading-relaxed">
-                Need help setting up your provider API? Message{" "}
-                <a
-                  href="https://t.me/Ghostfinds"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-[#3A4EFB] font-bold underline hover:text-blue-400 transition-colors"
-                >
-                  @Ghostfinds
-                </a>{" "}
-                on Telegram.
-              </p>
-            </div>
-          </div>
         </div>
 
-        {/* Account & Passkey Overview Card (Col-span-1) */}
+        {/* Right Column: Account Details & Telegram Assistance */}
         <div className="space-y-6">
           <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 shadow-subtle space-y-5">
             <div className="flex items-center gap-3 pb-3 border-b border-[#DEE0ED]">
@@ -454,7 +311,7 @@ export default function SettingsPage() {
               </div>
               <div>
                 <h3 className="text-sm font-bold text-[#252943]">
-                  Passkey Access Details
+                  Passkey Session Details
                 </h3>
                 <span className="text-[11px] text-[#252943]/60">
                   {userSession?.user?.username || "Authenticated User"}
@@ -501,45 +358,123 @@ export default function SettingsPage() {
                 </span>
               </div>
             </div>
+          </div>
 
-            {/* Provider Live Balance Card */}
-            <div className="pt-3 border-t border-[#DEE0ED] space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-[#252943]/60 uppercase tracking-wider">
-                  Provider Balance
-                </span>
-                <button
-                  type="button"
-                  onClick={handleRefreshBalance}
-                  disabled={refreshingBal}
-                  className="text-xs text-[#3A4EFB] hover:underline flex items-center gap-1 font-semibold"
+          {/* Telegram Assistance Banner */}
+          <div className="bg-[#1A1D31] border border-[#323758] rounded-3xl p-5 text-white shadow-subtle flex items-start gap-3.5">
+            <div className="w-9 h-9 rounded-xl bg-[#3A4EFB]/20 border border-[#3A4EFB]/40 text-[#E3FF3B] flex items-center justify-center shrink-0 mt-0.5">
+              <Send className="w-4 h-4" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-sm font-bold tracking-tight text-white">
+                Need Help Setting Up Your Provider API?
+              </h3>
+              <p className="text-xs text-[#DEE0ED]/75 leading-relaxed">
+                Need help connecting your SMM provider API or managing orders? Message{" "}
+                <a
+                  href="https://t.me/Ghostfinds"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[#3A4EFB] font-bold underline hover:text-blue-400 transition-colors"
                 >
-                  <RefreshCw className={`w-3 h-3 ${refreshingBal ? "animate-spin" : ""}`} />
-                  Refresh
-                </button>
-              </div>
-              <div className="p-3.5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <Wallet className="w-4 h-4 text-[#3A4EFB]" />
-                  <span className="text-base font-extrabold text-[#252943]">
-                    {formatProviderBalance(balance, currency)}
-                  </span>
-                </div>
-                {lastSyncAt && (
-                  <span className="text-[10px] text-[#252943]/50">
-                    Synced {new Date(lastSyncAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                  </span>
-                )}
-              </div>
-              {lastError && (
-                <p className="text-[11px] text-amber-700 font-medium">
-                  Notice: {lastError}
-                </p>
-              )}
+                  @Ghostfinds
+                </a>{" "}
+                on Telegram.
+              </p>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Confirm Snapshot Diff Modal (Change 12) */}
+      {showConfirmModal && prefData && (
+        <div className="fixed inset-0 z-50 bg-[#252943]/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl space-y-5 animate-scaleUp">
+            <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-bold">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-[#252943]">
+                    Update Favourites-Only View
+                  </h3>
+                  <p className="text-[11px] text-[#252943]/60">
+                    Review what will be added and removed from your active catalog view.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowConfirmModal(false)}
+                className="p-1.5 rounded-lg text-[#252943]/60 hover:text-[#252943]"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4 max-h-72 overflow-y-auto text-xs">
+              {/* To be Added */}
+              {prefData.diff.addedDetails.length > 0 && (
+                <div className="space-y-2">
+                  <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider block">
+                    + Services to be added ({prefData.diff.addedDetails.length}):
+                  </span>
+                  <div className="space-y-1.5 bg-emerald-50/60 p-2.5 rounded-xl border border-emerald-200">
+                    {prefData.diff.addedDetails.map((item) => (
+                      <div key={item.key} className="flex items-center justify-between text-emerald-900">
+                        <span className="font-semibold truncate max-w-xs">{item.name}</span>
+                        <span className="text-[10px] font-mono bg-emerald-100 px-1.5 py-0.5 rounded text-emerald-800">
+                          #{item.providerServiceId}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* To be Removed */}
+              {prefData.diff.removedDetails.length > 0 && (
+                <div className="space-y-2">
+                  <span className="text-[11px] font-bold text-rose-800 uppercase tracking-wider block">
+                    - Services to be removed ({prefData.diff.removedDetails.length}):
+                  </span>
+                  <div className="space-y-1.5 bg-rose-50/60 p-2.5 rounded-xl border border-rose-200">
+                    {prefData.diff.removedDetails.map((item) => (
+                      <div key={item.key} className="flex items-center justify-between text-rose-900">
+                        <span className="font-semibold truncate max-w-xs">{item.name}</span>
+                        <span className="text-[10px] font-mono bg-rose-100 px-1.5 py-0.5 rounded text-rose-800">
+                          #{item.providerServiceId}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-3 border-t border-[#DEE0ED] flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setShowConfirmModal(false)}
+                className="px-4 py-2 rounded-xl border border-[#DEE0ED] text-xs font-semibold text-[#252943]/70 hover:bg-[#F8F9FD]"
+              >
+                Keep Old View
+              </button>
+              <button
+                type="button"
+                id="confirm-snapshot-diff-btn"
+                onClick={handleConfirmSnapshot}
+                disabled={confirmingDiff}
+                className="px-4 py-2 rounded-xl bg-[#3A4EFB] hover:bg-[#2C3FE0] text-white text-xs font-bold transition-all press-scale shadow-subtle flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {confirmingDiff && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                <span>Confirm & Apply Snapshot</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

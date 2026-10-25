@@ -123,7 +123,7 @@ export async function runProviderIsolationTests() {
   const BETA_ENDPOINT = "https://provider-beta.example.com/api/v2";
 
   // Clean up any stale test data from previous partial runs
-  await prisma.userProviderConfig.deleteMany({
+  await prisma.userProviderConnection.deleteMany({
     where: { user: { username: { startsWith: `iso_test_` } } },
   });
   await prisma.user.deleteMany({
@@ -258,8 +258,8 @@ export async function runProviderIsolationTests() {
   // ─────────────────────────────────────────────
   console.log("\n── SUITE 5: Cross-User Config Access Prevention (IDOR) ───────");
 
-  const configViaA = await prisma.userProviderConfig.findUnique({ where: { userId: userA.id } });
-  const configViaB = await prisma.userProviderConfig.findUnique({ where: { userId: userB.id } });
+  const configViaA = await prisma.userProviderConnection.findFirst({ where: { userId: userA.id } });
+  const configViaB = await prisma.userProviderConnection.findFirst({ where: { userId: userB.id } });
 
   assert(configViaA?.userId === userA.id, "DB lookup userId:A returns A's config, not B's");
   assert(configViaB?.userId === userB.id, "DB lookup userId:B returns B's config, not A's");
@@ -436,21 +436,21 @@ export async function runProviderIsolationTests() {
   // ─────────────────────────────────────────────
   console.log("\n── SUITE 11: Unauthenticated Request Rejection ──────────────");
 
-  const { GET: providerGet, POST: providerPost } = await import("../src/app/api/provider/route");
+  const { GET: providerGet, POST: providerPost } = await import("../src/app/api/user/providers/route");
 
-  const unauthGet = await providerGet(new Request("https://smm.test/api/provider", { method: "GET" }));
-  assert(unauthGet.status === 401, "GET /api/provider → 401 for unauthenticated request");
+  const unauthGet = await providerGet(new Request("https://smm.test/api/user/providers", { method: "GET" }));
+  assert(unauthGet.status === 401, "GET /api/user/providers → 401 for unauthenticated request");
   const unauthGetBody = await unauthGet.json();
-  assert(unauthGetBody.success === false, "GET /api/provider → success:false for unauthenticated request");
+  assert(unauthGetBody.success === false, "GET /api/user/providers → success:false for unauthenticated request");
 
   const unauthPost = await providerPost(
-    new Request("https://smm.test/api/provider", {
+    new Request("https://smm.test/api/user/providers", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ apiUrl: "https://hacker.com/api", isMock: false }),
+      body: JSON.stringify({ name: "Hacker Provider", apiUrl: "https://hacker.com/api", apiKey: "fake-key", isMock: false }),
     })
   );
-  assert(unauthPost.status === 401, "POST /api/provider → 401 for unauthenticated request");
+  assert(unauthPost.status === 401, "POST /api/user/providers → 401 for unauthenticated request");
 
   const { GET: ordersGet } = await import("../src/app/api/orders/route");
   const unauthOrders = await ordersGet(new Request("https://smm.test/api/orders", { method: "GET" }));
@@ -581,7 +581,7 @@ export async function runProviderIsolationTests() {
   await prisma.service.deleteMany({
     where: { providerEndpoint: { in: [ALPHA_ENDPOINT, BETA_ENDPOINT] } },
   });
-  await prisma.userProviderConfig.deleteMany({ where: { userId: { in: [userA.id, userB.id] } } });
+  await prisma.userProviderConnection.deleteMany({ where: { userId: { in: [userA.id, userB.id] } } });
   await prisma.user.deleteMany({ where: { id: { in: [userA.id, userB.id] } } });
   console.log("  ✓ Cleaned up all test artifacts\n");
 

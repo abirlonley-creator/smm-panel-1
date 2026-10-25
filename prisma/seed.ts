@@ -6,21 +6,21 @@ const prisma = new PrismaClient();
 async function main() {
   console.log("Seeding AuraSMM Minimalist Panel database with exact SMM v2 catalog...");
 
-  // 1. Ensure Provider Config exists
-  let providerConfig = await prisma.providerConfig.findFirst();
-  if (!providerConfig) {
-    providerConfig = await prisma.providerConfig.create({
+  // 1. Ensure Provider exists
+  let provider = await prisma.provider.findFirst();
+  if (!provider) {
+    provider = await prisma.provider.create({
       data: {
         name: "Standard SMM Adapter",
         apiUrl: "https://api.smmprovider.com/v2",
-        apiKey: null,
+        apiKeyEncrypted: null,
         isMock: true,
         active: true,
         balance: null,
         lastSyncAt: null,
       },
     });
-    console.log("Created initial ProviderConfig (Mock mode active)");
+    console.log("Created initial Provider (Mock mode active)");
   }
 
   // 2. Populate Services from Mock Provider

@@ -1,7 +1,8 @@
 import { prisma } from "../prisma";
-import { StandardSMMv2Provider, MockSMMProvider, SMMProviderAdapter } from "./adapter";
+import { StandardSMMv2Provider, MockSMMProvider } from "./adapter";
 import { getProviderBalanceRefreshIntervalMs } from "./balance";
 import { validateProviderEndpointUrl } from "../security/ssrf";
+import { encryptApiKey, decryptApiKey, maskApiKey } from "../security/crypto";
 import { syncProviderServices } from "./service-sync";
 
 export interface UserProviderDTO {
@@ -20,25 +21,52 @@ export interface UserProviderDTO {
   balanceIsStale: boolean;
 }
 
-/**
- * Masks an API key for safe presentation to the user (e.g. "sk_l••••••••1234").
- */
-export function maskApiKey(key?: string | null): string {
-  if (!key) return "None configured (Mock Mode)";
-  if (key.length <= 8) return "••••••••";
-  return `${key.slice(0, 4)}••••••••${key.slice(-4)}`;
-}
+export { maskApiKey };
 
 /**
- * Gets or creates the Provider configuration for an authenticated user.
+ * Gets or creates the Provider connection for an authenticated user.
+ * Reads from user_providers.
  */
-export async function getUserProviderConfig(userId: string): Promise<UserProviderDTO> {
-  let config = await prisma.userProviderConfig.findUnique({
-    where: { userId },
-  });
+export async function getUserProviderConfig(userId: string, providerId?: string): Promise<UserProviderDTO> {
+  let connection: any = null;
 
-  if (!config) {
-    config = await prisma.userProviderConfig.create({
+  if (providerId) {
+    connection = await prisma.userProviderConnection.findFirst({
+      where: { id: providerId, userId },
+    });
+  }
+
+  if (!connection) {
+    // Check if user has an activeProviderId in preferences
+    const pref = await prisma.userPreference.findUnique({
+      where: { userId },
+    });
+    if (pref?.activeProviderId) {
+      connection = await prisma.userProviderConnection.findFirst({
+        where: { id: pref.activeProviderId, userId },
+      });
+    }
+  }
+
+  if (!connection) {
+    // Fall back to first active connection
+    connection = await prisma.userProviderConnection.findFirst({
+      where: { userId, active: true },
+      orderBy: { createdAt: "asc" },
+    });
+  }
+
+  if (!connection) {
+    // Check if any connection exists
+    connection = await prisma.userProviderConnection.findFirst({
+      where: { userId },
+      orderBy: { createdAt: "asc" },
+    });
+  }
+
+  if (!connection) {
+    // Create default connection
+    connection = await prisma.userProviderConnection.create({
       data: {
         userId,
         name: "My SMM Provider",
@@ -53,33 +81,33 @@ export async function getUserProviderConfig(userId: string): Promise<UserProvide
   const balanceRefreshIntervalMs = getProviderBalanceRefreshIntervalMs(
     process.env.PROVIDER_BALANCE_REFRESH_INTERVAL_MS
   );
-  const balanceAgeMs = config.lastSyncAt ? Date.now() - config.lastSyncAt.getTime() : null;
+  const balanceAgeMs = connection.lastSyncAt ? Date.now() - connection.lastSyncAt.getTime() : null;
   const balanceIsStale =
-    config.isMock ||
-    config.balance === null ||
+    connection.isMock ||
+    connection.balance === null ||
     balanceAgeMs === null ||
     balanceAgeMs < 0 ||
     balanceAgeMs >= balanceRefreshIntervalMs;
 
   return {
-    id: config.id,
-    userId: config.userId,
-    name: config.name,
-    apiUrl: config.apiUrl,
-    hasApiKey: Boolean(config.apiKey),
-    maskedKey: maskApiKey(config.apiKey),
-    isMock: config.isMock,
-    active: config.active,
-    balance: config.balance,
-    currency: config.currency,
-    lastSyncAt: config.lastSyncAt,
-    lastError: config.lastError,
+    id: connection.id,
+    userId: connection.userId,
+    name: connection.name,
+    apiUrl: connection.apiUrl,
+    hasApiKey: Boolean(connection.apiKeyEncrypted),
+    maskedKey: maskApiKey(connection.apiKeyEncrypted),
+    isMock: connection.isMock,
+    active: connection.active,
+    balance: connection.balance,
+    currency: connection.currency,
+    lastSyncAt: connection.lastSyncAt,
+    lastError: connection.lastError,
     balanceIsStale,
   };
 }
 
 /**
- * Updates an authenticated user's provider configuration.
+ * Updates or creates an authenticated user's provider connection in user_providers.
  * Encrypts/stores credentials securely at rest.
  */
 export async function saveUserProviderConfig(
@@ -90,6 +118,7 @@ export async function saveUserProviderConfig(
     apiKey?: string;
     isMock: boolean;
     active?: boolean;
+    currency?: string;
   }
 ): Promise<UserProviderDTO> {
   const urlValidation = validateProviderEndpointUrl(data.apiUrl, { allowMock: data.isMock });
@@ -97,54 +126,71 @@ export async function saveUserProviderConfig(
     throw new Error(`Invalid provider endpoint: ${urlValidation.error}`);
   }
   const cleanApiUrl = urlValidation.normalizedUrl || data.apiUrl.trim();
+  const providerName = data.name?.trim() || "My SMM Provider";
 
-  const existing = await prisma.userProviderConfig.findUnique({
-    where: { userId },
+  const existing = await prisma.userProviderConnection.findFirst({
+    where: { userId, name: providerName },
   });
 
   const incomingKey = data.apiKey?.trim();
-  const apiKey = incomingKey !== undefined && incomingKey.length > 0
-    ? incomingKey
-    : existing?.apiKey || null;
+  const encryptedKey = incomingKey !== undefined && incomingKey.length > 0
+    ? encryptApiKey(incomingKey)
+    : existing?.apiKeyEncrypted || null;
 
-  const updated = await prisma.userProviderConfig.upsert({
-    where: { userId },
-    create: {
-      userId,
-      name: data.name?.trim() || "My SMM Provider",
-      apiUrl: cleanApiUrl,
-      apiKey,
-      isMock: data.isMock,
-      active: data.active ?? true,
-      lastSyncAt: null,
-      balance: null,
-      lastError: null,
-    },
-    update: {
-      name: data.name?.trim() || existing?.name || "My SMM Provider",
-      apiUrl: cleanApiUrl,
-      apiKey,
-      isMock: data.isMock,
-      active: data.active ?? true,
-      lastError: null,
-      ...(incomingKey && incomingKey !== existing?.apiKey ? { balance: null, lastSyncAt: null } : {}),
-    },
-  });
+  const updated = existing
+    ? await prisma.userProviderConnection.update({
+        where: { id: existing.id },
+        data: {
+          apiUrl: cleanApiUrl,
+          apiKeyEncrypted: encryptedKey,
+          isMock: data.isMock,
+          active: data.active ?? true,
+          currency: data.currency ? data.currency.trim().toUpperCase() : existing.currency,
+          lastError: null,
+          ...(incomingKey ? { balance: null, lastSyncAt: null } : {}),
+        },
+      })
+    : await prisma.userProviderConnection.create({
+        data: {
+          userId,
+          name: providerName,
+          apiUrl: cleanApiUrl,
+          apiKeyEncrypted: encryptedKey,
+          isMock: data.isMock,
+          active: data.active ?? true,
+          currency: data.currency ? data.currency.trim().toUpperCase() : "USD",
+          lastSyncAt: null,
+          balance: null,
+          lastError: null,
+        },
+      });
 
   await prisma.auditLog.create({
     data: {
-      action: "UPDATE_USER_PROVIDER_CONFIG",
+      action: "UPDATE_USER_PROVIDER_CONNECTION",
       actor: "User",
       userId,
-      details: `Updated provider configuration "${updated.name}" (${updated.apiUrl}) - Mock Mode: ${updated.isMock}`,
+      details: `Saved provider connection "${updated.name}" (${updated.apiUrl}) - Mock: ${updated.isMock}`,
     },
   });
 
-  // If live provider credentials are provided, proactively sync services
-  if (!updated.isMock && apiKey) {
+  // If live provider credentials are provided, proactively test balance and sync services
+  if (!updated.isMock && incomingKey) {
     try {
-      const provider = new StandardSMMv2Provider(updated.apiUrl, apiKey);
-      await syncProviderServices(provider, "Settings Save", {
+      const decrypted = decryptApiKey(updated.apiKeyEncrypted);
+      const provider = new StandardSMMv2Provider(updated.apiUrl, decrypted);
+      const balRes = await provider.getBalance();
+      if (typeof balRes.balance === "number") {
+        await prisma.userProviderConnection.update({
+          where: { id: updated.id },
+          data: {
+            balance: balRes.balance,
+            currency: balRes.currency || updated.currency,
+            lastSyncAt: new Date(),
+          },
+        });
+      }
+      await syncProviderServices(provider, "Wallet Save", {
         providerEndpoint: updated.apiUrl,
         providerName: updated.name,
         userId,
@@ -152,14 +198,14 @@ export async function saveUserProviderConfig(
     } catch (syncErr: any) {
       const msg = syncErr instanceof Error ? syncErr.message : String(syncErr);
       console.warn("[USER_PROVIDER] Auto-sync on save warning:", msg);
-      await prisma.userProviderConfig.update({
+      await prisma.userProviderConnection.update({
         where: { id: updated.id },
         data: { lastError: msg },
       }).catch(() => {});
     }
   }
 
-  return getUserProviderConfig(userId);
+  return getUserProviderConfig(userId, updated.id);
 }
 
 /**
@@ -197,25 +243,27 @@ export async function testProviderConnection(
     const cleanUrl = urlValidation.normalizedUrl || apiUrl.trim();
     const provider = new StandardSMMv2Provider(cleanUrl, apiKey.trim());
     
-    // Test services first
-    const services = await provider.getServices();
-    
-    // Test balance
+    // Test balance (action=balance) as required by Change 10
     let balance: number | null = null;
     let currency: string | null = "USD";
+    const balRes = await provider.getBalance();
+    if (typeof balRes.balance === "number") {
+      balance = balRes.balance;
+      currency = balRes.currency || "USD";
+    }
+
+    // Also get services count if possible
+    let servicesCount = 0;
     try {
-      const balRes = await provider.getBalance();
-      if (typeof balRes.balance === "number") {
-        balance = balRes.balance;
-        currency = balRes.currency || "USD";
-      }
+      const services = await provider.getServices();
+      servicesCount = services.length;
     } catch {
-      // Balance might not be supported by some providers, but services were verified
+      // Balance verified
     }
 
     return {
       success: true,
-      servicesCount: services.length,
+      servicesCount,
       balance,
       currency,
     };
@@ -230,27 +278,48 @@ export async function testProviderConnection(
 /**
  * Refreshes an authenticated user's provider balance live.
  */
-export async function refreshUserBalance(userId: string): Promise<{
+export async function refreshUserBalance(userId: string, providerId?: string): Promise<{
   balance: number | null;
   currency: string | null;
   stale: boolean;
   warning?: string;
+  providerName?: string;
 }> {
-  const config = await prisma.userProviderConfig.findUnique({
-    where: { userId },
-  });
+  let connection: any = null;
 
-  if (!config) {
+  if (providerId) {
+    connection = await prisma.userProviderConnection.findFirst({
+      where: { id: providerId, userId },
+    });
+  }
+
+  if (!connection) {
+    const pref = await prisma.userPreference.findUnique({ where: { userId } });
+    if (pref?.activeProviderId) {
+      connection = await prisma.userProviderConnection.findFirst({
+        where: { id: pref.activeProviderId, userId },
+      });
+    }
+  }
+
+  if (!connection) {
+    connection = await prisma.userProviderConnection.findFirst({
+      where: { userId, active: true },
+      orderBy: { createdAt: "asc" },
+    });
+  }
+
+  if (!connection) {
     return { balance: null, currency: null, stale: true, warning: "Provider not configured" };
   }
 
-  if (config.isMock) {
-    const mockBal = config.balance !== null ? config.balance : 150.0;
-    await prisma.userProviderConfig.update({
-      where: { id: config.id },
+  if (connection.isMock) {
+    const mockBal = connection.balance !== null ? connection.balance : 150.0;
+    await prisma.userProviderConnection.update({
+      where: { id: connection.id },
       data: {
         balance: mockBal,
-        currency: config.currency || "INR",
+        currency: connection.currency || "INR",
         lastSyncAt: new Date(),
         lastError: null,
       },
@@ -258,30 +327,33 @@ export async function refreshUserBalance(userId: string): Promise<{
 
     return {
       balance: mockBal,
-      currency: config.currency || "INR",
+      currency: connection.currency || "INR",
       stale: false,
+      providerName: connection.name,
     };
   }
 
-  if (!config.apiKey) {
+  if (!connection.apiKeyEncrypted) {
     return {
       balance: null,
-      currency: config.currency || "INR",
+      currency: connection.currency || "USD",
       stale: true,
       warning: "No API key configured.",
+      providerName: connection.name,
     };
   }
 
   try {
-    const provider = new StandardSMMv2Provider(config.apiUrl, config.apiKey);
+    const decryptedKey = decryptApiKey(connection.apiKeyEncrypted);
+    const provider = new StandardSMMv2Provider(connection.apiUrl, decryptedKey);
     const bal = await provider.getBalance();
 
     if (typeof bal.balance === "number") {
-      await prisma.userProviderConfig.update({
-        where: { id: config.id },
+      await prisma.userProviderConnection.update({
+        where: { id: connection.id },
         data: {
           balance: bal.balance,
-          currency: bal.currency || config.currency || "INR",
+          currency: bal.currency || connection.currency || "USD",
           lastSyncAt: new Date(),
           lastError: null,
         },
@@ -289,28 +361,31 @@ export async function refreshUserBalance(userId: string): Promise<{
 
       return {
         balance: bal.balance,
-        currency: bal.currency || config.currency || "INR",
+        currency: bal.currency || connection.currency || "USD",
         stale: false,
+        providerName: connection.name,
       };
     }
 
     return {
-      balance: config.balance,
-      currency: config.currency,
+      balance: connection.balance,
+      currency: connection.currency,
       stale: true,
       warning: "Could not retrieve balance from provider",
+      providerName: connection.name,
     };
   } catch (err: any) {
-    await prisma.userProviderConfig.update({
-      where: { id: config.id },
+    await prisma.userProviderConnection.update({
+      where: { id: connection.id },
       data: { lastError: err.message || "Failed to connect to provider" },
     }).catch(() => {});
 
     return {
-      balance: config.balance,
-      currency: config.currency,
+      balance: connection.balance,
+      currency: connection.currency,
       stale: true,
       warning: err.message || "Provider connection error",
+      providerName: connection.name,
     };
   }
 }

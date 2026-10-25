@@ -11,6 +11,7 @@ import {
 import { prisma } from "../prisma";
 import { parseProviderBalanceResponse, ProviderBalance } from "./balance";
 import { validateProviderEndpointUrl } from "../security/ssrf";
+import { decryptApiKey } from "../security/crypto";
 
 export interface SMMProviderAdapter {
   readonly apiUrl?: string;
@@ -681,48 +682,91 @@ export class StandardSMMv2Provider implements SMMProviderAdapter {
 }
 
 /**
- * Resolves active provider adapter based on user configuration or fallback system configuration.
- * When userId is provided, strictly routes all operations through that specific user's provider.
+ * Resolves active provider adapter based on user configuration or fallback.
+ * When userId is provided, strictly routes all operations through that specific user's provider connection.
  */
-export async function getActiveProvider(userId?: string): Promise<{
+export async function getActiveProvider(
+  userId?: string,
+  providerId?: string
+): Promise<{
   adapter: SMMProviderAdapter;
-  config: { id: string; name: string; isMock: boolean; apiUrl: string; userId?: string; lastSyncAt?: Date | null };
+  config: {
+    id: string;
+    name: string;
+    isMock: boolean;
+    apiUrl: string;
+    userId?: string;
+    lastSyncAt?: Date | null;
+    currency?: string;
+  };
 }> {
   if (userId) {
-    const userConfig = await prisma.userProviderConfig.findUnique({
-      where: { userId },
-    });
+    let connection: any = null;
 
-    if (userConfig) {
-      if (userConfig.isMock || !userConfig.apiKey) {
+    if (providerId) {
+      connection = await prisma.userProviderConnection.findFirst({
+        where: { id: providerId, userId },
+      });
+    }
+
+    if (!connection) {
+      const pref = await prisma.userPreference.findUnique({
+        where: { userId },
+      });
+      if (pref?.activeProviderId) {
+        connection = await prisma.userProviderConnection.findFirst({
+          where: { id: pref.activeProviderId, userId },
+        });
+      }
+    }
+
+    if (!connection) {
+      connection = await prisma.userProviderConnection.findFirst({
+        where: { userId, active: true },
+        orderBy: { createdAt: "asc" },
+      });
+    }
+
+    if (!connection) {
+      connection = await prisma.userProviderConnection.findFirst({
+        where: { userId },
+        orderBy: { createdAt: "asc" },
+      });
+    }
+
+    if (connection) {
+      const decryptedKey = decryptApiKey(connection.apiKeyEncrypted);
+      const isMockUrl = connection.isMock || !decryptedKey || connection.apiUrl.includes("mock") || connection.apiUrl.includes(".internal") || connection.apiUrl.includes(".test");
+      if (isMockUrl) {
         return {
           adapter: new MockSMMProvider(),
           config: {
-            id: userConfig.id,
-            name: userConfig.name,
+            id: connection.id,
+            name: connection.name,
             isMock: true,
-            apiUrl: userConfig.apiUrl,
-            userId: userConfig.userId,
-            lastSyncAt: userConfig.lastSyncAt,
+            apiUrl: connection.apiUrl,
+            userId: connection.userId,
+            lastSyncAt: connection.lastSyncAt,
+            currency: connection.currency,
           },
         };
       }
 
       return {
-        adapter: new StandardSMMv2Provider(userConfig.apiUrl, userConfig.apiKey),
+        adapter: new StandardSMMv2Provider(connection.apiUrl, decryptedKey),
         config: {
-          id: userConfig.id,
-          name: userConfig.name,
+          id: connection.id,
+          name: connection.name,
           isMock: false,
-          apiUrl: userConfig.apiUrl,
-          userId: userConfig.userId,
-          lastSyncAt: userConfig.lastSyncAt,
+          apiUrl: connection.apiUrl,
+          userId: connection.userId,
+          lastSyncAt: connection.lastSyncAt,
+          currency: connection.currency,
         },
       };
     }
 
-    // Requirement #3 & #8: If a user has no provider configured, NEVER fall back to
-    // a global or live system provider. Return a mock adapter with isMock: true.
+    // Default mock if user has no connection
     return {
       adapter: new MockSMMProvider(),
       config: {
@@ -732,48 +776,21 @@ export async function getActiveProvider(userId?: string): Promise<{
         apiUrl: "https://mock-provider.smm.internal/v2",
         userId,
         lastSyncAt: null,
+        currency: "INR",
       },
     };
   }
 
-  // Fallback to system-level configuration (only when no userId is specified)
-  let config = await prisma.providerConfig.findFirst({
-    where: { active: true },
-  });
-
-  if (!config) {
-    config = await prisma.providerConfig.create({
-      data: {
-        name: "Standard SMM Mock Adapter",
-        apiUrl: "https://mock-provider.smm.internal/v2",
-        isMock: true,
-        active: true,
-        balance: null,
-      },
-    });
-  }
-
-  if (config.isMock || !config.apiKey) {
-    return {
-      adapter: new MockSMMProvider(),
-      config: {
-        id: config.id,
-        name: config.name,
-        isMock: true,
-        apiUrl: config.apiUrl,
-        lastSyncAt: config.lastSyncAt,
-      },
-    };
-  }
-
+  // Fallback if no userId: return standard MockSMMProvider
   return {
-    adapter: new StandardSMMv2Provider(config.apiUrl, config.apiKey),
+    adapter: new MockSMMProvider(),
     config: {
-      id: config.id,
-      name: config.name,
-      isMock: false,
-      apiUrl: config.apiUrl,
-      lastSyncAt: config.lastSyncAt,
+      id: "mock-system",
+      name: "Standard SMM Mock Adapter",
+      isMock: true,
+      apiUrl: "https://mock-provider.smm.internal/v2",
+      lastSyncAt: null,
+      currency: "INR",
     },
   };
 }

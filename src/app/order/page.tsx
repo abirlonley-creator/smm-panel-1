@@ -331,8 +331,15 @@ function NewOrderPageContent() {
     loadInitialData();
   }, [searchParams]);
 
-  const platforms = ["All", ...Array.from(new Set(services.map((s) => s.platform)))];
-  const filteredServices = selectedPlatform === "All"
+  const hasFavourites = services.some((s: any) => s.isFavourite);
+  const platforms = [
+    ...(hasFavourites ? ["Favourites"] : []),
+    "All",
+    ...Array.from(new Set(services.map((s) => s.platform))),
+  ];
+  const filteredServices = selectedPlatform === "Favourites"
+    ? services.filter((s: any) => s.isFavourite)
+    : selectedPlatform === "All"
     ? services
     : services.filter((s) => s.platform === selectedPlatform);
 
@@ -1446,26 +1453,37 @@ function NewOrderPageContent() {
 
               {/* Platform Filter Tabs */}
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-                {platforms.map((platform) => (
-                  <button
-                    key={platform}
-                    type="button"
-                    onClick={() => {
-                      setSelectedPlatform(platform);
-                      const firstInPlatform = platform === "All" 
-                        ? services[0] 
-                        : services.find((s) => s.platform === platform);
-                      if (firstInPlatform) setSelectedServiceId(firstInPlatform.id);
-                    }}
-                    className={`text-xs px-3 py-1.5 rounded-lg whitespace-nowrap transition-all press-scale ${
-                      selectedPlatform === platform
-                        ? "bg-[#252943] text-white font-medium"
-                        : "bg-[#F8F9FD] text-[#252943]/70 hover:bg-[#DEE0ED]/50"
-                    }`}
-                  >
-                    {platform}
-                  </button>
-                ))}
+                {platforms.map((platform) => {
+                  const isFav = platform === "Favourites";
+                  const isSelected = selectedPlatform === platform;
+                  return (
+                    <button
+                      key={platform}
+                      type="button"
+                      onClick={() => {
+                        setSelectedPlatform(platform);
+                        const firstInPlatform = platform === "Favourites"
+                          ? services.find((s: any) => s.isFavourite)
+                          : platform === "All" 
+                          ? services[0] 
+                          : services.find((s) => s.platform === platform);
+                        if (firstInPlatform) setSelectedServiceId(firstInPlatform.id);
+                      }}
+                      className={`text-xs px-3 py-1.5 rounded-lg whitespace-nowrap transition-all press-scale flex items-center gap-1.5 ${
+                        isSelected
+                          ? isFav
+                            ? "bg-amber-400 text-[#252943] font-bold"
+                            : "bg-[#252943] text-white font-medium"
+                          : isFav
+                          ? "bg-amber-50 text-amber-800 font-bold border border-amber-200 hover:bg-amber-100"
+                          : "bg-[#F8F9FD] text-[#252943]/70 hover:bg-[#DEE0ED]/50"
+                      }`}
+                    >
+                      {isFav && <span className="text-amber-500">★</span>}
+                      <span>{platform}</span>
+                    </button>
+                  );
+                })}
               </div>
 
               {/* Service Dropdown */}
@@ -1479,9 +1497,9 @@ function NewOrderPageContent() {
                   onChange={(e) => setSelectedServiceId(e.target.value)}
                   className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-[#252943] focus:border-[#3A4EFB] focus:bg-white transition-colors font-medium"
                 >
-                  {filteredServices.map((s) => (
+                  {filteredServices.map((s: any) => (
                     <option key={s.id} value={s.id}>
-                      {s.providerName ? `[${s.providerName}] ` : ""}#{s.externalId} — [{s.platform}] {s.name} (₹{s.ratePer1000.toFixed(2)}/1k)
+                      {s.isFavourite ? "★ " : ""}{s.providerName ? `[${s.providerName}] ` : ""}#{s.externalId} — [{s.platform}] {s.name} (₹{s.ratePer1000.toFixed(2)}/1k)
                     </option>
                   ))}
                 </select>

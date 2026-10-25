@@ -37,6 +37,33 @@ export async function resolveProviderById(providerId: string): Promise<{
   provider: ProviderRecord;
   adapter: SMMProviderAdapter;
 }> {
+  // 1. Check UserProviderConnection first (Change 9/10/14)
+  const userConn = await prisma.userProviderConnection.findUnique({
+    where: { id: providerId },
+  });
+
+  if (userConn) {
+    const rawKey = decryptApiKey(userConn.apiKeyEncrypted);
+    const adapter = (userConn.isMock || !rawKey)
+      ? new MockSMMProvider()
+      : new StandardSMMv2Provider(userConn.apiUrl, rawKey);
+    return {
+      provider: {
+        id: userConn.id,
+        name: userConn.name,
+        apiUrl: userConn.apiUrl,
+        apiKeyEncrypted: userConn.apiKeyEncrypted,
+        isMock: userConn.isMock,
+        active: userConn.active,
+        currency: userConn.currency,
+        balance: userConn.balance,
+        lastSyncAt: userConn.lastSyncAt,
+      },
+      adapter,
+    };
+  }
+
+  // 2. Fallback to system Provider
   const provider = await prisma.provider.findUnique({
     where: { id: providerId },
   });
@@ -58,7 +85,7 @@ export async function resolveProviderById(providerId: string): Promise<{
 export async function resolveServiceRouting(serviceId: string, preferredProviderId?: string) {
   let service = await prisma.service.findUnique({
     where: { id: serviceId },
-    include: { provider: true },
+    include: { provider: true, userProvider: true },
   });
 
   if (!service) {
@@ -67,16 +94,23 @@ export async function resolveServiceRouting(serviceId: string, preferredProvider
 
   // If a specific provider is requested and differs from the service's current provider,
   // find the service entry mapped to that provider with the same providerServiceId/externalId.
-  if (preferredProviderId && service.providerId !== preferredProviderId) {
+  if (preferredProviderId && service.providerId !== preferredProviderId && service.userProviderId !== preferredProviderId) {
     const alternateService = await prisma.service.findFirst({
       where: {
-        providerId: preferredProviderId,
         OR: [
-          { providerServiceId: service.providerServiceId || service.externalId },
-          { externalId: service.externalId },
+          { providerId: preferredProviderId },
+          { userProviderId: preferredProviderId },
+        ],
+        AND: [
+          {
+            OR: [
+              { providerServiceId: service.providerServiceId || service.externalId },
+              { externalId: service.externalId },
+            ],
+          },
         ],
       },
-      include: { provider: true },
+      include: { provider: true, userProvider: true },
     });
 
     if (alternateService) {
@@ -84,38 +118,36 @@ export async function resolveServiceRouting(serviceId: string, preferredProvider
     }
   }
 
-  let provider = service.provider;
-  if (!provider && service.providerId) {
-    provider = await prisma.provider.findUnique({
-      where: { id: service.providerId },
-    });
+  const effectiveProviderId = service.userProviderId || service.providerId;
+  let resolved: { provider: ProviderRecord; adapter: SMMProviderAdapter } | null = null;
+
+  if (effectiveProviderId) {
+    try {
+      resolved = await resolveProviderById(effectiveProviderId);
+    } catch {}
   }
 
-  if (!provider) {
-    // Fallback to any active provider or mock
-    const fallback = await prisma.provider.findFirst({
+  if (!resolved) {
+    const fallbackUserConn = await prisma.userProviderConnection.findFirst({
       where: { active: true },
     });
-    if (fallback) {
-      provider = fallback;
-    } else {
-      provider = {
-        id: "mock-default",
-        name: "Mock Provider",
-        apiUrl: "mock",
-        apiKeyEncrypted: null,
-        isMock: true,
-        active: true,
-        currency: "USD",
-        balance: null,
-        lastSyncAt: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
+    if (fallbackUserConn) {
+      resolved = await resolveProviderById(fallbackUserConn.id);
     }
   }
 
-  const adapter = getAdapterForProvider(provider);
+  const provider = resolved?.provider || {
+    id: "mock-default",
+    name: "Mock Provider",
+    apiUrl: "mock",
+    apiKeyEncrypted: null,
+    isMock: true,
+    active: true,
+    currency: "USD",
+    balance: null,
+    lastSyncAt: null,
+  };
+  const adapter = resolved?.adapter || new MockSMMProvider();
   const providerServiceId = service.providerServiceId || service.externalId;
 
   return {

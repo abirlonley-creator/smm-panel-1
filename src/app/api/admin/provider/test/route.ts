@@ -16,8 +16,8 @@ export async function POST(request: Request) {
     }
     const balanceRes = await adapter.getBalance();
 
-    // Update cached balance in config
-    await prisma.providerConfig.update({
+    // Update cached balance in provider
+    await prisma.provider.updateMany({
       where: { id: config.id },
       data: {
         balance: balanceRes.balance,

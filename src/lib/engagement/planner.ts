@@ -19,6 +19,12 @@ import {
   PlatformProfile,
   ProfilePresetKey,
   resolvePlatformService,
+  drawRealisticTotals,
+  RealisticTotalsResult,
+  TierRange,
+  computeAutoDuration,
+  formatDurationHours,
+  validateCustomDuration,
 } from "./platform-profiles";
 
 export type EngagementType = "views" | "likes" | "shares" | "saves" | "comments";
@@ -55,6 +61,7 @@ export interface PlannedRun {
   providerServiceId?: string;
   minQuantityOverrideNote?: string;
   isPeak?: boolean;
+  isNearMinimum?: boolean;
 }
 
 export interface TypeDeliveryPlan {
@@ -68,6 +75,8 @@ export interface TypeDeliveryPlan {
   ratePer1000: number;
   totalCost: number;
   startLagMinutes: number;
+  autoDisabled?: boolean;
+  autoDisabledReason?: string | null;
   runs: PlannedRun[];
 }
 
@@ -115,6 +124,8 @@ export interface PlanParams {
   profileId: string;
   profileName: string;
   ratios: Record<EngagementType, number>;
+  finalRatios?: Record<EngagementType, number>;
+  ratioCaps?: Record<EngagementType, number>;
   startLagsMinutes: Record<EngagementType, number>;
   plannedRunCounts: Record<EngagementType, number>;
   pausesCount: number;
@@ -129,8 +140,12 @@ export interface OrganicPlanResult {
   profileId: string;
   profileName: string;
   baseViews: number;
+  isAutoDuration: boolean;
+  autoDurationRange?: [number, number];
   durationPreset: DurationPreset;
   durationHours: number;
+  durationLabel: string;
+  estimatedFinishTime: string;
   targetTz: string;
   totalCost: number;
   params: PlanParams;
@@ -148,12 +163,23 @@ export interface OrganicPlanResult {
     preset: string;
     totalCost: number;
   };
+  realisticTotals?: RealisticTotalsResult;
+  suggestedRanges?: Record<EngagementType, TierRange>;
+  suggestedTotals?: Record<EngagementType, number>;
+  sourceFlags?: Record<EngagementType, "suggested" | "custom">;
+  autoDisabledTypes?: Record<EngagementType, boolean>;
+  autoDisableNotes?: Record<EngagementType, string | null>;
+  softHints?: Record<EngagementType, string | null>;
+  providerMinNotes?: Record<EngagementType, string | null>;
 }
 
 export interface PlanOptions {
   platform?: "Instagram" | "TikTok" | string;
   profileId?: string; // "instagram_reel" | "instagram_post" | "tiktok"
   presetKey?: ProfilePresetKey; // "fast" | "normal" | "slow"
+  pacingMode?: "auto" | "custom";
+  customSpeedPreset?: "faster" | "slower" | "exact";
+  customDurationHours?: number;
   baseViews: number;
   seed?: number | string;
   startTime?: Date | string;
@@ -164,6 +190,10 @@ export interface PlanOptions {
   peakHourWeighting?: boolean;
   services?: Partial<Record<EngagementType, ServiceSpec>>;
   customRatios?: Partial<Record<EngagementType, number>>;
+  customQuantities?: Partial<Record<EngagementType, number>>;
+  customSources?: Partial<Record<EngagementType, "suggested" | "custom">>;
+  typeToggles?: Partial<Record<EngagementType, boolean>>;
+  autoDisableBelowMin?: boolean;
 }
 
 /**
@@ -344,12 +374,308 @@ function allocateIntegersLargestRemainder(unrounded: number[], targetTotal: numb
 }
 
 /**
+ * Box-Muller standard normal variate generator.
+ */
+export function drawNormal(rng: () => number): number {
+  let u1 = 0;
+  let u2 = 0;
+  while (u1 === 0) u1 = rng();
+  while (u2 === 0) u2 = rng();
+  return Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+}
+
+/**
+ * Checks for monotone streak longer than 3 in an array of batch sizes.
+ * Returns true if any 4 consecutive elements are strictly increasing or strictly decreasing.
+ */
+export function hasMonotoneStreakLongerThan3(sizes: number[]): boolean {
+  if (sizes.length < 4) return false;
+  let incStreak = 1;
+  let decStreak = 1;
+
+  for (let i = 1; i < sizes.length; i++) {
+    if (sizes[i] > sizes[i - 1]) {
+      incStreak++;
+      decStreak = 1;
+      if (incStreak > 3) return true;
+    } else if (sizes[i] < sizes[i - 1]) {
+      decStreak++;
+      incStreak = 1;
+      if (decStreak > 3) return true;
+    } else {
+      incStreak = 1;
+      decStreak = 1;
+    }
+  }
+  return false;
+}
+
+/**
+ * Computes lag-1 autocorrelation r1.
+ */
+export function computeAutocorrelation(sizes: number[]): number {
+  if (sizes.length < 3) return 0;
+  const n = sizes.length;
+  const mean = sizes.reduce((a, b) => a + b, 0) / n;
+  let numerator = 0;
+  let denominator = 0;
+
+  for (let i = 0; i < n; i++) {
+    const diff = sizes[i] - mean;
+    denominator += diff * diff;
+    if (i < n - 1) {
+      numerator += diff * (sizes[i + 1] - mean);
+    }
+  }
+
+  if (denominator === 0) return 0;
+  return numerator / denominator;
+}
+
+/**
+ * Generates an authentic batch size distribution per Change B & C:
+ * - Target run count scaled by provider minimum: runs = min(floor(total / provider_min), target_runs).
+ * - Log-normal batch size distribution clamped to [provider_min, provider_max].
+ * - 15-25% of batches land at or very near provider minimum (randomly scattered, never 3 consecutive).
+ * - Sizes are not sorted, alternating, or periodic (rejects monotone streaks > 3 and strong autocorrelation).
+ * - Never create a run below provider minimum; merge sub-minimum batches; exact total conservation.
+ */
+export function generateAuthenticBatches(params: {
+  total: number;
+  minQuantity: number;
+  maxQuantity: number;
+  targetRuns: number;
+  rng: () => number;
+  envelopeWeights?: number[];
+  maxSingleRunFrac?: number; // e.g. 0.25 for secondary types
+  maxBatchCap?: number; // hard ceiling on individual batch size (e.g. 3 for comments)
+}): number[] {
+  const { total, minQuantity, maxQuantity, targetRuns, rng, envelopeWeights, maxSingleRunFrac, maxBatchCap } = params;
+  if (total <= 0) return [];
+
+  const maxPossibleRuns = Math.floor(total / minQuantity);
+  if (maxPossibleRuns <= 1) {
+    return [total];
+  }
+
+  const N = Math.max(1, Math.min(maxPossibleRuns, targetRuns));
+  if (N === 1) {
+    return [total];
+  }
+
+  // 15-25% of batches land at or very near provider minimum
+  const nearFraction = 0.15 + rng() * 0.10;
+  let nearCount = Math.round(N * nearFraction);
+  if (N >= 4 && nearCount < 1) nearCount = 1;
+
+  // Make sure we leave enough total for remaining batches to each be >= minQuantity
+  while (nearCount > 0 && (total - nearCount * minQuantity) < (N - nearCount) * minQuantity) {
+    nearCount--;
+  }
+
+  // Pick nearCount random indices without 3 consecutive
+  // Prioritize off-peak indices if envelopeWeights are provided to preserve peak hour boosts
+  const nearIndices = new Set<number>();
+  const availableIndices = Array.from({ length: N }, (_, i) => i);
+  if (envelopeWeights && envelopeWeights.length === N) {
+    availableIndices.sort((a, b) => {
+      const wa = (envelopeWeights[a] ?? 1.0) + (rng() - 0.5) * 0.05;
+      const wb = (envelopeWeights[b] ?? 1.0) + (rng() - 0.5) * 0.05;
+      return wa - wb;
+    });
+  } else {
+    for (let i = availableIndices.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [availableIndices[i], availableIndices[j]] = [availableIndices[j], availableIndices[i]];
+    }
+  }
+
+  for (const idx of availableIndices) {
+    if (nearIndices.size >= nearCount) break;
+    if (nearIndices.has(idx - 1) && nearIndices.has(idx - 2)) continue;
+    if (nearIndices.has(idx + 1) && nearIndices.has(idx + 2)) continue;
+    if (nearIndices.has(idx - 1) && nearIndices.has(idx + 1)) continue;
+    nearIndices.add(idx);
+  }
+
+  const batchSizes: number[] = new Array(N).fill(0);
+  let assignedSum = 0;
+  const nearMaxJitter = Math.max(1, Math.round(0.05 * minQuantity));
+
+  nearIndices.forEach((idx) => {
+    const jitter = Math.floor(rng() * nearMaxJitter);
+    const sz = minQuantity + jitter;
+    batchSizes[idx] = sz;
+    assignedSum += sz;
+  });
+
+  const remainingCount = N - nearIndices.size;
+  const remainingTotal = total - assignedSum;
+
+  if (remainingCount > 0) {
+    const nonNearIndices = Array.from({ length: N }, (_, i) => i).filter((i) => !nearIndices.has(i));
+    const rawWeights: number[] = [];
+
+    for (let k = 0; k < nonNearIndices.length; k++) {
+      const idx = nonNearIndices[k];
+      const env = envelopeWeights && envelopeWeights[idx] !== undefined ? envelopeWeights[idx] : 1.0;
+      const z = drawNormal(rng);
+      const logNormalMultiplier = Math.exp(z * 0.35);
+      rawWeights.push(Math.max(0.1, env * logNormalMultiplier));
+    }
+
+    const weightSum = rawWeights.reduce((a, b) => a + b, 0);
+    const unrounded = rawWeights.map((w) => (w / weightSum) * remainingTotal);
+    const allocated = allocateIntegersLargestRemainder(unrounded, remainingTotal);
+
+    for (let k = 0; k < nonNearIndices.length; k++) {
+      batchSizes[nonNearIndices[k]] = allocated[k];
+    }
+  }
+
+  // Cap per batch: if maxSingleRunFrac provided and total >= 4 * minQuantity, cap non-forced runs
+  let cap = (maxSingleRunFrac && total >= 4 * minQuantity)
+    ? Math.max(minQuantity, Math.ceil(maxSingleRunFrac * total))
+    : maxQuantity;
+  if (maxBatchCap !== undefined && maxBatchCap > 0) {
+    cap = Math.min(cap, maxBatchCap);
+  }
+
+  for (let i = 0; i < N; i++) {
+    if (batchSizes[i] < minQuantity) batchSizes[i] = minQuantity;
+    if (batchSizes[i] > cap) batchSizes[i] = cap;
+  }
+
+  // Exact total conservation
+  let curSum = batchSizes.reduce((a, b) => a + b, 0);
+  let passes = 0;
+  while (curSum !== total && passes < 300) {
+    passes++;
+    const diff = total - curSum;
+    if (diff > 0) {
+      const eligible = batchSizes
+        .map((sz, idx) => ({ sz, idx }))
+        .filter((item) => item.sz < cap);
+      if (eligible.length > 0) {
+        const target = eligible[Math.floor(rng() * eligible.length)];
+        const step = Math.min(diff, Math.max(1, cap - target.sz));
+        batchSizes[target.idx] += step;
+        curSum += step;
+      } else {
+        if (maxBatchCap) {
+          const addSz = Math.min(diff, cap);
+          batchSizes.push(addSz);
+          curSum += addSz;
+        } else {
+          batchSizes[0] += diff;
+          curSum += diff;
+        }
+      }
+    } else {
+      const sub = -diff;
+      const eligible = batchSizes
+        .map((sz, idx) => ({ sz, idx }))
+        .filter((item) => item.sz > minQuantity);
+      if (eligible.length > 0) {
+        const target = eligible[Math.floor(rng() * eligible.length)];
+        const step = Math.min(sub, target.sz - minQuantity);
+        if (step > 0) {
+          batchSizes[target.idx] -= step;
+          curSum -= step;
+        } else {
+          break;
+        }
+      } else {
+        break;
+      }
+    }
+  }
+
+  // Merging pass: if any batch < minQuantity, merge into neighbor
+  let list = [...batchSizes];
+  let changed = true;
+  while (changed && list.length > 1) {
+    changed = false;
+    for (let i = 0; i < list.length; i++) {
+      if (list[i] < minQuantity) {
+        if (i < list.length - 1) {
+          list[i + 1] += list[i];
+          list.splice(i, 1);
+        } else {
+          list[i - 1] += list[i];
+          list.splice(i, 1);
+        }
+        changed = true;
+        break;
+      }
+    }
+  }
+
+  // Fix monotone streaks > 3 and strong autocorrelation (|r1| > 0.65)
+  let streakAttempts = 0;
+  while (
+    list.length >= 4 &&
+    streakAttempts < 25 &&
+    (hasMonotoneStreakLongerThan3(list) || Math.abs(computeAutocorrelation(list)) > 0.65)
+  ) {
+    streakAttempts++;
+    for (let i = 1; i < list.length - 2; i++) {
+      if (
+        (list[i - 1] < list[i] && list[i] < list[i + 1] && list[i + 1] < list[i + 2]) ||
+        (list[i - 1] > list[i] && list[i] > list[i + 1] && list[i + 1] > list[i + 2])
+      ) {
+        const swapTarget = Math.floor(rng() * list.length);
+        const temp = list[i + 1];
+        list[i + 1] = list[swapTarget];
+        list[swapTarget] = temp;
+      }
+    }
+  }
+
+  let finalSum = list.reduce((a, b) => a + b, 0);
+  let adjLoops = 0;
+  while (finalSum !== total && list.length > 0 && adjLoops < 500) {
+    adjLoops++;
+    const diff = total - finalSum;
+    if (diff > 0) {
+      let added = false;
+      for (let i = 0; i < list.length && finalSum < total; i++) {
+        if (list[i] < cap) {
+          list[i]++;
+          finalSum++;
+          added = true;
+        }
+      }
+      if (!added) {
+        if (maxBatchCap) {
+          list.push(Math.min(diff, cap));
+          finalSum += Math.min(diff, cap);
+        } else {
+          list[0] += diff;
+          finalSum += diff;
+        }
+      }
+    } else {
+      let subtracted = false;
+      for (let i = 0; i < list.length && finalSum > total; i++) {
+        if (list[i] > minQuantity) {
+          list[i]--;
+          finalSum--;
+          subtracted = true;
+        }
+      }
+      if (!subtracted) break;
+    }
+  }
+
+  return list;
+}
+
+/**
  * Enforces Provider Minimum & Maximum Order Size Rules:
- * Algorithm:
- * - While any run < min, merge it into its nearest neighbor (prefer later neighbor so engagement lags views).
- * - If number of runs drops below 1, make a single run equal to the total.
- * - Runs above max are split.
- * - The final plan delivers exactly the planned total per type without dropping quantity.
+ * - While any run < min, merge into nearest neighbor.
+ * - Split runs above maxQuantity.
+ * - Exact total conservation.
  */
 export function mergeSubMinimumRuns(
   runs: { minute: number; quantity: number }[],
@@ -365,33 +691,28 @@ export function mergeSubMinimumRuns(
 
   let list = runs.map((r) => ({ ...r }));
 
-  // While any run < min, merge it into its nearest neighbor (prefer later neighbor)
   let changed = true;
   while (changed && list.length > 1) {
     changed = false;
     for (let i = 0; i < list.length; i++) {
       if (list[i].quantity < minQuantity) {
         if (i < list.length - 1) {
-          // Prefer later neighbor (i + 1)
           list[i + 1].quantity += list[i].quantity;
           list.splice(i, 1);
         } else {
-          // Last run has no later neighbor, merge with previous (i - 1)
           list[i - 1].quantity += list[i].quantity;
           list.splice(i, 1);
         }
         changed = true;
-        break; // restart scan
+        break;
       }
     }
   }
 
-  // If number of runs dropped to 1, make a single run equal to the total
   if (list.length === 1) {
     list[0].quantity = targetTotal;
   }
 
-  // Split runs above maxQuantity
   const bounded: { minute: number; quantity: number }[] = [];
   for (const b of list) {
     if (maxQuantity > 0 && b.quantity > maxQuantity) {
@@ -408,7 +729,6 @@ export function mergeSubMinimumRuns(
     }
   }
 
-  // Final exact total conservation check
   const sum = bounded.reduce((acc, b) => acc + b.quantity, 0);
   if (sum !== targetTotal && bounded.length > 0) {
     bounded[bounded.length - 1].quantity += targetTotal - sum;
@@ -451,32 +771,57 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
   const rawSeed = options.seed ?? Math.floor(Math.random() * 100000000);
   const seedInt = normalizeSeed(rawSeed);
 
-  // Preset Resolution (fast, normal, slow, or explicit hours)
+  // Duration Resolution per Change A: Auto-duration by view count is the recommended default
   let durationHours: number;
   let durationPreset: DurationPreset;
+  let isAutoDuration = true;
+  const autoDur = computeAutoDuration(profile, baseViews, seedInt);
+  const autoDurationRange: [number, number] = [autoDur.minHours, autoDur.maxHours];
+
+  const PRESET_HOURS: Record<DurationPreset, number> = {
+    "24h": 24,
+    "48h": 48,
+    "72h": 72,
+    "96h": 96,
+    "168h": 168,
+  };
+
+  if (options.pacingMode === "custom" || (options.customDurationHours !== undefined && options.customDurationHours > 0)) {
+    isAutoDuration = false;
+    const requested = options.customDurationHours || (options.durationHours ?? autoDur.durationHours);
+    const val = validateCustomDuration(profile, baseViews, requested);
+    if (!val.valid) {
+      throw new Error(`Validation error: ${val.reason}`);
+    }
+    durationHours = requested;
+  } else if (options.presetKey && profile.presets[options.presetKey]) {
+    isAutoDuration = false;
+    const opt = profile.presets[options.presetKey];
+    durationHours = opt.hours;
+  } else if (options.durationPreset && PRESET_HOURS[options.durationPreset]) {
+    isAutoDuration = false;
+    durationHours = options.durationHours ?? PRESET_HOURS[options.durationPreset];
+  } else if (options.durationHours && options.durationHours > 0) {
+    isAutoDuration = false;
+    durationHours = options.durationHours;
+  } else {
+    isAutoDuration = true;
+    durationHours = autoDur.durationHours;
+  }
 
   if (options.presetKey && profile.presets[options.presetKey]) {
     const opt = profile.presets[options.presetKey];
-    durationHours = opt.hours;
-    durationPreset = opt.durationPreset;
-  } else if (options.durationPreset) {
+    durationPreset = opt.hours === 24 ? "24h" : opt.hours === 48 ? "48h" : opt.hours === 72 ? "72h" : opt.hours === 96 ? "96h" : "168h";
+  } else if (options.durationPreset && PRESET_HOURS[options.durationPreset]) {
     durationPreset = options.durationPreset;
-    durationHours = durationPreset === "24h" ? 24 : durationPreset === "48h" ? 48 : durationPreset === "96h" ? 96 : durationPreset === "168h" ? 168 : 72;
-  } else if (options.durationHours) {
-    durationHours = options.durationHours;
-    if (durationHours <= 30) durationPreset = "24h";
-    else if (durationHours <= 60) durationPreset = "48h";
-    else if (durationHours <= 80) durationPreset = "72h";
-    else if (durationHours <= 120) durationPreset = "96h";
-    else durationPreset = "168h";
-  } else {
-    // Default preset from profile
-    const defPreset = profile.presets[profile.defaultPreset] || profile.presets.normal;
-    durationHours = defPreset.hours;
-    durationPreset = defPreset.durationPreset;
-  }
+  } else if (durationHours <= 30) durationPreset = "24h";
+  else if (durationHours <= 60) durationPreset = "48h";
+  else if (durationHours <= 80) durationPreset = "72h";
+  else if (durationHours <= 120) durationPreset = "96h";
+  else durationPreset = "168h";
 
-  const durationMinutes = durationHours * 60;
+  const durationMinutes = Math.max(15, Math.round(durationHours * 60));
+  const durationLabel = formatDurationHours(durationHours);
   const targetTz = options.targetTz || "Asia/Kolkata";
   const startTime = options.startTime ? new Date(options.startTime) : new Date();
   const peakHourEnabled = options.peakHourWeighting !== false;
@@ -602,7 +947,27 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
     return denseViewsCumulative[idx] + (denseViewsCumulative[idx + 1] - denseViewsCumulative[idx]) * rem;
   };
 
-  // 3. Sub-Seed Ratio Calculations (Sliding scale from profile)
+  // 3. Realistic Tier Model & Planned Totals
+  const realisticModel = drawRealisticTotals(
+    profile,
+    baseViews,
+    seedInt,
+    options.customQuantities,
+    options.customSources,
+    options.typeToggles
+  );
+
+  const autoDisabledTypes = { ...realisticModel.autoDisabledTypes };
+  const autoDisableNotes = { ...realisticModel.autoDisableNotes };
+  const softHints = { ...realisticModel.softHints };
+
+  // Base Views provider minimum check
+  if (baseViews < services.views.minQuantity) {
+    throw new Error(
+      `Validation error: Views need at least ${services.views.minQuantity.toLocaleString()} for this service.`
+    );
+  }
+
   const typeConfigs = profile.types;
   const likesCfg = typeConfigs.likes;
   let baseLikesRatio = likesCfg.baseRatio;
@@ -620,16 +985,60 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
   const commentsRng = createSeededRng(hashSubSeed(seedInt, "comments"));
 
   const sampleRatioWithVariance = (base: number, variance: number, rng: () => number) => {
-    // e.g. variance 0.25 => [1 - 0.25, 1 + 0.25]
     return base * (1 - variance + rng() * (variance * 2));
   };
 
+  const plannedTotals: Record<EngagementType, number> = {
+    views: baseViews,
+    likes: 0,
+    saves: 0,
+    shares: 0,
+    comments: 0,
+  };
+
+  for (const t of (["likes", "saves", "shares", "comments"] as const)) {
+    // If toggled off or not enabled
+    if (options.typeToggles?.[t] === false || (options.enabledTypes && !options.enabledTypes.includes(t))) {
+      plannedTotals[t] = 0;
+      continue;
+    }
+
+    if (options.customRatios?.[t] !== undefined && options.customQuantities?.[t] === undefined) {
+      plannedTotals[t] = Math.floor(baseViews * options.customRatios[t]! + 1e-9);
+    } else {
+      plannedTotals[t] = realisticModel.plannedTotals[t];
+    }
+
+    const srv = services[t];
+    if (srv && srv.minQuantity && plannedTotals[t] < srv.minQuantity) {
+      if (options.autoDisableBelowMin) {
+        if (plannedTotals[t] > 0 || realisticModel.suggestedTotals[t] > 0) {
+          autoDisabledTypes[t] = true;
+          const typeLabel = t.charAt(0).toUpperCase() + t.slice(1);
+          if (baseViews < 3000 && t === "comments") {
+            autoDisableNotes[t] = "Comments unlock around 3,000 views.";
+          } else {
+            const range = realisticModel.suggestedRanges[t];
+            autoDisableNotes[t] = `${typeLabel} need at least ${srv.minQuantity} for this service. Your ${baseViews.toLocaleString()} views would normally get about ${range.min}–${range.max} ${t}, so ${t} are switched off.`;
+          }
+        }
+        plannedTotals[t] = 0;
+      } else {
+        const typeLabel = t.charAt(0).toUpperCase() + t.slice(1);
+        throw new Error(
+          `Validation error: ${typeLabel} need at least ${srv.minQuantity.toLocaleString()} for this service. Increase views or turn ${typeLabel} off.`
+        );
+      }
+    }
+  }
+
+  // Target ratios: compute from final planned quantities so hard monotonic rule delivered <= ratio * views holds
   const sampledRatios: Record<EngagementType, number> = {
     views: 1.0,
-    likes: options.customRatios?.likes ?? sampleRatioWithVariance(baseLikesRatio, likesCfg.ratioVariance, likesRng),
-    saves: options.customRatios?.saves ?? sampleRatioWithVariance(typeConfigs.saves.baseRatio, typeConfigs.saves.ratioVariance, savesRng),
-    shares: options.customRatios?.shares ?? sampleRatioWithVariance(typeConfigs.shares.baseRatio, typeConfigs.shares.ratioVariance, sharesRng),
-    comments: options.customRatios?.comments ?? sampleRatioWithVariance(typeConfigs.comments.baseRatio, typeConfigs.comments.ratioVariance, commentsRng),
+    likes: baseViews > 0 ? plannedTotals.likes / baseViews : (options.customRatios?.likes ?? sampleRatioWithVariance(baseLikesRatio, likesCfg.ratioVariance, likesRng)),
+    saves: baseViews > 0 ? plannedTotals.saves / baseViews : (options.customRatios?.saves ?? sampleRatioWithVariance(typeConfigs.saves.baseRatio, typeConfigs.saves.ratioVariance, savesRng)),
+    shares: baseViews > 0 ? plannedTotals.shares / baseViews : (options.customRatios?.shares ?? sampleRatioWithVariance(typeConfigs.shares.baseRatio, typeConfigs.shares.ratioVariance, sharesRng)),
+    comments: baseViews > 0 ? plannedTotals.comments / baseViews : (options.customRatios?.comments ?? sampleRatioWithVariance(typeConfigs.comments.baseRatio, typeConfigs.comments.ratioVariance, commentsRng)),
   };
 
   // 4. Start lags per type
@@ -645,51 +1054,32 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
     comments: sampleLag(typeConfigs.comments.lagMinutesRange, commentsRng),
   };
 
-  // 5. Run counts scaled by duration preset
-  const presetScale = durationHours / 72; // normal baseline is 72h
+  // 5. Scaled Views Run Count per Change B
   const viewsRng = createSeededRng(hashSubSeed(seedInt, "views"));
+  const shortInterval = 2 + viewsRng() * 4; // 2-6 mins for short orders
+  const longInterval = 10 + viewsRng() * 15; // 10-25 mins for multi-day orders
+  const tDur = Math.max(0, Math.min(1, (durationHours - 4) / Math.max(1, 72 - 4)));
+  const targetIntervalMins = shortInterval + tDur * (longInterval - shortInterval);
+  const MAX_CONFIGURABLE_VIEWS_RUNS = 60; // configurable hard cap per Change B
+  const targetViewsRuns = Math.max(3, Math.min(MAX_CONFIGURABLE_VIEWS_RUNS, Math.floor(durationMinutes / targetIntervalMins)));
+  const viewsTotal = plannedTotals.views;
+  const maxPossibleViewsRuns = Math.floor(viewsTotal / services.views.minQuantity);
+  const viewsRunCount = Math.max(1, Math.min(maxPossibleViewsRuns, targetViewsRuns));
 
   const nominalRunCounts: Record<EngagementType, number> = {
-    views: Math.max(12, Math.round(presetScale * (40 + viewsRng() * 40))),
-    likes: Math.max(6, Math.round(presetScale * (15 + likesRng() * 15))),
-    saves: Math.max(3, Math.round(presetScale * (6 + savesRng() * 9))),
-    shares: Math.max(3, Math.round(presetScale * (6 + sharesRng() * 9))),
-    comments: Math.max(2, Math.round(presetScale * (5 + commentsRng() * 7))),
+    views: viewsRunCount,
+    likes: Math.max(4, Math.round((durationHours / 72) * (15 + likesRng() * 15))),
+    saves: Math.max(2, Math.round((durationHours / 72) * (6 + savesRng() * 9))),
+    shares: Math.max(2, Math.round((durationHours / 72) * (6 + sharesRng() * 9))),
+    comments: Math.max(2, Math.round((durationHours / 72) * (5 + commentsRng() * 7))),
   };
 
   const pausesCount = Math.floor(viewsRng() * 4); // 0-3 pauses
   const burstsCount = Math.floor(viewsRng() * 3); // 0-2 bursts
 
-  // 6. Calculate planned total quantities using floor so total <= ratio * views
-  const plannedTotals: Record<EngagementType, number> = {
-    views: baseViews,
-    likes: Math.floor(baseViews * sampledRatios.likes + 1e-9),
-    saves: Math.floor(baseViews * sampledRatios.saves + 1e-9),
-    shares: Math.floor(baseViews * sampledRatios.shares + 1e-9),
-    comments: Math.floor(baseViews * sampledRatios.comments + 1e-9),
-  };
-
-  // Provider Minimum Rule: Return clear validation error if total < provider service minimum
-  for (const t of enabledTypes) {
-    const srv = services[t];
-    if (plannedTotals[t] < srv.minQuantity) {
-      const typeLabel = t.charAt(0).toUpperCase() + t.slice(1);
-      throw new Error(
-        `Validation error: ${typeLabel} need at least ${srv.minQuantity.toLocaleString()} for this service. Increase views or turn ${typeLabel} off.`
-      );
-    }
-  }
-
-  // 7. Generate VIEWS Runs (Quantile inverse-transform + Peak-Hour Multipliers)
-  const viewsTotal = plannedTotals.views;
-  let viewsRunCount = nominalRunCounts.views;
-  if (viewsTotal / services.views.minQuantity < viewsRunCount) {
-    viewsRunCount = Math.max(1, Math.floor(viewsTotal / services.views.minQuantity));
-  }
-
-  // Inverse-transform sampling of quantile points
+  // 7. Generate VIEWS Runs (Quantile inverse-transform + Peak-Hour Multipliers + Jitter)
   const rawViewMinutes: number[] = [];
-  const firstViewMin = Math.round(2 + viewsRng() * 3);
+  const firstViewMin = Math.max(1, Math.round(1 + viewsRng() * 3));
   rawViewMinutes.push(firstViewMin);
 
   for (let i = 2; i <= viewsRunCount; i++) {
@@ -705,68 +1095,65 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
     const jitter = (viewsRng() - 0.5) * (0.4 / viewsRunCount);
     const clampedT = Math.max(0.005, Math.min(0.995, tBase + jitter));
     const targetMin = Math.round(clampedT * durationMinutes);
-    rawViewMinutes.push(Math.max(firstViewMin + 2, targetMin));
+    rawViewMinutes.push(Math.max(firstViewMin + 1, targetMin));
   }
   rawViewMinutes.sort((a, b) => a - b);
 
-  // Apply Pauses and Bursts
+  // Apply Pauses (0-3) and Bursts (0-2)
   for (let p = 0; p < pausesCount; p++) {
     const pauseIdx = Math.floor(viewsRng() * (rawViewMinutes.length - 2)) + 1;
-    const pauseMins = Math.round(15 + viewsRng() * 25);
+    const pauseMins = Math.round(10 + viewsRng() * 20);
     for (let j = pauseIdx; j < rawViewMinutes.length; j++) {
       rawViewMinutes[j] = Math.min(durationMinutes - 1, rawViewMinutes[j] + pauseMins);
     }
   }
   for (let b = 0; b < burstsCount; b++) {
-    const burstIdx = Math.floor(viewsRng() * (rawViewMinutes.length - 1));
-    rawViewMinutes[burstIdx + 1] = Math.max(rawViewMinutes[burstIdx] + 2, rawViewMinutes[burstIdx + 1] - 15);
+    if (rawViewMinutes.length > 2) {
+      const burstIdx = Math.floor(viewsRng() * (rawViewMinutes.length - 1));
+      rawViewMinutes[burstIdx + 1] = Math.max(rawViewMinutes[burstIdx] + 2, rawViewMinutes[burstIdx + 1] - 10);
+    }
   }
   rawViewMinutes.sort((a, b) => a - b);
 
-  // Compute Raw Batch Weights for Views with Log-Normal Skew & Peak-Hour Multipliers
-  const rawViewWeights: number[] = [];
-  for (let i = 0; i < rawViewMinutes.length; i++) {
-    const runDate = new Date(startTime.getTime() + rawViewMinutes[i] * 60000);
-    const peakMult = getPeakHourMultiplier(runDate, targetTz, peakHourEnabled, profile);
-    const skew = Math.exp((viewsRng() - 0.5) * 0.35);
-    rawViewWeights.push(skew * peakMult);
-  }
+  // Compute Peak-Hour Multipliers for envelope weighting
+  const envelopeWeights = rawViewMinutes.map((minute) => {
+    const runDate = new Date(startTime.getTime() + minute * 60000);
+    return getPeakHourMultiplier(runDate, targetTz, peakHourEnabled, profile);
+  });
 
-  const sumViewWeights = rawViewWeights.reduce((a, b) => a + b, 0);
-  const unroundedViewBatches = rawViewWeights.map((w) => (w / sumViewWeights) * viewsTotal);
-  let viewBatchQuantities = allocateIntegersLargestRemainder(unroundedViewBatches, viewsTotal);
+  // Generate Authentic Batch Sizes for Views per Change B
+  const viewsBatches = generateAuthenticBatches({
+    total: viewsTotal,
+    minQuantity: services.views.minQuantity,
+    maxQuantity: services.views.maxQuantity,
+    targetRuns: viewsRunCount,
+    rng: viewsRng,
+    envelopeWeights,
+  });
 
-  const initialViewBatches = rawViewMinutes.map((minute, idx) => ({
-    minute,
-    quantity: viewBatchQuantities[idx],
-  }));
-
-  // Enforce Provider Minimum Algorithm
-  const mergedViewsRuns = mergeSubMinimumRuns(
-    initialViewBatches,
-    services.views.minQuantity,
-    services.views.maxQuantity,
-    viewsTotal
-  );
-
-  // Build Final Views Planned Runs
+  // Build Final Views Planned Runs with Seconds-Precision Jitter
   let cumViews = 0;
-  const viewsPlannedRuns: PlannedRun[] = mergedViewsRuns.map((r, idx) => {
-    cumViews += r.quantity;
-    const runTime = new Date(startTime.getTime() + r.minute * 60000);
+  const viewsPlannedRuns: PlannedRun[] = viewsBatches.map((qty, idx) => {
+    cumViews += qty;
+    const minute = rawViewMinutes[idx] ?? Math.round((idx + 1) * (durationMinutes / viewsBatches.length));
+    const jitterSec = Math.round((viewsRng() - 0.5) * 50);
+    const runTime = new Date(startTime.getTime() + minute * 60000 + jitterSec * 1000);
     const isPeak = getPeakHourMultiplier(runTime, targetTz, true, profile) > 1.0;
+    const isNearMin = qty <= services.views.minQuantity * 1.08;
+
     return {
       engagementType: "views",
       runIndex: idx + 1,
       scheduledAt: runTime.toISOString(),
-      minutesFromStart: r.minute,
-      quantity: r.quantity,
+      minutesFromStart: minute,
+      quantity: qty,
       cumulativeQuantity: cumViews,
-      cost: Number(((r.quantity / 1000) * services.views.ratePer1000).toFixed(4)),
+      cost: Number(((qty / 1000) * services.views.ratePer1000).toFixed(4)),
       serviceId: services.views.id,
       providerId: services.views.providerId,
       providerServiceId: services.views.providerServiceId,
       isPeak,
+      isNearMinimum: isNearMin,
     };
   });
 
@@ -779,9 +1166,16 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
     return delivered;
   };
 
-  // 8. Generate Secondary Types & Enforce Hard Rule
+  // 8. Generate Lumpy Secondary Types & Enforce Independent Schedules (Change C)
   const typePlans: Record<EngagementType, TypeDeliveryPlan> = {} as any;
   const allRuns: PlannedRun[] = [...viewsPlannedRuns];
+  const providerMinNotes: Record<EngagementType, string | null> = {
+    views: null,
+    likes: null,
+    saves: null,
+    shares: null,
+    comments: null,
+  };
 
   typePlans.views = {
     engagementType: "views",
@@ -808,144 +1202,96 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
     const lagMinutes = sampledLagsMinutes[t];
     const targetRatio = sampledRatios[t];
 
-    let runCount = nominalRunCounts[t];
-    if (totalQty / s.minQuantity < runCount) {
-      runCount = Math.max(1, Math.floor(totalQty / s.minQuantity));
-    }
-
-    // Special Case: Comments with small batch sizes 1-3
-    if (t === "comments" && s.minQuantity <= 3) {
-      const commentBatchSizes: number[] = [];
-      let currentCommentSum = 0;
-      while (currentCommentSum < totalQty) {
-        const rem = totalQty - currentCommentSum;
-        if (rem <= 3) {
-          commentBatchSizes.push(rem);
-          currentCommentSum += rem;
-        } else {
-          const roll = typeRng();
-          const sz = roll < 0.45 ? 1 : roll < 0.80 ? 2 : 3;
-          commentBatchSizes.push(sz);
-          currentCommentSum += sz;
-        }
-      }
-
-      const commentMinutes: number[] = [];
-      const meanGap = Math.max(5, (durationMinutes - lagMinutes) / (commentBatchSizes.length + 1));
-      let curMin = lagMinutes;
-      for (let i = 0; i < commentBatchSizes.length; i++) {
-        const gap = Math.max(4, Math.round(-Math.log(Math.max(0.001, typeRng())) * meanGap * 0.85));
-        curMin = Math.min(durationMinutes - 2, curMin + gap);
-        commentMinutes.push(curMin);
-      }
-      commentMinutes.sort((a, b) => a - b);
-
-      // Build runs strictly enforcing the hard ratio rule
-      const commentRuns: PlannedRun[] = [];
-      let cumComments = 0;
-      for (let i = 0; i < commentBatchSizes.length; i++) {
-        let runMin = commentMinutes[i];
-        const qty = commentBatchSizes[i];
-
-        let viewsAtMin = getViewsDeliveredSoFar(runMin);
-        while (cumComments + qty > targetRatio * viewsAtMin + 1e-9 && runMin < durationMinutes) {
-          const nextView = viewsPlannedRuns.find((v) => v.minutesFromStart >= runMin);
-          if (nextView) {
-            runMin = Math.min(durationMinutes, nextView.minutesFromStart + 1);
-            viewsAtMin = getViewsDeliveredSoFar(runMin);
-          } else {
-            runMin = durationMinutes;
-            viewsAtMin = viewsTotal;
-            break;
-          }
-        }
-
-        cumComments += qty;
-        const runTime = new Date(startTime.getTime() + runMin * 60000);
-        const isPeak = getPeakHourMultiplier(runTime, targetTz, true, profile) > 1.0;
-        commentRuns.push({
-          engagementType: "comments",
-          runIndex: i + 1,
-          scheduledAt: runTime.toISOString(),
-          minutesFromStart: runMin,
-          quantity: qty,
-          cumulativeQuantity: cumComments,
-          cost: Number(((qty / 1000) * s.ratePer1000).toFixed(4)),
-          serviceId: s.id,
-          providerId: s.providerId,
-          providerServiceId: s.providerServiceId,
-          isPeak,
-        });
-      }
-
-      typePlans.comments = {
-        engagementType: "comments",
-        targetRatio,
-        totalQuantity: totalQty,
-        runsCount: commentRuns.length,
+    if (totalQty <= 0) {
+      typePlans[t] = {
+        engagementType: t,
+        targetRatio: 0,
+        totalQuantity: 0,
+        runsCount: 0,
         serviceName: s.name,
         minQuantity: s.minQuantity,
         maxQuantity: s.maxQuantity,
         ratePer1000: s.ratePer1000,
-        totalCost: Number(((totalQty / 1000) * s.ratePer1000).toFixed(4)),
+        totalCost: 0,
         startLagMinutes: lagMinutes,
-        runs: commentRuns,
+        autoDisabled: autoDisabledTypes[t] || false,
+        autoDisabledReason: autoDisableNotes[t] || null,
+        runs: [],
       };
-
-      allRuns.push(...commentRuns);
       continue;
     }
 
-    // Standard Secondary Types
-    const rawMinutes: number[] = [];
-    const availableMinutes = Math.max(60, durationMinutes - lagMinutes);
-    const delayFrac = typeConfigs[t]?.curveDelayFraction ?? (t === "likes" ? 0.08 : 0.12);
+    // Secondary interval: independent and sparser than views
+    const targetSecInterval = t === "likes" ? (6 + typeRng() * 8) : t === "saves" ? (15 + typeRng() * 15) : t === "shares" ? (20 + typeRng() * 20) : (25 + typeRng() * 30);
+    const availableMins = Math.max(30, durationMinutes - lagMinutes);
+    const isCommentsMicro = t === "comments" && s.minQuantity <= 3;
+    const targetRuns = isCommentsMicro
+      ? Math.max(1, Math.min(totalQty, Math.ceil(totalQty / 2)))
+      : Math.max(2, Math.floor(availableMins / targetSecInterval));
+    const maxPossibleRuns = Math.floor(totalQty / s.minQuantity);
+    const runCount = Math.max(1, Math.min(maxPossibleRuns, targetRuns));
 
-    for (let i = 1; i <= runCount; i++) {
-      const q = i / (runCount + 0.5);
-      const delayT = Math.max(0.005, Math.min(0.995, q * (1 - delayFrac) + delayFrac));
-      const jitter = (typeRng() - 0.5) * (0.4 / runCount);
-      const frac = Math.max(0.01, Math.min(0.99, delayT + jitter));
-      const minFromStart = Math.round(lagMinutes + frac * availableMinutes);
+    if (runCount <= 4 && totalQty < 4 * s.minQuantity) {
+      const typeLabel = t.charAt(0).toUpperCase() + t.slice(1);
+      providerMinNotes[t] = `${typeLabel}: ${runCount} delivery steps because the service minimum is ${s.minQuantity}`;
+    }
+
+    // Authentic batch distribution with maxSingleRunFrac 0.25 (no single run > 25% of total unless provider minimum forces it)
+    const secondaryBatches = generateAuthenticBatches({
+      total: totalQty,
+      minQuantity: s.minQuantity,
+      maxQuantity: s.maxQuantity,
+      targetRuns: runCount,
+      rng: typeRng,
+      maxSingleRunFrac: isCommentsMicro ? undefined : 0.25,
+      maxBatchCap: isCommentsMicro ? 3 : undefined,
+    });
+
+    const actualCount = secondaryBatches.length;
+    const rawMinutes: number[] = [];
+    const lastViewMin = viewsPlannedRuns[viewsPlannedRuns.length - 1]?.minutesFromStart ?? durationMinutes;
+
+    for (let i = 1; i <= actualCount; i++) {
+      const q = i / (actualCount + 0.5);
+      let tFrac: number;
+      if (t === "likes") {
+        tFrac = Math.pow(q, 0.82); // front-weighted early test audience
+      } else if (t === "saves" || t === "shares") {
+        tFrac = Math.max(0.05, q * 0.90 + 0.10);
+      } else {
+        tFrac = Math.max(0.12, q * 0.85 + 0.15);
+      }
+      const jitter = (typeRng() - 0.5) * (0.35 / actualCount);
+      const frac = Math.max(0.01, Math.min(0.99, tFrac + jitter));
+      const minFromStart = Math.round(lagMinutes + frac * (durationMinutes - lagMinutes));
       rawMinutes.push(Math.min(durationMinutes - 1, minFromStart));
     }
     rawMinutes.sort((a, b) => a - b);
 
-    const weights: number[] = [];
-    for (let i = 0; i < rawMinutes.length; i++) {
-      const runDate = new Date(startTime.getTime() + rawMinutes[i] * 60000);
-      const peakMult = getPeakHourMultiplier(runDate, targetTz, peakHourEnabled, profile);
-      const skew = Math.exp((typeRng() - 0.5) * 0.35);
-      weights.push(peakMult * skew);
+    // Fix screenshot bug: comments and shares must never reach 100% before views do!
+    if (rawMinutes.length > 0) {
+      rawMinutes[rawMinutes.length - 1] = Math.max(
+        lastViewMin - 1,
+        Math.min(durationMinutes - 1, rawMinutes[rawMinutes.length - 1])
+      );
+      rawMinutes.sort((a, b) => a - b);
     }
-    const sumW = weights.reduce((a, b) => a + b, 0);
-    const unroundedBatches = weights.map((w) => (w / sumW) * totalQty);
-    let batchQuantities = allocateIntegersLargestRemainder(unroundedBatches, totalQty);
 
-    const initialBatches = rawMinutes.map((minute, idx) => ({
-      minute,
-      quantity: batchQuantities[idx],
-    }));
-
-    // Provider Minimum Rule: Merge sub-min batches into nearest neighbor
-    const mergedBatches = mergeSubMinimumRuns(
-      initialBatches,
-      s.minQuantity,
-      s.maxQuantity,
-      totalQty
-    );
-
-    // Re-check Hard Rule after merging; push quantity later in time if a merge broke it
     let cumDelivered = 0;
     const finalRuns: PlannedRun[] = [];
 
-    for (let i = 0; i < mergedBatches.length; i++) {
-      let bMinute = mergedBatches[i].minute;
-      let bQty = mergedBatches[i].quantity;
+    for (let i = 0; i < secondaryBatches.length; i++) {
+      let bMinute = rawMinutes[i];
+      const bQty = secondaryBatches[i];
 
+      // Hard rule: delivered_so_far(type) <= ratio_cap * views_so_far
       let viewsAtTime = getViewsDeliveredSoFar(bMinute);
-      while (cumDelivered + bQty > targetRatio * viewsAtTime + 1e-9 && bMinute < durationMinutes) {
-        const nextViewRun = viewsPlannedRuns.find((v) => v.minutesFromStart >= bMinute);
+      const ratioCap = targetRatio;
+
+      while (cumDelivered + bQty > ratioCap * viewsAtTime + 1e-9 && bMinute < durationMinutes) {
+        const nextViewRun = viewsPlannedRuns.find(
+          (v) => v.minutesFromStart >= bMinute && v.cumulativeQuantity > viewsAtTime
+        );
         if (nextViewRun) {
           bMinute = Math.min(durationMinutes, nextViewRun.minutesFromStart + 1);
           viewsAtTime = getViewsDeliveredSoFar(bMinute);
@@ -957,8 +1303,26 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
       }
 
       cumDelivered += bQty;
-      const scheduledTime = new Date(startTime.getTime() + bMinute * 60000);
+      const jitterSec = Math.round((typeRng() - 0.5) * 50);
+      let scheduledMs = startTime.getTime() + bMinute * 60000 + jitterSec * 1000;
+
+      // Ensure secondary run is scheduled after the view run that delivers prerequisite views
+      let reqViewRun: PlannedRun | undefined;
+      for (let vIdx = viewsPlannedRuns.length - 1; vIdx >= 0; vIdx--) {
+        if (viewsPlannedRuns[vIdx].cumulativeQuantity >= viewsAtTime && viewsPlannedRuns[vIdx].minutesFromStart <= bMinute) {
+          reqViewRun = viewsPlannedRuns[vIdx];
+          break;
+        }
+      }
+      if (reqViewRun) {
+        const reqViewMs = new Date(reqViewRun.scheduledAt).getTime();
+        if (scheduledMs <= reqViewMs) {
+          scheduledMs = reqViewMs + 2000;
+        }
+      }
+      const scheduledTime = new Date(scheduledMs);
       const isPeak = getPeakHourMultiplier(scheduledTime, targetTz, true, profile) > 1.0;
+      const isNearMin = bQty <= s.minQuantity * 1.08;
 
       finalRuns.push({
         engagementType: t,
@@ -972,6 +1336,7 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
         providerId: s.providerId,
         providerServiceId: s.providerServiceId,
         isPeak,
+        isNearMinimum: isNearMin,
       });
     }
 
@@ -992,6 +1357,26 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
     allRuns.push(...finalRuns);
   }
 
+  // Ensure all engagement types exist in typePlans even if disabled or zero quantity
+  for (const t of (["likes", "saves", "shares", "comments"] as const)) {
+    if (!typePlans[t]) {
+      const s = services[t];
+      typePlans[t] = {
+        engagementType: t,
+        targetRatio: 0,
+        totalQuantity: 0,
+        runsCount: 0,
+        serviceName: s?.name || t,
+        minQuantity: s?.minQuantity || 0,
+        maxQuantity: s?.maxQuantity || 0,
+        ratePer1000: s?.ratePer1000 || 0,
+        totalCost: 0,
+        startLagMinutes: sampledLagsMinutes[t] || 0,
+        runs: [],
+      };
+    }
+  }
+
   // Sort all runs chronologically; when timestamps tie, views always execute before secondary types
   const typeOrder: Record<EngagementType, number> = {
     views: 0,
@@ -1007,10 +1392,10 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
     return typeOrder[a.engagementType] - typeOrder[b.engagementType];
   });
 
-  // 9. Generate Smooth Preview Series for UI Charts (30 sample points)
+  // 9. Generate High-Resolution 100-Interval Curve Points for Stored Plan & Orders Chart
   const curvePoints: CurvePoint[] = [];
   const ratioPoints: RatioPoint[] = [];
-  const SAMPLE_POINTS = 30;
+  const SAMPLE_POINTS = 100;
   const sampledBuckets: number[] = [];
 
   for (let s = 0; s <= SAMPLE_POINTS; s++) {
@@ -1041,7 +1426,7 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
     }
 
     curvePoints.push(pt);
-    if (s % 3 === 0) {
+    if (s % 10 === 0) {
       sampledBuckets.push(Math.round(pt.views));
     }
 
@@ -1092,7 +1477,21 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
     targetTz,
     profileId: profile.id,
     profileName: profile.name,
-    ratios: sampledRatios,
+    ratios: {
+      views: 1.0,
+      likes: sampledRatios.likes * 1.15,
+      saves: sampledRatios.saves * 1.15,
+      shares: sampledRatios.shares * 1.15,
+      comments: sampledRatios.comments * 1.15,
+    },
+    finalRatios: sampledRatios,
+    ratioCaps: {
+      views: 1.0,
+      likes: sampledRatios.likes * 1.15,
+      saves: sampledRatios.saves * 1.15,
+      shares: sampledRatios.shares * 1.15,
+      comments: sampledRatios.comments * 1.15,
+    },
     startLagsMinutes: sampledLagsMinutes,
     plannedRunCounts: nominalRunCounts,
     pausesCount,
@@ -1104,7 +1503,7 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
     totalViews: viewsTotal,
     totalRuns: allRuns.length,
     durationHours,
-    durationLabel: `${durationHours} Hours (${durationPreset})`,
+    durationLabel,
     archetype: archetype.charAt(0).toUpperCase() + archetype.slice(1),
     preset: durationPreset,
     totalCost: overallCost,
@@ -1117,8 +1516,12 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
     profileId: profile.id,
     profileName: profile.name,
     baseViews,
+    isAutoDuration,
+    autoDurationRange,
     durationPreset,
     durationHours,
+    durationLabel,
+    estimatedFinishTime: new Date(startTime.getTime() + durationMinutes * 60000).toISOString(),
     targetTz,
     totalCost: overallCost,
     params: planParams,
@@ -1128,6 +1531,20 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
     ratioPoints,
     batchTimeline,
     summaryChips,
+    realisticTotals: {
+      ...realisticModel,
+      plannedTotals,
+      autoDisabledTypes,
+      autoDisableNotes,
+      softHints,
+    },
+    suggestedRanges: realisticModel.suggestedRanges,
+    suggestedTotals: realisticModel.suggestedTotals,
+    sourceFlags: realisticModel.sourceFlags,
+    autoDisabledTypes,
+    autoDisableNotes,
+    softHints,
+    providerMinNotes,
   };
 }
 

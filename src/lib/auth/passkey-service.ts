@@ -118,12 +118,12 @@ export async function initDefaultAdminPasskey(): Promise<void> {
       });
     }
 
-    // Ensure default provider configuration exists for admin
-    const existingProvider = await prisma.userProviderConfig.findUnique({
+    // Ensure default provider connection exists for admin
+    const existingProvider = await prisma.userProviderConnection.findFirst({
       where: { userId: adminUser.id },
     });
     if (!existingProvider) {
-      await prisma.userProviderConfig.create({
+      await prisma.userProviderConnection.create({
         data: {
           userId: adminUser.id,
           name: "Standard SMM Provider",
@@ -351,7 +351,10 @@ export async function validateSession(token: string) {
     include: {
       user: {
         include: {
-          providerConfig: true,
+          providerConnections: {
+            where: { active: true },
+            take: 1,
+          },
         },
       },
       passkey: true,
@@ -403,6 +406,8 @@ export async function validateSession(token: string) {
     remainingHours = Math.floor(diffMs / (60 * 60 * 1000));
   }
 
+  const activeConn = session.user.providerConnections?.[0];
+
   return {
     valid: true,
     session: {
@@ -415,16 +420,16 @@ export async function validateSession(token: string) {
       username: session.user.username,
       role: session.user.role,
       status: session.user.status,
-      providerConfig: session.user.providerConfig
+      providerConfig: activeConn
         ? {
-            id: session.user.providerConfig.id,
-            name: session.user.providerConfig.name,
-            apiUrl: session.user.providerConfig.apiUrl,
-            hasApiKey: Boolean(session.user.providerConfig.apiKey),
-            isMock: session.user.providerConfig.isMock,
-            balance: session.user.providerConfig.balance,
-            currency: session.user.providerConfig.currency,
-            lastSyncAt: session.user.providerConfig.lastSyncAt,
+            id: activeConn.id,
+            name: activeConn.name,
+            apiUrl: activeConn.apiUrl,
+            hasApiKey: Boolean(activeConn.apiKeyEncrypted),
+            isMock: activeConn.isMock,
+            balance: activeConn.balance,
+            currency: activeConn.currency,
+            lastSyncAt: activeConn.lastSyncAt,
           }
         : null,
     },
@@ -492,8 +497,8 @@ export async function createPasskey(params: CreatePasskeyParams): Promise<{
       },
     });
 
-    // Create default provider configuration for new user
-    await prisma.userProviderConfig.create({
+    // Create default provider connection for new user
+    await prisma.userProviderConnection.create({
       data: {
         userId: user.id,
         name: "My SMM Provider",

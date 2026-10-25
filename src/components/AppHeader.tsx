@@ -15,6 +15,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { formatProviderBalance } from "@/lib/currency";
+import { ProviderBalanceSwitcher } from "@/components/ProviderBalanceSwitcher";
 
 export function AppHeader() {
   const router = useRouter();
@@ -132,33 +133,8 @@ export function AppHeader() {
 
       {/* Right Persistent Account Area: Balance, Settings, Logout */}
       <div className="flex items-center gap-2 sm:gap-3">
-        {/* Provider Balance Pill */}
-        {hasApiKey && balance !== null ? (
-          <button
-            type="button"
-            onClick={() => loadSessionAndBalance(true)}
-            disabled={refreshing}
-            title="Refresh Provider Balance"
-            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#F8F9FD] hover:bg-white border border-[#DEE0ED] hover:border-[#3A4EFB] text-xs font-bold text-[#252943] shadow-subtle transition-all press-scale"
-          >
-            <Wallet className="w-3.5 h-3.5 text-[#3A4EFB]" />
-            <span>{formatProviderBalance(balance, currency)}</span>
-            <RefreshCw
-              className={`w-3 h-3 text-[#252943]/40 ${
-                refreshing ? "animate-spin text-[#3A4EFB]" : ""
-              }`}
-            />
-          </button>
-        ) : (
-          <Link
-            href="/settings"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-xs font-bold transition-all shadow-subtle press-scale"
-          >
-            <Server className="w-3.5 h-3.5 text-amber-600" />
-            <span className="hidden xs:inline">Connect your provider API</span>
-            <span className="xs:hidden">Connect API</span>
-          </Link>
-        )}
+        {/* Provider Balance Pill / Switcher */}
+        <ProviderBalanceSwitcher variant="header" />
 
         {/* Settings Action */}
         <Link

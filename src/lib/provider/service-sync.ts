@@ -8,50 +8,67 @@ export interface SyncCatalogResult {
   updatedCount: number;
   catalogSyncedAt: string;
   providerEndpoint?: string;
+  providerId?: string;
 }
 
 /**
  * Fast bulk synchronization of services from any SMM provider adapter.
- * Associates services with the provider's endpoint to support dynamic switching
- * between providers and multi-user provider isolation.
+ * Upserts into catalog keyed by (provider_id, provider_service_id).
  */
 export async function syncProviderServices(
   adapter: SMMProviderAdapter,
   actor: string = "System",
   options: {
+    providerId?: string;
+    userProviderId?: string;
     providerEndpoint?: string;
     providerName?: string;
     userId?: string;
   } = {}
 ): Promise<SyncCatalogResult> {
   const endpoint = (options.providerEndpoint || adapter.apiUrl || "mock").trim();
+  const effectiveProviderId = options.userProviderId || options.providerId;
+
   const services = await adapter.getServices();
   if (!Array.isArray(services)) {
     throw new Error("Provider did not return a valid list of services");
   }
 
-  // Load existing external IDs for THIS specific provider endpoint
+  // Load existing external IDs for THIS specific provider ID / endpoint
   const existing = await prisma.service.findMany({
-    where: {
-      OR: [
-        { providerEndpoint: endpoint },
-        ...(endpoint === "mock" ? [{ isMock: true }] : []),
-      ],
-    },
-    select: { id: true, externalId: true, restrictions: true },
+    where: effectiveProviderId
+      ? {
+          OR: [
+            { userProviderId: effectiveProviderId },
+            { providerId: effectiveProviderId },
+          ],
+        }
+      : {
+          OR: [
+            { providerEndpoint: endpoint },
+            ...(endpoint === "mock" ? [{ isMock: true }] : []),
+          ],
+        },
+    select: { id: true, externalId: true, providerServiceId: true, restrictions: true },
   });
-  const existingMap = new Map(existing.map((s) => [s.externalId, s]));
+
+  const existingMap = new Map(
+    existing.map((s) => [s.providerServiceId || s.externalId, s])
+  );
 
   const toCreate: any[] = [];
   const toUpdate: any[] = [];
-  const incomingExternalIds = new Set<string>();
+  const incomingServiceIds = new Set<string>();
 
   for (const s of services) {
-    const extId = String(s.id);
-    incomingExternalIds.add(extId);
-    const existingService = existingMap.get(extId);
+    const sId = String(s.id);
+    incomingServiceIds.add(sId);
+    const existingService = existingMap.get(sId);
     const serviceData = {
-      externalId: extId,
+      externalId: sId,
+      providerServiceId: sId,
+      userProviderId: effectiveProviderId || null,
+      providerId: effectiveProviderId || null,
       name: s.name,
       type: s.type || "Default",
       platform: s.platform,
@@ -98,8 +115,9 @@ export async function syncProviderServices(
   }
 
   // Deactivate services no longer present in provider's live catalog
-  // (Preserves historical foreign keys for existing orders while removing from catalog)
-  const staleServices = existing.filter((s) => !incomingExternalIds.has(s.externalId));
+  const staleServices = existing.filter(
+    (s) => !incomingServiceIds.has(s.providerServiceId || s.externalId)
+  );
   if (staleServices.length > 0) {
     await prisma.service.updateMany({
       where: {
@@ -111,18 +129,24 @@ export async function syncProviderServices(
 
   const catalogSyncedAt = new Date();
 
-  // Update lastSyncAt on the corresponding ProviderConfig / UserProviderConfig
-  if (options.userId) {
-    await prisma.userProviderConfig.updateMany({
-      where: { userId: options.userId },
-      data: { lastSyncAt: catalogSyncedAt, lastError: null },
+  // Update servicesCount & lastSyncAt on user_providers
+  if (effectiveProviderId) {
+    await prisma.userProviderConnection.update({
+      where: { id: effectiveProviderId },
+      data: {
+        servicesCount: services.length,
+        lastSyncAt: catalogSyncedAt,
+        lastError: null,
+      },
     }).catch(() => {});
-  }
-
-  if (endpoint !== "mock") {
-    await prisma.providerConfig.updateMany({
-      where: { apiUrl: endpoint },
-      data: { lastSyncAt: catalogSyncedAt },
+  } else if (options.userId) {
+    await prisma.userProviderConnection.updateMany({
+      where: { userId: options.userId },
+      data: {
+        servicesCount: services.length,
+        lastSyncAt: catalogSyncedAt,
+        lastError: null,
+      },
     }).catch(() => {});
   }
 
@@ -142,5 +166,6 @@ export async function syncProviderServices(
     updatedCount: toUpdate.length,
     catalogSyncedAt: catalogSyncedAt.toISOString(),
     providerEndpoint: endpoint,
+    providerId: effectiveProviderId,
   };
 }
