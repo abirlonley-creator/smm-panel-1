@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import { EngagementType } from "@/lib/engagement/planner";
+import { createMonotoneCubicSpline, SplinePoint } from "@/lib/engagement/monotone-cubic";
 
 export interface ChartCurvePoint {
   minutes: number;
@@ -49,6 +50,8 @@ export interface EngagementDetailChartProps {
   height?: number;
 }
 
+const ALL_ENGAGEMENT_TYPES: EngagementType[] = ["views", "likes", "saves", "shares", "comments"];
+
 const TYPE_COLORS: Record<EngagementType, { stroke: string; lightBg: string; text: string }> = {
   views: { stroke: "#3A4EFB", lightBg: "#EFF2FE", text: "text-[#3A4EFB]" },
   likes: { stroke: "#E11D48", lightBg: "#FFE4E6", text: "text-[#E11D48]" },
@@ -58,14 +61,18 @@ const TYPE_COLORS: Record<EngagementType, { stroke: string; lightBg: string; tex
 };
 
 /**
- * Generates clean, readable time ticks for real-time x-axis spanning from 0 to total duration.
+ * Generates clean, readable time ticks for real duration x-axis.
+ * - Under 2 hours: minutes (0, 15m, 30m, 45m, 1h, 1h 15m, 1h 30m, ...)
+ * - Under 2 days (48h): hours (0, 3h, 6h, 12h, 24h, 36h, 48h)
+ * - 2 days and up: days (0, 1d, 2d, 3d, ...)
+ * Never shows "3d" for an order under an hour.
  */
 export function generateTimeTicks(durationHours: number): Array<{ minutes: number; label: string }> {
   const totalMinutes = Math.max(15, Math.round(durationHours * 60));
   const ticks: Array<{ minutes: number; label: string }> = [];
 
-  if (durationHours <= 1.5) {
-    // Short orders: every 15 minutes (0, 15m, 30m, 45m, 1h...)
+  if (durationHours < 2) {
+    // Under 2 hours: every 15 minutes (0, 15m, 30m, 45m, 1h, 1h 15m, ...)
     for (let m = 0; m <= totalMinutes; m += 15) {
       const h = Math.floor(m / 60);
       const min = m % 60;
@@ -77,41 +84,35 @@ export function generateTimeTicks(durationHours: number): Array<{ minutes: numbe
       }
       ticks.push({ minutes: m, label });
     }
-  } else if (durationHours <= 6) {
-    // 2-6 hour orders: every 1 hour
-    for (let h = 0; h <= Math.ceil(durationHours); h += 1) {
+  } else if (durationHours < 48) {
+    // Under 2 days: hours format
+    const stepHours = durationHours <= 6 ? 1 : durationHours <= 18 ? 3 : 6;
+    for (let h = 0; h * 60 <= totalMinutes; h += stepHours) {
       ticks.push({ minutes: h * 60, label: `${h}h` });
-    }
-  } else if (durationHours <= 18) {
-    // 7-18 hour orders: every 2 or 3 hours
-    const step = durationHours <= 12 ? 2 : 3;
-    for (let h = 0; h <= Math.ceil(durationHours); h += step) {
-      ticks.push({ minutes: h * 60, label: `${h}h` });
-    }
-  } else if (durationHours <= 48) {
-    // 1-2 day orders: every 6 hours
-    for (let h = 0; h <= Math.ceil(durationHours); h += 6) {
-      ticks.push({ minutes: h * 60, label: `${h}h` });
-    }
-  } else if (durationHours <= 96) {
-    // 3-4 day orders: every 12 hours or 1 day
-    for (let h = 0; h <= Math.ceil(durationHours); h += 12) {
-      const d = h / 24;
-      const label = Number.isInteger(d) ? `${d}d` : `${h}h`;
-      ticks.push({ minutes: h * 60, label });
     }
   } else {
-    // Multi-day orders (5-7+ days): every 24 hours / 1 day
-    for (let d = 0; d * 24 <= Math.ceil(durationHours); d += 1) {
+    // 2 days and up: days format
+    const stepDays = durationHours <= 120 ? 1 : 2;
+    for (let d = 0; d * 24 * 60 <= totalMinutes; d += stepDays) {
       ticks.push({ minutes: d * 24 * 60, label: `${d}d` });
     }
   }
 
-  // Ensure last tick captures end if not within 5%
+  // Ensure last tick captures end if not close to previous tick
   const last = ticks[ticks.length - 1];
-  if (last && totalMinutes - last.minutes > totalMinutes * 0.15) {
-    const h = Math.round(durationHours * 10) / 10;
-    ticks.push({ minutes: totalMinutes, label: `${h}h` });
+  if (last && totalMinutes - last.minutes > totalMinutes * 0.12) {
+    if (durationHours < 2) {
+      const h = Math.floor(totalMinutes / 60);
+      const m = totalMinutes % 60;
+      const label = h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
+      ticks.push({ minutes: totalMinutes, label });
+    } else if (durationHours < 48) {
+      const h = Math.round(durationHours * 10) / 10;
+      ticks.push({ minutes: totalMinutes, label: `${h % 1 === 0 ? h : h.toFixed(1)}h` });
+    } else {
+      const d = Math.round((durationHours / 24) * 10) / 10;
+      ticks.push({ minutes: totalMinutes, label: `${d % 1 === 0 ? d : d.toFixed(1)}d` });
+    }
   }
 
   return ticks;
@@ -130,11 +131,12 @@ export function EngagementDetailChart({
   height = 260,
 }: EngagementDetailChartProps) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const [scalePerType, setScalePerType] = useState<boolean>(false);
 
   const totalMinutes = Math.max(15, Math.round(durationHours * 60));
   const timeTicks = useMemo(() => generateTimeTicks(durationHours), [durationHours]);
 
-  // SVG Coordinate Geometry
+  // SVG Geometry
   const width = 760;
   const paddingLeft = 46;
   const paddingRight = 24;
@@ -144,25 +146,54 @@ export function EngagementDetailChart({
   const chartWidth = width - paddingLeft - paddingRight;
   const chartHeight = height - paddingTop - paddingBottom;
 
-  // Maximum value for y-axis normalization
-  const maxY = useMemo(() => {
-    let max = 0;
+  // Compute maximums per type and overall
+  const { maxYPerType, overallMaxY, typesInPlan } = useMemo(() => {
+    const maxByType: Record<EngagementType, number> = {
+      views: 0,
+      likes: 0,
+      saves: 0,
+      shares: 0,
+      comments: 0,
+    };
+
+    // From expectedCurve
     for (const pt of expectedCurve) {
-      if (visibleTypes.views && pt.views > max) max = pt.views;
-      if (visibleTypes.likes && pt.likes > max) max = pt.likes;
-      if (visibleTypes.saves && pt.saves > max) max = pt.saves;
-      if (visibleTypes.shares && pt.shares > max) max = pt.shares;
-      if (visibleTypes.comments && pt.comments > max) max = pt.comments;
+      for (const t of ALL_ENGAGEMENT_TYPES) {
+        if (pt[t] && pt[t] > maxByType[t]) maxByType[t] = pt[t];
+      }
     }
+
+    // From planned runs
+    for (const r of runs) {
+      const t = r.engagementType as EngagementType;
+      const cum = r.plannedCumulative || r.cumulativeQuantity || 0;
+      if (t && ALL_ENGAGEMENT_TYPES.includes(t) && cum > maxByType[t]) {
+        maxByType[t] = cum;
+      }
+    }
+
+    // From status samples
     for (const s of statusSamples) {
-      if (visibleTypes.views && s.views > max) max = s.views;
-      if (visibleTypes.likes && s.likes > max) max = s.likes;
-      if (visibleTypes.saves && s.saves > max) max = s.saves;
-      if (visibleTypes.shares && s.shares > max) max = s.shares;
-      if (visibleTypes.comments && s.comments > max) max = s.comments;
+      for (const t of ALL_ENGAGEMENT_TYPES) {
+        if (s[t] && s[t] > maxByType[t]) maxByType[t] = s[t];
+      }
     }
-    return max > 0 ? max : 100;
-  }, [expectedCurve, statusSamples, visibleTypes]);
+
+    // Identify types that actually exist in the plan with quantity > 0
+    // Requirement 4: Disabled types must be removed from chart, legend, and counts
+    const inPlan = ALL_ENGAGEMENT_TYPES.filter((t) => maxByType[t] > 0);
+
+    let overall = 0;
+    for (const t of inPlan) {
+      if (visibleTypes[t] && maxByType[t] > overall) overall = maxByType[t];
+    }
+
+    return {
+      maxYPerType: maxByType,
+      overallMaxY: overall > 0 ? overall : 100,
+      typesInPlan: inPlan,
+    };
+  }, [expectedCurve, runs, statusSamples, visibleTypes]);
 
   // Coordinate transforms
   const getX = (minutes: number) => {
@@ -170,56 +201,93 @@ export function EngagementDetailChart({
     return paddingLeft + (clamped / totalMinutes) * chartWidth;
   };
 
-  const getY = (val: number) => {
-    const clamped = Math.max(0, Math.min(maxY, val));
-    return paddingTop + chartHeight - (clamped / maxY) * chartHeight;
+  const getY = (val: number, type?: EngagementType) => {
+    const targetMax = scalePerType && type && maxYPerType[type] > 0
+      ? maxYPerType[type]
+      : overallMaxY;
+    const clamped = Math.max(0, Math.min(targetMax, val));
+    return paddingTop + chartHeight - (clamped / targetMax) * chartHeight;
   };
 
-  // Build Expected Curve SVG paths (thin dashed line)
+  // Build Monotone Cubic Hermite Splines for smooth expected curves
+  // Requirement 5: Smooth monotone interpolation through stored plan points, NOT step shape
+  const expectedSplines = useMemo(() => {
+    const splines: Partial<Record<EngagementType, ReturnType<typeof createMonotoneCubicSpline>>> = {};
+
+    for (const t of typesInPlan) {
+      if (!visibleTypes[t]) continue;
+
+      // Filter planned runs for this type to form spline knots
+      const typeRuns = runs
+        .filter((r) => r.engagementType === t)
+        .sort((a, b) => (a.minutesFromStart ?? 0) - (b.minutesFromStart ?? 0));
+
+      const knots: SplinePoint[] = [{ x: 0, y: 0 }];
+
+      if (typeRuns.length > 0) {
+        for (const r of typeRuns) {
+          const m = r.minutesFromStart ?? 0;
+          const cum = r.plannedCumulative || r.cumulativeQuantity || 0;
+          knots.push({ x: m, y: cum });
+        }
+        const lastRunMin = typeRuns[typeRuns.length - 1].minutesFromStart ?? 0;
+        if (lastRunMin < totalMinutes) {
+          knots.push({ x: totalMinutes, y: maxYPerType[t] });
+        }
+      } else if (expectedCurve.length > 0) {
+        // Fallback to expectedCurve if runs are not populated
+        for (const pt of expectedCurve) {
+          knots.push({ x: pt.minutes, y: pt[t] || 0 });
+        }
+      }
+
+      splines[t] = createMonotoneCubicSpline(knots);
+    }
+
+    return splines;
+  }, [typesInPlan, visibleTypes, runs, expectedCurve, totalMinutes, maxYPerType]);
+
+  // Convert splines to SVG path strings
   const expectedPaths = useMemo(() => {
     const paths: Partial<Record<EngagementType, string>> = {};
-    const types: EngagementType[] = ["views", "likes", "saves", "shares", "comments"];
 
-    for (const t of types) {
-      if (!visibleTypes[t] || expectedCurve.length === 0) continue;
-      let d = "";
-      for (let i = 0; i < expectedCurve.length; i++) {
-        const pt = expectedCurve[i];
-        const x = getX(pt.minutes);
-        const y = getY(pt[t] || 0);
-        d += i === 0 ? `M ${x.toFixed(1)} ${y.toFixed(1)}` : ` L ${x.toFixed(1)} ${y.toFixed(1)}`;
-      }
-      paths[t] = d;
+    for (const t of typesInPlan) {
+      if (!visibleTypes[t]) continue;
+      const spline = expectedSplines[t];
+      if (!spline || spline.points.length === 0) continue;
+
+      paths[t] = spline.toSvgPath(getX, (yVal) => getY(yVal, t));
     }
+
     return paths;
-  }, [expectedCurve, visibleTypes, maxY, totalMinutes]);
+  }, [typesInPlan, visibleTypes, expectedSplines, scalePerType, maxYPerType, overallMaxY, totalMinutes]);
 
   // Build Confirmed Delivered Curve SVG paths (truthful step-accurate solid line)
+  // Requirement 5: Step-accurate, only moves when delivery is confirmed
   const deliveredPaths = useMemo(() => {
     if (!showDelivered || statusSamples.length === 0 || !createdAt) return {};
     const paths: Partial<Record<EngagementType, string>> = {};
-    const types: EngagementType[] = ["views", "likes", "saves", "shares", "comments"];
     const startMs = new Date(createdAt).getTime();
 
-    for (const t of types) {
+    for (const t of typesInPlan) {
       if (!visibleTypes[t]) continue;
       let d = "";
       // Start at t=0, qty=0
-      d += `M ${paddingLeft.toFixed(1)} ${(paddingTop + chartHeight).toFixed(1)}`;
+      d += `M ${paddingLeft.toFixed(1)} ${getY(0, t).toFixed(1)}`;
 
       for (let i = 0; i < statusSamples.length; i++) {
         const sample = statusSamples[i];
         const sampleMs = new Date(sample.timestamp).getTime();
         const mins = Math.max(0, (sampleMs - startMs) / 60000);
         const x = getX(mins);
-        const y = getY(sample[t] || 0);
-        // Truthful step: horizontal to x, then vertical to y
+        const y = getY(sample[t] || 0, t);
+        // Step accurate: horizontal line to x, then vertical jump to new quantity
         d += ` L ${x.toFixed(1)} ${y.toFixed(1)}`;
       }
       paths[t] = d;
     }
     return paths;
-  }, [statusSamples, showDelivered, createdAt, visibleTypes, maxY, totalMinutes]);
+  }, [statusSamples, showDelivered, createdAt, typesInPlan, visibleTypes, scalePerType, maxYPerType, overallMaxY, totalMinutes]);
 
   // Calculate "Now" position
   const nowMarker = useMemo(() => {
@@ -253,10 +321,10 @@ export function EngagementDetailChart({
 
   return (
     <div className="w-full space-y-3">
-      {/* Type Toggles Bar */}
+      {/* Controls Bar: Type Toggles, Scale Per Type Toggle, and Legend */}
       <div className="flex items-center justify-between flex-wrap gap-2 text-xs">
         <div className="flex items-center gap-1.5 flex-wrap">
-          {(["views", "likes", "saves", "shares", "comments"] as EngagementType[]).map((t) => {
+          {typesInPlan.map((t) => {
             const isVis = visibleTypes[t];
             const cfg = TYPE_COLORS[t];
             return (
@@ -277,7 +345,21 @@ export function EngagementDetailChart({
           })}
         </div>
 
-        <div className="flex items-center gap-3 text-[11px] font-semibold text-[#252943]/60">
+        <div className="flex items-center gap-3 text-[11px] font-semibold text-[#252943]/70">
+          {/* Scale Per Type Toggle */}
+          <button
+            type="button"
+            onClick={() => setScalePerType(!scalePerType)}
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${
+              scalePerType
+                ? "bg-[#3A4EFB] text-white border-[#3A4EFB] shadow-xs"
+                : "bg-white text-[#252943]/70 border-[#DEE0ED] hover:text-[#252943]"
+            }`}
+            title="Scale each engagement type to its own maximum for clear viewing"
+          >
+            Scale per type
+          </button>
+
           <span className="flex items-center gap-1">
             <span className="w-4 h-0 border-t-2 border-dashed border-[#252943]/60" />
             <span>Expected</span>
@@ -316,10 +398,10 @@ export function EngagementDetailChart({
             }
           }}
         >
-          {/* Subtle Horizontal Grid Lines & Y-axis labels */}
+          {/* Horizontal Grid Lines & Y-axis labels */}
           {[0, 0.25, 0.5, 0.75, 1.0].map((frac, i) => {
             const y = paddingTop + chartHeight * (1 - frac);
-            const val = Math.round(maxY * frac);
+            const val = Math.round(overallMaxY * frac);
             return (
               <g key={i}>
                 <line
@@ -336,7 +418,11 @@ export function EngagementDetailChart({
                   textAnchor="end"
                   className="text-[9px] fill-[#252943]/50 font-mono font-semibold"
                 >
-                  {val >= 1000 ? `${(val / 1000).toFixed(val % 1000 === 0 ? 0 : 1)}k` : val}
+                  {scalePerType
+                    ? `${Math.round(frac * 100)}%`
+                    : val >= 1000
+                    ? `${(val / 1000).toFixed(val % 1000 === 0 ? 0 : 1)}k`
+                    : val}
                 </text>
               </g>
             );
@@ -367,8 +453,8 @@ export function EngagementDetailChart({
             );
           })}
 
-          {/* Expected Curves (thin dashed lines) */}
-          {(["views", "likes", "saves", "shares", "comments"] as EngagementType[]).map((t) => {
+          {/* Expected Curves: Smooth Monotone Cubic Bézier Lines */}
+          {typesInPlan.map((t) => {
             const pathD = expectedPaths[t];
             if (!pathD) return null;
             return (
@@ -377,16 +463,16 @@ export function EngagementDetailChart({
                 d={pathD}
                 fill="none"
                 stroke={TYPE_COLORS[t].stroke}
-                strokeWidth="1.8"
+                strokeWidth="2"
                 strokeDasharray="4 3"
-                opacity={0.85}
+                opacity={0.9}
               />
             );
           })}
 
-          {/* Confirmed Delivered Curves (truthful solid step-line) */}
+          {/* Confirmed Delivered Curves: Truthful Step-Accurate Solid Line */}
           {showDelivered &&
-            (["views", "likes", "saves", "shares", "comments"] as EngagementType[]).map((t) => {
+            typesInPlan.map((t) => {
               const pathD = deliveredPaths[t];
               if (!pathD) return null;
               return (
@@ -402,32 +488,33 @@ export function EngagementDetailChart({
               );
             })}
 
-          {/* Scheduled Run Dots */}
+          {/* Scheduled Run Dots: Exactly One Dot Per Planned Run on that Curve */}
           {runs.map((r, i) => {
             const t = r.engagementType as EngagementType;
-            if (!visibleTypes[t]) return null;
+            if (!typesInPlan.includes(t) || !visibleTypes[t]) return null;
+
             const scheduledMs = new Date(r.scheduledAt).getTime();
             const startMs = createdAt ? new Date(createdAt).getTime() : scheduledMs - (r.minutesFromStart || 0) * 60000;
             const mins = r.minutesFromStart ?? Math.max(0, (scheduledMs - startMs) / 60000);
             const x = getX(mins);
             const cum = r.plannedCumulative || r.cumulativeQuantity || 0;
-            const y = getY(cum);
+            const y = getY(cum, t);
 
             const isDone = r.status === "completed";
             const isSent = r.status === "sent" || r.status === "sending";
             const dotFill = isDone ? "#059669" : isSent ? "#D97706" : "#FFFFFF";
-            const dotStroke = isDone ? "#059669" : isSent ? "#D97706" : "#94A3B8";
+            const dotStroke = isDone ? "#059669" : isSent ? "#D97706" : TYPE_COLORS[t].stroke;
 
             return (
               <circle
                 key={`dot-${i}`}
                 cx={x}
                 cy={y}
-                r={2.8}
+                r={3}
                 fill={dotFill}
                 stroke={dotStroke}
-                strokeWidth="1.5"
-                className="transition-all"
+                strokeWidth="1.6"
+                className="transition-all hover:scale-125"
               />
             );
           })}
@@ -463,7 +550,7 @@ export function EngagementDetailChart({
             </g>
           )}
 
-          {/* Hover Crosshair & Indicator */}
+          {/* Hover Crosshair */}
           {hoverData && (
             <g>
               <line
@@ -494,7 +581,7 @@ export function EngagementDetailChart({
               <span>Timeline Slice</span>
             </div>
             <div className="space-y-1 text-[11px] font-medium">
-              {(["views", "likes", "saves", "shares", "comments"] as EngagementType[]).map((t) => {
+              {typesInPlan.map((t) => {
                 if (!visibleTypes[t]) return null;
                 const expVal = hoverData.pt[t] || 0;
                 const delVal = hoverData.nearestSample ? hoverData.nearestSample[t] : null;

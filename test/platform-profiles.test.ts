@@ -142,7 +142,7 @@ describe("Platform Profiles & Provider Minimum Rules Verification", () => {
       assert.ok(r.quantity >= 50, `Likes batch must be >= 50, got ${r.quantity}`);
     }
 
-    // 2. Total is strictly below min 50: throws clear validation error
+    // 2. Total is strictly below min 50: throws clear validation error when autoDisableBelowMin is false
     assert.throws(
       () => {
         generateOrganicPlan({
@@ -150,6 +150,7 @@ describe("Platform Profiles & Provider Minimum Rules Verification", () => {
           baseViews: 100, // 100 * 0.045 = 4 likes < 50
           seed: 888,
           enabledTypes: ["views", "likes"],
+          autoDisableBelowMin: false,
           services: {
             likes: { ...prof.serviceMappings.likes, minQuantity: 50 },
           },
@@ -157,6 +158,19 @@ describe("Platform Profiles & Provider Minimum Rules Verification", () => {
       },
       /Validation error: Likes need at least 50 for this service\. Increase views or turn Likes off\./
     );
+
+    // 3. Default behavior per Requirement 4: automatically marks disabled with fix action
+    const planAutoOff = generateOrganicPlan({
+      profileId: "instagram_reel",
+      baseViews: 100,
+      seed: 888,
+      enabledTypes: ["views", "likes"],
+      services: {
+        likes: { ...prof.serviceMappings.likes, minQuantity: 50 },
+      },
+    });
+    assert.equal(planAutoOff.plans.likes.disabled, true);
+    assert.equal(planAutoOff.plans.likes.runsCount, 0);
   });
 
   // --------------------------------------------------------------------------
@@ -164,20 +178,20 @@ describe("Platform Profiles & Provider Minimum Rules Verification", () => {
   // --------------------------------------------------------------------------
   it("Instagram preset durations scale all times correctly and peak-hour weighting works with target_tz", () => {
     // Instagram Reel: fast 24h, normal 72h, slow 168h
-    const reelNormal = generateOrganicPlan({ profileId: "instagram_reel", baseViews: 10000, presetKey: "normal", seed: 42 });
+    const reelNormal = generateOrganicPlan({ profileId: "instagram_reel", baseViews: 10000, pacingMode: "custom", presetKey: "normal", seed: 42 });
     assert.equal(reelNormal.durationHours, 72);
     assert.equal(reelNormal.durationPreset, "72h");
 
-    const reelSlow = generateOrganicPlan({ profileId: "instagram_reel", baseViews: 10000, presetKey: "slow", seed: 42 });
+    const reelSlow = generateOrganicPlan({ profileId: "instagram_reel", baseViews: 10000, pacingMode: "custom", presetKey: "slow", seed: 42 });
     assert.equal(reelSlow.durationHours, 168);
     assert.equal(reelSlow.durationPreset, "168h");
 
     // Instagram Post: fast 24h, normal 48h, slow 96h
-    const postNormal = generateOrganicPlan({ profileId: "instagram_post", baseViews: 10000, presetKey: "normal", seed: 42 });
+    const postNormal = generateOrganicPlan({ profileId: "instagram_post", baseViews: 10000, pacingMode: "custom", presetKey: "normal", seed: 42 });
     assert.equal(postNormal.durationHours, 48);
     assert.equal(postNormal.durationPreset, "48h");
 
-    const postSlow = generateOrganicPlan({ profileId: "instagram_post", baseViews: 10000, presetKey: "slow", seed: 42 });
+    const postSlow = generateOrganicPlan({ profileId: "instagram_post", baseViews: 10000, pacingMode: "custom", presetKey: "slow", seed: 42 });
     assert.equal(postSlow.durationHours, 96);
     assert.equal(postSlow.durationPreset, "96h");
 
@@ -191,6 +205,7 @@ describe("Platform Profiles & Provider Minimum Rules Verification", () => {
       const p = generateOrganicPlan({
         profileId: "instagram_reel",
         baseViews: 15000,
+        pacingMode: "custom",
         presetKey: "normal",
         seed: s * 101,
         targetTz: "America/New_York",

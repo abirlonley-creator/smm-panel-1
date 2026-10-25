@@ -225,14 +225,14 @@ export const TIKTOK_AUTO_DURATION_TABLE: AutoDurationRow[] = [
 ];
 
 export const INSTAGRAM_REEL_AUTO_DURATION_TABLE: AutoDurationRow[] = [
-  { views: 1000, minHours: 0.75, maxHours: 2.0 },
-  { views: 2500, minHours: 2.0, maxHours: 5.0 },
-  { views: 5000, minHours: 4.0, maxHours: 12.0 },
-  { views: 10000, minHours: 10.0, maxHours: 28.0 },
-  { views: 50000, minHours: 28.0, maxHours: 72.0 },
-  { views: 100000, minHours: 50.0, maxHours: 110.0 },
-  { views: 500000, minHours: 100.0, maxHours: 240.0 },
-  { views: 1000000, minHours: 160.0, maxHours: 450.0 },
+  { views: 1000, minHours: 0.5, maxHours: 1.5 },
+  { views: 2500, minHours: 1.5, maxHours: 4.0 },
+  { views: 5000, minHours: 3.0, maxHours: 10.0 },
+  { views: 10000, minHours: 8.0, maxHours: 24.0 },
+  { views: 50000, minHours: 24.0, maxHours: 60.0 },
+  { views: 100000, minHours: 48.0, maxHours: 96.0 },
+  { views: 500000, minHours: 96.0, maxHours: 200.0 },
+  { views: 1000000, minHours: 150.0, maxHours: 400.0 },
 ];
 
 export const INSTAGRAM_POST_AUTO_DURATION_TABLE: AutoDurationRow[] = [
@@ -685,7 +685,7 @@ export const DEFAULT_PLATFORM_PROFILES: Record<string, PlatformProfile> = {
       "Instagram tests content in waves. Views come first, then likes, then saves and shares. Comments are rare. Our delivery follows this with smooth, uneven batches. Recommended: 72h for Reels, 48h for photo posts.",
     presets: {
       fast: { key: "fast", label: "Fast Paced (24h)", hours: 24, durationPreset: "24h" },
-      normal: { key: "normal", label: "Normal Pace (72h)", hours: 72, durationPreset: "72h", isDefault: true },
+      normal: { key: "normal", label: "Normal Pace (72h)", hours: 72, durationPreset: "72h" },
       slow: { key: "slow", label: "Slow Organic (168h / 7d)", hours: 168, durationPreset: "168h" },
     },
     defaultPreset: "normal",
@@ -807,7 +807,7 @@ export const DEFAULT_PLATFORM_PROFILES: Record<string, PlatformProfile> = {
       "Photo and carousel feed posts experience the vast majority of interactions within the first 48 hours. Our post pacing is front-loaded to match feed impression velocity.",
     presets: {
       fast: { key: "fast", label: "Fast Feed (24h)", hours: 24, durationPreset: "24h" },
-      normal: { key: "normal", label: "Normal Pace (48h)", hours: 48, durationPreset: "48h", isDefault: true },
+      normal: { key: "normal", label: "Normal Pace (48h)", hours: 48, durationPreset: "48h" },
       slow: { key: "slow", label: "Sustained (96h / 4d)", hours: 96, durationPreset: "96h" },
     },
     defaultPreset: "normal",
@@ -925,7 +925,7 @@ export const DEFAULT_PLATFORM_PROFILES: Record<string, PlatformProfile> = {
       "TikTok's recommendation engine evaluates initial watch-time completion before pushing videos to broader FYP test clusters. Our pacing starts with early views, cascading into likes and rapid shares.",
     presets: {
       fast: { key: "fast", label: "Fast FYP (24h)", hours: 24, durationPreset: "24h" },
-      normal: { key: "normal", label: "Normal Growth (72h)", hours: 72, durationPreset: "72h", isDefault: true },
+      normal: { key: "normal", label: "Normal Growth (72h)", hours: 72, durationPreset: "72h" },
       slow: { key: "slow", label: "Long Tail (168h / 7d)", hours: 168, durationPreset: "168h" },
     },
     defaultPreset: "normal",

@@ -26,6 +26,7 @@ import {
   formatDurationHours,
   validateCustomDuration,
 } from "./platform-profiles";
+import { createMonotoneCubicSpline } from "./monotone-cubic";
 
 export type EngagementType = "views" | "likes" | "shares" | "saves" | "comments";
 
@@ -64,6 +65,13 @@ export interface PlannedRun {
   isNearMinimum?: boolean;
 }
 
+export interface DisabledReasonInfo {
+  type: "below_min" | "unmapped";
+  minNeeded?: number;
+  message: string;
+  fixAction: "use_min" | "pick_service";
+}
+
 export interface TypeDeliveryPlan {
   engagementType: EngagementType;
   targetRatio: number;
@@ -75,8 +83,10 @@ export interface TypeDeliveryPlan {
   ratePer1000: number;
   totalCost: number;
   startLagMinutes: number;
+  disabled?: boolean;
   autoDisabled?: boolean;
   autoDisabledReason?: string | null;
+  disabledReasonInfo?: DisabledReasonInfo | null;
   runs: PlannedRun[];
 }
 
@@ -169,8 +179,21 @@ export interface OrganicPlanResult {
   sourceFlags?: Record<EngagementType, "suggested" | "custom">;
   autoDisabledTypes?: Record<EngagementType, boolean>;
   autoDisableNotes?: Record<EngagementType, string | null>;
+  disabledReasons?: Record<EngagementType, DisabledReasonInfo | null>;
   softHints?: Record<EngagementType, string | null>;
   providerMinNotes?: Record<EngagementType, string | null>;
+  chunkyDeliveryNotice?: {
+    type: EngagementType;
+    minQuantity: number;
+    steps: number;
+    isConstrainedSlack: boolean;
+    text: string;
+  } | null;
+  chunkyAlertNotice?: {
+    severity: "low";
+    type: string;
+    reason: string;
+  } | null;
 }
 
 export interface PlanOptions {
@@ -463,6 +486,19 @@ export function generateAuthenticBatches(params: {
     return [total];
   }
 
+  // When minimum forces equal sizes (total / min < 2 runs of slack),
+  // allocate floor and distribute remainder.
+  const slackRuns = (total - N * minQuantity) / minQuantity;
+  if (slackRuns < 2) {
+    const baseVal = Math.floor(total / N);
+    const rem = total % N;
+    const constrainedBatches = new Array(N).fill(baseVal);
+    for (let r = 0; r < rem; r++) {
+      constrainedBatches[r]++;
+    }
+    return constrainedBatches;
+  }
+
   // 15-25% of batches land at or very near provider minimum
   const nearFraction = 0.15 + rng() * 0.10;
   let nearCount = Math.round(N * nearFraction);
@@ -668,6 +704,21 @@ export function generateAuthenticBatches(params: {
     }
   }
 
+  // Batch sizes: never equal when total allows (slack >= 2 runs)
+  if (list.length > 1 && slackRuns >= 2) {
+    const allEqual = list.every((sz) => sz === list[0]);
+    if (allEqual) {
+      const shift = Math.min(
+        Math.floor((total - N * minQuantity) / 2),
+        Math.max(1, Math.floor(minQuantity * 0.25))
+      );
+      if (shift > 0 && list[0] + shift <= cap && list[1] - shift >= minQuantity) {
+        list[0] += shift;
+        list[1] -= shift;
+      }
+    }
+  }
+
   return list;
 }
 
@@ -786,33 +837,41 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
     "168h": 168,
   };
 
-  if (options.pacingMode === "custom" || (options.customDurationHours !== undefined && options.customDurationHours > 0)) {
+  const isCustomExplicit =
+    options.pacingMode === "custom" ||
+    (options.customDurationHours !== undefined && options.customDurationHours > 0) ||
+    (options.durationHours !== undefined && options.durationHours > 0 && options.pacingMode !== "auto") ||
+    (options.durationPreset !== undefined && options.pacingMode !== "auto");
+
+  if (isCustomExplicit) {
     isAutoDuration = false;
-    const requested = options.customDurationHours || (options.durationHours ?? autoDur.durationHours);
+    let requested = options.customDurationHours;
+    if (requested === undefined || requested <= 0) {
+      if (options.presetKey && profile.presets[options.presetKey]) {
+        requested = profile.presets[options.presetKey].hours;
+      } else if (options.durationPreset && PRESET_HOURS[options.durationPreset]) {
+        requested = PRESET_HOURS[options.durationPreset];
+      } else if (options.durationHours && options.durationHours > 0) {
+        requested = options.durationHours;
+      } else {
+        requested = autoDur.durationHours;
+      }
+    }
     const val = validateCustomDuration(profile, baseViews, requested);
     if (!val.valid) {
       throw new Error(`Validation error: ${val.reason}`);
     }
     durationHours = requested;
-  } else if (options.presetKey && profile.presets[options.presetKey]) {
-    isAutoDuration = false;
-    const opt = profile.presets[options.presetKey];
-    durationHours = opt.hours;
-  } else if (options.durationPreset && PRESET_HOURS[options.durationPreset]) {
-    isAutoDuration = false;
-    durationHours = options.durationHours ?? PRESET_HOURS[options.durationPreset];
-  } else if (options.durationHours && options.durationHours > 0) {
-    isAutoDuration = false;
-    durationHours = options.durationHours;
   } else {
+    // 1. Auto duration must apply by default. Remove the old 72h default preset.
     isAutoDuration = true;
     durationHours = autoDur.durationHours;
   }
 
-  if (options.presetKey && profile.presets[options.presetKey]) {
+  if (isCustomExplicit && options.presetKey && profile.presets[options.presetKey]) {
     const opt = profile.presets[options.presetKey];
     durationPreset = opt.hours === 24 ? "24h" : opt.hours === 48 ? "48h" : opt.hours === 72 ? "72h" : opt.hours === 96 ? "96h" : "168h";
-  } else if (options.durationPreset && PRESET_HOURS[options.durationPreset]) {
+  } else if (isCustomExplicit && options.durationPreset && PRESET_HOURS[options.durationPreset]) {
     durationPreset = options.durationPreset;
   } else if (durationHours <= 30) durationPreset = "24h";
   else if (durationHours <= 60) durationPreset = "48h";
@@ -996,7 +1055,31 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
     comments: 0,
   };
 
+  const disabledReasons: Record<EngagementType, DisabledReasonInfo | null> = {
+    views: null,
+    likes: null,
+    saves: null,
+    shares: null,
+    comments: null,
+  };
+
   for (const t of (["likes", "saves", "shares", "comments"] as const)) {
+    const srv = services[t];
+    const typeLabel = t.charAt(0).toUpperCase() + t.slice(1);
+    const isUnmapped = !srv || !srv.id || !srv.providerServiceId || srv.providerServiceId === "unmapped";
+
+    if (isUnmapped) {
+      autoDisabledTypes[t] = true;
+      disabledReasons[t] = {
+        type: "unmapped",
+        message: `Pick a service for ${typeLabel}`,
+        fixAction: "pick_service",
+      };
+      autoDisableNotes[t] = `Pick a service for ${typeLabel}`;
+      plannedTotals[t] = 0;
+      continue;
+    }
+
     // If toggled off or not enabled
     if (options.typeToggles?.[t] === false || (options.enabledTypes && !options.enabledTypes.includes(t))) {
       plannedTotals[t] = 0;
@@ -1009,26 +1092,21 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
       plannedTotals[t] = realisticModel.plannedTotals[t];
     }
 
-    const srv = services[t];
     if (srv && srv.minQuantity && plannedTotals[t] < srv.minQuantity) {
-      if (options.autoDisableBelowMin) {
-        if (plannedTotals[t] > 0 || realisticModel.suggestedTotals[t] > 0) {
-          autoDisabledTypes[t] = true;
-          const typeLabel = t.charAt(0).toUpperCase() + t.slice(1);
-          if (baseViews < 3000 && t === "comments") {
-            autoDisableNotes[t] = "Comments unlock around 3,000 views.";
-          } else {
-            const range = realisticModel.suggestedRanges[t];
-            autoDisableNotes[t] = `${typeLabel} need at least ${srv.minQuantity} for this service. Your ${baseViews.toLocaleString()} views would normally get about ${range.min}–${range.max} ${t}, so ${t} are switched off.`;
-          }
-        }
-        plannedTotals[t] = 0;
-      } else {
-        const typeLabel = t.charAt(0).toUpperCase() + t.slice(1);
+      if (options.autoDisableBelowMin === false) {
         throw new Error(
           `Validation error: ${typeLabel} need at least ${srv.minQuantity.toLocaleString()} for this service. Increase views or turn ${typeLabel} off.`
         );
       }
+      autoDisabledTypes[t] = true;
+      disabledReasons[t] = {
+        type: "below_min",
+        minNeeded: srv.minQuantity,
+        message: `${typeLabel} need at least ${srv.minQuantity}.`,
+        fixAction: "use_min",
+      };
+      autoDisableNotes[t] = `${typeLabel} need at least ${srv.minQuantity}.`;
+      plannedTotals[t] = 0;
     }
   }
 
@@ -1054,24 +1132,25 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
     comments: sampleLag(typeConfigs.comments.lagMinutesRange, commentsRng),
   };
 
-  // 5. Scaled Views Run Count per Change B
+  // 5. Scaled Views Run Count per Change B & Fix Small Order Pacing
   const viewsRng = createSeededRng(hashSubSeed(seedInt, "views"));
   const shortInterval = 2 + viewsRng() * 4; // 2-6 mins for short orders
   const longInterval = 10 + viewsRng() * 15; // 10-25 mins for multi-day orders
-  const tDur = Math.max(0, Math.min(1, (durationHours - 4) / Math.max(1, 72 - 4)));
-  const targetIntervalMins = shortInterval + tDur * (longInterval - shortInterval);
-  const MAX_CONFIGURABLE_VIEWS_RUNS = 60; // configurable hard cap per Change B
-  const targetViewsRuns = Math.max(3, Math.min(MAX_CONFIGURABLE_VIEWS_RUNS, Math.floor(durationMinutes / targetIntervalMins)));
+  const tDur = Math.max(0, Math.min(1, (durationHours - 2) / Math.max(1, 72 - 2)));
+  const targetIntervalMins = durationHours <= 2 ? shortInterval : shortInterval + tDur * (longInterval - shortInterval);
+  const MAX_CONFIGURABLE_VIEWS_RUNS = 60;
+  const targetViewsRuns = Math.max(1, Math.min(MAX_CONFIGURABLE_VIEWS_RUNS, Math.floor(durationMinutes / targetIntervalMins)));
   const viewsTotal = plannedTotals.views;
-  const maxPossibleViewsRuns = Math.floor(viewsTotal / services.views.minQuantity);
+  const viewsMinQuantity = services.views.minQuantity || 10;
+  const maxPossibleViewsRuns = Math.floor(viewsTotal / viewsMinQuantity);
   const viewsRunCount = Math.max(1, Math.min(maxPossibleViewsRuns, targetViewsRuns));
 
   const nominalRunCounts: Record<EngagementType, number> = {
     views: viewsRunCount,
-    likes: Math.max(4, Math.round((durationHours / 72) * (15 + likesRng() * 15))),
-    saves: Math.max(2, Math.round((durationHours / 72) * (6 + savesRng() * 9))),
-    shares: Math.max(2, Math.round((durationHours / 72) * (6 + sharesRng() * 9))),
-    comments: Math.max(2, Math.round((durationHours / 72) * (5 + commentsRng() * 7))),
+    likes: plannedTotals.likes > 0 ? Math.max(2, Math.round((durationHours / 72) * (15 + likesRng() * 15))) : 0,
+    saves: plannedTotals.saves > 0 ? Math.max(2, Math.round((durationHours / 72) * (6 + savesRng() * 9))) : 0,
+    shares: plannedTotals.shares > 0 ? Math.max(2, Math.round((durationHours / 72) * (6 + sharesRng() * 9))) : 0,
+    comments: plannedTotals.comments > 0 ? Math.max(1, Math.round((durationHours / 72) * (5 + commentsRng() * 7))) : 0,
   };
 
   const pausesCount = Math.floor(viewsRng() * 4); // 0-3 pauses
@@ -1177,6 +1256,36 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
     comments: null,
   };
 
+  const viewsFloor = Math.floor(viewsTotal / viewsMinQuantity);
+  const viewsSlackRuns = (viewsTotal - viewsRunCount * viewsMinQuantity) / viewsMinQuantity;
+  const isConstrainedSlack = viewsSlackRuns < 2;
+
+  let chunkyDeliveryNotice: OrganicPlanResult["chunkyDeliveryNotice"] = null;
+  if (viewsFloor < 8) {
+    const calmNote = `This service has a minimum of ${viewsMinQuantity.toLocaleString()} per delivery, so your ${viewsTotal.toLocaleString()} views can only be split into ${viewsRunCount} steps. Pick a service with a lower minimum for smoother delivery.`;
+    const detailedNote = isConstrainedSlack
+      ? `This service has a minimum of ${viewsMinQuantity.toLocaleString()} per delivery, so your ${viewsTotal.toLocaleString()} views can only be split into ${viewsRunCount} steps. Batch sizes are constrained to ${viewsMinQuantity.toLocaleString()} by the service minimum, with delivery timing jittered for natural pacing. Pick a service with a lower minimum for smoother delivery.`
+      : calmNote;
+
+    chunkyDeliveryNotice = {
+      type: "views",
+      minQuantity: viewsMinQuantity,
+      steps: viewsRunCount,
+      isConstrainedSlack,
+      text: detailedNote,
+    };
+    providerMinNotes.views = detailedNote;
+  }
+
+  let chunkyAlertNotice: OrganicPlanResult["chunkyAlertNotice"] = null;
+  if (viewsMinQuantity > 50) {
+    chunkyAlertNotice = {
+      severity: "low",
+      type: "chunky_delivery_minimum",
+      reason: `Mapped views service "${services.views.name}" minimum of ${viewsMinQuantity} exceeds 5% of a 1,000-view order, making small deliveries chunky (${viewsRunCount} steps).`,
+    };
+  }
+
   typePlans.views = {
     engagementType: "views",
     targetRatio: 1.0,
@@ -1202,20 +1311,22 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
     const lagMinutes = sampledLagsMinutes[t];
     const targetRatio = sampledRatios[t];
 
-    if (totalQty <= 0) {
+    if (totalQty <= 0 || autoDisabledTypes[t]) {
       typePlans[t] = {
         engagementType: t,
         targetRatio: 0,
         totalQuantity: 0,
         runsCount: 0,
-        serviceName: s.name,
-        minQuantity: s.minQuantity,
-        maxQuantity: s.maxQuantity,
-        ratePer1000: s.ratePer1000,
+        serviceName: s ? s.name : t,
+        minQuantity: s ? s.minQuantity : 0,
+        maxQuantity: s ? s.maxQuantity : 0,
+        ratePer1000: s ? s.ratePer1000 : 0,
         totalCost: 0,
         startLagMinutes: lagMinutes,
-        autoDisabled: autoDisabledTypes[t] || false,
-        autoDisabledReason: autoDisableNotes[t] || null,
+        disabled: true,
+        autoDisabled: true,
+        autoDisabledReason: disabledReasons[t]?.message || autoDisableNotes[t] || null,
+        disabledReasonInfo: disabledReasons[t] || null,
         runs: [],
       };
       continue;
@@ -1372,6 +1483,10 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
         ratePer1000: s?.ratePer1000 || 0,
         totalCost: 0,
         startLagMinutes: sampledLagsMinutes[t] || 0,
+        disabled: true,
+        autoDisabled: autoDisabledTypes[t] || false,
+        autoDisabledReason: disabledReasons[t]?.message || autoDisableNotes[t] || null,
+        disabledReasonInfo: disabledReasons[t] || null,
         runs: [],
       };
     }
@@ -1392,11 +1507,27 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
     return typeOrder[a.engagementType] - typeOrder[b.engagementType];
   });
 
-  // 9. Generate High-Resolution 100-Interval Curve Points for Stored Plan & Orders Chart
+  // 9. Generate Smooth Monotone Cubic Curve Points for Stored Plan & Orders Chart
   const curvePoints: CurvePoint[] = [];
   const ratioPoints: RatioPoint[] = [];
   const SAMPLE_POINTS = 100;
   const sampledBuckets: number[] = [];
+
+  const typeSplines: Partial<Record<EngagementType, ReturnType<typeof createMonotoneCubicSpline>>> = {};
+  for (const t of (["views", "likes", "shares", "saves", "comments"] as const)) {
+    const plan = typePlans[t];
+    if (plan && plan.totalQuantity > 0 && plan.runs.length > 0 && !plan.disabled) {
+      const knots = [
+        { x: 0, y: 0 },
+        ...plan.runs.map((r) => ({ x: r.minutesFromStart, y: r.cumulativeQuantity })),
+      ];
+      const lastMin = plan.runs[plan.runs.length - 1].minutesFromStart;
+      if (lastMin < durationMinutes) {
+        knots.push({ x: durationMinutes, y: plan.totalQuantity });
+      }
+      typeSplines[t] = createMonotoneCubicSpline(knots);
+    }
+  }
 
   for (let s = 0; s <= SAMPLE_POINTS; s++) {
     const mins = Math.round((s / SAMPLE_POINTS) * durationMinutes);
@@ -1415,13 +1546,11 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
     };
 
     for (const t of (["views", "likes", "shares", "saves", "comments"] as const)) {
-      if (typePlans[t]) {
-        let cum = 0;
-        for (const r of typePlans[t].runs) {
-          if (r.minutesFromStart <= mins) cum = r.cumulativeQuantity;
-          else break;
-        }
-        pt[t] = cum;
+      const spline = typeSplines[t];
+      if (spline) {
+        pt[t] = Math.round(spline.evaluate(mins));
+      } else {
+        pt[t] = 0;
       }
     }
 
@@ -1543,8 +1672,11 @@ export function generateOrganicPlan(options: PlanOptions): OrganicPlanResult {
     sourceFlags: realisticModel.sourceFlags,
     autoDisabledTypes,
     autoDisableNotes,
+    disabledReasons,
     softHints,
     providerMinNotes,
+    chunkyDeliveryNotice,
+    chunkyAlertNotice,
   };
 }
 

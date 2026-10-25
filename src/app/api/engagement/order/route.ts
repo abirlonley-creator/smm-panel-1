@@ -7,6 +7,7 @@ import {
 } from "@/lib/engagement/planner";
 import { getPlatformProfile } from "@/lib/engagement/platform-profiles";
 import { checkProviderHealthGate } from "@/lib/engagement/health-gate";
+import { recordAdminAlert } from "@/lib/engagement/alert-service";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
@@ -137,6 +138,21 @@ export async function POST(request: Request) {
 
     const orderRef = `ENG-${Math.floor(100000 + Math.random() * 900000)}`;
     const newBalance = Number((currentBalance - totalCost).toFixed(2));
+
+    if (plan.chunkyAlertNotice) {
+      recordAdminAlert({
+        severity: "low",
+        type: plan.chunkyAlertNotice.type,
+        orderId: orderRef,
+        userId: user.id,
+        platform: profile.platform,
+        engagementType: "views",
+        providerId: resolvedServices.views?.providerId,
+        serviceId: resolvedServices.views?.providerServiceId,
+        reason: plan.chunkyAlertNotice.reason,
+        suggestedAction: "Select or map a views service with minimum <= 50 for smoother delivery.",
+      }).catch((e) => console.warn("[ADMIN-ALERT] Failed to record chunky notice:", e));
+    }
 
     // 4. Transactionally deduct wallet funds, record transaction, and create order + scheduled runs with stored plan
     const result = await prisma.$transaction(async (tx) => {

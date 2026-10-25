@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
+import { recordAdminAlert } from "@/lib/engagement/alert-service";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -177,6 +178,20 @@ export async function POST(request: Request) {
         active: parsed.active,
       },
     });
+
+    if (parsed.engagementType === "views" && minQuantity > 50) {
+      recordAdminAlert({
+        severity: "low",
+        type: "chunky_delivery_minimum",
+        userId,
+        platform: parsed.platform,
+        engagementType: "views",
+        providerId: parsed.providerId,
+        serviceId: parsed.providerServiceId,
+        reason: `Mapped views service "${serviceName}" has a minimum of ${minQuantity} (> 5% of 1,000 views), which makes small orders deliver in chunky steps.`,
+        suggestedAction: "Map a service with min <= 50 for smoother small-order pacing.",
+      }).catch((e) => console.warn("[ADMIN-ALERT] Failed to record chunky notice:", e));
+    }
 
     return NextResponse.json({
       success: true,

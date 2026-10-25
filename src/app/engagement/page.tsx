@@ -110,6 +110,7 @@ export default function FullEngagementPage() {
   const [userProviders, setUserProviders] = useState<{ id: string; name: string }[]>([]);
   const [loadingMappings, setLoadingMappings] = useState<boolean>(true);
   const [openServicePickerFor, setOpenServicePickerFor] = useState<string | null>(null);
+  const [lowerMinFilter, setLowerMinFilter] = useState<number | null>(null);
   const [savingMappingType, setSavingMappingType] = useState<string | null>(null);
 
   // Active view tab for analytics preview: "cumulative" | "ratio" | "timeline" | "runs"
@@ -244,7 +245,7 @@ export default function FullEngagementPage() {
           body: JSON.stringify({
             profileId,
             platform: activePlatformTab,
-            presetKey,
+            presetKey: pacingMode === "custom" ? presetKey : undefined,
             pacingMode,
             customSpeedPreset: pacingMode === "custom" ? customSpeedPreset : undefined,
             customDurationHours: pacingMode === "custom" && customSpeedPreset === "exact" ? customExactHours : undefined,
@@ -408,7 +409,7 @@ export default function FullEngagementPage() {
           targetUrl: targetUrl.trim(),
           profileId,
           platform: activePlatformTab,
-          presetKey,
+          presetKey: pacingMode === "custom" ? presetKey : undefined,
           pacingMode,
           customSpeedPreset: pacingMode === "custom" ? customSpeedPreset : undefined,
           customDurationHours: pacingMode === "custom" && customSpeedPreset === "exact" ? customExactHours : undefined,
@@ -1189,51 +1190,133 @@ export default function FullEngagementPage() {
                       </div>
                     )}
 
-                    {/* Dropdown if "Change" clicked */}
+                    {/* Dropdown if "Change" or "Pick lower-min service" clicked */}
                     {isEnabled && hasValidMapping && isPickerOpen && (
                       <div className="p-3 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED] text-xs space-y-2 animate-fadeIn">
-                        <span className="font-bold text-[#252943] block">Choose a different service for {t}:</span>
-                        <select
-                          defaultValue={`${mapping.providerId}:${mapping.providerServiceId}`}
-                          disabled={savingMappingType === t}
-                          onChange={(e) => {
-                            const s = availableServices.find(
-                              (x) => `${x.providerId}:${x.providerServiceId}` === e.target.value
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-[#252943]">
+                            {lowerMinFilter ? `Services with minimum under ${lowerMinFilter}:` : `Choose a different service for ${t}:`}
+                          </span>
+                          {lowerMinFilter && (
+                            <button
+                              type="button"
+                              onClick={() => setLowerMinFilter(null)}
+                              className="text-[10px] text-[#3A4EFB] font-bold hover:underline"
+                            >
+                              Show all services
+                            </button>
+                          )}
+                        </div>
+                        {(() => {
+                          const list = lowerMinFilter
+                            ? availableServices.filter((s) => s.minQuantity < lowerMinFilter)
+                            : availableServices;
+                          if (list.length === 0) {
+                            return (
+                              <div className="p-2 text-xs text-[#252943]/70 flex items-center justify-between">
+                                <span>No connected services with minimum under {lowerMinFilter} found.</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setLowerMinFilter(null)}
+                                  className="text-[11px] font-bold text-[#3A4EFB] hover:underline"
+                                >
+                                  View all
+                                </button>
+                              </div>
                             );
-                            if (s) handleSelectServiceMapping(t, s);
-                          }}
-                          className="w-full bg-white border border-[#DEE0ED] rounded-xl px-3 py-2 text-xs font-semibold text-[#252943] focus:border-[#3A4EFB]"
-                        >
-                          {availableServices.map((s) => (
-                            <option key={`${s.providerId}:${s.providerServiceId}`} value={`${s.providerId}:${s.providerServiceId}`}>
-                              {s.providerName} • #{s.providerServiceId} - {s.name} (Min: {s.minQuantity}, Max: {s.maxQuantity}, Rate: ₹{s.ratePer1000}/1k)
-                            </option>
-                          ))}
-                        </select>
+                          }
+                          return (
+                            <select
+                              defaultValue={`${mapping.providerId}:${mapping.providerServiceId}`}
+                              disabled={savingMappingType === t}
+                              onChange={(e) => {
+                                const s = list.find(
+                                  (x) => `${x.providerId}:${x.providerServiceId}` === e.target.value
+                                );
+                                if (s) {
+                                  setLowerMinFilter(null);
+                                  handleSelectServiceMapping(t, s);
+                                }
+                              }}
+                              className="w-full bg-white border border-[#DEE0ED] rounded-xl px-3 py-2 text-xs font-semibold text-[#252943] focus:border-[#3A4EFB]"
+                            >
+                              <option value="" disabled>Select service...</option>
+                              {list.map((s) => (
+                                <option key={`${s.providerId}:${s.providerServiceId}`} value={`${s.providerId}:${s.providerServiceId}`}>
+                                  {s.providerName} • #{s.providerServiceId} - {s.name} (Min: {s.minQuantity}, Max: {s.maxQuantity}, Rate: ₹{s.ratePer1000}/1k)
+                                </option>
+                              ))}
+                            </select>
+                          );
+                        })()}
                       </div>
                     )}
 
-                    {/* Below-Min Calm Note with Actions */}
-                    {note && (
+                    {/* Views Chunky Delivery Calm Note (Requirement 2 & 3) */}
+                    {isViews && plan?.chunkyDeliveryNotice && (
+                      <div className="p-3 rounded-xl bg-amber-50/70 border border-amber-200 text-xs text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                        <div className="flex items-start gap-2">
+                          <Info className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                          <div>
+                            <p className="font-medium">
+                              {plan.chunkyDeliveryNotice.text}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLowerMinFilter(plan.chunkyDeliveryNotice!.minQuantity);
+                            setOpenServicePickerFor("views");
+                          }}
+                          className="shrink-0 px-2.5 py-1 rounded-lg bg-white border border-amber-300 font-bold text-amber-900 hover:bg-amber-100/50 transition-all text-[11px]"
+                        >
+                          Pick lower-minimum service
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Disabled Type One-Line Reason with Fix Action Buttons (Requirement 4) */}
+                    {!isViews && (plan?.disabledReasons?.[t] || (plan?.plans[t]?.disabled && note)) && (
                       <div className="p-2.5 rounded-xl bg-blue-50/70 border border-blue-200 text-xs text-[#252943] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
                           <Info className="w-3.5 h-3.5 text-[#3A4EFB] shrink-0" />
-                          <span>{note}</span>
+                          <span className="font-medium">
+                            {plan?.disabledReasons?.[t]?.message || note}
+                          </span>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          {srv && srv.minQuantity && (
+                          {plan?.disabledReasons?.[t]?.fixAction === "use_min" && plan.disabledReasons[t]!.minNeeded && (
+                            <button
+                              type="button"
+                              onClick={() => handleUseMinimum(t, plan.disabledReasons![t]!.minNeeded!)}
+                              className="px-2.5 py-1 rounded-lg bg-[#3A4EFB] text-white text-[11px] font-bold hover:bg-[#2C3FE0]"
+                            >
+                              Use {plan.disabledReasons[t]!.minNeeded}
+                            </button>
+                          )}
+                          {(!plan?.disabledReasons?.[t] || plan?.disabledReasons?.[t]?.fixAction !== "use_min") && srv && srv.minQuantity && (
                             <button
                               type="button"
                               onClick={() => handleUseMinimum(t, srv.minQuantity)}
-                              className="px-2.5 py-1 rounded-lg bg-[#3A4EFB] text-white text-[10px] font-bold hover:bg-[#2C3FE0]"
+                              className="px-2.5 py-1 rounded-lg bg-[#3A4EFB] text-white text-[11px] font-bold hover:bg-[#2C3FE0]"
                             >
-                              Use minimum ({srv.minQuantity})
+                              Use {srv.minQuantity}
+                            </button>
+                          )}
+                          {plan?.disabledReasons?.[t]?.fixAction === "pick_service" && (
+                            <button
+                              type="button"
+                              onClick={() => setOpenServicePickerFor(t)}
+                              className="px-2.5 py-1 rounded-lg bg-[#3A4EFB] text-white text-[11px] font-bold hover:bg-[#2C3FE0]"
+                            >
+                              Pick service
                             </button>
                           )}
                           <button
                             type="button"
                             onClick={() => setTypeToggles((prev) => ({ ...prev, [t]: false }))}
-                            className="px-2.5 py-1 rounded-lg border border-[#DEE0ED] bg-white text-[10px] font-bold text-[#252943]/70 hover:bg-[#F8F9FD]"
+                            className="px-2.5 py-1 rounded-lg border border-[#DEE0ED] bg-white text-[11px] font-bold text-[#252943]/70 hover:bg-[#F8F9FD]"
                           >
                             Keep off
                           </button>

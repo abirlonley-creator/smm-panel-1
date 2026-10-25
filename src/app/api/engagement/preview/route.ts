@@ -9,6 +9,7 @@ import {
   type ServiceSpec,
 } from "@/lib/engagement/planner";
 import { getPlatformProfile } from "@/lib/engagement/platform-profiles";
+import { recordAdminAlert } from "@/lib/engagement/alert-service";
 import { z } from "zod";
 
 const previewSchema = z.object({
@@ -104,6 +105,19 @@ export async function POST(request: Request) {
     const plan = parsed.previousFingerprint
       ? generateUniqueOrganicPlan(planOptions, parsed.previousFingerprint)
       : generateOrganicPlan(planOptions);
+
+    if (plan.chunkyAlertNotice) {
+      recordAdminAlert({
+        severity: "low",
+        type: plan.chunkyAlertNotice.type,
+        platform: profile.platform,
+        engagementType: "views",
+        providerId: resolvedServices.views?.providerId,
+        serviceId: resolvedServices.views?.providerServiceId,
+        reason: plan.chunkyAlertNotice.reason,
+        suggestedAction: "Select or map a views service with minimum <= 50 for smoother delivery.",
+      }).catch((e) => console.warn("[ADMIN-ALERT] Failed to record chunky notice:", e));
+    }
 
     return NextResponse.json({
       success: true,
