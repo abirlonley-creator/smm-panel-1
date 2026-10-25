@@ -146,25 +146,32 @@ export async function GET(request: Request) {
 
         const onTrackPct = inProgress > 0 ? Math.round((onTrackCount / inProgress) * 100) : 100;
 
+        const providerHealthList = providers.map((p) => {
+          let status: "up" | "slow" | "down" = "up";
+          if (!p.active) status = "down";
+          return {
+            id: p.id,
+            name: p.name,
+            status,
+            health: status,
+            active: p.active,
+            balance: p.balance,
+            currency: p.currency,
+            lastSyncAt: p.lastSyncAt,
+          };
+        });
+
         return {
           ordersInProgress: inProgress,
           onTrackPct,
+          onTrackPercentage: onTrackPct,
           delayedOrders: delayedCount,
           failedOrders: failedCount,
           runsDueNextHour: dueNextHour,
           openAlerts,
-          providerHealth: providers.map((p) => {
-            let status: "up" | "slow" | "down" = "up";
-            if (!p.active) status = "down";
-            return {
-              id: p.id,
-              name: p.name,
-              status,
-              balance: p.balance,
-              currency: p.currency,
-              lastSyncAt: p.lastSyncAt,
-            };
-          }),
+          openAlertsCount: openAlerts,
+          providerHealth: providerHealthList,
+          providersHealth: providerHealthList,
         };
       })(),
     ]);
@@ -223,26 +230,35 @@ export async function GET(request: Request) {
       }
       const providers = Array.from(providerSet);
 
+      const completedRuns = ord.runs.filter((r) => r.status === "confirmed").length;
+      const failedRuns = ord.runs.filter((r) => r.status === "failed").length;
+
       return {
         id: ord.id,
         orderRef: ord.orderRef,
         userId: ord.userId,
         user: ord.user?.username || "Guest",
+        username: ord.user?.username || "Guest",
         platform: ord.platform,
         profileId: ord.profileId,
         targetUrl: ord.targetUrl,
         createdAt: ord.createdAt.toISOString(),
         durationHours: ord.durationHours,
         status: ord.status,
-        totalCost: ord.totalCost,
-        refundedAmount: ord.refundedAmount,
+        totalCost: ord.totalCost || 0,
+        totalPrice: ord.totalCost || 0,
+        refundedAmount: ord.refundedAmount || 0,
         progressPct,
         overallDeviationPct,
         deviationStatus: ord.deviationStatus,
         delayChip,
+        delayStatus: delayChip,
         providers: providers.length > 0 ? providers : ["Default Provider"],
         openAlertsCount: alertCountMap.get(ord.id) || 0,
         runsCount: ord.runs.length,
+        totalRuns: ord.runs.length,
+        completedRuns,
+        failedRuns,
       };
     });
 

@@ -418,23 +418,29 @@ export function OrderMonitorTab() {
               Providers Health
             </span>
             <div className="flex items-center gap-1.5 flex-wrap">
-              {overview.providersHealth.map((p) => (
-                <span
-                  key={p.id}
-                  title={`${p.name}: ${p.health.toUpperCase()} (${
-                    p.balance !== null ? formatProviderBalance(p.balance, p.currency) : "No bal"
-                  })`}
-                  className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                    p.health === "up"
-                      ? "bg-emerald-100 text-emerald-800"
-                      : p.health === "slow"
-                      ? "bg-amber-100 text-amber-800"
-                      : "bg-rose-100 text-rose-800"
-                  }`}
-                >
-                  {p.name.slice(0, 5)}: {p.health}
-                </span>
-              ))}
+              {((overview as any).providersHealth || (overview as any).providerHealth || []).map((p: any) => {
+                const health = (p.health || p.status || "up").toLowerCase();
+                const displayName = p.name || "Provider";
+                return (
+                  <span
+                    key={p.id || displayName}
+                    title={`${displayName}: ${health.toUpperCase()} (${
+                      p.balance !== null && p.balance !== undefined
+                        ? formatProviderBalance(p.balance, p.currency || "USD")
+                        : "No bal"
+                    })`}
+                    className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                      health === "up"
+                        ? "bg-emerald-100 text-emerald-800"
+                        : health === "slow"
+                        ? "bg-amber-100 text-amber-800"
+                        : "bg-rose-100 text-rose-800"
+                    }`}
+                  >
+                    {displayName.slice(0, 5)}: {health}
+                  </span>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -620,99 +626,111 @@ export function OrderMonitorTab() {
                       </td>
                     </tr>
                   ) : (
-                    orders.map((order) => (
-                      <tr
-                        key={order.id}
-                        onClick={() => openOrderModal(order.id)}
-                        className="hover:bg-[#F8F9FD]/60 cursor-pointer transition-colors"
-                      >
-                        <td className="py-3 px-3.5 font-mono font-bold text-[#3A4EFB]">
-                          {order.orderRef}
-                        </td>
-                        <td className="py-3 px-3.5 font-semibold text-[#252943]">
-                          <div>{order.username}</div>
-                          {order.userRole && (
-                            <span className="text-[10px] text-[#252943]/40 font-mono">
-                              {order.userRole}
+                    orders.map((order: any) => {
+                      const username = order.username || order.user || "Guest";
+                      const totalPrice = typeof order.totalPrice === "number" ? order.totalPrice : (typeof order.totalCost === "number" ? order.totalCost : 0);
+                      const progressPct = typeof order.progressPct === "number" ? order.progressPct : 0;
+                      const completedRuns = order.completedRuns ?? 0;
+                      const totalRuns = order.totalRuns ?? order.runsCount ?? 0;
+                      const overallDeviationPct = order.overallDeviationPct ?? 0;
+                      const delayStatus = order.delayStatus || order.delayChip || "On time";
+                      const providersList = Array.isArray(order.providers) ? order.providers : [];
+                      const createdDate = order.createdAt ? new Date(order.createdAt) : new Date();
+
+                      return (
+                        <tr
+                          key={order.id}
+                          onClick={() => openOrderModal(order.id)}
+                          className="hover:bg-[#F8F9FD]/60 cursor-pointer transition-colors"
+                        >
+                          <td className="py-3 px-3.5 font-mono font-bold text-[#3A4EFB]">
+                            {order.orderRef}
+                          </td>
+                          <td className="py-3 px-3.5 font-semibold text-[#252943]">
+                            <div>{username}</div>
+                            {order.userRole && (
+                              <span className="text-[10px] text-[#252943]/40 font-mono">
+                                {order.userRole}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3.5 font-semibold text-[#252943] capitalize">
+                            {order.platform || "Platform"}
+                          </td>
+                          <td className="py-3 px-3.5 text-[11px] text-[#252943]/70 whitespace-nowrap">
+                            {createdDate.toLocaleDateString([], {
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </td>
+                          <td className="py-3 px-3.5">
+                            <span
+                              className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase ${
+                                order.status === "COMPLETED"
+                                  ? "bg-emerald-100 text-emerald-800"
+                                  : order.status === "PROCESSING"
+                                  ? "bg-blue-100 text-blue-800"
+                                  : "bg-rose-100 text-rose-800"
+                              }`}
+                            >
+                              {order.status || "PENDING"}
                             </span>
-                          )}
-                        </td>
-                        <td className="py-3 px-3.5 font-semibold text-[#252943] capitalize">
-                          {order.platform}
-                        </td>
-                        <td className="py-3 px-3.5 text-[11px] text-[#252943]/70 whitespace-nowrap">
-                          {new Date(order.createdAt).toLocaleDateString([], {
-                            month: "short",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </td>
-                        <td className="py-3 px-3.5">
-                          <span
-                            className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase ${
-                              order.status === "COMPLETED"
-                                ? "bg-emerald-100 text-emerald-800"
-                                : order.status === "PROCESSING"
-                                ? "bg-blue-100 text-blue-800"
-                                : "bg-rose-100 text-rose-800"
-                            }`}
-                          >
-                            {order.status}
-                          </span>
-                        </td>
-                        <td className="py-3 px-3.5 font-bold text-[#252943]">
-                          ₹{order.totalPrice.toFixed(2)}
-                        </td>
-                        <td className="py-3 px-3.5">
-                          <div className="w-20 bg-gray-200 rounded-full h-1.5 overflow-hidden mb-1">
-                            <div
-                              className="bg-[#3A4EFB] h-1.5 rounded-full"
-                              style={{ width: `${Math.min(100, order.progressPct)}%` }}
-                            />
-                          </div>
-                          <span className="text-[10px] font-bold text-[#252943]/70">
-                            {order.progressPct}% ({order.completedRuns}/{order.totalRuns})
-                          </span>
-                        </td>
-                        <td className="py-3 px-3.5 font-mono font-bold">
-                          <span
-                            className={
-                              order.overallDeviationPct < 0
-                                ? "text-amber-600"
-                                : order.overallDeviationPct > 0
-                                ? "text-blue-600"
-                                : "text-emerald-600"
-                            }
-                          >
-                            {order.overallDeviationPct > 0 ? "+" : ""}
-                            {order.overallDeviationPct}%
-                          </span>
-                        </td>
-                        <td className="py-3 px-3.5">{getDelayChip(order.delayStatus)}</td>
-                        <td className="py-3 px-3.5 text-[11px] font-medium text-[#252943]/80">
-                          {order.providers.length > 0 ? order.providers.join(", ") : "Default"}
-                        </td>
-                        <td className="py-3 px-3.5 text-center">
-                          {order.openAlertsCount > 0 ? (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-black bg-rose-500 text-white animate-pulse">
-                              {order.openAlertsCount}
+                          </td>
+                          <td className="py-3 px-3.5 font-bold text-[#252943]">
+                            ₹{totalPrice.toFixed(2)}
+                          </td>
+                          <td className="py-3 px-3.5">
+                            <div className="w-20 bg-gray-200 rounded-full h-1.5 overflow-hidden mb-1">
+                              <div
+                                className="bg-[#3A4EFB] h-1.5 rounded-full"
+                                style={{ width: `${Math.min(100, Math.max(0, progressPct))}%` }}
+                              />
+                            </div>
+                            <span className="text-[10px] font-bold text-[#252943]/70">
+                              {progressPct}% ({completedRuns}/{totalRuns})
                             </span>
-                          ) : (
-                            <span className="text-gray-300">—</span>
-                          )}
-                        </td>
-                        <td className="py-3 px-3.5 text-right" onClick={(e) => e.stopPropagation()}>
-                          <button
-                            type="button"
-                            onClick={() => openOrderModal(order.id)}
-                            className="px-2.5 py-1 rounded-lg bg-[#3A4EFB]/10 hover:bg-[#3A4EFB] hover:text-white text-[#3A4EFB] text-[11px] font-bold transition-all"
-                          >
-                            Inspect
-                          </button>
-                        </td>
-                      </tr>
-                    ))
+                          </td>
+                          <td className="py-3 px-3.5 font-mono font-bold">
+                            <span
+                              className={
+                                overallDeviationPct < 0
+                                  ? "text-amber-600"
+                                  : overallDeviationPct > 0
+                                  ? "text-blue-600"
+                                  : "text-emerald-600"
+                              }
+                            >
+                              {overallDeviationPct > 0 ? "+" : ""}
+                              {overallDeviationPct}%
+                            </span>
+                          </td>
+                          <td className="py-3 px-3.5">{getDelayChip(delayStatus)}</td>
+                          <td className="py-3 px-3.5 text-[11px] font-medium text-[#252943]/80">
+                            {providersList.length > 0 ? providersList.join(", ") : "Default"}
+                          </td>
+                          <td className="py-3 px-3.5 text-center">
+                            {(order.openAlertsCount || 0) > 0 ? (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-black bg-rose-500 text-white animate-pulse">
+                                {order.openAlertsCount}
+                              </span>
+                            ) : (
+                              <span className="text-gray-300">—</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3.5 text-right" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              onClick={() => openOrderModal(order.id)}
+                              className="px-2.5 py-1 rounded-lg bg-[#3A4EFB]/10 hover:bg-[#3A4EFB] hover:text-white text-[#3A4EFB] text-[11px] font-bold transition-all"
+                            >
+                              Inspect
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
