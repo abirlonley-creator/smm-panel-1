@@ -85,14 +85,7 @@ export async function POST(request: Request) {
       },
     });
 
-    if (existing) {
-      return NextResponse.json(
-        { success: false, error: `You already have a provider connection named "${parsed.name.trim()}". Please use a unique name.` },
-        { status: 409 }
-      );
-    }
-
-    // Test connection action=balance. SAVE ONLY IF THE TEST PASSES! (Change 10 requirement)
+    // Test connection action=balance. SAVE ONLY IF THE TEST PASSES!
     let initialBalance: number | null = null;
     let initialCurrency = parsed.currency.toUpperCase();
     const adapter = parsed.isMock
@@ -120,20 +113,37 @@ export async function POST(request: Request) {
     // Encrypt API key with AES-256-GCM before saving
     const encryptedKey = encryptApiKey(parsed.apiKey.trim());
 
-    const connection = await prisma.userProviderConnection.create({
-      data: {
-        userId: session.user.id,
-        name: parsed.name.trim(),
-        apiUrl: parsed.apiUrl.trim(),
-        apiKeyEncrypted: encryptedKey,
-        currency: initialCurrency,
-        balance: initialBalance,
-        lastSyncAt: new Date(),
-        lastError: null,
-        isMock: parsed.isMock,
-        active: true,
-      },
-    });
+    let connection;
+    if (existing) {
+      connection = await prisma.userProviderConnection.update({
+        where: { id: existing.id },
+        data: {
+          apiUrl: parsed.apiUrl.trim(),
+          apiKeyEncrypted: encryptedKey,
+          currency: initialCurrency,
+          balance: initialBalance,
+          lastSyncAt: new Date(),
+          lastError: null,
+          isMock: parsed.isMock,
+          active: true,
+        },
+      });
+    } else {
+      connection = await prisma.userProviderConnection.create({
+        data: {
+          userId: session.user.id,
+          name: parsed.name.trim(),
+          apiUrl: parsed.apiUrl.trim(),
+          apiKeyEncrypted: encryptedKey,
+          currency: initialCurrency,
+          balance: initialBalance,
+          lastSyncAt: new Date(),
+          lastError: null,
+          isMock: parsed.isMock,
+          active: true,
+        },
+      });
+    }
 
     // Also set as activeProviderId if user has none
     const pref = await prisma.userPreference.findUnique({

@@ -122,11 +122,11 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
     if (!activeProvider) {
       return (
         <Link
-          href="/wallet"
+          href="/api-key"
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-xs font-bold transition-all shadow-subtle press-scale"
         >
           <Server className="w-3.5 h-3.5 text-amber-600" />
-          <span className="hidden xs:inline">Connect Provider</span>
+          <span className="hidden xs:inline">Connect API Key</span>
           <span className="xs:hidden">Connect</span>
         </Link>
       );
@@ -229,11 +229,11 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
             </div>
             <div className="pt-2 mt-1 border-t border-[#DEE0ED]/60 px-1">
               <Link
-                href="/wallet"
+                href="/api-key"
                 onClick={() => setDropdownOpen(false)}
                 className="text-[11px] text-[#3A4EFB] hover:underline font-semibold flex items-center justify-between"
               >
-                <span>Manage Providers in Wallet</span>
+                <span>Manage API Key</span>
                 <ExternalLink className="w-3 h-3" />
               </Link>
             </div>
@@ -264,10 +264,10 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
               Provider Balance
             </span>
             <Link
-              href="/wallet"
+              href="/api-key"
               className="text-xs font-bold text-[#E3FF3B] hover:underline flex items-center gap-1"
             >
-              Connect Provider →
+              Connect API Key →
             </Link>
           </div>
         </div>
@@ -374,11 +374,11 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
           </div>
           <div className="pt-2 mt-1 border-t border-[#323758] px-1 text-center">
             <Link
-              href="/wallet"
+              href="/api-key"
               onClick={() => setDropdownOpen(false)}
               className="text-[10px] text-[#E3FF3B] hover:underline font-semibold"
             >
-              Manage in Wallet →
+              Configure API Key →
             </Link>
           </div>
         </div>

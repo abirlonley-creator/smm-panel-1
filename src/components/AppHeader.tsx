@@ -8,7 +8,7 @@ import {
   RefreshCw,
   Clock,
   LogOut,
-  Settings,
+  KeyRound,
   Server,
   ShieldCheck,
   User,
@@ -136,13 +136,14 @@ export function AppHeader() {
         {/* Provider Balance Pill / Switcher */}
         <ProviderBalanceSwitcher variant="header" />
 
-        {/* Settings Action */}
+        {/* API Key Action */}
         <Link
-          href="/settings"
-          title="Account Settings & Provider API"
-          className="p-2 rounded-xl bg-[#F8F9FD] hover:bg-white border border-[#DEE0ED] text-[#252943]/70 hover:text-[#252943] hover:border-[#3A4EFB] transition-all shadow-subtle"
+          href="/api-key"
+          title="Add / Configure Provider API Key"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#F8F9FD] hover:bg-white border border-[#DEE0ED] text-[#252943]/80 hover:text-[#3A4EFB] hover:border-[#3A4EFB] text-xs font-semibold transition-all shadow-subtle"
         >
-          <Settings className="w-4 h-4" />
+          <KeyRound className="w-3.5 h-3.5 text-[#3A4EFB]" />
+          <span className="hidden sm:inline">API Key</span>
         </Link>
 
         {/* Logout Action */}

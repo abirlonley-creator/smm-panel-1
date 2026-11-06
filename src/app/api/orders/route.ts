@@ -145,95 +145,156 @@ export async function POST(request: Request) {
     const unitCost = service.ratePer1000 / 1000;
     const orderRef = `SMM-${Math.floor(100000 + Math.random() * 900000)}`;
 
-    // Case 0: Drip Feed Random Range Order
-    if (scheduleMode === "DRIP_FEED") {
-      const minQty = parsed.data.dripMinQuantity ?? service.minQuantity;
-      const maxQty = parsed.data.dripMaxQuantity ?? minQty;
-      const runs = parsed.data.dripRuns ?? 5;
-      const interval = parsed.data.dripIntervalMinutes ?? 60;
+    // Resolve Chosen Provider Connection
+    const targetProviderId = service.userProviderId || service.providerId;
+    let providerConnection = null;
+    if (targetProviderId) {
+      providerConnection = await prisma.userProviderConnection.findFirst({
+        where: { id: targetProviderId, userId },
+      });
+    }
+    if (!providerConnection) {
+      providerConnection = await prisma.userProviderConnection.findFirst({
+        where: { userId, active: true },
+      });
+    }
 
-      let dripPlan;
-      try {
-        dripPlan = generateDripFeedSequence({
-          minQuantityPerRun: minQty,
-          maxQuantityPerRun: maxQty,
-          runsCount: runs,
-          intervalMinutes: interval,
-          serviceMin: service.minQuantity,
-          serviceMax: service.maxQuantity,
-          ratePer1000: service.ratePer1000,
-        });
-      } catch (err: any) {
+    const { adapter, config: providerConfig } = await getActiveProvider(
+      userId,
+      providerConnection?.id
+    );
+    const targetProviderServiceId = service.providerServiceId || service.externalId;
+
+    // Fetch user (for optional local wallet records)
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const currentBalance = user?.walletBalance ?? 0;
+
+    // Case 0: Working Drip Feed Order
+    if (scheduleMode === "DRIP_FEED") {
+      const runs = parsed.data.dripRuns && parsed.data.dripRuns >= 1 ? parsed.data.dripRuns : 5;
+      const interval = parsed.data.dripIntervalMinutes && parsed.data.dripIntervalMinutes >= 1 ? parsed.data.dripIntervalMinutes : 60;
+      const quantityPerRun = requestedQuantity;
+
+      // Validate quantity per run against service limits
+      if (quantityPerRun < service.minQuantity) {
         return NextResponse.json(
-          { success: false, error: err.message || "Failed to generate drip feed plan" },
+          {
+            success: false,
+            error: `Quantity per run (${quantityPerRun.toLocaleString()}) is below the minimum required (${service.minQuantity.toLocaleString()}).`,
+          },
+          { status: 400 }
+        );
+      }
+      if (quantityPerRun > service.maxQuantity) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Quantity per run (${quantityPerRun.toLocaleString()}) exceeds the maximum allowed (${service.maxQuantity.toLocaleString()}).`,
+          },
           { status: 400 }
         );
       }
 
-      const user = await prisma.user.findUnique({ where: { id: userId } });
-      const currentBalance = user?.walletBalance ?? 0;
-      if (currentBalance < dripPlan.actualFinalCharge) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: `Insufficient wallet balance. Total cost is ₹${dripPlan.actualFinalCharge.toFixed(2)}, but your current balance is ₹${currentBalance.toFixed(2)}. Please recharge your wallet.`,
-            required: dripPlan.actualFinalCharge,
-            currentBalance,
-          },
-          { status: 402 }
-        );
+      const totalQuantity = quantityPerRun * runs;
+      const totalCharge = Number(((totalQuantity / 1000) * service.ratePer1000).toFixed(4));
+
+      // Attempt native provider drip feed first (Standard SMM API v2: action=add with runs & interval)
+      let providerOrderId: string | null = null;
+      let isNativeDrip = false;
+
+      const providerRes = await adapter.createOrder({
+        serviceExternalId: targetProviderServiceId,
+        targetUrl,
+        quantity: quantityPerRun,
+        runs,
+        interval,
+      });
+
+      if (providerRes.success && providerRes.providerOrderId) {
+        providerOrderId = String(providerRes.providerOrderId);
+        isNativeDrip = true;
+      } else {
+        // Provider does not support native drip feed -> Send Run 1 immediately as first batch
+        const run1Res = await adapter.createOrder({
+          serviceExternalId: targetProviderServiceId,
+          targetUrl,
+          quantity: quantityPerRun,
+        });
+
+        if (run1Res.success && run1Res.providerOrderId) {
+          providerOrderId = String(run1Res.providerOrderId);
+          isNativeDrip = false;
+        } else {
+          return NextResponse.json(
+            {
+              success: false,
+              error:
+                providerRes.error ||
+                run1Res.error ||
+                "Provider rejected order placement. Please verify service ID and link.",
+            },
+            { status: 422 }
+          );
+        }
       }
 
+      // Record in database
+      const now = new Date();
       const order = await prisma.$transaction(async (tx) => {
-        const updatedUser = await tx.user.update({
-          where: { id: userId },
-          data: { walletBalance: { decrement: dripPlan.actualFinalCharge } },
-        });
-
-        await tx.walletTransaction.create({
-          data: {
-            userId,
-            type: "DEBIT",
-            amount: dripPlan.actualFinalCharge,
-            balanceAfter: updatedUser.walletBalance,
-            referenceId: orderRef,
-            description: `Drip Feed order ${orderRef} (${dripPlan.runsCount} runs, total ${dripPlan.actualTotalQuantity} units)`,
-          },
-        });
+        // If user has local wallet balance, debit it; do not block if zero
+        if (currentBalance > 0) {
+          const debited = Math.min(currentBalance, totalCharge);
+          const newBal = Number((currentBalance - debited).toFixed(2));
+          await tx.user.update({
+            where: { id: userId },
+            data: { walletBalance: newBal },
+          });
+          await tx.walletTransaction.create({
+            data: {
+              userId,
+              type: "DEBIT",
+              amount: -debited,
+              balanceAfter: newBal,
+              referenceId: orderRef,
+              description: `Drip Feed order ${orderRef} (${runs} runs × ${quantityPerRun} units)`,
+            },
+          });
+        }
 
         const newOrder = await tx.order.create({
           data: {
             orderRef,
             serviceId: service.id,
-            providerId: service.providerId,
+            providerId: providerConnection?.id || null,
             targetUrl,
-            requestedQuantity: dripPlan.actualTotalQuantity,
-            submittedQuantity: 0,
+            requestedQuantity: totalQuantity,
+            submittedQuantity: isNativeDrip ? totalQuantity : quantityPerRun,
             deliveredQuantity: 0,
-            remainingQuantity: dripPlan.actualTotalQuantity,
+            remainingQuantity: isNativeDrip ? totalQuantity : totalQuantity - quantityPerRun,
             failedQuantity: 0,
             unitCost,
-            totalCost: dripPlan.actualFinalCharge,
+            totalCost: totalCharge,
             isScheduled: true,
             scheduleMode: "DRIP_FEED",
-            status: "SCHEDULED",
+            status: "PROCESSING",
+            providerOrderId,
             userId,
           },
         });
 
-        const now = new Date();
-        for (let i = 0; i < dripPlan.quantities.length; i++) {
-          const runQty = dripPlan.quantities[i];
-          const scheduledAt = new Date(now.getTime() + i * dripPlan.intervalMinutes * 60 * 1000);
-          const runCost = Number(((runQty / 1000) * service.ratePer1000).toFixed(4));
+        // Create drip feed run entries for tracking
+        for (let i = 0; i < runs; i++) {
+          const scheduledAt = new Date(now.getTime() + i * interval * 60 * 1000);
+          const runCost = Number(((quantityPerRun / 1000) * service.ratePer1000).toFixed(4));
 
           await tx.dripFeedRun.create({
             data: {
               orderId: newOrder.id,
               runNumber: i + 1,
               scheduledAt,
-              quantity: runQty,
-              status: "PENDING",
+              quantity: quantityPerRun,
+              status: isNativeDrip ? "PROCESSING" : i === 0 ? "COMPLETED" : "PENDING",
+              providerOrderId: isNativeDrip ? providerOrderId : i === 0 ? providerOrderId : null,
               cost: runCost,
             },
           });
@@ -246,7 +307,7 @@ export async function POST(request: Request) {
         data: {
           action: "DRIP_FEED_ORDER_PLACED",
           actor: "Customer",
-          details: `Drip Feed order ${orderRef} created with ${dripPlan.runsCount} runs (range ${minQty}-${maxQty})`,
+          details: `Drip Feed order ${orderRef} placed: ${runs} runs of ${quantityPerRun} units every ${interval}m (Provider Order #${providerOrderId})`,
           userId,
         },
       });
@@ -256,7 +317,11 @@ export async function POST(request: Request) {
         include: { service: true, dripFeedRuns: { orderBy: { runNumber: "asc" } } },
       });
 
-      return NextResponse.json({ success: true, order: fullOrder, dripPlan });
+      return NextResponse.json({
+        success: true,
+        order: fullOrder,
+        message: `Drip feed order #${providerOrderId || orderRef} placed successfully! ${runs} runs scheduled every ${interval} minutes.`,
+      });
     }
 
     const totalCost = Number(((requestedQuantity / 1000) * service.ratePer1000).toFixed(4));
@@ -288,18 +353,16 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2. Fetch User & Validate User Wallet Balance
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    // 2. Validate User Wallet Balance (Only block if no provider connected)
     if (!user) {
       return NextResponse.json({ success: false, error: "User account not found." }, { status: 404 });
     }
-    const currentBalance = user.walletBalance ?? 0;
-    if (currentBalance < totalCost) {
+    if (!providerConnection && currentBalance < totalCost) {
       const needed = Number((totalCost - currentBalance).toFixed(2));
       return NextResponse.json(
         {
           success: false,
-          error: `Insufficient wallet balance. Total cost is ₹${totalCost.toFixed(2)}, but your balance is ₹${currentBalance.toFixed(2)}. Please add ₹${needed.toFixed(2)} to continue.`,
+          error: `Insufficient wallet balance. Total cost is ${totalCost.toFixed(2)}, but your balance is ${currentBalance.toFixed(2)}. Please connect your provider API key or add balance.`,
           required: totalCost,
           currentBalance,
           needed,
@@ -308,31 +371,15 @@ export async function POST(request: Request) {
       );
     }
 
-    // 3. Resolve Chosen Provider & Validate Status, Key, and Upstream Balance
-    const targetProviderId = service.userProviderId || service.providerId;
-    let providerConnection = null;
-    if (targetProviderId) {
-      providerConnection = await prisma.userProviderConnection.findFirst({
-        where: { id: targetProviderId, userId },
-      });
-    }
-    if (!providerConnection) {
-      providerConnection = await prisma.userProviderConnection.findFirst({
-        where: { userId, active: true },
-      });
-    }
-
-    if (!providerConnection || !providerConnection.active) {
+    if (providerConnection && !providerConnection.active) {
       return NextResponse.json(
-        { success: false, error: "The chosen provider is currently disconnected or paused. Please check your Wallet tab." },
+        { success: false, error: "The chosen provider is currently disconnected or paused. Please check your API Key tab." },
         { status: 400 }
       );
     }
 
-    const { adapter } = await getActiveProvider(userId, providerConnection.id);
-
     // Validate provider API key
-    if (!providerConnection.isMock) {
+    if (providerConnection && !providerConnection.isMock) {
       const { decryptApiKey } = await import("@/lib/security/crypto");
       const decryptedKey = decryptApiKey(providerConnection.apiKeyEncrypted);
       if (!decryptedKey || decryptedKey.trim() === "") {
@@ -344,7 +391,7 @@ export async function POST(request: Request) {
     }
 
     // Validate provider balance if known
-    if (providerConnection.balance !== null && providerConnection.balance < totalCost && !providerConnection.isMock) {
+    if (providerConnection && providerConnection.balance !== null && providerConnection.balance < totalCost && !providerConnection.isMock) {
       return NextResponse.json(
         {
           success: false,
@@ -374,30 +421,33 @@ export async function POST(request: Request) {
         );
       }
 
-      // Success: Transactionally debit user wallet and record order
-      const newBal = Number((currentBalance - totalCost).toFixed(2));
+      // Success: Transactionally debit user wallet (if positive) and record order
+      const debited = Math.min(currentBalance, totalCost);
+      const newBal = Number((currentBalance - debited).toFixed(2));
       const order = await prisma.$transaction(async (tx) => {
-        await tx.user.update({
-          where: { id: userId },
-          data: { walletBalance: newBal },
-        });
+        if (debited > 0) {
+          await tx.user.update({
+            where: { id: userId },
+            data: { walletBalance: newBal },
+          });
 
-        await tx.walletTransaction.create({
-          data: {
-            userId,
-            type: "DEBIT",
-            amount: -totalCost,
-            balanceAfter: newBal,
-            referenceId: orderRef,
-            description: `Order ${orderRef} (${service.name}, ${requestedQuantity.toLocaleString()} units)`,
-          },
-        });
+          await tx.walletTransaction.create({
+            data: {
+              userId,
+              type: "DEBIT",
+              amount: -debited,
+              balanceAfter: newBal,
+              referenceId: orderRef,
+              description: `Order ${orderRef} (${service.name}, ${requestedQuantity.toLocaleString()} units)`,
+            },
+          });
+        }
 
         return tx.order.create({
           data: {
             orderRef,
             serviceId: service.id,
-            providerId: providerConnection.id,
+            providerId: providerConnection?.id || null,
             targetUrl,
             requestedQuantity,
             submittedQuantity: requestedQuantity,
@@ -477,7 +527,7 @@ export async function POST(request: Request) {
         data: {
           orderRef,
           serviceId: service.id,
-          providerId: providerConnection.id,
+          providerId: providerConnection?.id || null,
           targetUrl,
           requestedQuantity,
           submittedQuantity: 0,

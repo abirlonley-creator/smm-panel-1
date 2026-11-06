@@ -3,26 +3,16 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { 
-  Compass, 
   PlusCircle, 
-  TrendingUp, 
-  Radar,
   Layers, 
-  ListTree, 
-  ShieldCheck, 
+  KeyRound,
   Menu, 
   X,
-  ExternalLink,
   Wallet,
   RefreshCw,
   AlertTriangle,
-  Boxes,
-  Settings,
-  Send,
   Clock,
-  Shield,
-  KeyRound,
-  Tag,
+  Send,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { DEFAULT_PROVIDER_BALANCE_REFRESH_INTERVAL_MS } from "@/lib/provider/balance";
@@ -30,18 +20,9 @@ import { formatProviderBalance } from "@/lib/currency";
 import { ProviderBalanceSwitcher } from "@/components/ProviderBalanceSwitcher";
 
 const ALL_NAV_ITEMS = [
-  { href: "/", label: "Overview", icon: Compass, adminOnly: false },
-  { href: "/pricing", label: "Plans & Pricing", icon: Tag, adminOnly: false },
   { href: "/order", label: "New Order", icon: PlusCircle, adminOnly: false },
-  { href: "/engagement", label: "Full Engagement", icon: TrendingUp, adminOnly: false },
-  { href: "/combos", label: "Combo Orders", icon: Boxes, adminOnly: false },
-  { href: "/planner", label: "Growth Planner", icon: Clock, adminOnly: false },
-  { href: "/likes-analyze", label: "Likes Analyze", icon: Radar, adminOnly: false },
   { href: "/orders", label: "Orders", icon: Layers, adminOnly: false },
-  { href: "/services", label: "Services Catalog", icon: ListTree, adminOnly: false },
-  { href: "/wallet", label: "Wallet", icon: Wallet, adminOnly: false },
-  { href: "/settings", label: "Settings", icon: Settings, adminOnly: false },
-  { href: "/admin", label: "Administration", icon: ShieldCheck, adminOnly: true },
+  { href: "/api-key", label: "API Key", icon: KeyRound, adminOnly: false },
 ];
 
 export function Navigation() {
@@ -213,7 +194,10 @@ export function Navigation() {
           <div className="space-y-1.5 mt-4">
             {navItems.map((item) => {
               const Icon = item.icon;
-              const isActive = pathname === item.href || (item.href !== "/" && (pathname === item.href || pathname.startsWith(item.href + "/")));
+              const isActive =
+                item.href === "/order"
+                  ? pathname === "/order" || pathname === "/"
+                  : pathname === item.href || pathname.startsWith(item.href + "/");
               return (
                 <Link
                   key={item.href}
@@ -336,7 +320,10 @@ export function Navigation() {
           </div>
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = pathname === item.href || (item.href !== "/" && (pathname === item.href || pathname.startsWith(item.href + "/")));
+            const isActive =
+              item.href === "/order"
+                ? pathname === "/order" || pathname === "/"
+                : pathname === item.href || pathname.startsWith(item.href + "/");
             return (
               <Link
                 key={item.href}
