@@ -27,7 +27,41 @@ export async function syncProviderServices(
   } = {}
 ): Promise<SyncCatalogResult> {
   const endpoint = (options.providerEndpoint || adapter.apiUrl || "mock").trim();
-  const effectiveProviderId = options.userProviderId || options.providerId;
+  
+  // Resolve valid foreign keys for UserProviderConnection and legacy Provider
+  let validUserProviderId: string | null = options.userProviderId || null;
+  let validLegacyProviderId: string | null = null;
+
+  if (validUserProviderId) {
+    const userConn = await prisma.userProviderConnection.findUnique({
+      where: { id: validUserProviderId },
+      select: { id: true },
+    });
+    if (!userConn) validUserProviderId = null;
+  }
+
+  if (options.providerId && !validUserProviderId) {
+    // Check if options.providerId is actually a UserProviderConnection
+    const userConn = await prisma.userProviderConnection.findUnique({
+      where: { id: options.providerId },
+      select: { id: true },
+    });
+    if (userConn) {
+      validUserProviderId = userConn.id;
+    } else {
+      const legProv = await prisma.provider.findUnique({
+        where: { id: options.providerId },
+        select: { id: true },
+      });
+      if (legProv) validLegacyProviderId = legProv.id;
+    }
+  } else if (options.providerId) {
+    const legProv = await prisma.provider.findUnique({
+      where: { id: options.providerId },
+      select: { id: true },
+    });
+    if (legProv) validLegacyProviderId = legProv.id;
+  }
 
   const services = await adapter.getServices();
   if (!Array.isArray(services)) {
@@ -35,20 +69,25 @@ export async function syncProviderServices(
   }
 
   // Load existing external IDs for THIS specific provider ID / endpoint
+  const existingWhere: any = {};
+  if (validUserProviderId && validLegacyProviderId) {
+    existingWhere.OR = [
+      { userProviderId: validUserProviderId },
+      { providerId: validLegacyProviderId },
+    ];
+  } else if (validUserProviderId) {
+    existingWhere.userProviderId = validUserProviderId;
+  } else if (validLegacyProviderId) {
+    existingWhere.providerId = validLegacyProviderId;
+  } else {
+    existingWhere.OR = [
+      { providerEndpoint: endpoint },
+      ...(endpoint === "mock" ? [{ isMock: true }] : []),
+    ];
+  }
+
   const existing = await prisma.service.findMany({
-    where: effectiveProviderId
-      ? {
-          OR: [
-            { userProviderId: effectiveProviderId },
-            { providerId: effectiveProviderId },
-          ],
-        }
-      : {
-          OR: [
-            { providerEndpoint: endpoint },
-            ...(endpoint === "mock" ? [{ isMock: true }] : []),
-          ],
-        },
+    where: existingWhere,
     select: { id: true, externalId: true, providerServiceId: true, restrictions: true },
   });
 
@@ -67,8 +106,8 @@ export async function syncProviderServices(
     const serviceData = {
       externalId: sId,
       providerServiceId: sId,
-      userProviderId: effectiveProviderId || null,
-      providerId: effectiveProviderId || null,
+      userProviderId: validUserProviderId,
+      providerId: validLegacyProviderId,
       name: s.name,
       type: s.type || "Default",
       platform: s.platform,
@@ -105,13 +144,19 @@ export async function syncProviderServices(
     });
   }
 
-  // Update existing services
-  for (const item of toUpdate) {
-    const { id, ...data } = item;
-    await prisma.service.update({
-      where: { id },
-      data,
-    });
+  // Update existing services in concurrent batches for speed
+  const UPDATE_CONCURRENCY = 25;
+  for (let i = 0; i < toUpdate.length; i += UPDATE_CONCURRENCY) {
+    const batch = toUpdate.slice(i, i + UPDATE_CONCURRENCY);
+    await Promise.all(
+      batch.map((item) => {
+        const { id, ...data } = item;
+        return prisma.service.update({
+          where: { id },
+          data,
+        });
+      })
+    );
   }
 
   // Deactivate services no longer present in provider's live catalog
@@ -130,9 +175,9 @@ export async function syncProviderServices(
   const catalogSyncedAt = new Date();
 
   // Update servicesCount & lastSyncAt on user_providers
-  if (effectiveProviderId) {
+  if (validUserProviderId) {
     await prisma.userProviderConnection.update({
-      where: { id: effectiveProviderId },
+      where: { id: validUserProviderId },
       data: {
         servicesCount: services.length,
         lastSyncAt: catalogSyncedAt,
@@ -166,6 +211,6 @@ export async function syncProviderServices(
     updatedCount: toUpdate.length,
     catalogSyncedAt: catalogSyncedAt.toISOString(),
     providerEndpoint: endpoint,
-    providerId: effectiveProviderId,
+    providerId: validUserProviderId || validLegacyProviderId || options.providerId,
   };
 }

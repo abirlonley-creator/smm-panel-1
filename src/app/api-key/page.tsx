@@ -39,9 +39,9 @@ export default function ApiKeyPage() {
   const [activeProviderId, setActiveProviderId] = useState<string | null>(null);
 
   // Form State
-  const [apiUrl, setApiUrl] = useState("https://justanotherpanel.com/api/v2");
+  const [apiUrl, setApiUrl] = useState("https://airgrowsmm.com/api/v2");
   const [apiKey, setApiKey] = useState("");
-  const [providerName, setProviderName] = useState("Main Provider");
+  const [providerName, setProviderName] = useState("AirGrow SMM");
   const [currency, setCurrency] = useState("USD");
   const [showKey, setShowKey] = useState(false);
 
@@ -510,6 +510,61 @@ export default function ApiKeyPage() {
             Enter your SMM Provider API URL and API Key. We test the connection live using{" "}
             <code className="text-[#3A4EFB] font-mono">action=balance</code> before saving.
           </p>
+        </div>
+
+        {/* Quick Provider Presets */}
+        <div className="p-3 rounded-xl bg-[#F0F2FA] border border-[#DEE0ED] space-y-2">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-[#252943]/60 block">
+            Popular Provider Presets (1-Click Fill)
+          </span>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setProviderName("AirGrow SMM");
+                setApiUrl("https://airgrowsmm.com/api/v2");
+                setCurrency("USD");
+              }}
+              className="px-2.5 py-1 rounded-lg bg-white hover:bg-[#3A4EFB] hover:text-white border border-[#DEE0ED] text-xs font-bold text-[#252943] transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
+            >
+              <span>⚡ AirGrow SMM</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setProviderName("Zeofame");
+                setApiUrl("https://zefame.com/api/v2");
+                setCurrency("EUR");
+              }}
+              className="px-2.5 py-1 rounded-lg bg-white hover:bg-[#3A4EFB] hover:text-white border border-[#DEE0ED] text-xs font-bold text-[#252943] transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
+            >
+              <span>⚡ Zeofame</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setProviderName("XMedia SMM");
+                setApiUrl("https://xmediasmm.in/api/v2");
+                setCurrency("INR");
+              }}
+              className="px-2.5 py-1 rounded-lg bg-white hover:bg-[#3A4EFB] hover:text-white border border-[#DEE0ED] text-xs font-bold text-[#252943] transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
+            >
+              <span>⚡ XMedia SMM</span>
+            </button>
+          </div>
+          {apiUrl.includes("airgrowsmm.com") && (
+            <div className="text-[11px] text-[#3A4EFB] pt-0.5">
+              API Key can be generated from{" "}
+              <a
+                href="https://airgrowsmm.com/account/settings"
+                target="_blank"
+                rel="noreferrer"
+                className="underline font-bold hover:text-[#3243d9]"
+              >
+                AirGrow SMM Accounts Page ↗
+              </a>
+            </div>
+          )}
         </div>
 
         <form onSubmit={handleSaveConnection} className="space-y-5">

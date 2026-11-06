@@ -70,20 +70,38 @@ export class MockSMMProvider implements SMMProviderAdapter {
     },
     {
       id: "101",
-      name: "Instagram Likes — Instant & Natural Pace",
-      type: "Default",
+      name: "Real & Active Followers",
+      type: "default",
       platform: "Instagram",
-      category: "Likes",
-      description: "High speed gradual delivery likes. Starts within 2-5 minutes.",
-      minQuantity: 20,
-      maxQuantity: 25000,
-      ratePer1000: 0.85,
+      category: "Instagram Followers",
+      description: "Service Description",
+      minQuantity: 100,
+      maxQuantity: 100000,
+      ratePer1000: 250.00,
       refillSupported: true,
       cancelSupported: true,
       dripFeedSupported: true,
       dripFeedMinInterval: 10,
-      dripFeedMaxInterval: 720,
-      restrictions: "Post URL must be publicly accessible. Compatible with Reels and standard posts.",
+      dripFeedMaxInterval: 1440,
+      restrictions: "Account must be public during entire delivery. Do not change username while processing.",
+      isMock: true,
+    },
+    {
+      id: "30067",
+      name: "Instagram - Worldwide",
+      type: "default",
+      platform: "Instagram",
+      category: "Instagram Followers",
+      description: "Service Description",
+      minQuantity: 100,
+      maxQuantity: 10000,
+      ratePer1000: 103.00,
+      refillSupported: true,
+      cancelSupported: true,
+      dripFeedSupported: true,
+      dripFeedMinInterval: 10,
+      dripFeedMaxInterval: 1440,
+      restrictions: "Service Description restrictions apply.",
       isMock: true,
     },
     {
@@ -345,7 +363,7 @@ export class StandardSMMv2Provider implements SMMProviderAdapter {
         cache: "no-store",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
-          "User-Agent": "AuraSMM-Engine/2.0",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         },
         body: bodyParams.toString(),
         signal: controller.signal,
@@ -583,16 +601,16 @@ export class StandardSMMv2Provider implements SMMProviderAdapter {
       const res = await this.postRequest("refill", { order: providerOrderId });
       const data = res.data as Record<string, unknown>;
 
-      if (data && data.refill && !data.error) {
+      if (data && (data.refill !== undefined || data.success) && !data.error) {
         return {
           success: true,
-          refillId: String(data.refill),
+          refillId: data.refill !== undefined ? String(data.refill) : String(providerOrderId),
         };
       }
 
       return {
         success: false,
-        error: String(data?.error || "Provider rejected refill request"),
+        error: String(data?.error || "Order not eligible for refill."),
       };
     } catch (err: unknown) {
       return {
@@ -604,7 +622,10 @@ export class StandardSMMv2Provider implements SMMProviderAdapter {
 
   async getRefillStatus(refillId: string): Promise<RefillStatusResult> {
     try {
-      const res = await this.postRequest("refill_status", { refill: refillId });
+      const res = await this.postRequest("refill_status", {
+        refill: refillId,
+        order: refillId,
+      });
       const data = res.data as Record<string, unknown>;
 
       if (data && data.status) {
@@ -613,6 +634,7 @@ export class StandardSMMv2Provider implements SMMProviderAdapter {
         if (raw.toLowerCase().includes("complete")) status = "Completed";
         else if (raw.toLowerCase().includes("reject")) status = "Rejected";
         else if (raw.toLowerCase().includes("pending")) status = "Pending";
+        else if (raw.toLowerCase().includes("cancel")) status = "Rejected";
 
         return {
           success: true,
@@ -636,10 +658,29 @@ export class StandardSMMv2Provider implements SMMProviderAdapter {
 
   async cancelOrder(providerOrderId: string): Promise<CancelOrderResult> {
     try {
-      const res = await this.postRequest("cancel", { orders: providerOrderId });
+      const res = await this.postRequest("cancel", {
+        order: providerOrderId,
+        orders: providerOrderId,
+      });
       const data = res.data;
 
-      // User spec response: [ { "order": 2, "cancel": 1 } ] or [ { "order": 9, "cancel": { "error": "Incorrect order ID" } } ]
+      // Handle standard SMM v2 Direct Object:
+      // Success: { "success": "We will attempt to cancel this order..." }
+      // Failure: { "error": "Order not eligible for cancellation." }
+      if (typeof data === "object" && data !== null && !Array.isArray(data)) {
+        const obj = data as Record<string, unknown>;
+        if (obj.error) {
+          return { success: false, error: String(obj.error) };
+        }
+        if (obj.success) {
+          return { success: true, message: String(obj.success) };
+        }
+        if (obj.cancel && !obj.error) {
+          return { success: true, message: "Cancellation request processed" };
+        }
+      }
+
+      // Handle legacy Array response: [ { "order": 2, "cancel": 1 } ] or [ { "order": 9, "cancel": { "error": "Incorrect order ID" } } ]
       if (Array.isArray(data) && data.length > 0) {
         const item = data[0];
         if (item.cancel && item.cancel !== null && typeof item.cancel !== "object") {
@@ -653,19 +694,11 @@ export class StandardSMMv2Provider implements SMMProviderAdapter {
             error: String(item.cancel.error),
           };
         }
-      } else if (typeof data === "object" && data !== null) {
-        const obj = data as Record<string, unknown>;
-        if (obj.cancel && !obj.error) {
-          return { success: true, message: "Cancellation request processed" };
-        }
-        if (obj.error) {
-          return { success: false, error: String(obj.error) };
-        }
       }
 
       return {
         success: true,
-        message: "Cancellation request sent to provider",
+        message: "Cancellation request processed by provider",
       };
     } catch (err: unknown) {
       return {
