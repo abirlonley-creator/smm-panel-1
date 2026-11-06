@@ -63,7 +63,9 @@ export async function GET(request: Request) {
       }
     }
 
-    const { adapter, config } = await getActiveProvider(userId);
+    const filterProviderId = searchParams.get("providerId")?.trim();
+    const effectiveProviderId = filterProviderId && filterProviderId !== "all" ? filterProviderId : undefined;
+    const { adapter, config } = await getActiveProvider(userId, effectiveProviderId);
     const activeEndpoint = config.isMock ? "mock" : config.apiUrl.trim();
 
     // 3. Direct single-service lookup by ID (e.g. planner, likes-analyze, or order verification)
@@ -113,7 +115,10 @@ export async function GET(request: Request) {
 
     if (shouldRefresh && userId && userProviders.length > 0) {
       try {
-        const targetProvider = userProviders[0];
+        const targetProvider =
+          (effectiveProviderId ? userProviders.find((p) => p.id === effectiveProviderId) : null) ||
+          userProviders.find((p) => p.id === config.id) ||
+          userProviders[0];
         await syncProviderServices(
           adapter,
           session.user?.username || session.label || "Manual Sync",
@@ -132,15 +137,16 @@ export async function GET(request: Request) {
       }
     }
 
-    const filterProviderId = searchParams.get("providerId")?.trim();
-
     // 5. Build filter query
     const where: any = { active: true };
 
-    if (filterProviderId) {
+    if (filterProviderId && filterProviderId !== "all") {
+      const specificConn = userProviders.find((p) => p.id === filterProviderId);
+      const specificEndpoint = specificConn?.apiUrl?.trim();
       where.OR = [
         { userProviderId: filterProviderId },
         { providerId: filterProviderId },
+        ...(specificEndpoint && specificEndpoint !== "mock" ? [{ providerEndpoint: specificEndpoint }] : []),
       ];
     } else if (userProviders.length > 0) {
       const userProvIds = userProviders.map((p) => p.id);
@@ -301,10 +307,14 @@ export async function GET(request: Request) {
         lastSyncAt: config.lastSyncAt,
         warning: syncError || undefined,
       },
+      activeProviderId: config.id,
       providers: userProviders.map((p) => ({
         id: p.id,
         name: p.name,
         currency: p.currency,
+        balance: p.balance,
+        apiUrl: p.apiUrl,
+        isActive: p.id === config.id,
       })),
       services: paginated,
       totalServices: finalTotal,

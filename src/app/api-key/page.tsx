@@ -13,9 +13,9 @@ import {
   Eye,
   EyeOff,
   Trash2,
-  ShieldCheck,
   Check,
-  Sparkles,
+  PlusCircle,
+  Layers,
 } from "lucide-react";
 
 interface ProviderConnection {
@@ -36,12 +36,12 @@ interface ProviderConnection {
 export default function ApiKeyPage() {
   const [loading, setLoading] = useState(true);
   const [connections, setConnections] = useState<ProviderConnection[]>([]);
-  const [activeConnection, setActiveConnection] = useState<ProviderConnection | null>(null);
+  const [activeProviderId, setActiveProviderId] = useState<string | null>(null);
 
   // Form State
   const [apiUrl, setApiUrl] = useState("https://justanotherpanel.com/api/v2");
   const [apiKey, setApiKey] = useState("");
-  const [providerName, setProviderName] = useState("My SMM Provider");
+  const [providerName, setProviderName] = useState("Main Provider");
   const [currency, setCurrency] = useState("USD");
   const [showKey, setShowKey] = useState(false);
 
@@ -56,7 +56,8 @@ export default function ApiKeyPage() {
   } | null>(null);
 
   const [saving, setSaving] = useState(false);
-  const [syncing, setSyncing] = useState(false);
+  const [syncingId, setSyncingId] = useState<string | null>(null);
+  const [switchingId, setSwitchingId] = useState<string | null>(null);
   const [notification, setNotification] = useState<{
     type: "success" | "error";
     message: string;
@@ -65,16 +66,29 @@ export default function ApiKeyPage() {
   async function loadProviders() {
     setLoading(true);
     try {
-      const res = await fetch("/api/user/providers");
-      const data = await res.json();
-      if (data.success && Array.isArray(data.connections)) {
-        setConnections(data.connections);
-        const active = data.connections.find((c: ProviderConnection) => c.active) || data.connections[0] || null;
-        setActiveConnection(active);
-        if (active) {
-          setApiUrl(active.apiUrl);
-          setProviderName(active.name);
-          setCurrency(active.currency || "USD");
+      const [resProv, resBal] = await Promise.all([
+        fetch("/api/user/providers"),
+        fetch("/api/balance"),
+      ]);
+      const dataP = await resProv.json();
+      const dataB = await resBal.json();
+
+      if (dataP.success && Array.isArray(dataP.connections)) {
+        setConnections(dataP.connections);
+        const resolvedActiveId =
+          dataB.activeProviderId ||
+          dataP.connections.find((c: ProviderConnection) => c.active)?.id ||
+          dataP.connections[0]?.id ||
+          null;
+        setActiveProviderId(resolvedActiveId);
+
+        // Pre-fill form name suggestion if user already has 1 provider
+        if (dataP.connections.length === 1) {
+          setProviderName("Second Provider");
+        } else if (dataP.connections.length >= 2) {
+          setProviderName(`Provider ${dataP.connections.length + 1}`);
+        } else {
+          setProviderName("Main Provider");
         }
       }
     } catch (err: any) {
@@ -87,6 +101,39 @@ export default function ApiKeyPage() {
   useEffect(() => {
     loadProviders();
   }, []);
+
+  async function handleSetActiveProvider(providerId: string) {
+    if (providerId === activeProviderId) return;
+    setSwitchingId(providerId);
+    setNotification(null);
+
+    try {
+      const res = await fetch("/api/balance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ providerId }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to switch active provider");
+      }
+
+      setActiveProviderId(providerId);
+      setNotification({
+        type: "success",
+        message: `Switched active API to "${data.activeProvider?.name}". Live Balance: ${data.activeProvider?.currency || "USD"} ${data.activeProvider?.balance?.toFixed(2) ?? "0.00"}.`,
+      });
+
+      window.dispatchEvent(new CustomEvent("balance-updated"));
+    } catch (err: any) {
+      setNotification({
+        type: "error",
+        message: err.message || "Failed to switch provider.",
+      });
+    } finally {
+      setSwitchingId(null);
+    }
+  }
 
   async function handleTestConnection() {
     if (!apiUrl.trim() || !apiKey.trim()) {
@@ -155,7 +202,7 @@ export default function ApiKeyPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: providerName.trim() || "My SMM Provider",
+          name: providerName.trim() || `Provider ${connections.length + 1}`,
           apiUrl: apiUrl.trim(),
           apiKey: apiKey.trim(),
           currency: currency.trim().toUpperCase(),
@@ -170,7 +217,7 @@ export default function ApiKeyPage() {
 
       setNotification({
         type: "success",
-        message: `API Key saved successfully! Balance: ${data.connection.currency} ${data.connection.balance ?? 0}. Synced ${data.servicesCount} services.`,
+        message: `API "${data.connection.name}" connected successfully! Balance: ${data.connection.currency} ${data.connection.balance ?? 0}. Synced ${data.servicesCount} services.`,
       });
 
       setApiKey("");
@@ -192,7 +239,7 @@ export default function ApiKeyPage() {
   }
 
   async function handleSyncServices(providerId: string) {
-    setSyncing(true);
+    setSyncingId(providerId);
     setNotification(null);
     try {
       const res = await fetch(`/api/user/providers/${providerId}/refresh`, {
@@ -205,7 +252,7 @@ export default function ApiKeyPage() {
 
       setNotification({
         type: "success",
-        message: `Catalog refreshed! ${data.importedCount || data.servicesCount || 0} services updated. Balance: ${data.balance ?? "verified"}.`,
+        message: `Catalog refreshed for ${data.name}! ${data.importedCount || data.servicesCount || 0} services updated. Live Balance: ${data.currency} ${data.balance ?? 0}.`,
       });
 
       window.dispatchEvent(new CustomEvent("balance-updated"));
@@ -216,12 +263,12 @@ export default function ApiKeyPage() {
         message: err.message || "Failed to sync provider catalog.",
       });
     } finally {
-      setSyncing(false);
+      setSyncingId(null);
     }
   }
 
-  async function handleDeleteProvider(providerId: string) {
-    if (!confirm("Are you sure you want to disconnect this API Key?")) return;
+  async function handleDeleteProvider(providerId: string, name: string) {
+    if (!confirm(`Are you sure you want to disconnect "${name}"?`)) return;
 
     try {
       const res = await fetch(`/api/user/providers/${providerId}?force=true`, {
@@ -234,7 +281,7 @@ export default function ApiKeyPage() {
 
       setNotification({
         type: "success",
-        message: "API Key disconnected successfully.",
+        message: `Provider "${name}" disconnected successfully.`,
       });
 
       window.dispatchEvent(new CustomEvent("balance-updated"));
@@ -254,14 +301,14 @@ export default function ApiKeyPage() {
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="text-xs font-bold uppercase tracking-wider text-[#3A4EFB]">
-              Provider Settings
+              Double API & Multi-Provider Settings
             </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-[#252943] tracking-tight">
-            Add & Configure API Key
+            Connect & Manage API Keys
           </h1>
           <p className="text-sm text-[#252943]/60 mt-1">
-            Connect your standard SMM v2 Provider API (JustAnotherPanel, SMM Raja, etc.) to place orders and drip feeds directly.
+            Connect your primary and secondary SMM v2 APIs (Double API). Switch between them to place orders using each provider&apos;s balance and catalog.
           </p>
         </div>
 
@@ -292,97 +339,176 @@ export default function ApiKeyPage() {
         </div>
       )}
 
-      {/* Active Provider Card */}
-      {activeConnection && (
-        <div className="rounded-2xl bg-white border border-[#DEE0ED] p-6 shadow-sm space-y-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-[#3A4EFB]/10 border border-[#3A4EFB]/20 flex items-center justify-center text-[#3A4EFB]">
-                <Server className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-base font-bold text-[#252943]">{activeConnection.name}</h2>
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                    <Check className="w-3 h-3" />
-                    Active
-                  </span>
-                </div>
-                <p className="text-xs text-[#252943]/60 font-mono mt-0.5">
-                  {activeConnection.apiUrl}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => handleSyncServices(activeConnection.id)}
-                disabled={syncing}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#F8F9FD] hover:bg-white border border-[#DEE0ED] text-xs font-semibold text-[#252943] transition-all shadow-subtle"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 text-[#3A4EFB] ${syncing ? "animate-spin" : ""}`} />
-                <span>{syncing ? "Syncing..." : "Sync Services Now"}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleDeleteProvider(activeConnection.id)}
-                className="p-2 rounded-xl text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-all"
-                title="Disconnect API Key"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
+      {/* Connected APIs Section */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Layers className="w-5 h-5 text-[#3A4EFB]" />
+            <h2 className="text-lg font-bold text-[#252943]">
+              Connected API Providers ({connections.length})
+            </h2>
           </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-[#DEE0ED]/60">
-            <div className="p-3.5 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED]/80">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-[#252943]/50 block mb-1">
-                Live Upstream Balance
-              </span>
-              <div className="text-lg font-extrabold text-[#252943] flex items-center gap-2">
-                <Wallet className="w-4 h-4 text-[#3A4EFB]" />
-                <span>
-                  {activeConnection.balance !== null
-                    ? `${activeConnection.currency} ${activeConnection.balance.toFixed(2)}`
-                    : "Unavailable"}
-                </span>
-              </div>
-            </div>
-
-            <div className="p-3.5 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED]/80">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-[#252943]/50 block mb-1">
-                Synced Services
-              </span>
-              <div className="text-lg font-extrabold text-[#252943]">
-                {activeConnection.servicesCount.toLocaleString()} services
-              </div>
-            </div>
-
-            <div className="p-3.5 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED]/80">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-[#252943]/50 block mb-1">
-                API Key
-              </span>
-              <div className="text-sm font-mono font-bold text-[#252943]/80">
-                {activeConnection.maskedKey || "••••••••••••••••"}
-              </div>
-            </div>
-          </div>
+          {connections.length > 1 && (
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-[#3A4EFB] border border-blue-200">
+              Double API Active
+            </span>
+          )}
         </div>
-      )}
 
-      {/* Add / Update API Key Form */}
+        {loading ? (
+          <div className="rounded-2xl bg-white border border-[#DEE0ED] p-8 text-center text-sm text-[#252943]/60">
+            <RefreshCw className="w-5 h-5 text-[#3A4EFB] animate-spin mx-auto mb-2" />
+            Loading connected API providers...
+          </div>
+        ) : connections.length === 0 ? (
+          <div className="rounded-2xl bg-white border border-dashed border-[#DEE0ED] p-8 text-center space-y-2">
+            <Server className="w-8 h-8 text-[#252943]/40 mx-auto" />
+            <h3 className="text-base font-bold text-[#252943]">No API Keys Connected</h3>
+            <p className="text-xs text-[#252943]/60 max-w-sm mx-auto">
+              Add your SMM provider API key below to sync services and start placing orders.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4">
+            {connections.map((conn, idx) => {
+              const isActive = conn.id === activeProviderId;
+              const isSyncing = syncingId === conn.id;
+              const isSwitching = switchingId === conn.id;
+
+              return (
+                <div
+                  key={conn.id}
+                  className={`rounded-2xl bg-white border p-6 shadow-sm transition-all space-y-4 ${
+                    isActive
+                      ? "border-[#3A4EFB] ring-2 ring-[#3A4EFB]/15"
+                      : "border-[#DEE0ED] hover:border-[#DEE0ED]/80"
+                  }`}
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-11 h-11 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 ${
+                          isActive
+                            ? "bg-[#3A4EFB] text-white"
+                            : "bg-[#F0F2FA] text-[#252943]/70"
+                        }`}
+                      >
+                        API {idx + 1}
+                      </div>
+
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="text-base font-bold text-[#252943]">{conn.name}</h3>
+                          {isActive ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800">
+                              <Check className="w-3 h-3" />
+                              Active & In Use
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-gray-100 text-[#252943]/60">
+                              Standby
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-[#252943]/60 font-mono mt-0.5">
+                          {conn.apiUrl}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 self-start sm:self-center">
+                      {!isActive && (
+                        <button
+                          type="button"
+                          onClick={() => handleSetActiveProvider(conn.id)}
+                          disabled={isSwitching}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#3A4EFB] hover:bg-[#3243d9] text-white text-xs font-bold transition-all shadow-subtle active:scale-95 disabled:opacity-50"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          <span>{isSwitching ? "Activating..." : "Select / Use This API"}</span>
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => handleSyncServices(conn.id)}
+                        disabled={isSyncing}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#F8F9FD] hover:bg-white border border-[#DEE0ED] text-xs font-semibold text-[#252943] transition-all shadow-subtle disabled:opacity-50"
+                      >
+                        <RefreshCw
+                          className={`w-3.5 h-3.5 text-[#3A4EFB] ${isSyncing ? "animate-spin" : ""}`}
+                        />
+                        <span>{isSyncing ? "Syncing..." : "Sync Services"}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteProvider(conn.id, conn.name)}
+                        className="p-2 rounded-xl text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-all"
+                        title="Disconnect API Key"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Stats Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-[#DEE0ED]/60">
+                    <div className="p-3 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED]/80">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-[#252943]/50 block mb-1">
+                        Live Balance
+                      </span>
+                      <div className="text-base sm:text-lg font-extrabold text-[#252943] flex items-center gap-2">
+                        <Wallet className="w-4 h-4 text-[#3A4EFB]" />
+                        <span>
+                          {conn.balance !== null
+                            ? `${conn.currency} ${conn.balance.toFixed(2)}`
+                            : "Unavailable"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED]/80">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-[#252943]/50 block mb-1">
+                        Available Services
+                      </span>
+                      <div className="text-base sm:text-lg font-extrabold text-[#252943]">
+                        {conn.servicesCount.toLocaleString()} services
+                      </div>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED]/80">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-[#252943]/50 block mb-1">
+                        API Key
+                      </span>
+                      <div className="text-xs sm:text-sm font-mono font-bold text-[#252943]/80 truncate">
+                        {conn.maskedKey || "••••••••••••••••"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Add / Connect API Form (Double API Support) */}
       <div className="rounded-2xl bg-white border border-[#DEE0ED] p-6 sm:p-8 shadow-sm space-y-6">
         <div>
           <div className="flex items-center gap-2">
-            <KeyRound className="w-5 h-5 text-[#3A4EFB]" />
+            <PlusCircle className="w-5 h-5 text-[#3A4EFB]" />
             <h2 className="text-lg font-bold text-[#252943]">
-              {activeConnection ? "Update or Connect New API Key" : "Connect Your SMM Provider API Key"}
+              {connections.length === 0
+                ? "Connect Your SMM Provider API Key"
+                : connections.length === 1
+                ? "Connect 2nd API Provider (Double API)"
+                : "Connect Another API Provider"}
             </h2>
           </div>
           <p className="text-xs text-[#252943]/60 mt-1">
-            Enter your SMM Provider API URL and API Key. We test the connection live using <code className="text-[#3A4EFB] font-mono">action=balance</code> before saving.
+            Enter your SMM Provider API URL and API Key. We test the connection live using{" "}
+            <code className="text-[#3A4EFB] font-mono">action=balance</code> before saving.
           </p>
         </div>
 
@@ -397,7 +523,7 @@ export default function ApiKeyPage() {
                 type="text"
                 value={providerName}
                 onChange={(e) => setProviderName(e.target.value)}
-                placeholder="e.g. JustAnotherPanel, SMM Raja"
+                placeholder="e.g. Zefame, XMedia SMM, SMM Raja"
                 className="w-full px-3.5 py-2.5 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED] text-sm text-[#252943] focus:outline-none focus:border-[#3A4EFB] focus:bg-white transition-all font-medium"
               />
             </div>
@@ -416,6 +542,7 @@ export default function ApiKeyPage() {
                 <option value="INR">INR (₹)</option>
                 <option value="EUR">EUR (€)</option>
                 <option value="GBP">GBP (£)</option>
+                <option value="BDT">BDT (৳)</option>
                 <option value="BRL">BRL (R$)</option>
               </select>
             </div>
@@ -431,7 +558,7 @@ export default function ApiKeyPage() {
               required
               value={apiUrl}
               onChange={(e) => setApiUrl(e.target.value)}
-              placeholder="https://justanotherpanel.com/api/v2"
+              placeholder="https://zefame.com/api/v2"
               className="w-full px-3.5 py-2.5 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED] text-sm font-mono text-[#252943] focus:outline-none focus:border-[#3A4EFB] focus:bg-white transition-all"
             />
             <span className="text-[11px] text-[#252943]/50 mt-1 block">
@@ -450,8 +577,8 @@ export default function ApiKeyPage() {
                 required
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                placeholder="Paste your SMM Provider API key here..."
-                className="w-full pl-3.5 pr-10 py-2.5 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED] text-sm font-mono text-[#252943] focus:outline-none focus:border-[#3A4EFB] focus:bg-white transition-all"
+                placeholder="Paste your SMM provider API key here"
+                className="w-full px-3.5 py-2.5 pr-10 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED] text-sm font-mono text-[#252943] focus:outline-none focus:border-[#3A4EFB] focus:bg-white transition-all"
               />
               <button
                 type="button"
@@ -463,78 +590,59 @@ export default function ApiKeyPage() {
             </div>
           </div>
 
-          {/* Test Result Banner */}
+          {/* Test Result Indicator */}
           {testResult && (
             <div
-              className={`p-4 rounded-xl flex items-start gap-3 border ${
+              className={`p-3.5 rounded-xl text-xs flex items-center justify-between border ${
                 testResult.success
                   ? "bg-emerald-50 border-emerald-200 text-emerald-900"
                   : "bg-red-50 border-red-200 text-red-900"
               }`}
             >
-              {testResult.success ? (
-                <CheckCircle2 className="w-5 h-5 text-emerald-600 mt-0.5 shrink-0" />
-              ) : (
-                <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 shrink-0" />
-              )}
-              <div className="text-xs sm:text-sm">
+              <div className="flex items-center gap-2">
                 {testResult.success ? (
-                  <div>
-                    <span className="font-bold">Connection Verified!</span>
-                    <div className="mt-0.5">
-                      Provider Balance: <span className="font-extrabold">{testResult.currency} {testResult.balance?.toFixed(2)}</span> | {testResult.servicesCount} services detected.
-                    </div>
-                  </div>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                 ) : (
-                  <div>
-                    <span className="font-bold">Connection Test Failed:</span> {testResult.error}
-                  </div>
+                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
                 )}
+                <span>
+                  {testResult.success
+                    ? `Connection Verified! Balance: ${testResult.currency} ${testResult.balance?.toFixed(2)}`
+                    : testResult.error}
+                </span>
               </div>
             </div>
           )}
 
-          {/* Form Action Buttons */}
+          {/* Buttons */}
           <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
             <button
               type="button"
               onClick={handleTestConnection}
-              disabled={testing || !apiKey.trim()}
-              className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#F8F9FD] hover:bg-white border border-[#DEE0ED] hover:border-[#3A4EFB] text-xs sm:text-sm font-bold text-[#252943] active:scale-95 transition-all shadow-subtle flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              disabled={testing || saving}
+              className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#F8F9FD] hover:bg-[#F0F2FA] border border-[#DEE0ED] text-xs font-bold text-[#252943] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
             >
               <RefreshCw className={`w-3.5 h-3.5 text-[#3A4EFB] ${testing ? "animate-spin" : ""}`} />
-              <span>{testing ? "Testing Credentials..." : "Test Connection"}</span>
+              <span>{testing ? "Testing..." : "Test Connection"}</span>
             </button>
 
             <button
               type="submit"
-              disabled={saving || !apiKey.trim()}
-              className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-[#3A4EFB] hover:bg-[#3243d9] active:scale-95 text-xs sm:text-sm font-bold text-white transition-all shadow-subtle flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              disabled={saving || testing}
+              className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-[#3A4EFB] hover:bg-[#3243d9] active:scale-95 text-white text-xs font-bold transition-all shadow-subtle flex items-center justify-center gap-2 disabled:opacity-50"
             >
-              <ShieldCheck className="w-4 h-4" />
-              <span>{saving ? "Saving & Syncing..." : "Save & Connect API"}</span>
+              <KeyRound className="w-3.5 h-3.5" />
+              <span>
+                {saving
+                  ? "Connecting & Syncing Services..."
+                  : connections.length === 0
+                  ? "Connect & Sync Services"
+                  : "Connect & Add API"}
+              </span>
             </button>
           </div>
         </form>
       </div>
-
-      {/* Help / Instructions Note */}
-      <div className="p-4 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED] text-xs text-[#252943]/70 space-y-1.5 leading-relaxed">
-        <div className="font-bold text-[#252943] flex items-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5 text-[#3A4EFB]" />
-          How it works
-        </div>
-        <p>
-          1. Paste your SMM Provider API URL (usually ending in <code className="font-mono">/api/v2</code>) and API Key from your provider dashboard.
-        </p>
-        <p>
-          2. Click <strong>Test Connection</strong> to verify your key and check your live account balance.
-        </p>
-        <p>
-          3. Click <strong>Save & Connect API</strong>. We will securely encrypt your key, fetch all available services, and make them immediately available in <strong>New Order</strong>.
-        </p>
-      </div>
     </div>
   );
 }
-

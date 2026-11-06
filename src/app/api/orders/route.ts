@@ -36,6 +36,7 @@ const createOrderSchema = z.object({
   dripRuns: z.number().int().min(1).max(100).optional(),
   dripIntervalMinutes: z.number().int().min(1).max(10080).optional(),
   customRunQuantities: z.array(z.number().int().positive()).optional(),
+  providerId: z.string().optional(),
   timingMode: z.enum(["MODE_A", "MODE_B", "CUSTOM"]).optional().default("MODE_B"),
   stepsCount: z.number().int().min(1).max(30).optional().default(1),
   intervalMinutes: z.number().int().min(5).max(10080).optional().default(60),
@@ -120,23 +121,44 @@ export async function POST(request: Request) {
     const userId = session.user.id;
 
     // -----------------------------------------------------------------------
-    // Provider-Endpoint Ownership Guard
-    // A live service (providerEndpoint set, not mock) must belong to the
-    // requesting user's own active provider. This prevents cross-user catalog
-    // injection: User A cannot submit orders via User B's provider services.
+    // Resolve Chosen Provider Connection & Ownership Guard
+    // Supports Multiple ("Double") Connected APIs per user.
     // -----------------------------------------------------------------------
-    if (service.providerEndpoint && service.providerEndpoint !== "mock" && !service.isMock) {
-      const { config: userProviderConfig } = await getActiveProvider(userId);
-      const userEndpoint = userProviderConfig.isMock
-        ? "mock"
-        : userProviderConfig.apiUrl.trim();
+    const userConnections = await prisma.userProviderConnection.findMany({
+      where: { userId, active: true },
+      orderBy: { createdAt: "asc" },
+    });
 
-      if (userEndpoint !== service.providerEndpoint) {
+    let providerConnection = null;
+    if (parsed.data.providerId) {
+      providerConnection = userConnections.find((c) => c.id === parsed.data.providerId) || null;
+    }
+    if (!providerConnection && (service.userProviderId || service.providerId)) {
+      const sProvId = service.userProviderId || service.providerId;
+      providerConnection = userConnections.find((c) => c.id === sProvId) || null;
+    }
+    if (!providerConnection && service.providerEndpoint && service.providerEndpoint !== "mock") {
+      providerConnection = userConnections.find((c) => c.apiUrl.trim() === service.providerEndpoint?.trim()) || null;
+    }
+    if (!providerConnection) {
+      const pref = await prisma.userPreference.findUnique({ where: { userId } });
+      if (pref?.activeProviderId) {
+        providerConnection = userConnections.find((c) => c.id === pref.activeProviderId) || null;
+      }
+    }
+    if (!providerConnection && userConnections.length > 0) {
+      providerConnection = userConnections[0];
+    }
+
+    // Ownership check: service must belong to one of user's connected providers or mock
+    if (service.providerEndpoint && service.providerEndpoint !== "mock" && !service.isMock && userConnections.length > 0) {
+      const allowedEndpoints = new Set(userConnections.map((c) => c.apiUrl.trim()));
+      if (!allowedEndpoints.has(service.providerEndpoint.trim())) {
         return NextResponse.json(
           {
             success: false,
             error:
-              "The selected service does not belong to your connected provider. Please choose a service from your own provider catalog.",
+              "The selected service does not belong to any of your connected API providers. Please select a service from your connected providers.",
           },
           { status: 403 }
         );
@@ -145,20 +167,6 @@ export async function POST(request: Request) {
 
     const unitCost = service.ratePer1000 / 1000;
     const orderRef = `SMM-${Math.floor(100000 + Math.random() * 900000)}`;
-
-    // Resolve Chosen Provider Connection
-    const targetProviderId = service.userProviderId || service.providerId;
-    let providerConnection = null;
-    if (targetProviderId) {
-      providerConnection = await prisma.userProviderConnection.findFirst({
-        where: { id: targetProviderId, userId },
-      });
-    }
-    if (!providerConnection) {
-      providerConnection = await prisma.userProviderConnection.findFirst({
-        where: { userId, active: true },
-      });
-    }
 
     const { adapter, config: providerConfig } = await getActiveProvider(
       userId,
@@ -209,6 +217,18 @@ export async function POST(request: Request) {
 
       const totalQuantity = runQuantities.reduce((sum, q) => sum + q, 0);
       const totalCharge = Number(((totalQuantity / 1000) * service.ratePer1000).toFixed(4));
+
+      // Validate provider balance if known
+      if (providerConnection && providerConnection.balance !== null && providerConnection.balance < totalCharge && !providerConnection.isMock) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Insufficient balance on provider "${providerConnection.name}". Available: ${providerConnection.currency} ${providerConnection.balance.toFixed(2)}, Needed: ${totalCharge.toFixed(2)}. Please recharge your provider account.`,
+          },
+          { status: 400 }
+        );
+      }
+
       const allEqual = runQuantities.every((q) => q === runQuantities[0]);
 
       let providerOrderId: string | null = null;
@@ -318,6 +338,13 @@ export async function POST(request: Request) {
 
         return newOrder;
       });
+
+      if (providerConnection && providerConnection.balance !== null && !providerConnection.isMock) {
+        await prisma.userProviderConnection.update({
+          where: { id: providerConnection.id },
+          data: { balance: Math.max(0, Number((providerConnection.balance - totalCharge).toFixed(4))) },
+        }).catch(() => {});
+      }
 
       await prisma.auditLog.create({
         data: {
@@ -481,6 +508,13 @@ export async function POST(request: Request) {
           include: { service: true },
         });
       });
+
+      if (providerConnection && providerConnection.balance !== null && !providerConnection.isMock) {
+        await prisma.userProviderConnection.update({
+          where: { id: providerConnection.id },
+          data: { balance: Math.max(0, Number((providerConnection.balance - totalCost).toFixed(4))) },
+        }).catch(() => {});
+      }
 
       await prisma.auditLog.create({
         data: {

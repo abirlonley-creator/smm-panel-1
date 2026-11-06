@@ -165,7 +165,8 @@ export async function runScheduledJobsTick(): Promise<ScheduledJobTickResult> {
           throw new Error(`Service #${serviceId} is unavailable.`);
         }
 
-        const { adapter } = await getActiveProvider(job.userId || undefined);
+        const targetProviderId = service.userProviderId || service.providerId;
+        const { adapter } = await getActiveProvider(job.userId || undefined, targetProviderId || undefined);
         const orderRef = `SMM-${Math.floor(100000 + Math.random() * 900000)}`;
         const unitCost = service.ratePer1000 / 1000;
         const totalCost = Number(((requestedQuantity / 1000) * service.ratePer1000).toFixed(4));

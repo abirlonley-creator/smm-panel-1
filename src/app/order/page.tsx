@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, Suspense } from "react";
+import { useState, useEffect, useMemo, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -13,6 +13,9 @@ import {
   Sparkles,
   Shuffle,
   Calendar,
+  Server,
+  Wallet,
+  Check,
 } from "lucide-react";
 
 interface ServiceItem {
@@ -27,6 +30,15 @@ interface ServiceItem {
   maxQuantity: number;
   ratePer1000: number;
   dripFeedSupported?: boolean;
+}
+
+interface ProviderInfo {
+  id: string;
+  name: string;
+  currency: string;
+  balance?: number | null;
+  apiUrl?: string;
+  isActive?: boolean;
 }
 
 interface RunItem {
@@ -73,6 +85,14 @@ function NewOrderForm() {
   const [loadingServices, setLoadingServices] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [selectedServiceId, setSelectedServiceId] = useState<string>("");
+
+  // Provider / Double API State
+  const [providers, setProviders] = useState<ProviderInfo[]>([]);
+  const [activeProviderId, setActiveProviderId] = useState<string>("");
+
+  const activeProvider = useMemo(() => {
+    return providers.find((p) => p.id === activeProviderId) || providers[0] || null;
+  }, [providers, activeProviderId]);
 
   // Target Input
   const [targetUrl, setTargetUrl] = useState<string>("");
@@ -129,48 +149,87 @@ function NewOrderForm() {
   }, []);
 
   // Fetch Services Catalog
-  useEffect(() => {
-    async function loadServices() {
-      try {
-        setLoadingServices(true);
-        const res = await fetch("/api/services");
-        const data = await res.json();
-        if (data.success && Array.isArray(data.services)) {
-          setServices(data.services);
+  const loadServices = useCallback(async (providerId?: string) => {
+    try {
+      setLoadingServices(true);
+      const url = `/api/services${providerId ? `?providerId=${providerId}` : ""}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.services)) {
+        setServices(data.services);
 
-          const paramId = searchParams.get("serviceId");
-          const target = paramId
-            ? data.services.find(
-                (s: ServiceItem) =>
-                  s.id === paramId ||
-                  s.externalId === paramId ||
-                  s.providerServiceId === paramId
-              )
-            : data.services[0];
-
-          if (target) {
-            setSelectedCategory(target.category?.trim() || target.platform?.trim() || "General");
-            setSelectedServiceId(target.id);
-            setQuantity(target.minQuantity || 100);
-            setMinQtyRange(target.minQuantity || 10);
-            setMaxQtyRange((target.minQuantity || 10) + 4);
-          } else if (data.services.length > 0) {
-            setSelectedCategory(data.services[0].category?.trim() || data.services[0].platform?.trim() || "General");
-            setSelectedServiceId(data.services[0].id);
-            setQuantity(data.services[0].minQuantity || 100);
-            setMinQtyRange(data.services[0].minQuantity || 10);
-            setMaxQtyRange((data.services[0].minQuantity || 10) + 4);
-          }
+        if (Array.isArray(data.providers)) {
+          setProviders(data.providers);
+          const currentActive =
+            providerId ||
+            data.activeProviderId ||
+            data.providers.find((p: any) => p.isActive)?.id ||
+            data.providers[0]?.id ||
+            "";
+          setActiveProviderId(currentActive);
         }
-      } catch (err: any) {
-        console.warn("Failed to load services:", err);
-      } finally {
-        setLoadingServices(false);
-      }
-    }
 
-    loadServices();
+        const paramId = searchParams.get("serviceId");
+        const target = paramId
+          ? data.services.find(
+              (s: ServiceItem) =>
+                s.id === paramId ||
+                s.externalId === paramId ||
+                s.providerServiceId === paramId
+            )
+          : data.services[0];
+
+        if (target) {
+          setSelectedCategory(target.category?.trim() || target.platform?.trim() || "General");
+          setSelectedServiceId(target.id);
+          setQuantity(target.minQuantity || 100);
+          setMinQtyRange(target.minQuantity || 10);
+          setMaxQtyRange((target.minQuantity || 10) + 4);
+        } else if (data.services.length > 0) {
+          setSelectedCategory(data.services[0].category?.trim() || data.services[0].platform?.trim() || "General");
+          setSelectedServiceId(data.services[0].id);
+          setQuantity(data.services[0].minQuantity || 100);
+          setMinQtyRange(data.services[0].minQuantity || 10);
+          setMaxQtyRange((data.services[0].minQuantity || 10) + 4);
+        } else {
+          setSelectedCategory("");
+          setSelectedServiceId("");
+        }
+      }
+    } catch (err: any) {
+      console.warn("Failed to load services:", err);
+    } finally {
+      setLoadingServices(false);
+    }
   }, [searchParams]);
+
+  useEffect(() => {
+    loadServices();
+  }, [loadServices]);
+
+  // Listen to external balance updates (e.g. from header switcher)
+  useEffect(() => {
+    const handleBalanceUpdate = () => {
+      loadServices();
+    };
+    window.addEventListener("balance-updated", handleBalanceUpdate);
+    return () => window.removeEventListener("balance-updated", handleBalanceUpdate);
+  }, [loadServices]);
+
+  async function handleSwitchProvider(providerId: string) {
+    if (providerId === activeProviderId) return;
+    try {
+      await fetch("/api/balance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ providerId }),
+      });
+      window.dispatchEvent(new CustomEvent("balance-updated"));
+      await loadServices(providerId);
+    } catch (err) {
+      console.warn("Failed to switch provider:", err);
+    }
+  }
 
   // Unique Categories List
   const categories = useMemo(() => {
@@ -373,6 +432,7 @@ function NewOrderForm() {
               serviceId: activeService.id,
               targetUrl: targetUrl.trim(),
               requestedQuantity: numericQty || activeService.minQuantity,
+              providerId: activeProviderId || undefined,
             },
           }),
         });
@@ -401,6 +461,7 @@ function NewOrderForm() {
         targetUrl: targetUrl.trim(),
         requestedQuantity: isDripFeed && runItems.length > 0 ? runItems[0].quantity : numericQty,
         scheduleMode: isDripFeed ? "DRIP_FEED" : "INSTANT",
+        providerId: activeProviderId || undefined,
       };
 
       if (isDripFeed) {
@@ -538,6 +599,77 @@ function NewOrderForm() {
       {/* Main Order Form */}
       {!loadingServices && (
         <form onSubmit={handleSubmitOrder} className="rounded-2xl bg-white border border-[#DEE0ED] p-6 shadow-sm space-y-4">
+          {/* Active API Provider Selector & Balance Banner (Double / Multi API) */}
+          {providers.length > 0 ? (
+            <div className="p-3.5 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-[#3A4EFB]/10 border border-[#3A4EFB]/20 flex items-center justify-center text-[#3A4EFB] shrink-0">
+                  <Server className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#252943]/50 block">
+                    Selected API Provider
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs sm:text-sm font-bold text-[#252943]">
+                      {activeProvider?.name || "Connected API"}
+                    </span>
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                      <Check className="w-2.5 h-2.5" />
+                      Active
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 self-start sm:self-center flex-wrap">
+                {/* Live Upstream Balance of Selected Provider */}
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#DEE0ED] shadow-subtle">
+                  <Wallet className="w-3.5 h-3.5 text-[#3A4EFB]" />
+                  <span className="text-xs font-bold text-[#252943]">
+                    {activeProvider?.balance !== null && activeProvider?.balance !== undefined
+                      ? `${activeProvider.currency || "USD"} ${activeProvider.balance.toFixed(2)}`
+                      : "Available"}
+                  </span>
+                </div>
+
+                {/* Double API switcher buttons if user has 2 or more providers */}
+                {providers.length > 1 && (
+                  <div className="flex items-center p-0.5 rounded-xl bg-[#EBEFFA] border border-[#DEE0ED]">
+                    {providers.map((p) => {
+                      const isSel = p.id === activeProviderId;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => handleSwitchProvider(p.id)}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                            isSel
+                              ? "bg-[#3A4EFB] text-white shadow-sm"
+                              : "text-[#252943]/70 hover:text-[#252943] hover:bg-white/60"
+                          }`}
+                          title={`Switch to ${p.name}`}
+                        >
+                          {p.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>No API Provider connected yet.</span>
+              </div>
+              <Link href="/api-key" className="font-bold underline text-[#3A4EFB] hover:text-[#3243d9]">
+                Connect API Key →
+              </Link>
+            </div>
+          )}
+
           {/* BD Time Scheduler Banner (When in SCHEDULED mode) */}
           {orderMode === "SCHEDULED" && (
             <div className="p-4 rounded-xl bg-indigo-50/70 border border-indigo-200 space-y-3 animate-fadeIn">
@@ -591,13 +723,18 @@ function NewOrderForm() {
             <select
               value={selectedCategory}
               onChange={(e) => handleCategoryChange(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED] text-xs font-semibold text-[#252943] focus:outline-none focus:border-[#3A4EFB] focus:bg-white transition-all cursor-pointer"
+              disabled={categories.length === 0}
+              className="w-full px-3.5 py-2.5 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED] text-xs font-semibold text-[#252943] focus:outline-none focus:border-[#3A4EFB] focus:bg-white transition-all cursor-pointer disabled:opacity-50"
             >
-              {categories.map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat}
-                </option>
-              ))}
+              {categories.length === 0 ? (
+                <option value="">No categories found (sync services in API Key settings)</option>
+              ) : (
+                categories.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))
+              )}
             </select>
           </div>
 
@@ -609,13 +746,18 @@ function NewOrderForm() {
             <select
               value={selectedServiceId}
               onChange={(e) => handleServiceChange(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED] text-xs text-[#252943] font-medium focus:outline-none focus:border-[#3A4EFB] focus:bg-white transition-all cursor-pointer"
+              disabled={categoryServices.length === 0}
+              className="w-full px-3.5 py-2.5 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED] text-xs text-[#252943] font-medium focus:outline-none focus:border-[#3A4EFB] focus:bg-white transition-all cursor-pointer disabled:opacity-50"
             >
-              {categoryServices.map((s) => (
-                <option key={s.id} value={s.id}>
-                  [{s.providerServiceId || s.externalId}] {s.name} — ${s.ratePer1000.toFixed(2)}/1K
-                </option>
-              ))}
+              {categoryServices.length === 0 ? (
+                <option value="">No services in this category</option>
+              ) : (
+                categoryServices.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    [{s.providerServiceId || s.externalId}] {s.name} — ${s.ratePer1000.toFixed(2)}/1K
+                  </option>
+                ))
+              )}
             </select>
 
             {/* Service Details Line */}
