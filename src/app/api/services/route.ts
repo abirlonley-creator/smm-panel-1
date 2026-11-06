@@ -254,8 +254,24 @@ export async function GET(request: Request) {
 
     const snapshotKeySet = new Set(snapshotKeys);
 
+    const userProvMap = new Map<string, { id: string; name: string }>();
+    for (const up of userProviders) {
+      if (up.id) userProvMap.set(up.id, { id: up.id, name: up.name });
+      if (up.apiUrl) userProvMap.set(up.apiUrl.trim(), { id: up.id, name: up.name });
+    }
+
     let enriched = allServices.map((s) => {
-      const pId = s.userProviderId || s.providerId || "prov-default";
+      const matchedUserProv =
+        (s.userProviderId ? userProvMap.get(s.userProviderId) : null) ||
+        (s.providerEndpoint ? userProvMap.get(s.providerEndpoint.trim()) : null) ||
+        (s.providerId ? userProvMap.get(s.providerId) : null);
+
+      const pId = s.userProviderId || s.providerId || matchedUserProv?.id || config.id || "prov-default";
+      const pName =
+        s.userProvider?.name ||
+        s.provider?.name ||
+        matchedUserProv?.name ||
+        (s.isMock ? "Mock SMM Provider" : config.name);
       const pSrvId = s.providerServiceId || s.externalId;
       const key = `${pId}:${pSrvId}`;
       const isFav = favKeySet.has(key) || favServiceIdSet.has(s.id);
@@ -264,7 +280,7 @@ export async function GET(request: Request) {
       return {
         ...s,
         providerId: pId,
-        providerName: s.userProvider?.name || s.provider?.name || (s.isMock ? "Mock SMM Provider" : config.name),
+        providerName: pName,
         providerServiceId: pSrvId,
         isFavourite: isFav,
         inSnapshot,
