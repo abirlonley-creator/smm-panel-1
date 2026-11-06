@@ -170,8 +170,9 @@ export async function runScheduledJobsTick(): Promise<ScheduledJobTickResult> {
         const unitCost = service.ratePer1000 / 1000;
         const totalCost = Number(((requestedQuantity / 1000) * service.ratePer1000).toFixed(4));
 
+        const targetServiceId = service.providerServiceId || service.externalId;
         const providerRes = await adapter.createOrder({
-          serviceExternalId: service.externalId,
+          serviceExternalId: targetServiceId,
           targetUrl,
           quantity: requestedQuantity,
         });

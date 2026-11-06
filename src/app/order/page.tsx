@@ -7,10 +7,12 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
-  Layers,
   Repeat,
   ArrowRight,
-  ExternalLink,
+  Clock,
+  Sparkles,
+  Shuffle,
+  Calendar,
 } from "lucide-react";
 
 interface ServiceItem {
@@ -27,9 +29,44 @@ interface ServiceItem {
   dripFeedSupported?: boolean;
 }
 
+interface RunItem {
+  runNumber: number;
+  quantity: number;
+  timeLabel: string;
+}
+
+function formatBdTime(date: Date): string {
+  try {
+    return date.toLocaleTimeString("en-US", {
+      timeZone: "Asia/Dhaka",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+  } catch {
+    return date.toLocaleTimeString();
+  }
+}
+
+function formatBdDate(date: Date): string {
+  try {
+    return date.toLocaleDateString("en-US", {
+      timeZone: "Asia/Dhaka",
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  } catch {
+    return date.toLocaleDateString();
+  }
+}
+
 function NewOrderForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  // Mode: "NOW" (Instant / Drip) or "SCHEDULED" (BD Time Scheduler)
+  const [orderMode, setOrderMode] = useState<"NOW" | "SCHEDULED">("NOW");
 
   // Catalog State
   const [services, setServices] = useState<ServiceItem[]>([]);
@@ -37,8 +74,10 @@ function NewOrderForm() {
   const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [selectedServiceId, setSelectedServiceId] = useState<string>("");
 
-  // Order Inputs
+  // Target Input
   const [targetUrl, setTargetUrl] = useState<string>("");
+
+  // Single Quantity State
   const [quantity, setQuantity] = useState<number | "">("");
 
   // Drip Feed State
@@ -46,19 +85,50 @@ function NewOrderForm() {
   const [dripRuns, setDripRuns] = useState<number>(5);
   const [dripIntervalMinutes, setDripIntervalMinutes] = useState<number>(60);
 
+  // Min-Max Random Range Feature
+  const [isRandomRange, setIsRandomRange] = useState<boolean>(false);
+  const [minQtyRange, setMinQtyRange] = useState<number>(10);
+  const [maxQtyRange, setMaxQtyRange] = useState<number>(14);
+  const [runItems, setRunItems] = useState<RunItem[]>([]);
+
+  // BD Time Scheduler State
+  const [scheduledBdDate, setScheduledBdDate] = useState<string>("");
+  const [scheduledBdTime, setScheduledBdTime] = useState<string>("");
+  const [bdCurrentTimeDisplay, setBdCurrentTimeDisplay] = useState<string>("");
+
   // Submission State
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [orderSuccess, setOrderSuccess] = useState<{
-    orderRef: string;
+    type: "INSTANT" | "DRIP_FEED" | "SCHEDULED";
+    reference: string;
     providerOrderId?: string;
-    runs?: number;
-    interval?: number;
+    details: string;
     totalUnits: number;
     totalCharge: number;
   } | null>(null);
 
-  // Fetch Services
+  // Initialize BD Time clock and default scheduled time (1 hour ahead)
+  useEffect(() => {
+    function updateClock() {
+      const now = new Date();
+      setBdCurrentTimeDisplay(`${formatBdDate(now)} at ${formatBdTime(now)} (BST / UTC+6)`);
+    }
+    updateClock();
+    const interval = setInterval(updateClock, 30000);
+
+    // Default scheduled time: now + 60 minutes in BD Time (UTC+6)
+    const future = new Date(Date.now() + 60 * 60 * 1000 + 6 * 60 * 60 * 1000);
+    const dateStr = future.toISOString().split("T")[0];
+    const hours = String(future.getUTCHours()).padStart(2, "0");
+    const mins = String(future.getUTCMinutes()).padStart(2, "0");
+    setScheduledBdDate(dateStr);
+    setScheduledBdTime(`${hours}:${mins}`);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Fetch Services Catalog
   useEffect(() => {
     async function loadServices() {
       try {
@@ -82,10 +152,14 @@ function NewOrderForm() {
             setSelectedCategory(target.category?.trim() || target.platform?.trim() || "General");
             setSelectedServiceId(target.id);
             setQuantity(target.minQuantity || 100);
+            setMinQtyRange(target.minQuantity || 10);
+            setMaxQtyRange((target.minQuantity || 10) + 4);
           } else if (data.services.length > 0) {
             setSelectedCategory(data.services[0].category?.trim() || data.services[0].platform?.trim() || "General");
             setSelectedServiceId(data.services[0].id);
             setQuantity(data.services[0].minQuantity || 100);
+            setMinQtyRange(data.services[0].minQuantity || 10);
+            setMaxQtyRange((data.services[0].minQuantity || 10) + 4);
           }
         }
       } catch (err: any) {
@@ -126,6 +200,66 @@ function NewOrderForm() {
     );
   }, [categoryServices, selectedServiceId, services]);
 
+  // Generate or update Run Items when Drip Feed parameters change
+  useEffect(() => {
+    if (!isDripFeed) {
+      setRunItems([]);
+      return;
+    }
+
+    const runs = Math.max(2, dripRuns);
+    const interval = Math.max(1, dripIntervalMinutes);
+    const now = Date.now();
+
+    setRunItems((prev) => {
+      const items: RunItem[] = [];
+      for (let i = 0; i < runs; i++) {
+        const runTime = new Date(now + i * interval * 60 * 1000);
+        const timeLabel = i === 0 ? "Now (+0m)" : `+${i * interval}m (${formatBdTime(runTime)} BD)`;
+
+        let qty = typeof quantity === "number" ? quantity : 100;
+        if (isRandomRange) {
+          const min = Math.min(minQtyRange, maxQtyRange);
+          const max = Math.max(minQtyRange, maxQtyRange);
+          // Preserve existing if within range and runs length matches, else roll
+          if (prev[i] && prev[i].quantity >= min && prev[i].quantity <= max) {
+            qty = prev[i].quantity;
+          } else {
+            qty = Math.floor(Math.random() * (max - min + 1)) + min;
+          }
+        }
+
+        items.push({
+          runNumber: i + 1,
+          quantity: qty,
+          timeLabel,
+        });
+      }
+      return items;
+    });
+  }, [isDripFeed, dripRuns, dripIntervalMinutes, isRandomRange, minQtyRange, maxQtyRange]);
+
+  // Handler to roll/re-randomize quantities across all runs
+  function handleRerollQuantities() {
+    const min = Math.min(minQtyRange, maxQtyRange);
+    const max = Math.max(minQtyRange, maxQtyRange);
+    setRunItems((prev) =>
+      prev.map((item) => ({
+        ...item,
+        quantity: Math.floor(Math.random() * (max - min + 1)) + min,
+      }))
+    );
+  }
+
+  // Handler to edit a single run's quantity
+  function handleEditRunQuantity(index: number, val: number) {
+    setRunItems((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], quantity: Math.max(1, val) };
+      return next;
+    });
+  }
+
   // Handle Category Change
   const handleCategoryChange = (cat: string) => {
     setSelectedCategory(cat);
@@ -135,6 +269,8 @@ function NewOrderForm() {
     if (matched.length > 0) {
       setSelectedServiceId(matched[0].id);
       setQuantity(matched[0].minQuantity || 100);
+      setMinQtyRange(matched[0].minQuantity || 10);
+      setMaxQtyRange((matched[0].minQuantity || 10) + 4);
     }
   };
 
@@ -144,19 +280,39 @@ function NewOrderForm() {
     const srv = services.find((s) => s.id === serviceId);
     if (srv) {
       setQuantity(srv.minQuantity || 100);
+      setMinQtyRange(srv.minQuantity || 10);
+      setMaxQtyRange((srv.minQuantity || 10) + 4);
     }
   };
 
   // Live Calculations
   const numericQty = typeof quantity === "number" ? quantity : 0;
-  const effectiveRuns = isDripFeed ? Math.max(2, dripRuns) : 1;
-  const totalUnits = numericQty * effectiveRuns;
+  const totalUnits = useMemo(() => {
+    if (isDripFeed && runItems.length > 0) {
+      return runItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
+    }
+    return numericQty;
+  }, [isDripFeed, runItems, numericQty]);
+
   const ratePer1k = activeService ? activeService.ratePer1000 : 0;
   const totalCost = Number(((totalUnits / 1000) * ratePer1k).toFixed(4));
 
   // Quantity Limits Validation
   const quantityError = useMemo(() => {
-    if (!activeService || !numericQty) return null;
+    if (!activeService) return null;
+    if (isDripFeed && runItems.length > 0) {
+      for (const item of runItems) {
+        if (item.quantity < activeService.minQuantity) {
+          return `Run #${item.runNumber} quantity (${item.quantity}) is below service minimum of ${activeService.minQuantity.toLocaleString()}`;
+        }
+        if (item.quantity > activeService.maxQuantity) {
+          return `Run #${item.runNumber} quantity (${item.quantity}) exceeds service maximum of ${activeService.maxQuantity.toLocaleString()}`;
+        }
+      }
+      return null;
+    }
+
+    if (!numericQty) return null;
     if (numericQty < activeService.minQuantity) {
       return `Min quantity: ${activeService.minQuantity.toLocaleString()}`;
     }
@@ -164,7 +320,7 @@ function NewOrderForm() {
       return `Max quantity: ${activeService.maxQuantity.toLocaleString()}`;
     }
     return null;
-  }, [activeService, numericQty]);
+  }, [activeService, isDripFeed, runItems, numericQty]);
 
   // Submit Handler
   async function handleSubmitOrder(e: React.FormEvent) {
@@ -186,18 +342,71 @@ function NewOrderForm() {
     setOrderSuccess(null);
 
     try {
+      // -----------------------------------------------------------------------
+      // PATH A: BD TIME SCHEDULER (Schedule for future delivery in BD Time)
+      // -----------------------------------------------------------------------
+      if (orderMode === "SCHEDULED") {
+        if (!scheduledBdDate || !scheduledBdTime) {
+          throw new Error("Please select both a date and time in Bangladesh Time.");
+        }
+
+        // Construct ISO string with Bangladesh Time offset (+06:00)
+        const bdIsoString = `${scheduledBdDate}T${scheduledBdTime}:00+06:00`;
+        const scheduledUtcDate = new Date(bdIsoString);
+
+        if (isNaN(scheduledUtcDate.getTime())) {
+          throw new Error("Invalid Bangladesh scheduled date or time.");
+        }
+
+        if (scheduledUtcDate.getTime() <= Date.now() + 60000) {
+          throw new Error("Scheduled BD time must be at least 1 minute in the future.");
+        }
+
+        const res = await fetch("/api/scheduled-jobs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jobType: "SINGLE",
+            scheduledFor: scheduledUtcDate.toISOString(),
+            timezone: "Asia/Dhaka",
+            payload: {
+              serviceId: activeService.id,
+              targetUrl: targetUrl.trim(),
+              requestedQuantity: numericQty || activeService.minQuantity,
+            },
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || "Failed to schedule job.");
+        }
+
+        setOrderSuccess({
+          type: "SCHEDULED",
+          reference: data.job.jobRef,
+          details: `Scheduled for ${scheduledBdDate} at ${scheduledBdTime} (Bangladesh Time UTC+6)`,
+          totalUnits: numericQty,
+          totalCharge: totalCost,
+        });
+
+        return;
+      }
+
+      // -----------------------------------------------------------------------
+      // PATH B: INSTANT / DRIP-FEED (With Min-Max Random Range & Editable Runs)
+      // -----------------------------------------------------------------------
       const payload: any = {
         serviceId: activeService.id,
         targetUrl: targetUrl.trim(),
-        requestedQuantity: numericQty,
+        requestedQuantity: isDripFeed && runItems.length > 0 ? runItems[0].quantity : numericQty,
         scheduleMode: isDripFeed ? "DRIP_FEED" : "INSTANT",
       };
 
       if (isDripFeed) {
-        payload.dripRuns = effectiveRuns;
+        payload.dripRuns = runItems.length;
         payload.dripIntervalMinutes = Math.max(1, dripIntervalMinutes);
-        payload.dripMinQuantity = numericQty;
-        payload.dripMaxQuantity = numericQty;
+        payload.customRunQuantities = runItems.map((r) => r.quantity);
       }
 
       const res = await fetch("/api/orders", {
@@ -212,10 +421,12 @@ function NewOrderForm() {
       }
 
       setOrderSuccess({
-        orderRef: data.order.orderRef,
+        type: isDripFeed ? "DRIP_FEED" : "INSTANT",
+        reference: data.order.orderRef,
         providerOrderId: data.order.providerOrderId,
-        runs: isDripFeed ? effectiveRuns : undefined,
-        interval: isDripFeed ? dripIntervalMinutes : undefined,
+        details: isDripFeed
+          ? `${runItems.length} runs every ${dripIntervalMinutes}m (${runItems.map((r) => r.quantity).join(", ")})`
+          : "Delivered immediately to provider",
         totalUnits,
         totalCharge: totalCost,
       });
@@ -236,19 +447,39 @@ function NewOrderForm() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 animate-fadeIn pb-16">
-      {/* Title */}
-      <div className="flex items-center justify-between border-b border-[#DEE0ED] pb-4">
+      {/* Title & Mode Switcher */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#DEE0ED] pb-4">
         <div>
           <h1 className="text-xl font-bold text-[#252943]">New Order</h1>
-          <p className="text-xs text-[#252943]/60">Choose a service and place your order.</p>
+          <p className="text-xs text-[#252943]/60">Instant delivery, Min-Max drip feed, or BD Time scheduler.</p>
         </div>
-        <Link
-          href="/orders"
-          className="text-xs text-[#3A4EFB] hover:underline font-semibold flex items-center gap-1"
-        >
-          <span>View Orders</span>
-          <ArrowRight className="w-3.5 h-3.5" />
-        </Link>
+
+        {/* Deliver Now vs Schedule in BD Time Tabs */}
+        <div className="flex items-center p-1 rounded-xl bg-[#F0F2FA] border border-[#DEE0ED] self-start sm:self-center">
+          <button
+            type="button"
+            onClick={() => setOrderMode("NOW")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              orderMode === "NOW"
+                ? "bg-white text-[#3A4EFB] shadow-sm"
+                : "text-[#252943]/70 hover:text-[#252943]"
+            }`}
+          >
+            Deliver Now / Drip
+          </button>
+          <button
+            type="button"
+            onClick={() => setOrderMode("SCHEDULED")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+              orderMode === "SCHEDULED"
+                ? "bg-white text-[#3A4EFB] shadow-sm"
+                : "text-[#252943]/70 hover:text-[#252943]"
+            }`}
+          >
+            <Clock className="w-3 h-3 text-[#3A4EFB]" />
+            <span>BD Time Scheduler</span>
+          </button>
+        </div>
       </div>
 
       {/* Success Banner */}
@@ -257,7 +488,9 @@ function NewOrderForm() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 font-bold">
               <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-              <span>Order Placed Successfully!</span>
+              <span>
+                {orderSuccess.type === "SCHEDULED" ? "Order Scheduled in BD Time!" : "Order Placed Successfully!"}
+              </span>
             </div>
             <Link
               href="/orders"
@@ -267,12 +500,14 @@ function NewOrderForm() {
             </Link>
           </div>
           <p className="text-xs text-emerald-800">
-            Order Ref: <span className="font-mono font-bold">{orderSuccess.orderRef}</span>
+            Ref: <span className="font-mono font-bold">{orderSuccess.reference}</span>
             {orderSuccess.providerOrderId && (
-              <span> • Provider Order ID: <span className="font-mono font-bold">#{orderSuccess.providerOrderId}</span></span>
+              <span> • Upstream Order: <span className="font-mono font-bold">#{orderSuccess.providerOrderId}</span></span>
             )}
             {" • "}{orderSuccess.totalUnits.toLocaleString()} units (${orderSuccess.totalCharge.toFixed(2)})
-            {orderSuccess.runs ? ` [Drip-feed: ${orderSuccess.runs} runs every ${orderSuccess.interval}m]` : ""}
+          </p>
+          <p className="text-[11px] text-emerald-700 font-medium">
+            {orderSuccess.details}
           </p>
           <button
             type="button"
@@ -300,9 +535,54 @@ function NewOrderForm() {
         </div>
       )}
 
-      {/* Order Form Card */}
+      {/* Main Order Form */}
       {!loadingServices && (
         <form onSubmit={handleSubmitOrder} className="rounded-2xl bg-white border border-[#DEE0ED] p-6 shadow-sm space-y-4">
+          {/* BD Time Scheduler Banner (When in SCHEDULED mode) */}
+          {orderMode === "SCHEDULED" && (
+            <div className="p-4 rounded-xl bg-indigo-50/70 border border-indigo-200 space-y-3 animate-fadeIn">
+              <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-1.5 font-bold text-indigo-900">
+                  <Clock className="w-4 h-4 text-[#3A4EFB]" />
+                  <span>Bangladesh Standard Time Scheduler (BST / UTC+6)</span>
+                </div>
+                <span className="text-[10px] font-mono text-indigo-700 bg-white px-2 py-0.5 rounded border border-indigo-200">
+                  {bdCurrentTimeDisplay || "Asia/Dhaka"}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-indigo-900 mb-1">
+                    Date (BD Time)
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={scheduledBdDate}
+                    onChange={(e) => setScheduledBdDate(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg bg-white border border-indigo-200 text-xs font-semibold text-[#252943] focus:outline-none focus:border-[#3A4EFB]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-indigo-900 mb-1">
+                    Execution Time (BD Time)
+                  </label>
+                  <input
+                    type="time"
+                    required
+                    value={scheduledBdTime}
+                    onChange={(e) => setScheduledBdTime(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg bg-white border border-indigo-200 text-xs font-bold text-[#252943] focus:outline-none focus:border-[#3A4EFB]"
+                  />
+                </div>
+              </div>
+              <p className="text-[11px] text-indigo-800 leading-relaxed">
+                Your order will be queued and automatically dispatched at the exact BD time specified above.
+              </p>
+            </div>
+          )}
+
           {/* Category Dropdown */}
           <div>
             <label className="block text-xs font-semibold text-[#252943] mb-1.5">
@@ -338,7 +618,7 @@ function NewOrderForm() {
               ))}
             </select>
 
-            {/* Compact Service Details Line */}
+            {/* Service Details Line */}
             {activeService && (
               <div className="mt-1.5 flex flex-wrap items-center gap-3 text-[11px] text-[#252943]/60">
                 <span>Min: <strong className="text-[#252943]">{activeService.minQuantity.toLocaleString()}</strong></span>
@@ -358,7 +638,7 @@ function NewOrderForm() {
             )}
           </div>
 
-          {/* Link Input */}
+          {/* Target Link Input */}
           <div>
             <label className="block text-xs font-semibold text-[#252943] mb-1.5">
               Link
@@ -373,93 +653,202 @@ function NewOrderForm() {
             />
           </div>
 
-          {/* Quantity Input */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs font-semibold text-[#252943]">
-                {isDripFeed ? "Quantity per Run" : "Quantity"}
-              </label>
-              {activeService && (
-                <span className="text-[11px] text-[#252943]/50">
-                  {activeService.minQuantity} - {activeService.maxQuantity.toLocaleString()}
-                </span>
+          {/* Standard Quantity (Shown when Drip Feed is OFF or in Scheduled Mode) */}
+          {(!isDripFeed || orderMode === "SCHEDULED") && (
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-semibold text-[#252943]">
+                  Quantity
+                </label>
+                {activeService && (
+                  <span className="text-[11px] text-[#252943]/50">
+                    {activeService.minQuantity} - {activeService.maxQuantity.toLocaleString()}
+                  </span>
+                )}
+              </div>
+              <input
+                type="number"
+                required
+                min={activeService?.minQuantity || 1}
+                max={activeService?.maxQuantity || 1000000}
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value === "" ? "" : parseInt(e.target.value, 10))}
+                className={`w-full px-3.5 py-2.5 rounded-xl bg-[#F8F9FD] border text-xs font-bold text-[#252943] focus:outline-none focus:bg-white transition-all ${
+                  quantityError ? "border-red-300 focus:border-red-500" : "border-[#DEE0ED] focus:border-[#3A4EFB]"
+                }`}
+              />
+              {quantityError && (
+                <p className="text-[11px] text-red-600 mt-1 font-medium">{quantityError}</p>
               )}
             </div>
-            <input
-              type="number"
-              required
-              min={activeService?.minQuantity || 1}
-              max={activeService?.maxQuantity || 1000000}
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value === "" ? "" : parseInt(e.target.value, 10))}
-              className={`w-full px-3.5 py-2.5 rounded-xl bg-[#F8F9FD] border text-xs font-bold text-[#252943] focus:outline-none focus:bg-white transition-all ${
-                quantityError ? "border-red-300 focus:border-red-500" : "border-[#DEE0ED] focus:border-[#3A4EFB]"
-              }`}
-            />
-            {quantityError && (
-              <p className="text-[11px] text-red-600 mt-1 font-medium">{quantityError}</p>
-            )}
-          </div>
+          )}
 
-          {/* Drip-Feed Option */}
-          <div className="pt-2 border-t border-[#DEE0ED]/60 space-y-3">
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={isDripFeed}
-                onChange={(e) => setIsDripFeed(e.target.checked)}
-                className="w-4 h-4 rounded text-[#3A4EFB] focus:ring-[#3A4EFB]"
-              />
-              <span className="text-xs font-bold text-[#252943] flex items-center gap-1.5">
-                <Repeat className="w-3.5 h-3.5 text-[#3A4EFB]" />
-                Drip-feed
-              </span>
-            </label>
+          {/* Drip-Feed Option (Only in NOW mode) */}
+          {orderMode === "NOW" && (
+            <div className="pt-2 border-t border-[#DEE0ED]/60 space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={isDripFeed}
+                    onChange={(e) => setIsDripFeed(e.target.checked)}
+                    className="w-4 h-4 rounded text-[#3A4EFB] focus:ring-[#3A4EFB]"
+                  />
+                  <span className="text-xs font-bold text-[#252943] flex items-center gap-1.5">
+                    <Repeat className="w-3.5 h-3.5 text-[#3A4EFB]" />
+                    Drip-feed
+                  </span>
+                </label>
 
-            {isDripFeed && (
-              <div className="p-3.5 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED] space-y-2.5 animate-fadeIn">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[11px] font-semibold text-[#252943]/70 mb-1">
-                      Runs
-                    </label>
+                {isDripFeed && (
+                  <label className="flex items-center gap-2 cursor-pointer select-none text-[11px] font-semibold text-[#3A4EFB] bg-[#3A4EFB]/10 px-2.5 py-1 rounded-lg">
                     <input
-                      type="number"
-                      min={2}
-                      max={100}
-                      value={dripRuns}
-                      onChange={(e) => setDripRuns(Math.max(2, parseInt(e.target.value, 10) || 2))}
-                      className="w-full px-3 py-1.5 rounded-lg bg-white border border-[#DEE0ED] text-xs font-bold text-[#252943] focus:outline-none focus:border-[#3A4EFB]"
+                      type="checkbox"
+                      checked={isRandomRange}
+                      onChange={(e) => setIsRandomRange(e.target.checked)}
+                      className="w-3.5 h-3.5 rounded text-[#3A4EFB]"
                     />
+                    <span>Min-Max Random Range</span>
+                  </label>
+                )}
+              </div>
+
+              {isDripFeed && (
+                <div className="p-4 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED] space-y-3 animate-fadeIn">
+                  {/* Runs & Interval Inputs */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#252943]/70 mb-1">
+                        Runs (Batches)
+                      </label>
+                      <input
+                        type="number"
+                        min={2}
+                        max={100}
+                        value={dripRuns}
+                        onChange={(e) => setDripRuns(Math.max(2, parseInt(e.target.value, 10) || 2))}
+                        className="w-full px-3 py-1.5 rounded-lg bg-white border border-[#DEE0ED] text-xs font-bold text-[#252943] focus:outline-none focus:border-[#3A4EFB]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#252943]/70 mb-1">
+                        Interval (Minutes)
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={1440}
+                        value={dripIntervalMinutes}
+                        onChange={(e) => setDripIntervalMinutes(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                        className="w-full px-3 py-1.5 rounded-lg bg-white border border-[#DEE0ED] text-xs font-bold text-[#252943] focus:outline-none focus:border-[#3A4EFB]"
+                      />
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="block text-[11px] font-semibold text-[#252943]/70 mb-1">
-                      Interval (Minutes)
-                    </label>
-                    <input
-                      type="number"
-                      min={1}
-                      max={1440}
-                      value={dripIntervalMinutes}
-                      onChange={(e) => setDripIntervalMinutes(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                      className="w-full px-3 py-1.5 rounded-lg bg-white border border-[#DEE0ED] text-xs font-bold text-[#252943] focus:outline-none focus:border-[#3A4EFB]"
-                    />
+                  {/* Min to Max Range Inputs (When Random Range is ON) */}
+                  {isRandomRange && (
+                    <div className="p-3 rounded-lg bg-white border border-indigo-200 space-y-2 animate-fadeIn">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-indigo-900 flex items-center gap-1.5">
+                          <Shuffle className="w-3.5 h-3.5 text-[#3A4EFB]" />
+                          Random Range (Min to Max per run)
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleRerollQuantities}
+                          className="text-[11px] font-bold text-[#3A4EFB] hover:underline flex items-center gap-1 cursor-pointer"
+                        >
+                          <Shuffle className="w-3 h-3" />
+                          <span>Re-roll Random Values</span>
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase text-[#252943]/60 mb-0.5">
+                            Min Qty (x)
+                          </label>
+                          <input
+                            type="number"
+                            min={activeService?.minQuantity || 1}
+                            max={activeService?.maxQuantity || 100000}
+                            value={minQtyRange}
+                            onChange={(e) => setMinQtyRange(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                            className="w-full px-2.5 py-1.5 rounded-md bg-[#F8F9FD] border border-[#DEE0ED] text-xs font-bold text-[#252943] focus:outline-none focus:border-[#3A4EFB]"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase text-[#252943]/60 mb-0.5">
+                            Max Qty (y)
+                          </label>
+                          <input
+                            type="number"
+                            min={activeService?.minQuantity || 1}
+                            max={activeService?.maxQuantity || 100000}
+                            value={maxQtyRange}
+                            onChange={(e) => setMaxQtyRange(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                            className="w-full px-2.5 py-1.5 rounded-md bg-[#F8F9FD] border border-[#DEE0ED] text-xs font-bold text-[#252943] focus:outline-none focus:border-[#3A4EFB]"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-[#252943]/60">
+                        Automatically selects random amounts between {minQtyRange} and {maxQtyRange} for each run. You can also edit individual run amounts below.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Interactive Runs Breakdown (Delivery Times & Editable Quantities) */}
+                  <div className="space-y-1.5 pt-1">
+                    <span className="text-[11px] font-bold text-[#252943] block">
+                      Delivery Schedule & Quantities (editable):
+                    </span>
+
+                    <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+                      {runItems.map((item, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between p-2 rounded-lg bg-white border border-[#DEE0ED] text-xs"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="w-5 h-5 rounded-full bg-[#3A4EFB]/10 text-[#3A4EFB] font-bold text-[10px] flex items-center justify-center shrink-0">
+                              #{item.runNumber}
+                            </span>
+                            <span className="text-[11px] text-[#252943]/70 font-mono">
+                              {item.timeLabel}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="number"
+                              min={activeService?.minQuantity || 1}
+                              max={activeService?.maxQuantity || 1000000}
+                              value={item.quantity}
+                              onChange={(e) => handleEditRunQuantity(idx, parseInt(e.target.value, 10) || 0)}
+                              className="w-16 px-2 py-1 rounded border border-[#DEE0ED] text-right font-bold text-xs text-[#252943] focus:outline-none focus:border-[#3A4EFB]"
+                            />
+                            <span className="text-[10px] text-[#252943]/50">units</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="pt-2 flex items-center justify-between text-xs border-t border-[#DEE0ED]">
+                      <span className="font-semibold text-[#252943]">Total Drip Units:</span>
+                      <strong className="text-[#3A4EFB] text-sm">{totalUnits.toLocaleString()} units</strong>
+                    </div>
                   </div>
                 </div>
+              )}
+            </div>
+          )}
 
-                <p className="text-[11px] text-[#252943]/70">
-                  Total Quantity: <strong className="text-[#3A4EFB]">{totalUnits.toLocaleString()} units</strong> ({effectiveRuns} runs of {numericQty} every {dripIntervalMinutes}m)
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Price & Submit Action */}
+          {/* Charge & Submit Button */}
           <div className="pt-3 border-t border-[#DEE0ED] flex items-center justify-between gap-4">
             <div>
               <span className="text-[11px] uppercase tracking-wider text-[#252943]/50 font-bold block">
-                Charge
+                Total Charge
               </span>
               <div className="text-xl font-extrabold text-[#252943]">
                 ${totalCost.toFixed(2)}
@@ -474,10 +863,15 @@ function NewOrderForm() {
               {submitting ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Submitting...</span>
+                  <span>Processing...</span>
+                </>
+              ) : orderMode === "SCHEDULED" ? (
+                <>
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>Schedule Order (BD Time)</span>
                 </>
               ) : (
-                <span>Submit Order</span>
+                <span>{isDripFeed ? "Submit Drip-feed Order" : "Submit Order"}</span>
               )}
             </button>
           </div>

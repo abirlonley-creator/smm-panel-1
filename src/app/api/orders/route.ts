@@ -35,6 +35,7 @@ const createOrderSchema = z.object({
   dripMaxQuantity: z.number().int().positive().optional(),
   dripRuns: z.number().int().min(1).max(100).optional(),
   dripIntervalMinutes: z.number().int().min(1).max(10080).optional(),
+  customRunQuantities: z.array(z.number().int().positive()).optional(),
   timingMode: z.enum(["MODE_A", "MODE_B", "CUSTOM"]).optional().default("MODE_B"),
   stepsCount: z.number().int().min(1).max(30).optional().default(1),
   intervalMinutes: z.number().int().min(5).max(10080).optional().default(60),
@@ -169,56 +170,72 @@ export async function POST(request: Request) {
     const user = await prisma.user.findUnique({ where: { id: userId } });
     const currentBalance = user?.walletBalance ?? 0;
 
-    // Case 0: Working Drip Feed Order
+    // Case 0: Working Drip Feed Order (Supports Uniform, Min-Max Random Range, and Custom Run Quantities)
     if (scheduleMode === "DRIP_FEED") {
-      const runs = parsed.data.dripRuns && parsed.data.dripRuns >= 1 ? parsed.data.dripRuns : 5;
       const interval = parsed.data.dripIntervalMinutes && parsed.data.dripIntervalMinutes >= 1 ? parsed.data.dripIntervalMinutes : 60;
-      const quantityPerRun = requestedQuantity;
+      let runQuantities: number[] = [];
 
-      // Validate quantity per run against service limits
-      if (quantityPerRun < service.minQuantity) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: `Quantity per run (${quantityPerRun.toLocaleString()}) is below the minimum required (${service.minQuantity.toLocaleString()}).`,
-          },
-          { status: 400 }
-        );
-      }
-      if (quantityPerRun > service.maxQuantity) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: `Quantity per run (${quantityPerRun.toLocaleString()}) exceeds the maximum allowed (${service.maxQuantity.toLocaleString()}).`,
-          },
-          { status: 400 }
-        );
+      if (Array.isArray(parsed.data.customRunQuantities) && parsed.data.customRunQuantities.length > 0) {
+        runQuantities = parsed.data.customRunQuantities;
+      } else {
+        const runs = parsed.data.dripRuns && parsed.data.dripRuns >= 1 ? parsed.data.dripRuns : 5;
+        runQuantities = Array(runs).fill(requestedQuantity);
       }
 
-      const totalQuantity = quantityPerRun * runs;
+      const runs = runQuantities.length;
+
+      // Validate every run quantity against service limits
+      for (let i = 0; i < runs; i++) {
+        const q = runQuantities[i];
+        if (q < service.minQuantity) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: `Run #${i + 1} quantity (${q.toLocaleString()}) is below service minimum of ${service.minQuantity.toLocaleString()}.`,
+            },
+            { status: 400 }
+          );
+        }
+        if (q > service.maxQuantity) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: `Run #${i + 1} quantity (${q.toLocaleString()}) exceeds service maximum of ${service.maxQuantity.toLocaleString()}.`,
+            },
+            { status: 400 }
+          );
+        }
+      }
+
+      const totalQuantity = runQuantities.reduce((sum, q) => sum + q, 0);
       const totalCharge = Number(((totalQuantity / 1000) * service.ratePer1000).toFixed(4));
+      const allEqual = runQuantities.every((q) => q === runQuantities[0]);
 
-      // Attempt native provider drip feed first (Standard SMM API v2: action=add with runs & interval)
       let providerOrderId: string | null = null;
       let isNativeDrip = false;
 
-      const providerRes = await adapter.createOrder({
-        serviceExternalId: targetProviderServiceId,
-        targetUrl,
-        quantity: quantityPerRun,
-        runs,
-        interval,
-      });
+      // If all run quantities are equal, attempt provider native drip feed
+      if (allEqual) {
+        const providerRes = await adapter.createOrder({
+          serviceExternalId: targetProviderServiceId,
+          targetUrl,
+          quantity: runQuantities[0],
+          runs,
+          interval,
+        });
 
-      if (providerRes.success && providerRes.providerOrderId) {
-        providerOrderId = String(providerRes.providerOrderId);
-        isNativeDrip = true;
-      } else {
-        // Provider does not support native drip feed -> Send Run 1 immediately as first batch
+        if (providerRes.success && providerRes.providerOrderId) {
+          providerOrderId = String(providerRes.providerOrderId);
+          isNativeDrip = true;
+        }
+      }
+
+      // If quantities vary (Min-Max randomized) or native drip feed is unsupported, submit Run 1 immediately
+      if (!isNativeDrip) {
         const run1Res = await adapter.createOrder({
           serviceExternalId: targetProviderServiceId,
           targetUrl,
-          quantity: quantityPerRun,
+          quantity: runQuantities[0],
         });
 
         if (run1Res.success && run1Res.providerOrderId) {
@@ -229,7 +246,6 @@ export async function POST(request: Request) {
             {
               success: false,
               error:
-                providerRes.error ||
                 run1Res.error ||
                 "Provider rejected order placement. Please verify service ID and link.",
             },
@@ -241,7 +257,6 @@ export async function POST(request: Request) {
       // Record in database
       const now = new Date();
       const order = await prisma.$transaction(async (tx) => {
-        // If user has local wallet balance, debit it; do not block if zero
         if (currentBalance > 0) {
           const debited = Math.min(currentBalance, totalCharge);
           const newBal = Number((currentBalance - debited).toFixed(2));
@@ -256,7 +271,7 @@ export async function POST(request: Request) {
               amount: -debited,
               balanceAfter: newBal,
               referenceId: orderRef,
-              description: `Drip Feed order ${orderRef} (${runs} runs × ${quantityPerRun} units)`,
+              description: `Drip Feed order ${orderRef} (${runs} runs, total ${totalQuantity} units)`,
             },
           });
         }
@@ -268,9 +283,9 @@ export async function POST(request: Request) {
             providerId: providerConnection?.id || null,
             targetUrl,
             requestedQuantity: totalQuantity,
-            submittedQuantity: isNativeDrip ? totalQuantity : quantityPerRun,
+            submittedQuantity: isNativeDrip ? totalQuantity : runQuantities[0],
             deliveredQuantity: 0,
-            remainingQuantity: isNativeDrip ? totalQuantity : totalQuantity - quantityPerRun,
+            remainingQuantity: isNativeDrip ? totalQuantity : totalQuantity - runQuantities[0],
             failedQuantity: 0,
             unitCost,
             totalCost: totalCharge,
@@ -282,17 +297,18 @@ export async function POST(request: Request) {
           },
         });
 
-        // Create drip feed run entries for tracking
+        // Create individual drip feed run entries
         for (let i = 0; i < runs; i++) {
+          const runQty = runQuantities[i];
           const scheduledAt = new Date(now.getTime() + i * interval * 60 * 1000);
-          const runCost = Number(((quantityPerRun / 1000) * service.ratePer1000).toFixed(4));
+          const runCost = Number(((runQty / 1000) * service.ratePer1000).toFixed(4));
 
           await tx.dripFeedRun.create({
             data: {
               orderId: newOrder.id,
               runNumber: i + 1,
               scheduledAt,
-              quantity: quantityPerRun,
+              quantity: runQty,
               status: isNativeDrip ? "PROCESSING" : i === 0 ? "COMPLETED" : "PENDING",
               providerOrderId: isNativeDrip ? providerOrderId : i === 0 ? providerOrderId : null,
               cost: runCost,
@@ -307,7 +323,7 @@ export async function POST(request: Request) {
         data: {
           action: "DRIP_FEED_ORDER_PLACED",
           actor: "Customer",
-          details: `Drip Feed order ${orderRef} placed: ${runs} runs of ${quantityPerRun} units every ${interval}m (Provider Order #${providerOrderId})`,
+          details: `Drip Feed order ${orderRef} placed: ${runs} runs (total ${totalQuantity} units) every ${interval}m (Provider Order #${providerOrderId})`,
           userId,
         },
       });
