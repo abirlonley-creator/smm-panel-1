@@ -174,6 +174,17 @@ export async function POST(request: Request) {
     );
     const targetProviderServiceId = service.providerServiceId || service.externalId;
 
+    // Resolve legacy provider ID only if it exists in the Provider table, else null
+    // (UserProviderConnection is tracked via service.userProviderId; Order.providerId has foreign key to Provider)
+    let legacyProviderId: string | null = null;
+    if (service.providerId) {
+      const leg = await prisma.provider.findUnique({
+        where: { id: service.providerId },
+        select: { id: true },
+      });
+      if (leg) legacyProviderId = leg.id;
+    }
+
     // Fetch user (for optional local wallet records)
     const user = await prisma.user.findUnique({ where: { id: userId } });
     const currentBalance = user?.walletBalance ?? 0;
@@ -300,7 +311,7 @@ export async function POST(request: Request) {
           data: {
             orderRef,
             serviceId: service.id,
-            providerId: providerConnection?.id || null,
+            providerId: legacyProviderId,
             targetUrl,
             requestedQuantity: totalQuantity,
             submittedQuantity: isNativeDrip ? totalQuantity : runQuantities[0],
@@ -490,7 +501,7 @@ export async function POST(request: Request) {
           data: {
             orderRef,
             serviceId: service.id,
-            providerId: providerConnection?.id || null,
+            providerId: legacyProviderId,
             targetUrl,
             requestedQuantity,
             submittedQuantity: requestedQuantity,
@@ -577,7 +588,7 @@ export async function POST(request: Request) {
         data: {
           orderRef,
           serviceId: service.id,
-          providerId: providerConnection?.id || null,
+          providerId: legacyProviderId,
           targetUrl,
           requestedQuantity,
           submittedQuantity: 0,
