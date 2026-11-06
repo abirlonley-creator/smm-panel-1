@@ -144,13 +144,20 @@ export async function GET(request: Request) {
       ];
     } else if (userProviders.length > 0) {
       const userProvIds = userProviders.map((p) => p.id);
+      const userEndpoints = userProviders
+        .map((p) => p.apiUrl?.trim())
+        .filter((url): url is string => Boolean(url && url !== "mock"));
+
       where.OR = [
         { userProviderId: { in: userProvIds } },
         { providerId: { in: userProvIds } },
+        ...(userEndpoints.length > 0 ? [{ providerEndpoint: { in: userEndpoints } }] : []),
+        ...(activeEndpoint && activeEndpoint !== "mock" ? [{ providerEndpoint: activeEndpoint }] : []),
         ...(userProviders.some((p) => p.isMock) ? [{ isMock: true }] : []),
       ];
     } else {
       where.OR = [
+        ...(activeEndpoint && activeEndpoint !== "mock" ? [{ providerEndpoint: activeEndpoint }] : []),
         { providerEndpoint: "mock" },
         { isMock: true },
       ];
@@ -178,7 +185,7 @@ export async function GET(request: Request) {
     }
 
     // 6. Fetch services matching query
-    const [allServices, totalServices] = await Promise.all([
+    let [allServices, totalServices] = await Promise.all([
       prisma.service.findMany({
         where,
         include: {
@@ -194,6 +201,42 @@ export async function GET(request: Request) {
       }),
       prisma.service.count({ where }),
     ]);
+
+    // If 0 services found in DB and user has active live provider, auto-fetch and sync from provider
+    if (allServices.length === 0 && config && !config.isMock) {
+      try {
+        const liveServices = await adapter.getServices();
+        if (Array.isArray(liveServices) && liveServices.length > 0) {
+          await syncProviderServices(
+            adapter,
+            session.user?.username || session.label || "Auto Sync",
+            {
+              providerId: config.id,
+              userProviderId: config.id,
+              providerEndpoint: config.apiUrl,
+              providerName: config.name,
+              userId,
+            }
+          );
+          allServices = await prisma.service.findMany({
+            where,
+            include: {
+              userProvider: { select: { id: true, name: true, currency: true } },
+              provider: { select: { id: true, name: true, currency: true } },
+            },
+            orderBy: [
+              { userProviderId: "asc" },
+              { providerId: "asc" },
+              { externalId: "asc" },
+              { ratePer1000: "asc" },
+            ],
+          });
+          totalServices = allServices.length;
+        }
+      } catch (err: any) {
+        console.warn("Live services auto-sync attempt:", err.message);
+      }
+    }
 
     // Build favourite keys set
     const favKeySet = new Set(
@@ -222,8 +265,8 @@ export async function GET(request: Request) {
       };
     });
 
-    // If onlyFavouritesMode is ON (Change 12)
-    const isOnlyFavouritesMode = Boolean(userPref?.onlyFavourites && !ignoreSnapshot);
+    // If onlyFavouritesMode is explicitly requested
+    const isOnlyFavouritesMode = Boolean(userPref?.onlyFavourites && !ignoreSnapshot && filterFavouritesOnly);
     if (isOnlyFavouritesMode) {
       if (snapshotKeys.length > 0) {
         enriched = enriched.filter((s) => s.inSnapshot);
