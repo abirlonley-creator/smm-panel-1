@@ -208,41 +208,8 @@ export async function GET(request: Request) {
       prisma.service.count({ where }),
     ]);
 
-    // If 0 services found in DB and user has active live provider, auto-fetch and sync from provider
-    if (allServices.length === 0 && config && !config.isMock) {
-      try {
-        const liveServices = await adapter.getServices();
-        if (Array.isArray(liveServices) && liveServices.length > 0) {
-          await syncProviderServices(
-            adapter,
-            session.user?.username || session.label || "Auto Sync",
-            {
-              providerId: config.id,
-              userProviderId: config.id,
-              providerEndpoint: config.apiUrl,
-              providerName: config.name,
-              userId,
-            }
-          );
-          allServices = await prisma.service.findMany({
-            where,
-            include: {
-              userProvider: { select: { id: true, name: true, currency: true } },
-              provider: { select: { id: true, name: true, currency: true } },
-            },
-            orderBy: [
-              { userProviderId: "asc" },
-              { providerId: "asc" },
-              { externalId: "asc" },
-              { ratePer1000: "asc" },
-            ],
-          });
-          totalServices = allServices.length;
-        }
-      } catch (err: any) {
-        console.warn("Live services auto-sync attempt:", err.message);
-      }
-    }
+    // If 0 services found in DB, return empty list instantly without blocking.
+    // Heavy syncing is done explicitly via /api/user/providers/[id]/refresh or when shouldRefresh is requested.
 
     // Build favourite keys set
     const favKeySet = new Set(
@@ -312,39 +279,55 @@ export async function GET(request: Request) {
       ? enriched.slice((page - 1) * pageSize, page * pageSize)
       : enriched;
 
-    return NextResponse.json({
-      success: true,
-      provider: {
-        name: config.name,
-        apiUrl: config.isMock ? "Mock SMM Provider" : config.apiUrl,
-        isMock: config.isMock,
-        isLive: !config.isMock && wasRefreshedLive,
-        cached: !wasRefreshedLive,
-        lastSyncAt: config.lastSyncAt,
-        warning: syncError || undefined,
+    return NextResponse.json(
+      {
+        success: true,
+        provider: {
+          name: config.name,
+          apiUrl: config.isMock ? "Mock SMM Provider" : config.apiUrl,
+          isMock: config.isMock,
+          isLive: !config.isMock && wasRefreshedLive,
+          cached: !wasRefreshedLive,
+          lastSyncAt: config.lastSyncAt,
+          warning: syncError || undefined,
+        },
+        activeProviderId: config.id,
+        providers: userProviders.map((p) => {
+          const count = enriched.filter(
+            (s) =>
+              s.providerId === p.id ||
+              s.userProviderId === p.id ||
+              s.providerName?.toLowerCase() === p.name?.toLowerCase()
+          ).length;
+          return {
+            id: p.id,
+            name: p.name,
+            currency: p.currency,
+            balance: p.balance,
+            apiUrl: p.apiUrl,
+            isActive: p.id === config.id,
+            servicesCount: count,
+          };
+        }),
+        services: paginated,
+        totalServices: finalTotal,
+        onlyFavouritesMode: isOnlyFavouritesMode,
+        snapshotCount: snapshotKeys.length,
+        favouritesCount: userFavourites.length,
+        ...(paginationRequested
+          ? {
+              page,
+              pageSize,
+              totalPages: Math.max(1, Math.ceil(finalTotal / pageSize)),
+            }
+          : {}),
       },
-      activeProviderId: config.id,
-      providers: userProviders.map((p) => ({
-        id: p.id,
-        name: p.name,
-        currency: p.currency,
-        balance: p.balance,
-        apiUrl: p.apiUrl,
-        isActive: p.id === config.id,
-      })),
-      services: paginated,
-      totalServices: finalTotal,
-      onlyFavouritesMode: isOnlyFavouritesMode,
-      snapshotCount: snapshotKeys.length,
-      favouritesCount: userFavourites.length,
-      ...(paginationRequested
-        ? {
-            page,
-            pageSize,
-            totalPages: Math.max(1, Math.ceil(finalTotal / pageSize)),
-          }
-        : {}),
-    });
+      {
+        headers: {
+          "Cache-Control": "private, no-cache, no-transform",
+        },
+      }
+    );
   } catch (error: any) {
     console.error("[SERVICES_API] Unhandled error:", error);
     return NextResponse.json(

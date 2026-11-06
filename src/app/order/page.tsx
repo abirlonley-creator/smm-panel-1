@@ -18,6 +18,8 @@ import {
   Check,
   Search,
   X,
+  RefreshCw,
+  ArrowLeft,
 } from "lucide-react";
 
 interface ServiceItem {
@@ -26,6 +28,7 @@ interface ServiceItem {
   providerServiceId?: string;
   providerId?: string;
   providerName?: string;
+  userProviderId?: string;
   name: string;
   platform: string;
   category: string;
@@ -43,6 +46,7 @@ interface ProviderInfo {
   balance?: number | null;
   apiUrl?: string;
   isActive?: boolean;
+  servicesCount?: number;
 }
 
 interface RunItem {
@@ -84,9 +88,10 @@ function NewOrderForm() {
   // Mode: "NOW" (Instant / Drip) or "SCHEDULED" (BD Time Scheduler)
   const [orderMode, setOrderMode] = useState<"NOW" | "SCHEDULED">("NOW");
 
-  // Catalog State
-  const [services, setServices] = useState<ServiceItem[]>([]);
+  // Catalog State (In-Memory Cached for 0ms Instant Switching)
+  const [allServices, setAllServices] = useState<ServiceItem[]>([]);
   const [loadingServices, setLoadingServices] = useState(true);
+  const [refreshingServices, setRefreshingServices] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [selectedServiceId, setSelectedServiceId] = useState<string>("");
 
@@ -97,10 +102,6 @@ function NewOrderForm() {
 
   // Search State (Fast Instant Search)
   const [searchQuery, setSearchQuery] = useState<string>("");
-
-  const activeProvider = useMemo(() => {
-    return providers.find((p) => p.id === activeProviderId) || providers[0] || null;
-  }, [providers, activeProviderId]);
 
   // Target Input
   const [targetUrl, setTargetUrl] = useState<string>("");
@@ -156,25 +157,124 @@ function NewOrderForm() {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch Services Catalog
-  const loadServices = useCallback(async (providerId?: string) => {
+  // Compute Service Counts for each provider in memory
+  const providerCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const p of providers) {
+      counts[p.id] = typeof p.servicesCount === "number" ? p.servicesCount : 0;
+    }
+    for (const s of allServices) {
+      if (s.providerId && counts[s.providerId] !== undefined) {
+        counts[s.providerId] = (counts[s.providerId] || 0) + 1;
+      }
+    }
+    for (const p of providers) {
+      if (!counts[p.id]) {
+        const matchByName = allServices.filter(
+          (s) =>
+            s.providerId === p.id ||
+            s.userProviderId === p.id ||
+            s.providerName?.toLowerCase() === p.name.toLowerCase()
+        ).length;
+        counts[p.id] = matchByName;
+      }
+    }
+    return counts;
+  }, [allServices, providers]);
+
+  // The active provider object currently displayed in the switcher banner
+  const activeProvider = useMemo(() => {
+    if (providerFilter !== "ALL") {
+      const found = providers.find((p) => p.id === providerFilter);
+      if (found) return found;
+    }
+    return providers.find((p) => p.id === activeProviderId) || providers[0] || null;
+  }, [providers, activeProviderId, providerFilter]);
+
+  // Filter services instantly in-memory by chosen Provider ("ALL" or specific Provider ID)
+  const currentFilteredServices = useMemo(() => {
+    if (providerFilter === "ALL") return allServices;
+    const target = providers.find((p) => p.id === providerFilter);
+    return allServices.filter((s) => {
+      if (s.providerId === providerFilter || s.userProviderId === providerFilter) return true;
+      if (target && s.providerName?.toLowerCase() === target.name.toLowerCase()) return true;
+      return false;
+    });
+  }, [allServices, providerFilter, providers]);
+
+  // Fast Instant Search Filter within currently active services
+  const searchResults = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [];
+    return currentFilteredServices.filter((s) => {
+      const nameMatch = s.name?.toLowerCase().includes(q);
+      const catMatch = s.category?.toLowerCase().includes(q);
+      const platMatch = s.platform?.toLowerCase().includes(q);
+      const idMatch = (s.providerServiceId || s.externalId || s.id)?.toLowerCase().includes(q);
+      const provMatch = s.providerName?.toLowerCase().includes(q);
+      return nameMatch || catMatch || platMatch || idMatch || provMatch;
+    });
+  }, [currentFilteredServices, searchQuery]);
+
+  // Unique Categories List for currently active services
+  const categories = useMemo(() => {
+    const set = new Set<string>();
+    currentFilteredServices.forEach((s) => {
+      const cat = s.category?.trim() || s.platform?.trim() || "General";
+      if (cat) set.add(cat);
+    });
+    return Array.from(set).sort();
+  }, [currentFilteredServices]);
+
+  // Services Filtered by Chosen Category
+  const categoryServices = useMemo(() => {
+    if (!selectedCategory) return currentFilteredServices;
+    return currentFilteredServices.filter(
+      (s) => (s.category?.trim() || s.platform?.trim() || "General") === selectedCategory
+    );
+  }, [currentFilteredServices, selectedCategory]);
+
+  // Displayed Services in dropdown: search results if search is active, else category services
+  const displayedServices = useMemo(() => {
+    if (searchQuery.trim()) {
+      return searchResults;
+    }
+    return categoryServices;
+  }, [searchQuery, searchResults, categoryServices]);
+
+  // Active Service Object
+  const activeService = useMemo(() => {
+    return (
+      displayedServices.find((s) => s.id === selectedServiceId) ||
+      displayedServices[0] ||
+      currentFilteredServices[0] ||
+      null
+    );
+  }, [displayedServices, selectedServiceId, currentFilteredServices]);
+
+  // Fetch Services Catalog Once and Cache In Memory
+  const loadServices = useCallback(async (isRefresh = false) => {
     try {
-      setLoadingServices(true);
-      const url = `/api/services${providerId && providerId !== "ALL" ? `?providerId=${providerId}` : ""}`;
-      const res = await fetch(url);
+      if (isRefresh) {
+        setRefreshingServices(true);
+      } else {
+        setLoadingServices(true);
+      }
+
+      const res = await fetch("/api/services");
       const data = await res.json();
+
       if (data.success && Array.isArray(data.services)) {
-        setServices(data.services);
+        setAllServices(data.services);
 
         if (Array.isArray(data.providers)) {
           setProviders(data.providers);
-          const currentActive =
-            (providerId && providerId !== "ALL" && providerId !== "all" ? providerId : null) ||
+          const initialActive =
             data.activeProviderId ||
             data.providers.find((p: any) => p.isActive)?.id ||
             data.providers[0]?.id ||
             "";
-          setActiveProviderId(currentActive);
+          setActiveProviderId((prev) => prev || initialActive);
         }
 
         const paramId = searchParams.get("serviceId");
@@ -199,15 +299,13 @@ function NewOrderForm() {
           setQuantity(data.services[0].minQuantity || 100);
           setMinQtyRange(data.services[0].minQuantity || 10);
           setMaxQtyRange((data.services[0].minQuantity || 10) + 4);
-        } else {
-          setSelectedCategory("");
-          setSelectedServiceId("");
         }
       }
     } catch (err: any) {
-      console.warn("Failed to load services:", err);
+      console.warn("Failed to load services catalog:", err);
     } finally {
       setLoadingServices(false);
+      setRefreshingServices(false);
     }
   }, [searchParams]);
 
@@ -218,85 +316,65 @@ function NewOrderForm() {
   // Listen to external balance updates (e.g. from header switcher)
   useEffect(() => {
     const handleBalanceUpdate = () => {
-      loadServices();
+      // Re-fetch balance quietly without blowing away service state
+      fetch("/api/balance")
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success && Array.isArray(data.providers)) {
+            setProviders(data.providers);
+            if (data.activeProviderId) setActiveProviderId(data.activeProviderId);
+          }
+        })
+        .catch((e) => console.warn("Balance poll error:", e));
     };
     window.addEventListener("balance-updated", handleBalanceUpdate);
     return () => window.removeEventListener("balance-updated", handleBalanceUpdate);
-  }, [loadServices]);
+  }, []);
 
-  async function handleSwitchProvider(providerId: string) {
-    if (providerId === activeProviderId) return;
-    try {
-      await fetch("/api/balance", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ providerId }),
-      });
-      window.dispatchEvent(new CustomEvent("balance-updated"));
-      await loadServices(providerId);
-    } catch (err) {
-      console.warn("Failed to switch provider:", err);
-    }
-  }
+  // 0ms Instant In-Memory Provider Switcher Handler
+  const handleSelectProvider = useCallback(
+    (filterId: string) => {
+      setProviderFilter(filterId);
+      setSearchQuery("");
 
-  async function handleFilterProvider(filterId: string) {
-    setProviderFilter(filterId);
-    if (filterId === "ALL") {
-      await loadServices("ALL");
-    } else {
-      await handleSwitchProvider(filterId);
-    }
-  }
+      const target = providers.find((p) => p.id === filterId);
+      const filtered =
+        filterId === "ALL"
+          ? allServices
+          : allServices.filter(
+              (s) =>
+                s.providerId === filterId ||
+                s.userProviderId === filterId ||
+                (target && s.providerName?.toLowerCase() === target.name.toLowerCase())
+            );
 
-  // Fast Instant Search Filter across all services
-  const searchResults = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return [];
-    return services.filter((s) => {
-      const nameMatch = s.name?.toLowerCase().includes(q);
-      const catMatch = s.category?.toLowerCase().includes(q);
-      const platMatch = s.platform?.toLowerCase().includes(q);
-      const idMatch = (s.providerServiceId || s.externalId || s.id)?.toLowerCase().includes(q);
-      const provMatch = s.providerName?.toLowerCase().includes(q);
-      return nameMatch || catMatch || platMatch || idMatch || provMatch;
-    });
-  }, [services, searchQuery]);
+      if (filtered.length > 0) {
+        setSelectedCategory(filtered[0].category?.trim() || filtered[0].platform?.trim() || "General");
+        setSelectedServiceId(filtered[0].id);
+        setQuantity(filtered[0].minQuantity || 100);
+        setMinQtyRange(filtered[0].minQuantity || 10);
+        setMaxQtyRange((filtered[0].minQuantity || 10) + 4);
+      } else {
+        setSelectedCategory("");
+        setSelectedServiceId("");
+      }
 
-  // Unique Categories List
-  const categories = useMemo(() => {
-    const set = new Set<string>();
-    services.forEach((s) => {
-      const cat = s.category?.trim() || s.platform?.trim() || "General";
-      if (cat) set.add(cat);
-    });
-    return Array.from(set).sort();
-  }, [services]);
-
-  // Services Filtered by Chosen Category
-  const categoryServices = useMemo(() => {
-    if (!selectedCategory) return services;
-    return services.filter(
-      (s) => (s.category?.trim() || s.platform?.trim() || "General") === selectedCategory
-    );
-  }, [services, selectedCategory]);
-
-  // Displayed Services in dropdown: search results if search is active, else category services
-  const displayedServices = useMemo(() => {
-    if (searchQuery.trim()) {
-      return searchResults;
-    }
-    return categoryServices;
-  }, [searchQuery, searchResults, categoryServices]);
-
-  // Active Service Object
-  const activeService = useMemo(() => {
-    return (
-      displayedServices.find((s) => s.id === selectedServiceId) ||
-      displayedServices[0] ||
-      services[0] ||
-      null
-    );
-  }, [displayedServices, selectedServiceId, services]);
+      // If a specific provider was selected, save as active preference in background (non-blocking)
+      if (filterId !== "ALL") {
+        setActiveProviderId(filterId);
+        fetch("/api/balance", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ providerId: filterId }),
+        })
+          .then(() => {
+            window.dispatchEvent(new CustomEvent("balance-updated"));
+          })
+          .catch((err) => console.warn("Background balance update error:", err));
+      }
+    },
+    [allServices, providers]
+  );
 
   function handleSelectSearchedService(s: ServiceItem) {
     setSelectedCategory(s.category?.trim() || s.platform?.trim() || "General");
@@ -328,7 +406,6 @@ function NewOrderForm() {
         if (isRandomRange) {
           const min = Math.min(minQtyRange, maxQtyRange);
           const max = Math.max(minQtyRange, maxQtyRange);
-          // Preserve existing if within range and runs length matches, else roll
           if (prev[i] && prev[i].quantity >= min && prev[i].quantity <= max) {
             qty = prev[i].quantity;
           } else {
@@ -370,7 +447,7 @@ function NewOrderForm() {
   // Handle Category Change
   const handleCategoryChange = (cat: string) => {
     setSelectedCategory(cat);
-    const matched = services.filter(
+    const matched = currentFilteredServices.filter(
       (s) => (s.category?.trim() || s.platform?.trim() || "General") === cat
     );
     if (matched.length > 0) {
@@ -384,7 +461,7 @@ function NewOrderForm() {
   // Handle Service Change
   const handleServiceChange = (serviceId: string) => {
     setSelectedServiceId(serviceId);
-    const srv = services.find((s) => s.id === serviceId);
+    const srv = currentFilteredServices.find((s) => s.id === serviceId);
     if (srv) {
       setQuantity(srv.minQuantity || 100);
       setMinQtyRange(srv.minQuantity || 10);
@@ -449,15 +526,11 @@ function NewOrderForm() {
     setOrderSuccess(null);
 
     try {
-      // -----------------------------------------------------------------------
-      // PATH A: BD TIME SCHEDULER (Schedule for future delivery in BD Time)
-      // -----------------------------------------------------------------------
       if (orderMode === "SCHEDULED") {
         if (!scheduledBdDate || !scheduledBdTime) {
           throw new Error("Please select both a date and time in Bangladesh Time.");
         }
 
-        // Construct ISO string with Bangladesh Time offset (+06:00)
         const bdIsoString = `${scheduledBdDate}T${scheduledBdTime}:00+06:00`;
         const scheduledUtcDate = new Date(bdIsoString);
 
@@ -501,9 +574,7 @@ function NewOrderForm() {
         return;
       }
 
-      // -----------------------------------------------------------------------
-      // PATH B: INSTANT / DRIP-FEED (With Min-Max Random Range & Editable Runs)
-      // -----------------------------------------------------------------------
+      // PATH B: INSTANT / DRIP-FEED
       const payload: any = {
         serviceId: activeService.id,
         targetUrl: targetUrl.trim(),
@@ -554,9 +625,14 @@ function NewOrderForm() {
     if (activeService) setQuantity(activeService.minQuantity || 100);
   }
 
+  // Find another provider that actually has services for the 1-click fallback button
+  const fallbackProvider = useMemo(() => {
+    return providers.find((p) => p.id !== activeProvider?.id && (providerCounts[p.id] || 0) > 0) || null;
+  }, [providers, activeProvider, providerCounts]);
+
   return (
-    <div className="max-w-2xl mx-auto space-y-6 animate-fadeIn pb-16">
-      {/* Title & Mode Switcher */}
+    <div className="max-w-2xl mx-auto space-y-5 animate-fadeIn pb-16">
+      {/* 1. Header & Order Mode Switcher */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#DEE0ED] pb-4">
         <div>
           <h1 className="text-xl font-bold text-[#252943]">New Order</h1>
@@ -591,7 +667,7 @@ function NewOrderForm() {
         </div>
       </div>
 
-      {/* Success Banner */}
+      {/* 2. Success Banner */}
       {orderSuccess && (
         <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 space-y-2 animate-fadeIn text-sm">
           <div className="flex items-center justify-between">
@@ -628,7 +704,7 @@ function NewOrderForm() {
         </div>
       )}
 
-      {/* Error Banner */}
+      {/* 3. Error Banner */}
       {errorMessage && (
         <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-900 flex items-center gap-2 text-xs font-medium animate-fadeIn">
           <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
@@ -636,100 +712,177 @@ function NewOrderForm() {
         </div>
       )}
 
-      {/* Loading Skeleton */}
-      {loadingServices && services.length === 0 && (
-        <div className="p-12 text-center text-xs text-[#252943]/60 flex items-center justify-center gap-2">
+      {/* 4. ALWAYS VISIBLE TOP BAR: Selected API Provider & Double/Multi API Switcher */}
+      {providers.length > 0 ? (
+        <div className="p-3.5 rounded-2xl bg-white border border-[#DEE0ED] shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-[#3A4EFB]/10 border border-[#3A4EFB]/20 flex items-center justify-center text-[#3A4EFB] shrink-0">
+              <Server className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#252943]/50 block">
+                Selected API Provider
+              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs sm:text-sm font-bold text-[#252943]">
+                  {providerFilter === "ALL"
+                    ? "All Connected APIs"
+                    : activeProvider?.name || "Connected API"}
+                </span>
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                  <Check className="w-2.5 h-2.5" />
+                  Active
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-start sm:self-center flex-wrap">
+            {/* Live Upstream Balance of Selected Provider */}
+            {activeProvider && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED] shadow-subtle">
+                <Wallet className="w-3.5 h-3.5 text-[#3A4EFB]" />
+                <span className="text-xs font-bold text-[#252943]">
+                  {activeProvider.balance !== null && activeProvider.balance !== undefined
+                    ? `${activeProvider.currency || "USD"} ${activeProvider.balance.toFixed(2)}`
+                    : "Available"}
+                </span>
+              </div>
+            )}
+
+            {/* Double / Multi API switcher buttons (Always clickable, 0ms latency) */}
+            {providers.length > 1 && (
+              <div className="flex items-center p-0.5 rounded-xl bg-[#EBEFFA] border border-[#DEE0ED] flex-wrap gap-1">
+                <button
+                  type="button"
+                  onClick={() => handleSelectProvider("ALL")}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    providerFilter === "ALL"
+                      ? "bg-[#3A4EFB] text-white shadow-sm"
+                      : "text-[#252943]/70 hover:text-[#252943] hover:bg-white/60"
+                  }`}
+                  title="Show all services across all connected APIs"
+                >
+                  All APIs ({allServices.length})
+                </button>
+                {providers.map((p) => {
+                  const isSel = providerFilter === p.id;
+                  const sCount = providerCounts[p.id] ?? 0;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => handleSelectProvider(p.id)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                        isSel
+                          ? "bg-[#3A4EFB] text-white shadow-sm"
+                          : "text-[#252943]/70 hover:text-[#252943] hover:bg-white/60"
+                      }`}
+                      title={`Switch to ${p.name} (${sCount} services)`}
+                    >
+                      <span>{p.name}</span>
+                      <span
+                        className={`text-[10px] px-1 py-0.2 rounded ${
+                          isSel ? "bg-white/20 text-white" : "bg-[#252943]/10 text-[#252943]/60"
+                        }`}
+                      >
+                        {sCount}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>No API Provider connected yet.</span>
+          </div>
+          <Link href="/api-key" className="font-bold underline text-[#3A4EFB] hover:text-[#3243d9]">
+            Connect API Key →
+          </Link>
+        </div>
+      )}
+
+      {/* 5. Initial Loading Skeleton */}
+      {loadingServices && allServices.length === 0 && (
+        <div className="rounded-2xl bg-white border border-[#DEE0ED] p-12 text-center text-xs text-[#252943]/60 flex items-center justify-center gap-2 shadow-sm">
           <Loader2 className="w-4 h-4 animate-spin text-[#3A4EFB]" />
           <span>Loading services catalog...</span>
         </div>
       )}
 
-      {/* Main Order Form */}
-      {!loadingServices && (
+      {/* 6. EMPTY STATE: When Selected Provider has 0 services synced / not connected */}
+      {!loadingServices && currentFilteredServices.length === 0 && (
+        <div className="rounded-2xl bg-white border border-[#DEE0ED] p-8 shadow-sm text-center space-y-4 animate-fadeIn">
+          <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto shadow-subtle">
+            <AlertCircle className="w-6 h-6" />
+          </div>
+
+          <div className="space-y-1.5 max-w-md mx-auto">
+            <h2 className="text-base font-bold text-[#252943]">
+              No Services Synced for {activeProvider?.name || "Selected API"}
+            </h2>
+            <p className="text-xs text-[#252943]/70 leading-relaxed">
+              You don&apos;t have any API connected or services synced for{" "}
+              <strong className="text-[#252943]">{activeProvider?.name || "this provider"}</strong> yet.
+              You can instantly go back to your active services below or sync this provider in API settings.
+            </p>
+          </div>
+
+          {/* Instant 1-Click Action Buttons: Never stranded! */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-2 max-w-md mx-auto">
+            {fallbackProvider && (
+              <button
+                type="button"
+                onClick={() => handleSelectProvider(fallbackProvider.id)}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-[#3A4EFB] hover:bg-[#3243d9] active:scale-95 text-white text-xs font-bold transition-all shadow-subtle flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Go Back to {fallbackProvider.name}</span>
+                <span className="px-1.5 py-0.2 rounded bg-white/20 text-[10px]">
+                  {providerCounts[fallbackProvider.id] || 0}
+                </span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => handleSelectProvider("ALL")}
+              className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-[#F0F2FA] hover:bg-[#DEE0ED] text-[#252943] text-xs font-bold transition-all border border-[#DEE0ED] flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <span>View All Services ({allServices.length})</span>
+            </button>
+          </div>
+
+          <div className="pt-2 flex items-center justify-center gap-4 text-xs">
+            <Link
+              href="/api-key"
+              className="text-[#3A4EFB] font-bold hover:underline flex items-center gap-1"
+            >
+              <span>Open API Settings to Sync</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+            <span className="text-[#DEE0ED]">•</span>
+            <button
+              type="button"
+              onClick={() => loadServices(true)}
+              disabled={refreshingServices}
+              className="text-[#252943]/70 hover:text-[#252943] font-semibold flex items-center gap-1 cursor-pointer disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${refreshingServices ? "animate-spin text-[#3A4EFB]" : ""}`} />
+              <span>{refreshingServices ? "Checking..." : "Check for Synced Services"}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 7. MAIN ORDER FORM: Rendered when services are available */}
+      {!loadingServices && currentFilteredServices.length > 0 && (
         <form onSubmit={handleSubmitOrder} className="rounded-2xl bg-white border border-[#DEE0ED] p-6 shadow-sm space-y-4">
-          {/* Active API Provider Selector & Balance Banner (Double / Multi API) */}
-          {providers.length > 0 ? (
-            <div className="p-3.5 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-[#3A4EFB]/10 border border-[#3A4EFB]/20 flex items-center justify-center text-[#3A4EFB] shrink-0">
-                  <Server className="w-4 h-4" />
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#252943]/50 block">
-                    Selected API Provider
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs sm:text-sm font-bold text-[#252943]">
-                      {activeProvider?.name || "Connected API"}
-                    </span>
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                      <Check className="w-2.5 h-2.5" />
-                      Active
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 self-start sm:self-center flex-wrap">
-                {/* Live Upstream Balance of Selected Provider */}
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#DEE0ED] shadow-subtle">
-                  <Wallet className="w-3.5 h-3.5 text-[#3A4EFB]" />
-                  <span className="text-xs font-bold text-[#252943]">
-                    {activeProvider?.balance !== null && activeProvider?.balance !== undefined
-                      ? `${activeProvider.currency || "USD"} ${activeProvider.balance.toFixed(2)}`
-                      : "Available"}
-                  </span>
-                </div>
-
-                {/* Double / Multi API switcher buttons */}
-                {providers.length > 1 && (
-                  <div className="flex items-center p-0.5 rounded-xl bg-[#EBEFFA] border border-[#DEE0ED] flex-wrap gap-1">
-                    <button
-                      type="button"
-                      onClick={() => handleFilterProvider("ALL")}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                        providerFilter === "ALL"
-                          ? "bg-[#3A4EFB] text-white shadow-sm"
-                          : "text-[#252943]/70 hover:text-[#252943] hover:bg-white/60"
-                      }`}
-                      title="Show all services across all connected APIs"
-                    >
-                      All APIs ({services.length})
-                    </button>
-                    {providers.map((p) => {
-                      const isSel = providerFilter === p.id;
-                      return (
-                        <button
-                          key={p.id}
-                          type="button"
-                          onClick={() => handleFilterProvider(p.id)}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                            isSel
-                              ? "bg-[#3A4EFB] text-white shadow-sm"
-                              : "text-[#252943]/70 hover:text-[#252943] hover:bg-white/60"
-                          }`}
-                          title={`Switch to ${p.name}`}
-                        >
-                          {p.name}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                <span>No API Provider connected yet.</span>
-              </div>
-              <Link href="/api-key" className="font-bold underline text-[#3A4EFB] hover:text-[#3243d9]">
-                Connect API Key →
-              </Link>
-            </div>
-          )}
-
           {/* BD Time Scheduler Banner (When in SCHEDULED mode) */}
           {orderMode === "SCHEDULED" && (
             <div className="p-4 rounded-xl bg-indigo-50/70 border border-indigo-200 space-y-3 animate-fadeIn">
@@ -802,7 +955,7 @@ function NewOrderForm() {
                 <button
                   type="button"
                   onClick={() => setSearchQuery("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#252943]/40 hover:text-[#252943] p-0.5"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#252943]/40 hover:text-[#252943] p-0.5 cursor-pointer"
                   title="Clear search"
                 >
                   <X className="w-3.5 h-3.5" />
@@ -821,7 +974,7 @@ function NewOrderForm() {
                     key={s.id}
                     type="button"
                     onClick={() => handleSelectSearchedService(s)}
-                    className={`w-full text-left p-2 rounded-lg text-xs transition-all flex items-center justify-between gap-2 ${
+                    className={`w-full text-left p-2 rounded-lg text-xs transition-all flex items-center justify-between gap-2 cursor-pointer ${
                       s.id === selectedServiceId
                         ? "bg-[#F0F2FA] border border-[#3A4EFB]/40 text-[#252943]"
                         : "hover:bg-[#F8F9FD] text-[#252943]"
@@ -861,7 +1014,7 @@ function NewOrderForm() {
                 className="w-full px-3.5 py-2.5 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED] text-xs font-semibold text-[#252943] focus:outline-none focus:border-[#3A4EFB] focus:bg-white transition-all cursor-pointer disabled:opacity-50"
               >
                 {categories.length === 0 ? (
-                  <option value="">No categories found (sync services in API Key settings)</option>
+                  <option value="">No categories found</option>
                 ) : (
                   categories.map((cat) => (
                     <option key={cat} value={cat}>
