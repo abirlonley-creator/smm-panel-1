@@ -110,6 +110,8 @@ export async function runDripFeedTick(): Promise<DripFeedTickResult> {
           where: { id: run.order.id },
           data: {
             submittedQuantity: { increment: run.quantity },
+            deliveredQuantity: { increment: run.quantity },
+            remainingQuantity: { decrement: run.quantity },
             status: "PROCESSING",
           },
         });
@@ -125,7 +127,7 @@ export async function runDripFeedTick(): Promise<DripFeedTickResult> {
         if (remainingPending === 0) {
           await prisma.order.update({
             where: { id: run.order.id },
-            data: { status: "COMPLETED" },
+            data: { status: "COMPLETED", remainingQuantity: 0 },
           });
         }
       } else {

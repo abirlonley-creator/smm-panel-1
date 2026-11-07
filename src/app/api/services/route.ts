@@ -6,6 +6,13 @@ import { syncProviderServices } from "@/lib/provider/service-sync";
 
 export const dynamic = "force-dynamic";
 
+interface ServiceCacheEntry {
+  data: any;
+  timestamp: number;
+}
+const MEMORY_CACHE = new Map<string, ServiceCacheEntry>();
+const CACHE_TTL_MS = 60 * 1000; // 60s cache for lightning fast instant switching
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -26,6 +33,21 @@ export async function GET(request: Request) {
     // 1. Resolve caller session
     const session = await getAuthSession(request);
     const userId = session.authenticated && session.user ? session.user.id : undefined;
+
+    // In-Memory Fast Cache Check (Sub-millisecond instant response for catalog)
+    const filterProviderId = searchParams.get("providerId")?.trim();
+    const cacheKey = `${userId || "anon"}:${filterProviderId || "all"}:${platform || "all"}:${search || ""}:${filterFavouritesOnly}:${page}:${pageSize}:${paginationRequested}`;
+    if (!shouldRefresh && !serviceId) {
+      const cached = MEMORY_CACHE.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+        return NextResponse.json(cached.data, {
+          headers: {
+            "Cache-Control": "private, max-age=30, stale-while-revalidate=120",
+            "X-Cache": "HIT",
+          },
+        });
+      }
+    }
 
     // 2. Fetch user's connected providers
     let userProviders: any[] = [];
@@ -63,7 +85,6 @@ export async function GET(request: Request) {
       }
     }
 
-    const filterProviderId = searchParams.get("providerId")?.trim();
     const effectiveProviderId = filterProviderId && filterProviderId !== "all" ? filterProviderId : undefined;
     const { adapter, config } = await getActiveProvider(userId, effectiveProviderId);
     const activeEndpoint = config.isMock ? "mock" : config.apiUrl.trim();
@@ -190,11 +211,28 @@ export async function GET(request: Request) {
       }
     }
 
-    // 6. Fetch services matching query
+    // 6. Fetch services matching query (Optimized select: excludes huge text payloads for fast 0ms speed)
     let [allServices, totalServices] = await Promise.all([
       prisma.service.findMany({
         where,
-        include: {
+        select: {
+          id: true,
+          externalId: true,
+          name: true,
+          category: true,
+          platform: true,
+          ratePer1000: true,
+          minQuantity: true,
+          maxQuantity: true,
+          userProviderId: true,
+          providerId: true,
+          providerEndpoint: true,
+          providerServiceId: true,
+          isMock: true,
+          dripFeedSupported: true,
+          refillSupported: true,
+          cancelSupported: true,
+          active: true,
           userProvider: { select: { id: true, name: true, currency: true } },
           provider: { select: { id: true, name: true, currency: true } },
         },
@@ -279,55 +317,60 @@ export async function GET(request: Request) {
       ? enriched.slice((page - 1) * pageSize, page * pageSize)
       : enriched;
 
-    return NextResponse.json(
-      {
-        success: true,
-        provider: {
-          name: config.name,
-          apiUrl: config.isMock ? "Mock SMM Provider" : config.apiUrl,
-          isMock: config.isMock,
-          isLive: !config.isMock && wasRefreshedLive,
-          cached: !wasRefreshedLive,
-          lastSyncAt: config.lastSyncAt,
-          warning: syncError || undefined,
-        },
-        activeProviderId: config.id,
-        providers: userProviders.map((p) => {
-          const count = enriched.filter(
-            (s) =>
-              s.providerId === p.id ||
-              s.userProviderId === p.id ||
-              s.providerName?.toLowerCase() === p.name?.toLowerCase()
-          ).length;
-          return {
-            id: p.id,
-            name: p.name,
-            currency: p.currency,
-            balance: p.balance,
-            apiUrl: p.apiUrl,
-            isActive: p.id === config.id,
-            servicesCount: count,
-          };
-        }),
-        services: paginated,
-        totalServices: finalTotal,
-        onlyFavouritesMode: isOnlyFavouritesMode,
-        snapshotCount: snapshotKeys.length,
-        favouritesCount: userFavourites.length,
-        ...(paginationRequested
-          ? {
-              page,
-              pageSize,
-              totalPages: Math.max(1, Math.ceil(finalTotal / pageSize)),
-            }
-          : {}),
+    const responsePayload = {
+      success: true,
+      provider: {
+        name: config.name,
+        apiUrl: config.isMock ? "Mock SMM Provider" : config.apiUrl,
+        isMock: config.isMock,
+        isLive: !config.isMock && wasRefreshedLive,
+        cached: !wasRefreshedLive,
+        lastSyncAt: config.lastSyncAt,
+        warning: syncError || undefined,
       },
-      {
-        headers: {
-          "Cache-Control": "private, no-cache, no-transform",
-        },
-      }
-    );
+      activeProviderId: config.id,
+      providers: userProviders.map((p) => {
+        const count = enriched.filter(
+          (s) =>
+            s.providerId === p.id ||
+            s.userProviderId === p.id ||
+            s.providerName?.toLowerCase() === p.name?.toLowerCase()
+        ).length;
+        return {
+          id: p.id,
+          name: p.name,
+          currency: p.currency,
+          balance: p.balance,
+          apiUrl: p.apiUrl,
+          isActive: p.id === config.id,
+          servicesCount: count,
+        };
+      }),
+      services: paginated,
+      totalServices: finalTotal,
+      onlyFavouritesMode: isOnlyFavouritesMode,
+      snapshotCount: snapshotKeys.length,
+      favouritesCount: userFavourites.length,
+      ...(paginationRequested
+        ? {
+            page,
+            pageSize,
+            totalPages: Math.max(1, Math.ceil(finalTotal / pageSize)),
+          }
+        : {}),
+    };
+
+    // Store in server memory cache for subsequent instant loads
+    if (!serviceId) {
+      MEMORY_CACHE.set(cacheKey, { data: responsePayload, timestamp: Date.now() });
+    }
+
+    return NextResponse.json(responsePayload, {
+      headers: {
+        "Cache-Control": "private, max-age=30, stale-while-revalidate=120",
+        "X-Cache": "MISS",
+      },
+    });
   } catch (error: any) {
     console.error("[SERVICES_API] Unhandled error:", error);
     return NextResponse.json(

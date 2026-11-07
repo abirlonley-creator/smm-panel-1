@@ -363,10 +363,21 @@ export default function OrderDetailPage() {
   const adaptiveSubmittedValue = Number(
     ((adaptiveSubmittedQuantity / 1000) * order.service.ratePer1000).toFixed(2)
   );
+  const dripCompletedQuantity = order.dripFeedRuns
+    ? order.dripFeedRuns.filter((r) => r.status === "COMPLETED").reduce((sum, r) => sum + r.quantity, 0)
+    : 0;
+
+  const effectiveDeliveredQuantity =
+    order.status === "COMPLETED"
+      ? Math.max(order.deliveredQuantity, order.submittedQuantity || order.requestedQuantity)
+      : Math.max(order.deliveredQuantity, dripCompletedQuantity);
+
+  const effectiveRemainingQuantity = Math.max(0, order.requestedQuantity - effectiveDeliveredQuantity);
+
   const percentComplete = Math.min(
     100,
     Math.round(
-      ((order?.deliveredQuantity ?? 0) /
+      (effectiveDeliveredQuantity /
         ((isAdaptiveMonitor ? adaptiveSubmittedQuantity : order?.requestedQuantity) || 1)) *
         100
     )
@@ -657,8 +668,8 @@ export default function OrderDetailPage() {
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 pt-4 border-t border-[#DEE0ED]/60 text-xs">
               <div><span className="text-[#252943]/50 text-[10px] block">Requested</span><span className="font-bold text-[#252943] text-base tracking-tight">{order.requestedQuantity.toLocaleString()}</span></div>
               <div><span className="text-[#252943]/50 text-[10px] block">Submitted</span><span className="font-bold text-[#252943] text-base tracking-tight">{order.submittedQuantity.toLocaleString()}</span></div>
-              <div><span className="text-[#252943]/50 text-[10px] block">Delivered</span><span className="font-bold text-emerald-700 text-base tracking-tight">{order.deliveredQuantity.toLocaleString()}</span></div>
-              <div><span className="text-[#252943]/50 text-[10px] block">Remaining</span><span className="font-bold text-[#252943] text-base tracking-tight">{order.remainingQuantity.toLocaleString()}</span></div>
+              <div><span className="text-[#252943]/50 text-[10px] block">Delivered</span><span className="font-bold text-emerald-700 text-base tracking-tight">{effectiveDeliveredQuantity.toLocaleString()}</span></div>
+              <div><span className="text-[#252943]/50 text-[10px] block">Remaining</span><span className="font-bold text-[#252943] text-base tracking-tight">{effectiveRemainingQuantity.toLocaleString()}</span></div>
               <div><span className="text-[#252943]/50 text-[10px] block">Total Cost</span><span className="font-bold text-[#3A4EFB] text-base tracking-tight">₹{Number(order.totalCost).toFixed(2)}</span></div>
             </div>
 

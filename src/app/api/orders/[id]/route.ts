@@ -71,7 +71,11 @@ export async function POST(
       where: {
         OR: [{ id: params.id }, { orderRef: params.id }],
       },
-      include: { service: true, steps: { orderBy: { stepNumber: "asc" } } },
+      include: {
+        service: true,
+        steps: { orderBy: { stepNumber: "asc" } },
+        dripFeedRuns: { orderBy: { runNumber: "asc" } },
+      },
     });
 
     if (!order) {
@@ -88,7 +92,8 @@ export async function POST(
       );
     }
 
-    const { adapter } = await getActiveProvider(order.userId || undefined);
+    const targetProviderId = order.service.userProviderId || order.service.providerId || undefined;
+    const { adapter } = await getActiveProvider(order.userId || undefined, targetProviderId);
 
     if (order.steps.length > 0) {
       const reconciled = await reconcileScheduledOrderStatus(order.id, adapter);
@@ -118,18 +123,40 @@ export async function POST(
       return NextResponse.json({ success: true, order: updated });
     }
 
+    // Reconcile individual drip feed runs if present
+    if (order.dripFeedRuns && order.dripFeedRuns.length > 0) {
+      for (const run of order.dripFeedRuns) {
+        if (run.providerOrderId && run.status !== "COMPLETED") {
+          try {
+            const runStatus = await adapter.getOrderStatus(run.providerOrderId);
+            if (runStatus.success && runStatus.status === "COMPLETED") {
+              await prisma.dripFeedRun.update({
+                where: { id: run.id },
+                data: { status: "COMPLETED" },
+              });
+            }
+          } catch (e) {}
+        }
+      }
+    }
+
     if (!order.providerOrderId) {
-      return NextResponse.json(
-        { success: false, error: "Order does not have an active provider reference." },
-        { status: 400 }
-      );
+      const updated = await findOrderDetailById(order.id);
+      return NextResponse.json({ success: true, order: updated });
     }
 
     const statusRes = await adapter.getOrderStatus(order.providerOrderId);
 
     if (statusRes.success) {
-      const delivered = statusRes.deliveredQuantity ?? order.deliveredQuantity;
-      const remains = statusRes.remains ?? Math.max(0, order.requestedQuantity - delivered);
+      let delivered = order.deliveredQuantity;
+      let remains = typeof statusRes.remains === "number" ? statusRes.remains : order.remainingQuantity;
+
+      if (statusRes.status === "COMPLETED") {
+        delivered = order.requestedQuantity;
+        remains = 0;
+      } else if (typeof statusRes.remains === "number") {
+        delivered = Math.max(0, order.requestedQuantity - statusRes.remains);
+      }
 
       // Change 14: If upstream returns Partial or Canceled, calculate undelivered quantity and refund difference automatically
       let refundAmount = 0;

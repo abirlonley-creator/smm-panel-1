@@ -67,8 +67,8 @@ export default function OrdersPage() {
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1, page: 1 });
   const [counts, setCounts] = useState<Record<string, number>>({});
 
-  async function fetchOrders() {
-    setLoading(true);
+  async function fetchOrders(showSpinner = true) {
+    if (showSpinner) setLoading(true);
     try {
       const params = new URLSearchParams({
         status: activeTab,
@@ -83,6 +83,11 @@ export default function OrdersPage() {
         setOrders(data.orders);
         setPagination(data.pagination);
         setCounts(data.counts || {});
+        if (typeof window !== "undefined" && !searchQuery.trim()) {
+          try {
+            sessionStorage.setItem(`aurasmm_orders_${activeTab}_p${page}`, JSON.stringify(data));
+          } catch (e) {}
+        }
       }
     } catch (err) {
       console.error("Failed to load orders", err);
@@ -92,7 +97,24 @@ export default function OrdersPage() {
   }
 
   useEffect(() => {
-    fetchOrders();
+    // 0ms instant display from session cache
+    let hasCached = false;
+    if (typeof window !== "undefined" && !searchQuery.trim()) {
+      try {
+        const cachedStr = sessionStorage.getItem(`aurasmm_orders_${activeTab}_p${page}`);
+        if (cachedStr) {
+          const parsed = JSON.parse(cachedStr);
+          if (parsed && Array.isArray(parsed.orders)) {
+            setOrders(parsed.orders);
+            if (parsed.counts) setCounts(parsed.counts);
+            if (parsed.pagination) setPagination(parsed.pagination);
+            setLoading(false);
+            hasCached = true;
+          }
+        }
+      } catch (e) {}
+    }
+    fetchOrders(!hasCached);
     // Non-blocking background scheduler tick so pending drip feed runs / BD jobs execute without waiting for cron
     fetch("/api/scheduler/tick", { method: "POST" }).catch((e) => console.warn("Background tick:", e));
   }, [activeTab, page]);
@@ -124,7 +146,7 @@ export default function OrdersPage() {
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={fetchOrders}
+              onClick={() => fetchOrders(true)}
               className="p-2 rounded-xl border border-[#DEE0ED] bg-white hover:bg-[#F8F9FD] text-[#252943]/70 transition-colors press-scale"
               title="Refresh Orders"
             >
@@ -283,14 +305,26 @@ export default function OrdersPage() {
                           </div>
                         </>
                       ) : (
-                        <>
-                          <div className="font-bold text-[#252943]">
-                            {order.deliveredQuantity.toLocaleString()} / {order.requestedQuantity.toLocaleString()}
-                          </div>
-                          <div className="text-[10px] text-[#252943]/60 font-medium">
-                            {Math.round((order.deliveredQuantity / (order.requestedQuantity || 1)) * 100)}% delivered
-                          </div>
-                        </>
+                        (() => {
+                          const dripCompleted = order.dripFeedRuns
+                            ? order.dripFeedRuns.filter((r) => r.status === "COMPLETED").reduce((sum, r) => sum + r.quantity, 0)
+                            : 0;
+                          const delivered =
+                            order.status === "COMPLETED"
+                              ? Math.max(order.deliveredQuantity, order.submittedQuantity || order.requestedQuantity)
+                              : Math.max(order.deliveredQuantity, dripCompleted);
+                          const pct = Math.min(100, Math.round((delivered / (order.requestedQuantity || 1)) * 100));
+                          return (
+                            <>
+                              <div className="font-bold text-[#252943]">
+                                {delivered.toLocaleString()} / {order.requestedQuantity.toLocaleString()}
+                              </div>
+                              <div className={`text-[10px] font-medium ${pct >= 100 ? "text-emerald-600 font-bold" : "text-[#252943]/60"}`}>
+                                {pct}% delivered
+                              </div>
+                            </>
+                          );
+                        })()
                       )}
                     </td>
 

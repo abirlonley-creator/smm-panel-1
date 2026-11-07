@@ -681,7 +681,13 @@ export async function GET(request: Request) {
       ];
     }
 
-    const [orders, totalCount] = await Promise.all([
+    const statusCountWhere: any = {};
+    if (!isAdmin) {
+      statusCountWhere.userId = userId;
+    }
+
+    // Parallel query execution: runs data fetch, total count, and tab counts simultaneously
+    const [orders, totalCount, statusCounts] = await Promise.all([
       prisma.order.findMany({
         where,
         include: {
@@ -712,35 +718,36 @@ export async function GET(request: Request) {
         take: limit,
       }),
       prisma.order.count({ where }),
+      prisma.order.groupBy({
+        by: ["status"],
+        where: statusCountWhere,
+        _count: { id: true },
+      }),
     ]);
-
-    // Also get status count breakdown for tabs
-    const statusCountWhere: any = {};
-    if (!isAdmin) {
-      statusCountWhere.userId = userId;
-    }
-    const statusCounts = await prisma.order.groupBy({
-      by: ["status"],
-      where: statusCountWhere,
-      _count: { id: true },
-    });
 
     const countMap: Record<string, number> = { ALL: totalCount };
     statusCounts.forEach((c) => {
       countMap[c.status] = c._count.id;
     });
 
-    return NextResponse.json({
-      success: true,
-      orders,
-      pagination: {
-        total: totalCount,
-        page,
-        limit,
-        totalPages: Math.ceil(totalCount / limit),
+    return NextResponse.json(
+      {
+        success: true,
+        orders,
+        pagination: {
+          total: totalCount,
+          page,
+          limit,
+          totalPages: Math.ceil(totalCount / limit),
+        },
+        counts: countMap,
       },
-      counts: countMap,
-    });
+      {
+        headers: {
+          "Cache-Control": "private, max-age=5, stale-while-revalidate=30",
+        },
+      }
+    );
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message || "Failed to load orders" },

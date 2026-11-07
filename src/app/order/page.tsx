@@ -253,13 +253,26 @@ function NewOrderForm() {
     );
   }, [displayedServices, selectedServiceId, currentFilteredServices]);
 
-  // Fetch Services Catalog Once and Cache In Memory
+  // Fetch Services Catalog with Instant 0ms SWR Local Cache
   const loadServices = useCallback(async (isRefresh = false) => {
     try {
       if (isRefresh) {
         setRefreshingServices(true);
       } else {
-        setLoadingServices(true);
+        // 0ms Instant Cache Load: populate immediately from local storage if available
+        if (typeof window !== "undefined") {
+          try {
+            const cachedStr = localStorage.getItem("aurasmm_cached_catalog");
+            if (cachedStr) {
+              const cached = JSON.parse(cachedStr);
+              if (cached && Array.isArray(cached.services) && cached.services.length > 0) {
+                setAllServices(cached.services);
+                if (Array.isArray(cached.providers)) setProviders(cached.providers);
+                setLoadingServices(false);
+              }
+            }
+          } catch (e) {}
+        }
       }
 
       const res = await fetch("/api/services");
@@ -276,6 +289,13 @@ function NewOrderForm() {
             data.providers[0]?.id ||
             "";
           setActiveProviderId((prev) => prev || initialActive);
+        }
+
+        // Save to local storage for 0ms next load
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.setItem("aurasmm_cached_catalog", JSON.stringify(data));
+          } catch (e) {}
         }
 
         const paramId = searchParams.get("serviceId");
