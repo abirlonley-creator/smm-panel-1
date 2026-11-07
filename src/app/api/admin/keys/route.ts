@@ -6,6 +6,7 @@ import {
   revokePasskey,
   togglePasskeyStatus,
   deletePasskey,
+  hashKey,
 } from "@/lib/auth/passkey-service";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
@@ -21,8 +22,14 @@ const createPasskeySchema = z.object({
 
 const patchPasskeySchema = z.object({
   id: z.string().min(1, "Passkey ID is required"),
-  action: z.enum(["renew", "revoke", "disable", "enable"]),
+  action: z.enum(["renew", "revoke", "disable", "enable", "edit"]),
   additionalDays: z.number().int().positive().optional(),
+  label: z.string().min(1).max(100).optional(),
+  role: z.enum(["ADMIN", "USER"]).optional(),
+  status: z.enum(["ACTIVE", "DISABLED", "REVOKED", "EXPIRED"]).optional(),
+  durationDays: z.number().int().nullable().optional(),
+  expiresAt: z.string().nullable().optional(),
+  newCustomKey: z.string().min(4).max(100).optional(),
 });
 
 export async function GET(request: Request) {
@@ -181,6 +188,66 @@ export async function PATCH(request: Request) {
     if (action === "enable") {
       await togglePasskeyStatus(id, "ACTIVE", actor);
       return NextResponse.json({ success: true, message: "Passkey activated." });
+    }
+
+    if (action === "edit") {
+      const { label, role, status, expiresAt, durationDays, newCustomKey } = parsed.data;
+      const passkey = await prisma.passkey.findUnique({ where: { id } });
+      if (!passkey) {
+        return NextResponse.json({ success: false, error: "Passkey not found" }, { status: 404 });
+      }
+
+      const updateData: any = {};
+      if (label && label.trim()) updateData.label = label.trim();
+      if (role) updateData.role = role;
+      if (status) updateData.status = status;
+      if (durationDays !== undefined) updateData.durationDays = durationDays;
+      if (expiresAt !== undefined) {
+        updateData.expiresAt = expiresAt ? new Date(expiresAt) : null;
+      }
+
+      let updatedRawKey: string | null = null;
+      if (newCustomKey && newCustomKey.trim()) {
+        const cleanKey = newCustomKey.trim();
+        const keyHash = hashKey(cleanKey);
+        const prefix = cleanKey.length > 12 ? `${cleanKey.slice(0, 8)}...${cleanKey.slice(-4)}` : `${cleanKey.slice(0, 4)}...`;
+        updateData.keyHash = keyHash;
+        updateData.keyPrefix = prefix;
+        updatedRawKey = cleanKey;
+      }
+
+      const updated = await prisma.passkey.update({
+        where: { id },
+        data: updateData,
+        include: {
+          user: {
+            select: { id: true, username: true, role: true, status: true },
+          },
+        },
+      });
+
+      if (role && role !== passkey.role) {
+        await prisma.user.update({
+          where: { id: passkey.userId },
+          data: { role },
+        }).catch(() => {});
+      }
+
+      await prisma.auditLog.create({
+        data: {
+          action: "EDIT_PASSKEY",
+          actor,
+          userId: passkey.userId,
+          details: `Updated passkey "${passkey.label}" (Role: ${role || passkey.role}, Status: ${status || passkey.status}${updatedRawKey ? ", Passkey string changed" : ""})`,
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: "Passkey updated successfully.",
+        passkey: updated,
+        updatedSecretKey: updatedRawKey,
+      });
     }
 
     return NextResponse.json({ success: false, error: "Invalid action" }, { status: 400 });

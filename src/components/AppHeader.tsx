@@ -99,10 +99,14 @@ export function AppHeader() {
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2">
           {role === "ADMIN" ? (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-black uppercase tracking-wider bg-[#252943] text-[#E3FF3B] border border-[#323758] shadow-subtle">
+            <Link
+              href="/admin"
+              title="Open Admin Panel & Passkeys"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-black uppercase tracking-wider bg-[#252943] text-[#E3FF3B] border border-[#323758] shadow-subtle hover:bg-[#1a1d31] transition-all cursor-pointer"
+            >
               <ShieldCheck className="w-3.5 h-3.5 text-[#E3FF3B]" />
               ADMIN
-            </span>
+            </Link>
           ) : (
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase tracking-wider bg-[#3A4EFB]/10 text-[#3A4EFB] border border-[#3A4EFB]/20">
               <User className="w-3.5 h-3.5 text-[#3A4EFB]" />
@@ -135,6 +139,18 @@ export function AppHeader() {
       <div className="flex items-center gap-2 sm:gap-3">
         {/* Provider Balance Pill / Switcher */}
         <ProviderBalanceSwitcher variant="header" />
+
+        {/* Admin Panel Quick Access */}
+        {role === "ADMIN" && (
+          <Link
+            href="/admin"
+            title="Open Admin Panel & Passkeys"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#252943] hover:bg-[#1a1d31] border border-[#323758] text-[#E3FF3B] text-xs font-bold transition-all shadow-subtle"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-[#E3FF3B]" />
+            <span className="hidden sm:inline">Admin Panel</span>
+          </Link>
+        )}
 
         {/* API Key Action */}
         <Link

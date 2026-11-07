@@ -14,6 +14,7 @@ import {
   Clock,
   Send,
   ListTree,
+  ShieldCheck,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { DEFAULT_PROVIDER_BALANCE_REFRESH_INTERVAL_MS } from "@/lib/provider/balance";
@@ -25,6 +26,7 @@ const ALL_NAV_ITEMS = [
   { href: "/services", label: "Services", icon: ListTree, adminOnly: false },
   { href: "/orders", label: "Orders", icon: Layers, adminOnly: false },
   { href: "/api-key", label: "API Key", icon: KeyRound, adminOnly: false },
+  { href: "/admin", label: "Admin Panel", icon: ShieldCheck, adminOnly: true },
 ];
 
 export function Navigation() {

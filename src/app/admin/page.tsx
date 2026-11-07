@@ -26,6 +26,8 @@ import {
   Calendar,
   ChevronDown,
   Layers,
+  Edit3,
+  Search,
 } from "lucide-react";
 import { formatProviderBalance } from "@/lib/currency";
 import { OrderMonitorTab } from "@/components/admin/OrderMonitorTab";
@@ -139,8 +141,9 @@ export default function AdminPage() {
   const [loggingIn, setLoggingIn] = useState(false);
 
   // Admin Data state
-  const [activeTab, setActiveTab] = useState<"keys" | "ordermonitor" | "monitoring" | "provider" | "audit" | "engagement" | "alerts">("ordermonitor");
+  const [activeTab, setActiveTab] = useState<"keys" | "ordermonitor" | "monitoring" | "provider" | "audit" | "engagement" | "alerts">("keys");
   const [passkeys, setPasskeys] = useState<PasskeyData[]>([]);
+  const [passkeySearchQuery, setPasskeySearchQuery] = useState("");
   const [diagnostics, setDiagnostics] = useState<DiagnosticsData | null>(null);
   const [engagementProfiles, setEngagementProfiles] = useState<any[]>([]);
   const [engagementOrders, setEngagementOrders] = useState<any[]>([]);
@@ -167,13 +170,25 @@ export default function AdminPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newKeyLabel, setNewKeyLabel] = useState("");
   const [newKeyRole, setNewKeyRole] = useState<"USER" | "ADMIN">("USER");
-  const [newKeyDuration, setNewKeyDuration] = useState<number | "custom">(30);
+  const [newKeyDuration, setNewKeyDuration] = useState<number | "custom" | "permanent">(30);
   const [customDaysInput, setCustomDaysInput] = useState("30");
   const [customPasskeyString, setCustomPasskeyString] = useState("");
   const [newKeyUsername, setNewKeyUsername] = useState("");
   const [creatingKey, setCreatingKey] = useState(false);
   const [createdSecret, setCreatedSecret] = useState<{ key: string; label: string; role: string; expiresAt?: string } | null>(null);
   const [copiedKey, setCopiedKey] = useState(false);
+
+  // Edit Key Form Modal state
+  const [editingPasskey, setEditingPasskey] = useState<PasskeyData | null>(null);
+  const [editLabel, setEditLabel] = useState("");
+  const [editRole, setEditRole] = useState<"USER" | "ADMIN">("USER");
+  const [editStatus, setEditStatus] = useState<"ACTIVE" | "DISABLED" | "REVOKED">("ACTIVE");
+  const [editDurationType, setEditDurationType] = useState<"keep" | "preset" | "permanent" | "customDate">("keep");
+  const [editPresetDays, setEditPresetDays] = useState<number>(30);
+  const [editCustomDate, setEditCustomDate] = useState<string>("");
+  const [editNewCustomKey, setEditNewCustomKey] = useState<string>("");
+  const [savingEditKey, setSavingEditKey] = useState<boolean>(false);
+  const [editResultSecret, setEditResultSecret] = useState<string | null>(null);
 
   // System Provider Config state
   const [providerConfig, setProviderConfig] = useState<any>(null);
@@ -395,14 +410,18 @@ export default function AdminPage() {
     setActionMsg(null);
 
     try {
-      const days = newKeyDuration === "custom" ? parseInt(customDaysInput, 10) : newKeyDuration;
+      const days = newKeyDuration === "permanent" 
+        ? null 
+        : newKeyDuration === "custom" 
+          ? parseInt(customDaysInput, 10) 
+          : newKeyDuration;
       const res = await fetch("/api/admin/keys", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           label: newKeyLabel.trim(),
           role: newKeyRole,
-          durationDays: days > 0 ? days : null,
+          durationDays: days && days > 0 ? days : null,
           customKey: customPasskeyString.trim() || undefined,
           username: newKeyUsername.trim() || undefined,
         }),
@@ -428,6 +447,75 @@ export default function AdminPage() {
       setActionMsg({ text: err.message || "Failed to create passkey", type: "error" });
     } finally {
       setCreatingKey(false);
+    }
+  }
+
+  // Open Edit Passkey Modal
+  function openEditPasskeyModal(pk: PasskeyData) {
+    setEditingPasskey(pk);
+    setEditLabel(pk.label);
+    setEditRole(pk.role as "ADMIN" | "USER");
+    setEditStatus((pk.status === "EXPIRED" ? "ACTIVE" : pk.status) as "ACTIVE" | "DISABLED" | "REVOKED");
+    setEditDurationType("keep");
+    setEditPresetDays(30);
+    setEditCustomDate(pk.expiresAt ? new Date(pk.expiresAt).toISOString().split("T")[0] : "");
+    setEditNewCustomKey("");
+    setEditResultSecret(null);
+  }
+
+  // Save Edited Passkey
+  async function handleSaveEditedPasskey(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingPasskey) return;
+    setSavingEditKey(true);
+    setActionMsg(null);
+
+    try {
+      const payload: any = {
+        id: editingPasskey.id,
+        action: "edit",
+        label: editLabel.trim(),
+        role: editRole,
+        status: editStatus,
+      };
+
+      if (editDurationType === "permanent") {
+        payload.expiresAt = null;
+        payload.durationDays = null;
+      } else if (editDurationType === "preset") {
+        payload.expiresAt = new Date(Date.now() + editPresetDays * 24 * 60 * 60 * 1000).toISOString();
+        payload.durationDays = editPresetDays;
+      } else if (editDurationType === "customDate" && editCustomDate) {
+        payload.expiresAt = new Date(`${editCustomDate}T23:59:59Z`).toISOString();
+      }
+
+      if (editNewCustomKey.trim()) {
+        payload.newCustomKey = editNewCustomKey.trim();
+      }
+
+      const res = await fetch("/api/admin/keys", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to update passkey.");
+      }
+
+      if (data.updatedSecretKey) {
+        setEditResultSecret(data.updatedSecretKey);
+      } else {
+        setEditingPasskey(null);
+      }
+
+      setActionMsg({ text: `Passkey "${editLabel}" updated successfully.`, type: "success" });
+      await loadAllAdminData();
+    } catch (err: any) {
+      setActionMsg({ text: err.message || "Failed to update passkey.", type: "error" });
+    } finally {
+      setSavingEditKey(false);
     }
   }
 
@@ -581,6 +669,18 @@ export default function AdminPage() {
     );
   }
 
+  const filteredPasskeys = passkeys.filter((pk) => {
+    if (!passkeySearchQuery.trim()) return true;
+    const q = passkeySearchQuery.toLowerCase();
+    return (
+      pk.label.toLowerCase().includes(q) ||
+      (pk.user?.username && pk.user.username.toLowerCase().includes(q)) ||
+      pk.keyPrefix.toLowerCase().includes(q) ||
+      pk.role.toLowerCase().includes(q) ||
+      pk.status.toLowerCase().includes(q)
+    );
+  });
+
   return (
     <div className="space-y-8 animate-fadeIn max-w-6xl mx-auto pb-16">
       {/* Admin Top Header */}
@@ -646,19 +746,6 @@ export default function AdminPage() {
       <div className="flex items-center gap-2 border-b border-[#DEE0ED] pb-px overflow-x-auto">
         <button
           type="button"
-          onClick={() => setActiveTab("ordermonitor")}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${
-            activeTab === "ordermonitor"
-              ? "border-[#3A4EFB] text-[#3A4EFB] bg-[#3A4EFB]/5"
-              : "border-transparent text-[#252943]/60 hover:text-[#252943]"
-          }`}
-        >
-          <Layers className="w-4 h-4" />
-          <span>Order Monitor</span>
-        </button>
-
-        <button
-          type="button"
           onClick={() => setActiveTab("keys")}
           className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${
             activeTab === "keys"
@@ -668,6 +755,19 @@ export default function AdminPage() {
         >
           <Key className="w-4 h-4" />
           <span>Passkeys & Users ({passkeys.length})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("ordermonitor")}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${
+            activeTab === "ordermonitor"
+              ? "border-[#3A4EFB] text-[#3A4EFB] bg-[#3A4EFB]/5"
+              : "border-transparent text-[#252943]/60 hover:text-[#252943]"
+          }`}
+        >
+          <Layers className="w-4 h-4" />
+          <span>Order Monitor</span>
         </button>
 
         <button
@@ -783,25 +883,37 @@ export default function AdminPage() {
           </div>
 
           {/* Action Bar */}
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
             <div>
               <h2 className="text-base font-bold text-[#252943]">Configured Passkeys</h2>
               <p className="text-xs text-[#252943]/60">
-                Manage access duration, assign roles, revoke or renew access for botters and admins.
+                Manage access duration, assign roles, edit details, revoke or renew access for botters and admins.
               </p>
             </div>
-            <button
-              type="button"
-              id="create-passkey-btn"
-              onClick={() => {
-                setCreatedSecret(null);
-                setShowCreateModal(true);
-              }}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#3A4EFB] hover:bg-[#2F40DB] text-white text-xs font-bold shadow-subtle transition-all press-scale"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Create New Passkey</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#252943]/40" />
+                <input
+                  type="text"
+                  value={passkeySearchQuery}
+                  onChange={(e) => setPasskeySearchQuery(e.target.value)}
+                  placeholder="Search passkey, user..."
+                  className="bg-white border border-[#DEE0ED] rounded-xl pl-8 pr-3 py-2 text-xs text-[#252943] placeholder-[#252943]/40 focus:border-[#3A4EFB] outline-none w-44 sm:w-56 shadow-subtle"
+                />
+              </div>
+              <button
+                type="button"
+                id="create-passkey-btn"
+                onClick={() => {
+                  setCreatedSecret(null);
+                  setShowCreateModal(true);
+                }}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#3A4EFB] hover:bg-[#2F40DB] text-white text-xs font-bold shadow-subtle transition-all press-scale shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create New Passkey</span>
+              </button>
+            </div>
           </div>
 
           {/* Passkeys Table */}
@@ -821,7 +933,7 @@ export default function AdminPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#DEE0ED]/60 font-medium">
-                  {passkeys.map((pk) => {
+                  {filteredPasskeys.map((pk) => {
                     const isExp = pk.isExpired || pk.status === "EXPIRED";
                     return (
                       <tr key={pk.id} className="hover:bg-[#F8F9FD]/60 transition-colors">
@@ -879,6 +991,17 @@ export default function AdminPage() {
                         </td>
                         <td className="px-5 py-3 text-right">
                           <div className="flex items-center justify-end gap-1.5">
+                            {/* Edit Passkey */}
+                            <button
+                              type="button"
+                              onClick={() => openEditPasskeyModal(pk)}
+                              title="Edit Passkey & Access"
+                              className="px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-[#3A4EFB] font-bold text-[10px] border border-indigo-200 transition-colors flex items-center gap-1"
+                            >
+                              <Edit3 className="w-3 h-3" />
+                              <span>Edit</span>
+                            </button>
+
                             {/* Renew / Extend */}
                             <button
                               type="button"
@@ -938,10 +1061,12 @@ export default function AdminPage() {
                       </tr>
                     );
                   })}
-                  {passkeys.length === 0 && (
+                  {filteredPasskeys.length === 0 && (
                     <tr>
                       <td colSpan={8} className="text-center py-8 text-[#252943]/50">
-                        No passkeys found. Click "Create New Passkey" above.
+                        {passkeys.length === 0
+                          ? 'No passkeys found. Click "Create New Passkey" above.'
+                          : `No passkeys match "${passkeySearchQuery}".`}
                       </td>
                     </tr>
                   )}
@@ -1707,30 +1832,48 @@ export default function AdminPage() {
                     <label className="block text-xs font-bold text-[#252943] mb-1">
                       Access Duration
                     </label>
-                    <div className="grid grid-cols-4 gap-2 mb-2">
-                      {[7, 14, 30, 90].map((d) => (
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 mb-2">
+                      {[
+                        { label: "1 Day", val: 1 },
+                        { label: "7 Days", val: 7 },
+                        { label: "14 Days", val: 14 },
+                        { label: "30 Days", val: 30 },
+                        { label: "90 Days", val: 90 },
+                        { label: "365 Days", val: 365 },
+                      ].map((item) => (
                         <button
-                          key={d}
+                          key={item.val}
                           type="button"
-                          onClick={() => setNewKeyDuration(d)}
-                          className={`py-1.5 rounded-xl text-xs font-bold border ${
-                            newKeyDuration === d
-                              ? "bg-[#3A4EFB] text-white border-[#3A4EFB]"
-                              : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED]"
+                          onClick={() => setNewKeyDuration(item.val)}
+                          className={`py-1.5 rounded-xl text-[11px] font-bold border transition-all ${
+                            newKeyDuration === item.val
+                              ? "bg-[#3A4EFB] text-white border-[#3A4EFB] shadow-sm"
+                              : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED] hover:bg-white"
                           }`}
                         >
-                          {d} Days
+                          {item.label}
                         </button>
                       ))}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setNewKeyDuration("permanent")}
+                        className={`py-1.5 px-3 rounded-xl text-xs font-bold border transition-all ${
+                          newKeyDuration === "permanent"
+                            ? "bg-[#252943] text-[#E3FF3B] border-[#252943] shadow-sm"
+                            : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED] hover:bg-white"
+                        }`}
+                      >
+                        Permanent / Unlimited
+                      </button>
                       <button
                         type="button"
                         onClick={() => setNewKeyDuration("custom")}
-                        className={`py-1.5 px-3 rounded-xl text-xs font-bold border ${
+                        className={`py-1.5 px-3 rounded-xl text-xs font-bold border transition-all ${
                           newKeyDuration === "custom"
                             ? "bg-[#3A4EFB] text-white border-[#3A4EFB]"
-                            : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED]"
+                            : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED] hover:bg-white"
                         }`}
                       >
                         Custom Days:
@@ -1742,7 +1885,7 @@ export default function AdminPage() {
                           max={3650}
                           value={customDaysInput}
                           onChange={(e) => setCustomDaysInput(e.target.value)}
-                          className="w-24 bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-2.5 py-1 text-xs font-bold"
+                          className="w-24 bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-2.5 py-1 text-xs font-bold outline-none focus:border-[#3A4EFB]"
                         />
                       )}
                     </div>
@@ -1829,6 +1972,284 @@ export default function AdminPage() {
                   Done
                 </button>
               </div>
+            )}
+          </div>
+        </div>
+      )}
+      {/* =====================================================================
+          EDIT PASSKEY MODAL
+      ====================================================================== */}
+      {editingPasskey && (
+        <div className="fixed inset-0 z-50 bg-[#252943]/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-[#DEE0ED] max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-5 animate-scaleUp">
+            {editResultSecret ? (
+              /* Success View if Secret Passkey was Changed */
+              <div className="space-y-4">
+                <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-start gap-3">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="text-sm font-bold">Passkey Secret Updated!</h4>
+                    <p className="text-xs text-emerald-800 mt-0.5">
+                      The passkey secret was reset. Copy the new secret string now.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <span className="text-xs font-bold text-[#252943] block">New Secret Passkey</span>
+                  <div className="p-3.5 rounded-2xl bg-[#141624] text-white flex items-center justify-between font-mono text-sm border border-[#323758]">
+                    <span className="break-all">{editResultSecret}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(editResultSecret);
+                        setCopiedKey(true);
+                        setTimeout(() => setCopiedKey(false), 2500);
+                      }}
+                      className="p-1.5 ml-2 rounded-lg bg-[#3A4EFB] hover:bg-[#2F40DB] text-white shrink-0"
+                    >
+                      {copiedKey ? <Check className="w-4 h-4 text-[#E3FF3B]" /> : <Copy className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  {copiedKey && (
+                    <span className="text-[11px] font-bold text-emerald-600 block">
+                      Copied to clipboard!
+                    </span>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingPasskey(null);
+                    setEditResultSecret(null);
+                  }}
+                  className="w-full py-2.5 rounded-xl bg-[#252943] text-white text-xs font-bold hover:bg-[#1A1D31]"
+                >
+                  Done
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
+                  <div className="flex items-center gap-2">
+                    <Edit3 className="w-5 h-5 text-[#3A4EFB]" />
+                    <h3 className="text-base font-bold text-[#252943]">
+                      Edit Passkey: <span className="text-[#3A4EFB]">{editingPasskey.label}</span>
+                    </h3>
+                  </div>
+                  <button
+                    onClick={() => setEditingPasskey(null)}
+                    className="p-1 rounded-lg text-gray-400 hover:text-gray-700"
+                  >
+                    <XCircle className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleSaveEditedPasskey} className="space-y-4">
+                  {/* Label */}
+                  <div>
+                    <label className="block text-xs font-bold text-[#252943] mb-1">
+                      Passkey Label *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={editLabel}
+                      onChange={(e) => setEditLabel(e.target.value)}
+                      className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3.5 py-2.5 text-xs font-semibold text-[#252943] focus:border-[#3A4EFB] outline-none"
+                    />
+                  </div>
+
+                  {/* Role */}
+                  <div>
+                    <label className="block text-xs font-bold text-[#252943] mb-1">
+                      Account Role
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditRole("USER")}
+                        className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
+                          editRole === "USER"
+                            ? "bg-[#3A4EFB] text-white border-[#3A4EFB]"
+                            : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED]"
+                        }`}
+                      >
+                        USER (Standard Panel)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditRole("ADMIN")}
+                        className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
+                          editRole === "ADMIN"
+                            ? "bg-[#252943] text-[#E3FF3B] border-[#252943]"
+                            : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED]"
+                        }`}
+                      >
+                        ADMIN (Full Access)
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Status */}
+                  <div>
+                    <label className="block text-xs font-bold text-[#252943] mb-1">
+                      Status
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(["ACTIVE", "DISABLED", "REVOKED"] as const).map((st) => (
+                        <button
+                          key={st}
+                          type="button"
+                          onClick={() => setEditStatus(st)}
+                          className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all ${
+                            editStatus === st
+                              ? st === "ACTIVE"
+                                ? "bg-emerald-600 text-white border-emerald-600"
+                                : st === "DISABLED"
+                                ? "bg-gray-600 text-white border-gray-600"
+                                : "bg-red-600 text-white border-red-600"
+                              : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED]"
+                          }`}
+                        >
+                          {st}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Expiration / Duration */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-bold text-[#252943]">
+                        Access Expiration
+                      </label>
+                      <span className="text-[11px] text-[#252943]/50">
+                        Current: {editingPasskey.expiresAt ? new Date(editingPasskey.expiresAt).toLocaleDateString() : "Permanent"}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mb-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditDurationType("keep")}
+                        className={`py-1.5 rounded-xl text-[11px] font-bold border transition-all ${
+                          editDurationType === "keep"
+                            ? "bg-[#3A4EFB] text-white border-[#3A4EFB]"
+                            : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED]"
+                        }`}
+                      >
+                        Keep Current
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditDurationType("permanent")}
+                        className={`py-1.5 rounded-xl text-[11px] font-bold border transition-all ${
+                          editDurationType === "permanent"
+                            ? "bg-[#252943] text-[#E3FF3B] border-[#252943]"
+                            : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED]"
+                        }`}
+                      >
+                        Permanent
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditDurationType("preset")}
+                        className={`py-1.5 rounded-xl text-[11px] font-bold border transition-all ${
+                          editDurationType === "preset"
+                            ? "bg-[#3A4EFB] text-white border-[#3A4EFB]"
+                            : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED]"
+                        }`}
+                      >
+                        Preset Days
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditDurationType("customDate")}
+                        className={`py-1.5 rounded-xl text-[11px] font-bold border transition-all ${
+                          editDurationType === "customDate"
+                            ? "bg-[#3A4EFB] text-white border-[#3A4EFB]"
+                            : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED]"
+                        }`}
+                      >
+                        Specific Date
+                      </button>
+                    </div>
+
+                    {editDurationType === "preset" && (
+                      <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 pt-1">
+                        {[
+                          { label: "1d", val: 1 },
+                          { label: "7d", val: 7 },
+                          { label: "14d", val: 14 },
+                          { label: "30d", val: 30 },
+                          { label: "90d", val: 90 },
+                          { label: "365d", val: 365 },
+                        ].map((item) => (
+                          <button
+                            key={item.val}
+                            type="button"
+                            onClick={() => setEditPresetDays(item.val)}
+                            className={`py-1.5 rounded-xl text-[11px] font-bold border transition-all ${
+                              editPresetDays === item.val
+                                ? "bg-[#3A4EFB] text-white border-[#3A4EFB]"
+                                : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED]"
+                            }`}
+                          >
+                            +{item.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {editDurationType === "customDate" && (
+                      <div className="pt-1">
+                        <input
+                          type="date"
+                          value={editCustomDate}
+                          onChange={(e) => setEditCustomDate(e.target.value)}
+                          className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3 py-2 text-xs font-bold text-[#252943] outline-none focus:border-[#3A4EFB]"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Reset/Change Passkey String (Optional) */}
+                  <div className="border-t border-[#DEE0ED] pt-3">
+                    <label className="block text-xs font-bold text-[#252943] mb-1">
+                      Reset Passkey Secret String (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={editNewCustomKey}
+                      onChange={(e) => setEditNewCustomKey(e.target.value)}
+                      placeholder="Leave blank to keep existing secret key"
+                      className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3.5 py-2.5 text-xs font-mono text-[#252943] outline-none focus:border-[#3A4EFB]"
+                    />
+                    <p className="text-[10px] text-[#252943]/50 mt-1">
+                      Enter a new passkey secret if you want to replace the current secret key for this passkey.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-3">
+                    <button
+                      type="button"
+                      onClick={() => setEditingPasskey(null)}
+                      className="px-4 py-2 rounded-xl border border-[#DEE0ED] text-xs font-bold text-[#252943]/70"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={savingEditKey || !editLabel.trim()}
+                      className="px-5 py-2 rounded-xl bg-[#3A4EFB] text-white text-xs font-bold hover:bg-[#2F40DB] shadow-subtle disabled:opacity-50"
+                    >
+                      {savingEditKey ? "Saving..." : "Save Changes"}
+                    </button>
+                  </div>
+                </form>
+              </>
             )}
           </div>
         </div>
