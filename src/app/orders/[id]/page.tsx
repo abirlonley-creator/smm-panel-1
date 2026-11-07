@@ -405,6 +405,12 @@ export default function OrderDetailPage() {
     ? nextPendingRun?.scheduledAt
     : nextPendingStep?.scheduledTime;
 
+  const lastRun = order.dripFeedRuns && order.dripFeedRuns.length > 0
+    ? order.dripFeedRuns[order.dripFeedRuns.length - 1]
+    : null;
+  const lastStep = steps && steps.length > 0 ? steps[steps.length - 1] : null;
+  const lastDispatchTimeString = isDripFeedOrder ? lastRun?.scheduledAt : lastStep?.scheduledTime;
+
   const monitorStatusLabels: Record<string, string> = {
     RUNNING: "Monitoring",
     PAUSED: "Paused",
@@ -680,11 +686,12 @@ export default function OrderDetailPage() {
             </div>
 
             {order.isScheduled && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-[#DEE0ED]/60 text-xs bg-[#F8F9FD] p-3 rounded-xl border border-[#DEE0ED]/70">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-3 border-t border-[#DEE0ED]/60 text-xs bg-[#F8F9FD] p-3 rounded-xl border border-[#DEE0ED]/70">
                 <div><span className="text-[10px] text-[#252943]/50 block">Pacing Strategy</span><span className="font-semibold text-[#252943]">{order.scheduleMode ? order.scheduleMode.replace("_", " ") : "Custom Schedule"}</span></div>
                 <div><span className="text-[10px] text-[#252943]/50 block">Batch Progress</span><span className="font-semibold text-[#252943]">{dispatchedBatchesCount} / {totalBatchesCount} dispatched</span></div>
                 <div><span className="text-[10px] text-[#252943]/50 block">Pending Batches</span><span className="font-semibold text-[#252943]">{pendingBatchesCount} batches remaining</span></div>
                 <div><span className="text-[10px] text-[#252943]/50 block">Next Scheduled Dispatch</span><span className="font-semibold text-[#3A4EFB]">{nextPendingTimeString ? new Date(nextPendingTimeString).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "All Dispatched"}</span></div>
+                <div><span className="text-[10px] text-[#252943]/50 block">Estimated Completion</span><span className="font-semibold text-emerald-700">{order.status === "COMPLETED" ? "Delivered" : lastDispatchTimeString ? new Date(lastDispatchTimeString).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Instant"}</span></div>
               </div>
             )}
           </>

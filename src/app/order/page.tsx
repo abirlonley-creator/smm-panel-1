@@ -78,6 +78,7 @@ interface OrderReceipt {
   currency: string;
   balance?: number | null;
   isDripFeed?: boolean;
+  finishEstimate?: string;
 }
 
 const PLATFORMS_LIST: Array<{ key: string; label: string; icon: any }> = [
@@ -634,6 +635,74 @@ function NewOrderForm() {
   const ratePer1k = activeService ? activeService.ratePer1000 : 0;
   const totalCost = Number(((totalUnits / 1000) * ratePer1k).toFixed(4));
 
+  // Drip-Feed Completion & Duration Calculations
+  const dripDurationMinutes = useMemo(() => {
+    if (!isDripFeed || runItems.length <= 1) return 0;
+    const interval = Math.max(1, dripIntervalMinutes);
+    return (runItems.length - 1) * interval;
+  }, [isDripFeed, runItems.length, dripIntervalMinutes]);
+
+  const dripFinishEstimatedTime = useMemo(() => {
+    if (!isDripFeed || runItems.length === 0) return null;
+    const finishDate = new Date(Date.now() + dripDurationMinutes * 60 * 1000);
+    const nowDate = new Date();
+    const isSameDay = formatBdDate(finishDate) === formatBdDate(nowDate);
+    const timeStr = formatBdTime(finishDate);
+    const dateStr = formatBdDate(finishDate);
+
+    let durationLabel = "";
+    if (dripDurationMinutes === 0) {
+      durationLabel = "Instant delivery";
+    } else {
+      const hrs = Math.floor(dripDurationMinutes / 60);
+      const mins = dripDurationMinutes % 60;
+      if (hrs > 0 && mins > 0) {
+        durationLabel = `${hrs} hr ${mins} min`;
+      } else if (hrs > 0) {
+        durationLabel = `${hrs} hour${hrs > 1 ? "s" : ""}`;
+      } else {
+        durationLabel = `${mins} minute${mins > 1 ? "s" : ""}`;
+      }
+    }
+
+    return {
+      durationMinutes: dripDurationMinutes,
+      durationLabel,
+      finishTime: timeStr,
+      finishDate: dateStr,
+      fullLabel: isSameDay ? `${timeStr} (BD Time)` : `${timeStr}, ${dateStr} (BD Time)`,
+    };
+  }, [isDripFeed, runItems.length, dripDurationMinutes]);
+
+  // Standard/Scheduled Order Duration Estimation
+  const standardEstimatedDuration = useMemo(() => {
+    if (!activeService) return null;
+    const text = `${activeService.name} ${activeService.description || ""}`.toLowerCase();
+    
+    // Check for explicit speed in name/description (e.g. 100k/day, 50k/day, 10k/hr)
+    const match = text.match(/(\d+[\d,.]*)\s*k?\s*\/\s*(day|hour|hr)/i);
+    if (match) {
+      let speedNum = parseFloat(match[1].replace(/,/g, ""));
+      if (match[0].toLowerCase().includes("k")) speedNum *= 1000;
+      const unit = match[2].toLowerCase();
+      const speedPerHour = unit.startsWith("d") ? speedNum / 24 : speedNum;
+      if (speedPerHour > 0 && numericQty > 0) {
+        const estHours = numericQty / speedPerHour;
+        if (estHours < 1) {
+          const mins = Math.max(5, Math.round(estHours * 60));
+          return `~${mins} minutes (based on service speed)`;
+        }
+        const hrs = Math.round(estHours * 10) / 10;
+        return `~${hrs} hours (based on service speed)`;
+      }
+    }
+
+    if (text.includes("instant")) {
+      return "Instant start (typically 5 - 30 minutes)";
+    }
+    return "Standard speed (~1 - 24 hours)";
+  }, [activeService, numericQty]);
+
   // Quantity Limits Validation
   const quantityError = useMemo(() => {
     if (!activeService) return null;
@@ -729,6 +798,7 @@ function NewOrderForm() {
           currency: provCurrency,
           balance: newBal,
           isDripFeed: false,
+          finishEstimate: `Scheduled for ${scheduledBdDate} at ${scheduledBdTime} (BD Time)`,
         });
 
         // ONLY remove the video link! Keep all other selections intact!
@@ -792,6 +862,9 @@ function NewOrderForm() {
         currency: provCurrency,
         balance: newBal,
         isDripFeed,
+        finishEstimate: isDripFeed
+          ? `~${dripFinishEstimatedTime?.durationLabel} (Final batch at ${dripFinishEstimatedTime?.fullLabel})`
+          : standardEstimatedDuration || "Instant start",
       });
 
       // ONLY remove the video link! Keep category, service, quantity, drip feed, etc. selected!
@@ -920,6 +993,13 @@ function NewOrderForm() {
                 {formatCurrency(orderReceipt.charge, orderReceipt.currency)}
               </span>
             </div>
+
+            {orderReceipt.finishEstimate && (
+              <div>
+                <span className="font-semibold text-[#155724]/80">Estimated Finish: </span>
+                <span className="font-bold text-[#155724]">{orderReceipt.finishEstimate}</span>
+              </div>
+            )}
 
             {orderReceipt.balance !== null && orderReceipt.balance !== undefined && (
               <div>
@@ -1559,6 +1639,35 @@ function NewOrderForm() {
                       <span className="font-semibold text-[#252943]">Total Drip Units:</span>
                       <strong className="text-[#3A4EFB] text-sm">{totalUnits.toLocaleString()} units</strong>
                     </div>
+
+                    {/* Time to Finish Order Calculation */}
+                    <div className="pt-2.5 mt-1 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs border-t border-[#DEE0ED]/60 bg-[#F8F9FD] p-2.5 rounded-xl border border-[#DEE0ED]">
+                      <div className="flex items-center gap-2 text-[#252943]">
+                        <div className="w-7 h-7 rounded-lg bg-[#3A4EFB]/10 text-[#3A4EFB] flex items-center justify-center shrink-0">
+                          <Clock className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-xs text-[#252943]">Time to Finish Order:</span>
+                            <span className="font-extrabold text-[#3A4EFB] text-xs">
+                              ~{dripFinishEstimatedTime?.durationLabel}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-[#252943]/60 block">
+                            {runItems.length} batches spaced every {dripIntervalMinutes} minutes
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="text-left sm:text-right pl-9 sm:pl-0">
+                        <span className="text-[10px] text-[#252943]/50 font-bold uppercase tracking-wider block">
+                          Final Batch Dispatches At
+                        </span>
+                        <strong className="text-[#252943] text-xs font-bold font-mono">
+                          {dripFinishEstimatedTime?.fullLabel}
+                        </strong>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1573,6 +1682,14 @@ function NewOrderForm() {
               </span>
               <div className="text-xl font-extrabold text-[#252943]">
                 {formatCurrency(totalCost, activeProvider?.currency || "USD")}
+              </div>
+              <div className="text-[11px] text-[#252943]/70 font-medium flex items-center gap-1 mt-0.5">
+                <Clock className="w-3 h-3 text-[#3A4EFB]" />
+                <span>
+                  {isDripFeed
+                    ? `Finishes in ~${dripFinishEstimatedTime?.durationLabel} (${dripFinishEstimatedTime?.fullLabel})`
+                    : `Estimated duration: ${standardEstimatedDuration || "Instant start"}`}
+                </span>
               </div>
             </div>
 
