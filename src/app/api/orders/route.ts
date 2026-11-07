@@ -350,10 +350,12 @@ export async function POST(request: Request) {
         return newOrder;
       });
 
+      let updatedDripBalance: number | null = null;
       if (providerConnection && providerConnection.balance !== null && !providerConnection.isMock) {
+        updatedDripBalance = Math.max(0, Number((providerConnection.balance - totalCharge).toFixed(4)));
         await prisma.userProviderConnection.update({
           where: { id: providerConnection.id },
-          data: { balance: Math.max(0, Number((providerConnection.balance - totalCharge).toFixed(4))) },
+          data: { balance: updatedDripBalance },
         }).catch(() => {});
       }
 
@@ -374,6 +376,9 @@ export async function POST(request: Request) {
       return NextResponse.json({
         success: true,
         order: fullOrder,
+        providerOrderId: fullOrder?.providerOrderId || providerOrderId,
+        balance: updatedDripBalance,
+        currency: providerConnection?.currency || "USD",
         message: `Drip feed order #${providerOrderId || orderRef} placed successfully! ${runs} runs scheduled every ${interval} minutes.`,
       });
     }
@@ -520,10 +525,12 @@ export async function POST(request: Request) {
         });
       });
 
+      let updatedInstantBalance: number | null = null;
       if (providerConnection && providerConnection.balance !== null && !providerConnection.isMock) {
+        updatedInstantBalance = Math.max(0, Number((providerConnection.balance - totalCost).toFixed(4)));
         await prisma.userProviderConnection.update({
           where: { id: providerConnection.id },
-          data: { balance: Math.max(0, Number((providerConnection.balance - totalCost).toFixed(4))) },
+          data: { balance: updatedInstantBalance },
         }).catch(() => {});
       }
 
@@ -536,7 +543,13 @@ export async function POST(request: Request) {
         },
       });
 
-      return NextResponse.json({ success: true, order });
+      return NextResponse.json({
+        success: true,
+        order,
+        providerOrderId: String(providerRes.providerOrderId),
+        balance: updatedInstantBalance,
+        currency: providerConnection?.currency || "USD",
+      });
     }
 
     // Case B: Scheduled Growth Planner Order

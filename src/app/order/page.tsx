@@ -20,6 +20,16 @@ import {
   X,
   RefreshCw,
   ArrowLeft,
+  Send,
+  Video,
+  Music,
+  Share2,
+  Globe,
+  Layers,
+  Tv,
+  Headphones,
+  Compass,
+  ExternalLink,
 } from "lucide-react";
 
 interface ServiceItem {
@@ -37,6 +47,7 @@ interface ServiceItem {
   maxQuantity: number;
   ratePer1000: number;
   dripFeedSupported?: boolean;
+  currency?: string;
 }
 
 interface ProviderInfo {
@@ -53,6 +64,64 @@ interface RunItem {
   runNumber: number;
   quantity: number;
   timeLabel: string;
+}
+
+interface OrderReceipt {
+  id: string;
+  orderId?: string;
+  serviceName: string;
+  link: string;
+  quantity: number;
+  charge: number;
+  currency: string;
+  balance?: number | null;
+  isDripFeed?: boolean;
+}
+
+const PLATFORMS_LIST: Array<{ key: string; label: string; icon: any }> = [
+  { key: "ALL", label: "All", icon: Layers },
+  { key: "Telegram", label: "Telegram", icon: Send },
+  { key: "Instagram", label: "Instagram", icon: Sparkles },
+  { key: "YouTube", label: "YouTube", icon: Tv },
+  { key: "TikTok", label: "TikTok", icon: Video },
+  { key: "Twitter", label: "Twitter", icon: Share2 },
+  { key: "Facebook", label: "Facebook", icon: Globe },
+  { key: "Spotify", label: "Spotify", icon: Headphones },
+  { key: "LinkedIn", label: "LinkedIn", icon: Globe },
+  { key: "Other", label: "+ Other", icon: Compass },
+];
+
+function formatCurrency(amount: number, currency = "USD"): string {
+  const c = (currency || "USD").toUpperCase();
+  const symMap: Record<string, string> = {
+    INR: "₹",
+    USD: "$",
+    EUR: "€",
+    BDT: "৳",
+    GBP: "£",
+  };
+  const sym = symMap[c] || `${currency} `;
+  const num = Number(amount);
+  if (isNaN(num)) return `${sym}0`;
+  const formatted = num.toFixed(5).replace(/0+$/, "").replace(/\.$/, "") || "0";
+  return `${sym}${formatted}`;
+}
+
+function matchesPlatform(service: ServiceItem, platKey: string): boolean {
+  if (platKey === "ALL") return true;
+  const p = (service.platform || "").toLowerCase();
+  const c = (service.category || "").toLowerCase();
+  const n = (service.name || "").toLowerCase();
+  const k = platKey.toLowerCase();
+
+  if (k === "other") {
+    const known = ["telegram", "instagram", "youtube", "tiktok", "twitter", "facebook", "spotify", "linkedin"];
+    return !known.some((kn) => p.includes(kn) || c.includes(kn) || n.includes(kn));
+  }
+  if (k.startsWith("twitter")) {
+    return p.includes("twitter") || p.includes(" x ") || c.includes("twitter") || c.includes(" x ") || n.includes("twitter");
+  }
+  return p.includes(k) || c.includes(k) || n.includes(k);
 }
 
 function formatBdTime(date: Date): string {
@@ -125,18 +194,13 @@ function NewOrderForm() {
   const [scheduledBdTime, setScheduledBdTime] = useState<string>("");
   const [bdCurrentTimeDisplay, setBdCurrentTimeDisplay] = useState<string>("");
 
+  // Platform Filter State (Matching Xmedia's Clean Pill Bar)
+  const [selectedPlatform, setSelectedPlatform] = useState<string>("ALL");
+
   // Submission State
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [orderSuccess, setOrderSuccess] = useState<{
-    type: "INSTANT" | "DRIP_FEED" | "SCHEDULED";
-    reference: string;
-    providerOrderId?: string;
-    providerName?: string;
-    details: string;
-    totalUnits: number;
-    totalCharge: number;
-  } | null>(null);
+  const [orderReceipt, setOrderReceipt] = useState<OrderReceipt | null>(null);
 
   // Initialize BD Time clock and default scheduled time (1 hour ahead)
   useEffect(() => {
@@ -217,23 +281,29 @@ function NewOrderForm() {
     });
   }, [currentFilteredServices, searchQuery]);
 
-  // Unique Categories List for currently active services
+  // Unique Categories List for currently active services and platform
   const categories = useMemo(() => {
     const set = new Set<string>();
-    currentFilteredServices.forEach((s) => {
+    const pool = selectedPlatform === "ALL"
+      ? currentFilteredServices
+      : currentFilteredServices.filter((s) => matchesPlatform(s, selectedPlatform));
+    pool.forEach((s) => {
       const cat = s.category?.trim() || s.platform?.trim() || "General";
       if (cat) set.add(cat);
     });
     return Array.from(set).sort();
-  }, [currentFilteredServices]);
+  }, [currentFilteredServices, selectedPlatform]);
 
-  // Services Filtered by Chosen Category
+  // Services Filtered by Chosen Category and Platform
   const categoryServices = useMemo(() => {
-    if (!selectedCategory) return currentFilteredServices;
-    return currentFilteredServices.filter(
+    const pool = selectedPlatform === "ALL"
+      ? currentFilteredServices
+      : currentFilteredServices.filter((s) => matchesPlatform(s, selectedPlatform));
+    if (!selectedCategory) return pool;
+    return pool.filter(
       (s) => (s.category?.trim() || s.platform?.trim() || "General") === selectedCategory
     );
-  }, [currentFilteredServices, selectedCategory]);
+  }, [currentFilteredServices, selectedPlatform, selectedCategory]);
 
   // Displayed Services in dropdown: search results if search is active, else category services
   const displayedServices = useMemo(() => {
@@ -465,10 +535,36 @@ function NewOrderForm() {
     });
   }
 
+  // Handle Platform Select (1-Click Platform Filter Pill)
+  const handleSelectPlatform = (platKey: string) => {
+    setSelectedPlatform(platKey);
+    setSearchQuery("");
+    const pool = platKey === "ALL"
+      ? currentFilteredServices
+      : currentFilteredServices.filter((s) => matchesPlatform(s, platKey));
+
+    if (pool.length > 0) {
+      const firstCat = pool[0].category?.trim() || pool[0].platform?.trim() || "General";
+      setSelectedCategory(firstCat);
+      const catServices = pool.filter(
+        (s) => (s.category?.trim() || s.platform?.trim() || "General") === firstCat
+      );
+      if (catServices.length > 0) {
+        setSelectedServiceId(catServices[0].id);
+        if (catServices[0].minQuantity) setQuantity(catServices[0].minQuantity);
+        setMinQtyRange(catServices[0].minQuantity || 10);
+        setMaxQtyRange((catServices[0].minQuantity || 10) + 4);
+      }
+    }
+  };
+
   // Handle Category Change
   const handleCategoryChange = (cat: string) => {
     setSelectedCategory(cat);
-    const matched = currentFilteredServices.filter(
+    const pool = selectedPlatform === "ALL"
+      ? currentFilteredServices
+      : currentFilteredServices.filter((s) => matchesPlatform(s, selectedPlatform));
+    const matched = pool.filter(
       (s) => (s.category?.trim() || s.platform?.trim() || "General") === cat
     );
     if (matched.length > 0) {
@@ -544,7 +640,7 @@ function NewOrderForm() {
 
     setSubmitting(true);
     setErrorMessage(null);
-    setOrderSuccess(null);
+    setOrderReceipt(null);
 
     try {
       if (orderMode === "SCHEDULED") {
@@ -584,13 +680,28 @@ function NewOrderForm() {
           throw new Error(data.error || "Failed to schedule job.");
         }
 
-        setOrderSuccess({
-          type: "SCHEDULED",
-          reference: data.job.jobRef,
-          details: `Scheduled for ${scheduledBdDate} at ${scheduledBdTime} (Bangladesh Time UTC+6)`,
-          totalUnits: numericQty,
-          totalCharge: totalCost,
+        const submittedUrl = targetUrl.trim();
+        const provCurrency = activeService.currency || activeProvider?.currency || "USD";
+        const newBal = activeProvider?.balance != null ? Math.max(0, activeProvider.balance - totalCost) : null;
+
+        setOrderReceipt({
+          id: data.job?.jobRef || "Scheduled",
+          serviceName: activeService.name,
+          link: submittedUrl,
+          quantity: numericQty,
+          charge: totalCost,
+          currency: provCurrency,
+          balance: newBal,
+          isDripFeed: false,
         });
+
+        // ONLY remove the video link! Keep all other selections intact!
+        setTargetUrl("");
+
+        // Immediately scroll up to the top to show the receipt
+        if (typeof window !== "undefined") {
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }
 
         return;
       }
@@ -621,18 +732,39 @@ function NewOrderForm() {
         throw new Error(data.error || "Failed to submit order.");
       }
 
-      const provName = activeService.providerName || activeProvider?.name || "Connected API";
-      setOrderSuccess({
-        type: isDripFeed ? "DRIP_FEED" : "INSTANT",
-        reference: data.order.orderRef,
-        providerOrderId: data.order.providerOrderId,
-        providerName: provName,
-        details: isDripFeed
-          ? `${runItems.length} runs every ${dripIntervalMinutes}m (${runItems.map((r) => r.quantity).join(", ")}) — Run 1 sent to ${provName}`
-          : `Dispatched directly to ${provName} via API`,
-        totalUnits,
-        totalCharge: totalCost,
+      const submittedUrl = targetUrl.trim();
+      const provCurrency = data.currency || activeService.currency || activeProvider?.currency || "USD";
+      const newBal = typeof data.balance === "number"
+        ? data.balance
+        : activeProvider?.balance != null
+          ? Math.max(0, activeProvider.balance - totalCost)
+          : null;
+
+      if (activeProvider && newBal !== null) {
+        setProviders((prev) =>
+          prev.map((p) => (p.id === activeProvider.id ? { ...p, balance: newBal } : p))
+        );
+      }
+
+      setOrderReceipt({
+        id: String(data.providerOrderId || data.order?.providerOrderId || data.order?.orderRef || "Submitted"),
+        orderId: data.order?.id,
+        serviceName: activeService.name,
+        link: submittedUrl,
+        quantity: isDripFeed && runItems.length > 0 ? totalUnits : numericQty,
+        charge: totalCost,
+        currency: provCurrency,
+        balance: newBal,
+        isDripFeed,
       });
+
+      // ONLY remove the video link! Keep category, service, quantity, drip feed, etc. selected!
+      setTargetUrl("");
+
+      // Smooth scroll to top immediately to display receipt
+      if (typeof window !== "undefined") {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
 
       window.dispatchEvent(new CustomEvent("balance-updated"));
     } catch (err: any) {
@@ -645,10 +777,8 @@ function NewOrderForm() {
     }
   }
 
-  function handleReset() {
-    setOrderSuccess(null);
-    setTargetUrl("");
-    if (activeService) setQuantity(activeService.minQuantity || 100);
+  function handleDismissReceipt() {
+    setOrderReceipt(null);
   }
 
   // Find another provider that actually has services for the 1-click fallback button
@@ -693,49 +823,77 @@ function NewOrderForm() {
         </div>
       </div>
 
-      {/* 2. Success Banner */}
-      {orderSuccess && (
-        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 space-y-2.5 animate-fadeIn text-sm">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 font-bold">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-              <span>
-                {orderSuccess.type === "SCHEDULED" ? "Order Scheduled in BD Time!" : "Order Dispatched to API!"}
-              </span>
-            </div>
-            <Link
-              href="/orders"
-              className="text-xs font-bold text-emerald-800 underline hover:text-emerald-950 inline-flex items-center gap-1"
-            >
-              Go to Orders Table →
-            </Link>
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-emerald-800">
-              Ref: <span className="font-mono font-bold">{orderSuccess.reference}</span>
-            </span>
-            {orderSuccess.providerOrderId && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold bg-blue-100 text-blue-800 border border-blue-200">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-                {orderSuccess.providerName || "API"}: #{orderSuccess.providerOrderId}
-              </span>
-            )}
-            <span className="text-xs text-emerald-800">
-              • {orderSuccess.totalUnits.toLocaleString()} units (${orderSuccess.totalCharge.toFixed(2)})
-            </span>
-          </div>
-
-          <p className="text-[11px] text-emerald-700 font-medium">
-            {orderSuccess.details}
-          </p>
+      {/* 2. Exact Green Order Received Receipt (Matching Xmedia) */}
+      {orderReceipt && (
+        <div className="relative p-4 sm:p-5 rounded-2xl bg-[#D4EDDA] border border-[#C3E6CB] text-[#155724] space-y-1.5 animate-fadeIn shadow-xs">
           <button
             type="button"
-            onClick={handleReset}
-            className="text-xs text-[#3A4EFB] hover:underline font-bold block pt-1 cursor-pointer"
+            onClick={handleDismissReceipt}
+            className="absolute top-3.5 right-3.5 text-[#155724]/70 hover:text-[#155724] transition-colors p-1 cursor-pointer"
+            title="Dismiss receipt"
           >
-            + Place another order
+            <X className="w-4 h-4" />
           </button>
+
+          <h3 className="text-base sm:text-lg font-bold text-[#155724] tracking-tight">
+            Your order received
+          </h3>
+
+          <div className="text-xs sm:text-sm space-y-1 pt-1 font-medium leading-relaxed">
+            <div>
+              <span className="font-semibold text-[#155724]/80">ID: </span>
+              <span className="font-mono font-bold text-[#155724]">{orderReceipt.id}</span>
+              {orderReceipt.orderId && (
+                <Link
+                  href={`/orders/${orderReceipt.orderId}`}
+                  className="ml-2 text-xs font-semibold text-[#3A4EFB] hover:underline"
+                >
+                  View Details →
+                </Link>
+              )}
+            </div>
+
+            <div className="break-words">
+              <span className="font-semibold text-[#155724]/80">Service: </span>
+              <span className="text-[#155724]">{orderReceipt.serviceName}</span>
+            </div>
+
+            <div className="break-all">
+              <span className="font-semibold text-[#155724]/80">Link: </span>
+              <a
+                href={orderReceipt.link}
+                target="_blank"
+                rel="noreferrer"
+                className="underline hover:text-[#0b3315]"
+              >
+                {orderReceipt.link}
+              </a>
+            </div>
+
+            <div>
+              <span className="font-semibold text-[#155724]/80">Quantity: </span>
+              <span className="font-bold text-[#155724]">{orderReceipt.quantity.toLocaleString()}</span>
+              {orderReceipt.isDripFeed && (
+                <span className="ml-1.5 text-xs text-[#155724]/80">(Drip-feed)</span>
+              )}
+            </div>
+
+            <div>
+              <span className="font-semibold text-[#155724]/80">Charge: </span>
+              <span className="font-bold text-[#155724]">
+                {formatCurrency(orderReceipt.charge, orderReceipt.currency)}
+              </span>
+            </div>
+
+            {orderReceipt.balance !== null && orderReceipt.balance !== undefined && (
+              <div>
+                <span className="font-semibold text-[#155724]/80">Balance: </span>
+                <span className="font-bold text-[#155724]">
+                  {formatCurrency(orderReceipt.balance, orderReceipt.currency)}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -963,20 +1121,33 @@ function NewOrderForm() {
             </div>
           )}
 
+          {/* Platform Category Filter Pills (Matching Xmedia's Simplified UI) */}
+          <div>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+              {PLATFORMS_LIST.map((plat) => {
+                const isSel = selectedPlatform === plat.key;
+                const Icon = plat.icon;
+                return (
+                  <button
+                    key={plat.key}
+                    type="button"
+                    onClick={() => handleSelectPlatform(plat.key)}
+                    className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer border ${
+                      isSel
+                        ? "bg-[#3A4EFB] text-white border-[#3A4EFB] shadow-sm"
+                        : "bg-[#F8F9FD] hover:bg-[#F0F2FA] text-[#252943] border-[#DEE0ED]"
+                    }`}
+                  >
+                    <Icon className={`w-3.5 h-3.5 ${isSel ? "text-white" : "text-[#3A4EFB]"}`} />
+                    <span>{plat.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Fast Instant Search Bar */}
           <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs font-semibold text-[#252943] flex items-center gap-1.5">
-                <Search className="w-3.5 h-3.5 text-[#3A4EFB]" />
-                <span>Quick Service Search</span>
-              </label>
-              {searchQuery && (
-                <span className="text-[11px] font-semibold text-[#3A4EFB]">
-                  Found {searchResults.length} {searchResults.length === 1 ? "service" : "services"}
-                </span>
-              )}
-            </div>
-
             <div className="relative">
               <input
                 type="text"
@@ -1016,7 +1187,6 @@ function NewOrderForm() {
                     }`}
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      {/* Blue Provider Button in front of the service */}
                       <span className="shrink-0 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-[#3A4EFB] text-white shadow-xs">
                         {s.providerName || "API"}
                       </span>
@@ -1027,7 +1197,7 @@ function NewOrderForm() {
                     </div>
 
                     <div className="shrink-0 text-right">
-                      <span className="font-bold text-[#3A4EFB]">${s.ratePer1000.toFixed(2)}</span>
+                      <span className="font-bold text-[#3A4EFB]">{formatCurrency(s.ratePer1000, activeProvider?.currency || "USD")}</span>
                       <span className="text-[10px] text-[#252943]/50">/1K</span>
                     </div>
                   </button>
@@ -1091,43 +1261,42 @@ function NewOrderForm() {
               ) : (
                 displayedServices.map((s) => (
                   <option key={s.id} value={s.id}>
-                    [{s.providerName || "API"}] #{s.providerServiceId || s.externalId} — {s.name} (${s.ratePer1000.toFixed(2)}/1K)
+                    [{s.providerName || "API"}] #{s.providerServiceId || s.externalId} — {s.name} ({formatCurrency(s.ratePer1000, activeProvider?.currency || "USD")}/1K)
                   </option>
                 ))
               )}
             </select>
+          </div>
 
-            {/* Service Details with Blue Button */}
-            {activeService && (
-              <div className="mt-2 p-2.5 rounded-xl bg-[#F0F2FA] border border-[#DEE0ED] flex flex-wrap items-center justify-between gap-2 text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-[#3A4EFB] text-white shadow-xs">
-                    <Server className="w-3.5 h-3.5" />
-                    {activeService.providerName || activeProvider?.name || "API"}
-                  </span>
-                  <span className="font-mono text-xs font-bold text-[#252943]">
-                    #{activeService.providerServiceId || activeService.externalId}
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-3 text-[11px] text-[#252943]/70 font-medium">
+          {/* Description & Estimation Box (Matching Xmedia's Layout) */}
+          {activeService && (
+            <div className="p-3.5 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED] text-xs space-y-2 animate-fadeIn">
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-1.5 border-b border-[#DEE0ED]">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#252943]/60">
+                  Description
+                </span>
+                <div className="flex items-center gap-2.5 text-[11px] text-[#252943]/70 font-medium flex-wrap">
                   <span>Min: <strong className="text-[#252943]">{activeService.minQuantity.toLocaleString()}</strong></span>
                   <span>•</span>
                   <span>Max: <strong className="text-[#252943]">{activeService.maxQuantity.toLocaleString()}</strong></span>
                   <span>•</span>
-                  <span>Rate: <strong className="text-[#3A4EFB]">${activeService.ratePer1000.toFixed(2)}</strong> / 1K</span>
+                  <span>Rate: <strong className="text-[#3A4EFB]">{formatCurrency(activeService.ratePer1000, activeProvider?.currency || "USD")}</strong> / 1K</span>
                   {activeService.dripFeedSupported && (
                     <>
                       <span>•</span>
-                      <span className="text-emerald-700 font-semibold flex items-center gap-1">
+                      <span className="text-emerald-700 font-bold flex items-center gap-1">
                         <Repeat className="w-3 h-3" /> Drip supported
                       </span>
                     </>
                   )}
                 </div>
               </div>
-            )}
-          </div>
+
+              <p className="whitespace-pre-line text-[#252943]/85 leading-relaxed font-normal">
+                {activeService.description || "Always working superfast."}
+              </p>
+            </div>
+          )}
 
           {/* Target Link Input */}
           <div>
@@ -1342,7 +1511,7 @@ function NewOrderForm() {
                 Total Charge
               </span>
               <div className="text-xl font-extrabold text-[#252943]">
-                ${totalCost.toFixed(2)}
+                {formatCurrency(totalCost, activeProvider?.currency || "USD")}
               </div>
             </div>
 
