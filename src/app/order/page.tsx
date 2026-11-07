@@ -30,6 +30,7 @@ import {
   Headphones,
   Compass,
   ExternalLink,
+  Star,
 } from "lucide-react";
 
 interface ServiceItem {
@@ -48,6 +49,7 @@ interface ServiceItem {
   ratePer1000: number;
   dripFeedSupported?: boolean;
   currency?: string;
+  isFavourite?: boolean;
 }
 
 interface ProviderInfo {
@@ -79,6 +81,7 @@ interface OrderReceipt {
 }
 
 const PLATFORMS_LIST: Array<{ key: string; label: string; icon: any }> = [
+  { key: "FAVOURITES", label: "Favourites", icon: Star },
   { key: "ALL", label: "All", icon: Layers },
   { key: "Telegram", label: "Telegram", icon: Send },
   { key: "Instagram", label: "Instagram", icon: Sparkles },
@@ -109,6 +112,7 @@ function formatCurrency(amount: number, currency = "USD"): string {
 
 function matchesPlatform(service: ServiceItem, platKey: string): boolean {
   if (platKey === "ALL") return true;
+  if (platKey === "FAVOURITES") return Boolean(service.isFavourite);
   const p = (service.platform || "").toLowerCase();
   const c = (service.category || "").toLowerCase();
   const n = (service.name || "").toLowerCase();
@@ -281,6 +285,11 @@ function NewOrderForm() {
     });
   }, [currentFilteredServices, searchQuery]);
 
+  // Favourite services count in currently active services
+  const favouritesCount = useMemo(() => {
+    return currentFilteredServices.filter((s) => s.isFavourite).length;
+  }, [currentFilteredServices]);
+
   // Unique Categories List for currently active services and platform
   const categories = useMemo(() => {
     const set = new Set<string>();
@@ -305,13 +314,16 @@ function NewOrderForm() {
     );
   }, [currentFilteredServices, selectedPlatform, selectedCategory]);
 
-  // Displayed Services in dropdown: search results if search is active, else category services
+  // Displayed Services in dropdown: search results if search is active, all favourites if Favourites mode, else category services
   const displayedServices = useMemo(() => {
     if (searchQuery.trim()) {
       return searchResults;
     }
+    if (selectedPlatform === "FAVOURITES") {
+      return currentFilteredServices.filter((s) => s.isFavourite);
+    }
     return categoryServices;
-  }, [searchQuery, searchResults, categoryServices]);
+  }, [searchQuery, searchResults, selectedPlatform, currentFilteredServices, categoryServices]);
 
   // Active Service Object
   const activeService = useMemo(() => {
@@ -418,8 +430,15 @@ function NewOrderForm() {
         })
         .catch((e) => console.warn("Balance poll error:", e));
     };
+    const handleFavUpdate = () => {
+      loadServices(true);
+    };
     window.addEventListener("balance-updated", handleBalanceUpdate);
-    return () => window.removeEventListener("balance-updated", handleBalanceUpdate);
+    window.addEventListener("favourites-updated", handleFavUpdate);
+    return () => {
+      window.removeEventListener("balance-updated", handleBalanceUpdate);
+      window.removeEventListener("favourites-updated", handleFavUpdate);
+    };
   }, []);
 
   // 0ms Instant In-Memory Provider Switcher Handler
@@ -555,6 +574,9 @@ function NewOrderForm() {
         setMinQtyRange(catServices[0].minQuantity || 10);
         setMaxQtyRange((catServices[0].minQuantity || 10) + 4);
       }
+    } else {
+      setSelectedCategory("");
+      setSelectedServiceId("");
     }
   };
 
@@ -1121,30 +1143,55 @@ function NewOrderForm() {
             </div>
           )}
 
-          {/* Platform Category Filter Pills (Matching Xmedia's Simplified UI) */}
+          {/* Platform Category Filter Pills (Matching Xmedia's Simplified UI + Favourites) */}
           <div>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2">
               {PLATFORMS_LIST.map((plat) => {
                 const isSel = selectedPlatform === plat.key;
+                const isFav = plat.key === "FAVOURITES";
                 const Icon = plat.icon;
                 return (
                   <button
                     key={plat.key}
                     type="button"
                     onClick={() => handleSelectPlatform(plat.key)}
-                    className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer border ${
+                    className={`px-2.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer border ${
                       isSel
-                        ? "bg-[#3A4EFB] text-white border-[#3A4EFB] shadow-sm"
-                        : "bg-[#F8F9FD] hover:bg-[#F0F2FA] text-[#252943] border-[#DEE0ED]"
+                        ? isFav
+                          ? "bg-amber-500 text-white border-amber-500 shadow-sm"
+                          : "bg-[#3A4EFB] text-white border-[#3A4EFB] shadow-sm"
+                        : isFav
+                          ? "bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-200"
+                          : "bg-[#F8F9FD] hover:bg-[#F0F2FA] text-[#252943] border-[#DEE0ED]"
                     }`}
                   >
-                    <Icon className={`w-3.5 h-3.5 ${isSel ? "text-white" : "text-[#3A4EFB]"}`} />
-                    <span>{plat.label}</span>
+                    <Icon className={`w-3.5 h-3.5 shrink-0 ${isSel ? (isFav ? "fill-white text-white" : "text-white") : isFav ? "fill-amber-400 text-amber-500" : "text-[#3A4EFB]"}`} />
+                    <span className="truncate">{isFav ? `Favourites (${favouritesCount})` : plat.label}</span>
                   </button>
                 );
               })}
             </div>
           </div>
+
+          {/* Favourites Only Empty Banner: when Favourites is selected but user has 0 favourites */}
+          {selectedPlatform === "FAVOURITES" && favouritesCount === 0 && (
+            <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-2 animate-fadeIn">
+              <div className="font-bold flex items-center gap-1.5 text-sm">
+                <Star className="w-4 h-4 fill-amber-400 text-amber-500" />
+                <span>No Favourite Services Added Yet</span>
+              </div>
+              <p className="text-amber-800 text-xs leading-relaxed">
+                You can add any service to your favourites from the <strong>Services</strong> section with 1 click. Once added, only those services will show here for quick ordering without seeing all other categories!
+              </p>
+              <Link
+                href="/services"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-xs"
+              >
+                <span>Go to Services to add favourites</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+          )}
 
           {/* Fast Instant Search Bar */}
           <div>
@@ -1206,8 +1253,8 @@ function NewOrderForm() {
             )}
           </div>
 
-          {/* Category Dropdown (Hidden during active search so user sees search results directly) */}
-          {!searchQuery.trim() && (
+          {/* Category Dropdown (Hidden in Favourites mode or active search so user selects directly without seeing categories) */}
+          {!searchQuery.trim() && selectedPlatform !== "FAVOURITES" && (
             <div>
               <label className="block text-xs font-semibold text-[#252943] mb-1.5">
                 Category
@@ -1235,7 +1282,7 @@ function NewOrderForm() {
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs font-semibold text-[#252943]">
-                Service {searchQuery.trim() && <span className="text-[#3A4EFB] font-normal">(Filtered by Search)</span>}
+                Service {selectedPlatform === "FAVOURITES" ? <span className="text-amber-600 font-bold">(Your Favourites)</span> : searchQuery.trim() && <span className="text-[#3A4EFB] font-normal">(Filtered by Search)</span>}
               </label>
 
               {/* Blue Provider Name Button Badge */}

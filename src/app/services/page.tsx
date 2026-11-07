@@ -67,6 +67,19 @@ interface ProviderInfo {
   warning?: string;
 }
 
+function formatCurrency(amount: number, currency = "INR"): string {
+  const c = (currency || "INR").toUpperCase();
+  const symMap: Record<string, string> = {
+    INR: "₹",
+    USD: "$",
+    EUR: "€",
+    BDT: "৳",
+    GBP: "£",
+  };
+  const sym = symMap[c] || `${currency} `;
+  return `${sym}${Number(amount).toFixed(2)}`;
+}
+
 export default function ServicesPage() {
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [totalServices, setTotalServices] = useState(0);
@@ -383,7 +396,7 @@ export default function ServicesPage() {
                   }`}
                 >
                   {isFavChip && <Star className="w-3.5 h-3.5 fill-current text-amber-500" />}
-                  <span>{p}</span>
+                  <span>{isFavChip ? "My Favourites" : p}</span>
                 </button>
               );
             })}
@@ -467,23 +480,42 @@ export default function ServicesPage() {
           </div>
         ) : filtered.length === 0 ? (
           <div className="p-12 text-center space-y-3">
-            <p className="text-sm font-medium text-[#252943]">No services matched your query</p>
-            <p className="text-xs text-[#252943]/60">
-              No service matching &quot;{activeQuery || searchInput}&quot;. Try clearing filters or checking Settings.
-            </p>
-            <button
-              onClick={handleClearSearch}
-              className="mt-2 px-3 py-1.5 rounded-lg bg-[#3A4EFB] text-white text-xs font-semibold"
-            >
-              Reset Search
-            </button>
+            {selectedPlatform === "Favourites" ? (
+              <>
+                <Star className="w-8 h-8 text-amber-400 mx-auto fill-amber-100" />
+                <p className="text-sm font-bold text-[#252943]">No favourite services added yet</p>
+                <p className="text-xs text-[#252943]/60 max-w-md mx-auto">
+                  Click on &quot;All&quot; above to view all provider services and click &quot;+ Add&quot; on any service to add it to your favourites. Once added, it will show here and in the order section!
+                </p>
+                <button
+                  type="button"
+                  onClick={() => handlePlatformChange("All")}
+                  className="mt-2 px-4 py-2 rounded-xl bg-[#3A4EFB] text-white text-xs font-bold transition-all shadow-subtle cursor-pointer"
+                >
+                  Browse All Services
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-medium text-[#252943]">No services matched your query</p>
+                <p className="text-xs text-[#252943]/60">
+                  No service matching &quot;{activeQuery || searchInput}&quot;. Try clearing filters or checking Settings.
+                </p>
+                <button
+                  onClick={handleClearSearch}
+                  className="mt-2 px-3 py-1.5 rounded-lg bg-[#3A4EFB] text-white text-xs font-semibold"
+                >
+                  Reset Search
+                </button>
+              </>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-[#F8F9FD] border-b border-[#DEE0ED] text-[#252943]/60 font-medium">
                 <tr>
-                  <th className="py-3 px-3 w-10 text-center">★</th>
+                  <th className="py-3 px-3 w-24 text-center">Favourite</th>
                   <th className="py-3 px-4 w-28">Service ID</th>
                   <th className="py-3 px-4">Service Name & Type</th>
                   <th className="py-3 px-4">Category</th>
@@ -504,22 +536,26 @@ export default function ServicesPage() {
                         : "hover:bg-[#F8F9FD]/60"
                     }`}
                   >
-                    {/* Favourite Star Quick Toggle */}
+                    {/* Favourite Quick Add / Remove Toggle */}
                     <td className="py-3.5 px-3 text-center">
                       <button
                         type="button"
                         onClick={() => handleToggleFavourite(s)}
-                        title={s.isFavourite ? "Remove from favourites" : "Add to favourites"}
-                        aria-label={s.isFavourite ? `Remove ${s.name} from favourites` : `Add ${s.name} to favourites`}
-                        className="p-1 rounded-lg text-gray-300 hover:text-amber-500 transition-colors press-scale"
+                        title={s.isFavourite ? "Click to remove from favourites" : "Click to add to favourites"}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 mx-auto cursor-pointer ${
+                          s.isFavourite
+                            ? "bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200 shadow-xs"
+                            : "bg-[#F0F2FA] text-[#252943]/80 border border-[#DEE0ED] hover:bg-amber-50 hover:text-amber-900 hover:border-amber-300"
+                        }`}
                       >
                         <Star
-                          className={`w-4 h-4 ${
+                          className={`w-3.5 h-3.5 ${
                             s.isFavourite
-                              ? "fill-amber-400 text-amber-500"
-                              : "text-gray-300 hover:text-amber-400"
+                              ? "fill-amber-500 text-amber-600"
+                              : "text-[#252943]/40"
                           }`}
                         />
+                        <span>{s.isFavourite ? "Added" : "+ Add"}</span>
                       </button>
                     </td>
 
@@ -579,7 +615,11 @@ export default function ServicesPage() {
                     </td>
 
                     <td className="py-3.5 px-4 text-right font-bold text-[#3A4EFB] text-sm tracking-tight">
-                      ₹{Number(s.ratePer1000).toFixed(2)}
+                      {formatCurrency(
+                        s.ratePer1000,
+                        providers.find((p) => p.id === s.providerId)?.currency ||
+                          (s.providerName?.toLowerCase().includes("zeofame") ? "EUR" : "INR")
+                      )}
                     </td>
 
                     {/* Refill / Cancel Indicators */}
@@ -614,9 +654,10 @@ export default function ServicesPage() {
                       <div className="flex items-center justify-end gap-1.5 relative">
                         <Link
                           href={`/order?serviceId=${s.id}`}
-                          className="px-2.5 py-1 rounded-lg bg-[#3A4EFB] hover:bg-[#2C3FE0] text-white text-[11px] font-semibold transition-all press-scale"
+                          className="px-3 py-1.5 rounded-lg bg-[#3A4EFB] hover:bg-[#2C3FE0] text-white text-xs font-bold transition-all shadow-subtle flex items-center gap-1 shrink-0"
                         >
-                          Order
+                          <span>Order</span>
+                          <ArrowRight className="w-3 h-3 text-[#E3FF3B]" />
                         </Link>
 
                         {/* 3-Dot Context Menu (Change 11 Requirement) */}
