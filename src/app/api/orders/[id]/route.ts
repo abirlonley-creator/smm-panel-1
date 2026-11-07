@@ -45,6 +45,52 @@ export async function GET(
       );
     }
 
+    // Proactive auto-reconciliation: If order is active and has providerOrderId, check provider status
+    if (order.providerOrderId && !["COMPLETED", "CANCELLED", "FAILED"].includes(order.status)) {
+      try {
+        const targetProviderId = order.service?.userProviderId || order.service?.providerId || undefined;
+        const { adapter } = await getActiveProvider(order.userId || undefined, targetProviderId);
+
+        const statusRes: any = await Promise.race([
+          adapter.getOrderStatus(order.providerOrderId),
+          new Promise<null>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 2500)),
+        ]).catch(() => null);
+
+        if (statusRes && statusRes.success) {
+          let delivered = order.deliveredQuantity;
+          let remains = typeof statusRes.remains === "number" ? statusRes.remains : order.remainingQuantity;
+
+          if (statusRes.status === "COMPLETED") {
+            delivered = order.requestedQuantity;
+            remains = 0;
+          } else if (typeof statusRes.remains === "number") {
+            delivered = Math.max(0, order.requestedQuantity - statusRes.remains);
+          }
+
+          if (statusRes.status !== order.status || delivered !== order.deliveredQuantity) {
+            await prisma.order.update({
+              where: { id: order.id },
+              data: {
+                status: statusRes.status,
+                deliveredQuantity: delivered,
+                remainingQuantity: remains,
+              },
+            });
+
+            const refreshed = await prisma.order.findUnique({
+              where: { id: order.id },
+              include: orderDetailInclude,
+            });
+            if (refreshed) {
+              return NextResponse.json({ success: true, order: normalizeOrderDetail(refreshed) });
+            }
+          }
+        }
+      } catch {
+        // Graceful fallback to cached state
+      }
+    }
+
     return NextResponse.json({ success: true, order: normalizeOrderDetail(order) });
   } catch (error: any) {
     return NextResponse.json(

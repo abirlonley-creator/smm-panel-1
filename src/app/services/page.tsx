@@ -209,8 +209,6 @@ export default function ServicesPage() {
     setCurrentPage(1);
     setSearchInput("");
     setActiveQuery("");
-    setServices([]);
-    setTotalServices(0);
     setLoadError(null);
     setLoading(true);
 
@@ -461,10 +459,39 @@ export default function ServicesPage() {
 
       {/* Services Table */}
       <div className="bg-white rounded-2xl border border-[#DEE0ED] shadow-subtle overflow-hidden">
-        {loading ? (
-          <div className="py-16 flex items-center justify-center text-xs text-[#252943]/60 gap-2">
-            <Loader2 className="w-5 h-5 animate-spin text-[#3A4EFB]" />
-            <span>Loading {selectedPlatform === "All" ? "service catalog" : `${selectedPlatform} services`}...</span>
+        {loading && filtered.length > 0 && (
+          <div className="h-0.5 bg-blue-100 overflow-hidden">
+            <div className="h-full bg-[#3A4EFB] animate-pulse w-full" />
+          </div>
+        )}
+        {loading && filtered.length === 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs animate-pulse">
+              <thead className="bg-[#F8F9FD] border-b border-[#DEE0ED] text-[#252943]/60 font-medium">
+                <tr>
+                  <th className="py-3 px-3 w-24 text-center">Favourite</th>
+                  <th className="py-3 px-4 w-28">Service ID</th>
+                  <th className="py-3 px-4">Service Name & Type</th>
+                  <th className="py-3 px-4">Category</th>
+                  <th className="py-3 px-4 text-right">Rate / 1k</th>
+                  <th className="py-3 px-4 text-center">Min / Max</th>
+                  <th className="py-3 px-4 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#DEE0ED]/60">
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <tr key={i} className="hover:bg-[#F8F9FD]/60">
+                    <td className="py-3.5 px-3 text-center"><div className="h-6 w-16 bg-[#EBEFFA] rounded-lg mx-auto" /></td>
+                    <td className="py-3.5 px-4"><div className="h-4 w-16 bg-[#EBEFFA] rounded" /></td>
+                    <td className="py-3.5 px-4"><div className="h-4 w-56 bg-[#EBEFFA] rounded" /></td>
+                    <td className="py-3.5 px-4"><div className="h-4 w-32 bg-[#EBEFFA] rounded" /></td>
+                    <td className="py-3.5 px-4 text-right"><div className="h-4 w-14 bg-[#EBEFFA] rounded ml-auto" /></td>
+                    <td className="py-3.5 px-4 text-center"><div className="h-4 w-20 bg-[#EBEFFA] rounded mx-auto" /></td>
+                    <td className="py-3.5 px-4 text-right"><div className="h-7 w-16 bg-[#EBEFFA] rounded-lg ml-auto" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         ) : loadError ? (
           <div className="p-12 text-center space-y-3">

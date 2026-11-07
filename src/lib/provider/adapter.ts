@@ -555,6 +555,15 @@ export class StandardSMMv2Provider implements SMMProviderAdapter {
   }
 
   async getMultipleOrdersStatus(providerOrderIds: string[]): Promise<Record<string, OrderStatusResult>> {
+    if (!providerOrderIds || providerOrderIds.length === 0) return {};
+    if (providerOrderIds.length === 1) {
+      try {
+        const single = await this.getOrderStatus(providerOrderIds[0]);
+        return { [providerOrderIds[0]]: single };
+      } catch {
+        return {};
+      }
+    }
     try {
       const res = await this.postRequest("status", { orders: providerOrderIds.join(",") });
       const data = res.data as Record<string, Record<string, unknown>>;

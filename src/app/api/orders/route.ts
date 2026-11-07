@@ -762,6 +762,78 @@ export async function GET(request: Request) {
       countMap[c.status] = c._count.id;
     });
 
+    // Proactive auto-sync for active orders on the current page
+    const activeOrdersWithRef = orders.filter(
+      (o) =>
+        !["COMPLETED", "CANCELLED", "FAILED"].includes(o.status) &&
+        Boolean(o.providerOrderId)
+    );
+
+    if (activeOrdersWithRef.length > 0) {
+      try {
+        const providerGroups: Record<string, typeof activeOrdersWithRef> = {};
+        for (const ord of activeOrdersWithRef) {
+          const pId = ord.service?.userProvider?.id || ord.service?.provider?.id || "default";
+          if (!providerGroups[pId]) providerGroups[pId] = [];
+          providerGroups[pId].push(ord);
+        }
+
+        for (const [pId, groupOrders] of Object.entries(providerGroups)) {
+          const targetPId = pId === "default" ? undefined : pId;
+          const { adapter } = await getActiveProvider(userId, targetPId);
+          const pOrderIds = groupOrders
+            .map((o) => o.providerOrderId!)
+            .filter(Boolean)
+            .slice(0, 15);
+
+          if (pOrderIds.length > 0) {
+            const statusMap: Record<string, any> = (await Promise.race([
+              adapter.getMultipleOrdersStatus(pOrderIds),
+              new Promise<Record<string, any>>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 2500)),
+            ]).catch(() => ({}))) || {};
+
+            for (const ord of groupOrders) {
+              if (!ord.providerOrderId) continue;
+              const sRes = statusMap[ord.providerOrderId];
+              if (sRes && sRes.success) {
+                let delivered = ord.deliveredQuantity;
+                let remains = typeof sRes.remains === "number" ? sRes.remains : ord.remainingQuantity;
+
+                if (sRes.status === "COMPLETED") {
+                  delivered = ord.requestedQuantity;
+                  remains = 0;
+                } else if (typeof sRes.remains === "number") {
+                  delivered = Math.max(0, ord.requestedQuantity - sRes.remains);
+                }
+
+                if (sRes.status !== ord.status || delivered !== ord.deliveredQuantity) {
+                  await prisma.order.update({
+                    where: { id: ord.id },
+                    data: {
+                      status: sRes.status,
+                      deliveredQuantity: delivered,
+                      remainingQuantity: remains,
+                    },
+                  }).catch(() => {});
+
+                  if (countMap[ord.status] && countMap[ord.status] > 0) {
+                    countMap[ord.status]--;
+                  }
+                  countMap[sRes.status] = (countMap[sRes.status] || 0) + 1;
+
+                  ord.status = sRes.status;
+                  ord.deliveredQuantity = delivered;
+                  ord.remainingQuantity = remains;
+                }
+              }
+            }
+          }
+        }
+      } catch {
+        // Safe non-blocking fallback
+      }
+    }
+
     const responsePayload = {
       success: true,
       orders,

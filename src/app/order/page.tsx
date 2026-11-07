@@ -562,6 +562,20 @@ function NewOrderForm() {
       ? currentFilteredServices
       : currentFilteredServices.filter((s) => matchesPlatform(s, platKey));
 
+    if (platKey === "FAVOURITES") {
+      if (pool.length > 0) {
+        setSelectedCategory("");
+        setSelectedServiceId(pool[0].id);
+        if (pool[0].minQuantity) setQuantity(pool[0].minQuantity);
+        setMinQtyRange(pool[0].minQuantity || 10);
+        setMaxQtyRange((pool[0].minQuantity || 10) + 4);
+      } else {
+        setSelectedCategory("");
+        setSelectedServiceId("");
+      }
+      return;
+    }
+
     if (pool.length > 0) {
       const firstCat = pool[0].category?.trim() || pool[0].platform?.trim() || "General";
       setSelectedCategory(firstCat);

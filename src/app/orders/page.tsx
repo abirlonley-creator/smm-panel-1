@@ -97,6 +97,9 @@ export default function OrdersPage() {
           } catch (e) {}
         }
       }
+
+      // Opportunistic background scheduler tick
+      fetch("/api/scheduler/tick", { method: "POST" }).catch(() => {});
     } catch (err) {
       console.error("Failed to load orders", err);
     } finally {
@@ -125,6 +128,14 @@ export default function OrdersPage() {
     }
     fetchOrders(!hasCached);
   }, [activeTab, page]);
+
+  // Quiet background auto-refresh every 15s to keep provider delivery status live
+  useEffect(() => {
+    const timer = setInterval(() => {
+      fetchOrders(false);
+    }, 15000);
+    return () => clearInterval(timer);
+  }, [activeTab, page, searchQuery]);
 
   function handleSearchSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -219,10 +230,41 @@ export default function OrdersPage() {
 
       {/* Orders Table */}
       <div className="bg-white rounded-2xl border border-[#DEE0ED] shadow-subtle overflow-hidden">
-        {loading ? (
-          <div className="py-16 flex items-center justify-center text-xs text-[#252943]/60 gap-2">
-            <Loader2 className="w-5 h-5 animate-spin text-[#3A4EFB]" />
-            <span>Loading order history...</span>
+        {loading && orders.length > 0 && (
+          <div className="h-0.5 bg-blue-100 overflow-hidden">
+            <div className="h-full bg-[#3A4EFB] animate-pulse w-full" />
+          </div>
+        )}
+        {loading && orders.length === 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs animate-pulse">
+              <thead className="bg-[#F8F9FD] border-b border-[#DEE0ED] text-[#252943]/60 font-medium">
+                <tr>
+                  <th className="py-3 px-4">Order Ref</th>
+                  <th className="py-3 px-4">Platform & Service</th>
+                  <th className="py-3 px-4">Target Link</th>
+                  <th className="py-3 px-4 text-right">Quantity</th>
+                  <th className="py-3 px-4 text-right">Cost / value</th>
+                  <th className="py-3 px-4">Delivery Mode</th>
+                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#DEE0ED]/60">
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <tr key={i} className="hover:bg-[#F8F9FD]/60">
+                    <td className="py-3.5 px-4"><div className="h-4 w-24 bg-[#EBEFFA] rounded" /></td>
+                    <td className="py-3.5 px-4"><div className="h-4 w-44 bg-[#EBEFFA] rounded" /></td>
+                    <td className="py-3.5 px-4"><div className="h-4 w-32 bg-[#EBEFFA] rounded" /></td>
+                    <td className="py-3.5 px-4 text-right"><div className="h-4 w-16 bg-[#EBEFFA] rounded ml-auto" /></td>
+                    <td className="py-3.5 px-4 text-right"><div className="h-4 w-12 bg-[#EBEFFA] rounded ml-auto" /></td>
+                    <td className="py-3.5 px-4"><div className="h-4 w-16 bg-[#EBEFFA] rounded" /></td>
+                    <td className="py-3.5 px-4"><div className="h-5 w-20 bg-[#EBEFFA] rounded-full" /></td>
+                    <td className="py-3.5 px-4 text-right"><div className="h-4 w-14 bg-[#EBEFFA] rounded ml-auto" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         ) : orders.length === 0 ? (
           <div className="p-12 text-center space-y-3">

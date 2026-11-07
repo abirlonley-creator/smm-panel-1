@@ -118,6 +118,20 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
   }
 
   useEffect(() => {
+    // 0ms instant display from localStorage on hydration
+    if (typeof window !== "undefined") {
+      try {
+        const local = localStorage.getItem("aurasmm_cached_balance");
+        if (local) {
+          const p = JSON.parse(local);
+          if (p && Array.isArray(p.providers) && p.providers.length > 0) {
+            setProviders(p.providers);
+            if (p.activeProviderId) setActiveProviderId(p.activeProviderId);
+            setLoading(false);
+          }
+        }
+      } catch {}
+    }
     loadBalanceData();
 
     const handleBalanceUpdate = () => loadBalanceData(false);
@@ -303,10 +317,14 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
   }
 
   // Render for Sidebar Card (variant === "sidebar")
-  if (loading) {
+  if (loading && !activeProvider) {
     return (
-      <div className="mx-3.5 mt-4 p-3.5 rounded-2xl bg-[#1A1D31] border border-[#323758] flex items-center justify-between">
-        <span className="text-xs text-[#DEE0ED]/60 font-medium">Checking balance...</span>
+      <div className="mx-3.5 mt-4 p-3.5 rounded-2xl bg-[#1A1D31] border border-[#323758] animate-pulse flex items-center justify-between">
+        <div className="space-y-1.5">
+          <div className="h-2 w-14 bg-[#323758] rounded" />
+          <div className="h-4 w-20 bg-[#323758] rounded" />
+        </div>
+        <div className="w-6 h-6 rounded-lg bg-[#323758]" />
       </div>
     );
   }
