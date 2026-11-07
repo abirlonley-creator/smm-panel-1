@@ -29,7 +29,16 @@ interface OrderItem {
     name: string;
     platform: string;
     ratePer1000: number;
+    userProvider?: { id: string; name: string; apiUrl: string; currency: string } | null;
+    provider?: { id: string; name: string; currency: string } | null;
   };
+  dripFeedRuns?: Array<{
+    id: string;
+    runNumber: number;
+    quantity: number;
+    status: string;
+    providerOrderId?: string | null;
+  }>;
   steps?: Array<{
     id: string;
     stepNumber: number;
@@ -84,6 +93,8 @@ export default function OrdersPage() {
 
   useEffect(() => {
     fetchOrders();
+    // Non-blocking background scheduler tick so pending drip feed runs / BD jobs execute without waiting for cron
+    fetch("/api/scheduler/tick", { method: "POST" }).catch((e) => console.warn("Background tick:", e));
   }, [activeTab, page]);
 
   function handleSearchSubmit(e: React.FormEvent) {
@@ -213,10 +224,35 @@ export default function OrdersPage() {
                 {orders.map((order) => (
                   <tr key={order.id} className="hover:bg-[#F8F9FD]/60 transition-colors">
                     <td className="py-3.5 px-4 font-bold text-[#252943]">
-                      <Link href={`/orders/${order.id}`} className="hover:text-[#3A4EFB]">
-                        {order.orderRef}
-                      </Link>
-                      <div className="text-[10px] text-[#252943]/50 font-normal">
+                      <div className="flex items-center gap-2">
+                        <Link href={`/orders/${order.id}`} className="hover:text-[#3A4EFB] font-bold text-sm">
+                          {order.orderRef}
+                        </Link>
+                      </div>
+
+                      {/* Prominent Upstream API Provider & Order ID Badge */}
+                      <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                        {order.providerOrderId ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                            {order.service.userProvider?.name || order.service.provider?.name || "API"}: #{order.providerOrderId}
+                          </span>
+                        ) : order.dripFeedRuns && order.dripFeedRuns.length > 0 ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                            {order.service.userProvider?.name || order.service.provider?.name || "API"}: {order.dripFeedRuns.filter((r) => r.status === "COMPLETED").length}/{order.dripFeedRuns.length} runs sent
+                          </span>
+                        ) : order.isScheduled ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                            {order.service.userProvider?.name || order.service.provider?.name || "API"}: Scheduled
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-gray-50 text-gray-500 border border-gray-200">
+                            {order.service.userProvider?.name || order.service.provider?.name || "API"}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="text-[10px] text-[#252943]/50 font-normal mt-0.5">
                         {new Date(order.createdAt).toLocaleDateString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                       </div>
                     </td>

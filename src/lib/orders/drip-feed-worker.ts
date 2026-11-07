@@ -84,7 +84,8 @@ export async function runDripFeedTick(): Promise<DripFeedTickResult> {
     }
 
     try {
-      const { adapter } = await getActiveProvider(run.order.userId || undefined);
+      const targetProviderId = run.order.service.userProviderId || run.order.service.providerId || undefined;
+      const { adapter } = await getActiveProvider(run.order.userId || undefined, targetProviderId);
       const targetServiceId = run.order.service.providerServiceId || run.order.service.externalId;
 
       const submission = await adapter.createOrder({

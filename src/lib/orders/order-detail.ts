@@ -2,7 +2,24 @@ import type { Prisma } from "@prisma/client";
 
 /** Shared include used by every endpoint that returns an order detail. */
 export const orderDetailInclude = {
-  service: true,
+  service: {
+    include: {
+      userProvider: { select: { id: true, name: true, apiUrl: true, currency: true } },
+      provider: { select: { id: true, name: true, currency: true } },
+    },
+  },
+  dripFeedRuns: {
+    select: {
+      id: true,
+      runNumber: true,
+      quantity: true,
+      status: true,
+      providerOrderId: true,
+      scheduledAt: true,
+      errorMessage: true,
+    },
+    orderBy: { runNumber: "asc" },
+  },
   steps: { orderBy: { stepNumber: "asc" } },
   providerRecords: { orderBy: { createdAt: "desc" }, take: 10 },
   monitoringSession: {

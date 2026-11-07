@@ -132,6 +132,7 @@ function NewOrderForm() {
     type: "INSTANT" | "DRIP_FEED" | "SCHEDULED";
     reference: string;
     providerOrderId?: string;
+    providerName?: string;
     details: string;
     totalUnits: number;
     totalCharge: number;
@@ -600,20 +601,25 @@ function NewOrderForm() {
         throw new Error(data.error || "Failed to submit order.");
       }
 
+      const provName = activeService.providerName || activeProvider?.name || "Connected API";
       setOrderSuccess({
         type: isDripFeed ? "DRIP_FEED" : "INSTANT",
         reference: data.order.orderRef,
         providerOrderId: data.order.providerOrderId,
+        providerName: provName,
         details: isDripFeed
-          ? `${runItems.length} runs every ${dripIntervalMinutes}m (${runItems.map((r) => r.quantity).join(", ")})`
-          : "Delivered immediately to provider",
+          ? `${runItems.length} runs every ${dripIntervalMinutes}m (${runItems.map((r) => r.quantity).join(", ")}) — Run 1 sent to ${provName}`
+          : `Dispatched directly to ${provName} via API`,
         totalUnits,
         totalCharge: totalCost,
       });
 
       window.dispatchEvent(new CustomEvent("balance-updated"));
     } catch (err: any) {
-      setErrorMessage(err.message || "Failed to place order.");
+      const provPrefix = activeService?.providerName || activeProvider?.name;
+      const rawMsg = err.message || "Failed to place order.";
+      const formatted = provPrefix && !rawMsg.includes(provPrefix) ? `[${provPrefix}] ${rawMsg}` : rawMsg;
+      setErrorMessage(formatted);
     } finally {
       setSubmitting(false);
     }
@@ -669,28 +675,37 @@ function NewOrderForm() {
 
       {/* 2. Success Banner */}
       {orderSuccess && (
-        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 space-y-2 animate-fadeIn text-sm">
+        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 space-y-2.5 animate-fadeIn text-sm">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 font-bold">
               <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
               <span>
-                {orderSuccess.type === "SCHEDULED" ? "Order Scheduled in BD Time!" : "Order Placed Successfully!"}
+                {orderSuccess.type === "SCHEDULED" ? "Order Scheduled in BD Time!" : "Order Dispatched to API!"}
               </span>
             </div>
             <Link
               href="/orders"
-              className="text-xs font-bold text-emerald-800 underline hover:text-emerald-950"
+              className="text-xs font-bold text-emerald-800 underline hover:text-emerald-950 inline-flex items-center gap-1"
             >
-              Go to Orders →
+              Go to Orders Table →
             </Link>
           </div>
-          <p className="text-xs text-emerald-800">
-            Ref: <span className="font-mono font-bold">{orderSuccess.reference}</span>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-emerald-800">
+              Ref: <span className="font-mono font-bold">{orderSuccess.reference}</span>
+            </span>
             {orderSuccess.providerOrderId && (
-              <span> • Upstream Order: <span className="font-mono font-bold">#{orderSuccess.providerOrderId}</span></span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                {orderSuccess.providerName || "API"}: #{orderSuccess.providerOrderId}
+              </span>
             )}
-            {" • "}{orderSuccess.totalUnits.toLocaleString()} units (${orderSuccess.totalCharge.toFixed(2)})
-          </p>
+            <span className="text-xs text-emerald-800">
+              • {orderSuccess.totalUnits.toLocaleString()} units (${orderSuccess.totalCharge.toFixed(2)})
+            </span>
+          </div>
+
           <p className="text-[11px] text-emerald-700 font-medium">
             {orderSuccess.details}
           </p>

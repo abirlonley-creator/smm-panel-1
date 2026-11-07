@@ -59,7 +59,18 @@ interface OrderDetail {
     cancelSupported?: boolean;
     restrictions?: string;
     isMock: boolean;
+    userProvider?: { id: string; name: string; apiUrl: string; currency: string } | null;
+    provider?: { id: string; name: string; currency: string } | null;
   };
+  dripFeedRuns?: Array<{
+    id: string;
+    runNumber: number;
+    quantity: number;
+    status: string;
+    providerOrderId?: string | null;
+    scheduledAt: string;
+    errorMessage?: string | null;
+  }>;
   monitoringSession?: {
     status: string;
     intervalMinutes: number;
@@ -412,7 +423,7 @@ export default function OrderDetailPage() {
 
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2.5 flex-wrap">
               <h1 className="text-2xl font-bold tracking-tight text-[#252943]">
                 {order.orderRef}
               </h1>
@@ -422,6 +433,16 @@ export default function OrderDetailPage() {
                   ? order.status === "CANCELLED" ? "Cancelled" : monitorStatusLabel
                   : undefined}
               />
+              {order.providerOrderId ? (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 shadow-sm">
+                  <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                  {order.service.userProvider?.name || order.service.provider?.name || "API"}: #{order.providerOrderId}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                  {order.service.userProvider?.name || order.service.provider?.name || "API"}
+                </span>
+              )}
             </div>
             <p className="text-xs text-[#252943]/60 mt-1">
               Created on {new Date(order.createdAt).toLocaleString()}
@@ -467,16 +488,16 @@ export default function OrderDetailPage() {
               </>
             )}
 
-            {order.isScheduled && !isAdaptiveMonitor && (
+            {(order.isScheduled || (order.dripFeedRuns && order.dripFeedRuns.some((r) => r.status === "PENDING"))) && !isAdaptiveMonitor && (
               <button
                 type="button"
                 onClick={handleTriggerSchedulerTick}
                 disabled={runningTick}
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#252943] hover:bg-[#1A1D31] text-white text-xs font-semibold transition-all press-scale shadow-subtle"
-                title="Execute due steps immediately"
+                title="Execute due steps or drip feed runs immediately"
               >
                 {runningTick ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 text-[#E3FF3B]" />}
-                Run Scheduler Tick
+                Run Tick Now
               </button>
             )}
 
@@ -682,25 +703,45 @@ export default function OrderDetailPage() {
               </div>
 
               <div>
+                <span className="text-[#252943]/50 text-[11px] block">Connected API Provider</span>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-[#F0F2FA] text-[#3A4EFB] mt-0.5 border border-[#DEE0ED]">
+                  {order.service.userProvider?.name || order.service.provider?.name || "Connected API"}
+                </span>
+                {order.service.userProvider?.apiUrl && (
+                  <span className="text-[10px] text-[#252943]/40 font-mono block mt-0.5 truncate">
+                    {order.service.userProvider.apiUrl}
+                  </span>
+                )}
+              </div>
+
+              <div>
                 <span className="text-[#252943]/50 text-[11px] block">Delivery Mode</span>
                 <span className="font-medium text-[#252943]">
                   {isAdaptiveMonitor
                     ? "Likes Analyze · automatic batches"
-                    : order.isScheduled
-                      ? `Growth Plan (${order.scheduleMode})`
-                      : "Instant Submission"}
+                    : order.dripFeedRuns && order.dripFeedRuns.length > 0
+                      ? `Drip Feed (${order.dripFeedRuns.length} Runs)`
+                      : order.isScheduled
+                        ? `Growth Plan (${order.scheduleMode})`
+                        : "Instant Submission"}
                 </span>
               </div>
 
               <div>
                 <span className="text-[#252943]/50 text-[11px] block">
-                  {isAdaptiveMonitor ? "Provider submission" : "Provider Order Reference"}
+                  {isAdaptiveMonitor ? "Provider submission" : "Upstream Provider Order ID"}
                 </span>
-                <span className="font-bold text-[#252943]">
-                  {order.providerOrderId || (
-                    isAdaptiveMonitor
-                      ? adaptiveSubmittedQuantity > 0 ? "See references in batch history" : "No batches sent yet"
-                      : "Pending Dispatch"
+                <span className="font-bold text-[#252943] flex items-center gap-1.5 mt-0.5">
+                  {order.providerOrderId ? (
+                    <span className="text-sm font-mono text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                      #{order.providerOrderId}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-[#252943]/50 font-normal">
+                      {isAdaptiveMonitor
+                        ? adaptiveSubmittedQuantity > 0 ? "See references in batch history" : "No batches sent yet"
+                        : "Pending Dispatch"}
+                    </span>
                   )}
                 </span>
               </div>
@@ -714,14 +755,22 @@ export default function OrderDetailPage() {
             <div className="p-5 border-b border-[#DEE0ED] flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-semibold text-[#252943]">
-                  {isAdaptiveMonitor ? "Batch history" : order.isScheduled ? "Scheduled Delivery Step Jobs" : "Execution Record"}
+                  {order.dripFeedRuns && order.dripFeedRuns.length > 0
+                    ? `Drip Feed Delivery Runs (${order.dripFeedRuns.length} Runs)`
+                    : isAdaptiveMonitor
+                      ? "Batch history"
+                      : order.isScheduled
+                        ? "Scheduled Delivery Step Jobs"
+                        : "Execution Record"}
                 </h3>
                 <p className="text-xs text-[#252943]/60">
-                  {isAdaptiveMonitor
-                    ? steps.length === 0
-                      ? "Batches appear here when a likes increase is detected."
-                      : "Each quantity is calculated from the likes increase measured at that check."
-                    : `${steps.length} scheduled delivery ${steps.length === 1 ? "step" : "steps"}`}
+                  {order.dripFeedRuns && order.dripFeedRuns.length > 0
+                    ? `${order.dripFeedRuns.filter((r) => r.status === "COMPLETED").length} of ${order.dripFeedRuns.length} runs sent to API`
+                    : isAdaptiveMonitor
+                      ? steps.length === 0
+                        ? "Batches appear here when a likes increase is detected."
+                        : "Each quantity is calculated from the likes increase measured at that check."
+                      : `${steps.length} scheduled delivery ${steps.length === 1 ? "step" : "steps"}`}
                 </p>
               </div>
 
@@ -736,7 +785,58 @@ export default function OrderDetailPage() {
               )}
             </div>
 
-            {steps.length === 0 ? (
+            {order.dripFeedRuns && order.dripFeedRuns.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[#F8F9FD] border-b border-[#DEE0ED] text-[#252943]/60 font-medium">
+                    <tr>
+                      <th className="py-2.5 px-4 w-16">Run</th>
+                      <th className="py-2.5 px-4">Scheduled Execution</th>
+                      <th className="py-2.5 px-4 text-right">Quantity</th>
+                      <th className="py-2.5 px-4">Upstream API Order ID</th>
+                      <th className="py-2.5 px-4">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#DEE0ED]/60">
+                    {order.dripFeedRuns.map((run) => (
+                      <tr key={run.id} className="hover:bg-[#F8F9FD]/60 transition-colors">
+                        <td className="py-3 px-4 font-bold text-[#252943]">
+                          Run #{run.runNumber}
+                        </td>
+                        <td className="py-3 px-4 text-[#252943]/80">
+                          {new Date(run.scheduledAt).toLocaleString([], {
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </td>
+                        <td className="py-3 px-4 text-right font-bold text-[#252943]">
+                          {run.quantity.toLocaleString()}
+                        </td>
+                        <td className="py-3 px-4">
+                          {run.providerOrderId ? (
+                            <span className="font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 text-xs">
+                              #{run.providerOrderId}
+                            </span>
+                          ) : (
+                            <span className="text-[#252943]/40 text-xs">—</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4">
+                          <StatusBadge status={run.status} />
+                          {run.errorMessage && (
+                            <div className="text-[10px] text-red-600 mt-0.5 max-w-[200px] truncate" title={run.errorMessage}>
+                              {run.errorMessage}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : steps.length === 0 ? (
               <div className="p-8 text-center text-xs text-[#252943]/50">
                 {isAdaptiveMonitor
                   ? "No batches yet. Likes Analyze will calculate a batch after it detects a likes increase."

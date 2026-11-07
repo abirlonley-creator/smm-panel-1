@@ -675,6 +675,7 @@ export async function GET(request: Request) {
     if (search) {
       where.OR = [
         { orderRef: { contains: search } },
+        { providerOrderId: { contains: search } },
         { targetUrl: { contains: search } },
         { service: { name: { contains: search } } },
       ];
@@ -684,7 +685,24 @@ export async function GET(request: Request) {
       prisma.order.findMany({
         where,
         include: {
-          service: true,
+          service: {
+            include: {
+              userProvider: { select: { id: true, name: true, apiUrl: true, currency: true } },
+              provider: { select: { id: true, name: true, currency: true } },
+            },
+          },
+          dripFeedRuns: {
+            select: {
+              id: true,
+              runNumber: true,
+              quantity: true,
+              status: true,
+              providerOrderId: true,
+              scheduledAt: true,
+              errorMessage: true,
+            },
+            orderBy: { runNumber: "asc" },
+          },
           steps: {
             orderBy: { stepNumber: "asc" },
           },
