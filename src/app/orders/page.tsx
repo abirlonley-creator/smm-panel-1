@@ -58,14 +58,22 @@ const STATUS_TABS = [
   "REQUIRES_RECONCILIATION",
 ];
 
+let initialOrdersCache: any = null;
+if (typeof window !== "undefined") {
+  try {
+    const raw = localStorage.getItem("aurasmm_orders_v1_ALL_p1");
+    if (raw) initialOrdersCache = JSON.parse(raw);
+  } catch (e) {}
+}
+
 export default function OrdersPage() {
-  const [orders, setOrders] = useState<OrderItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [orders, setOrders] = useState<OrderItem[]>(() => initialOrdersCache?.orders || []);
+  const [loading, setLoading] = useState<boolean>(() => !initialOrdersCache || !initialOrdersCache.orders || initialOrdersCache.orders.length === 0);
   const [activeTab, setActiveTab] = useState("ALL");
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
-  const [pagination, setPagination] = useState({ total: 0, totalPages: 1, page: 1 });
-  const [counts, setCounts] = useState<Record<string, number>>({});
+  const [pagination, setPagination] = useState(() => initialOrdersCache?.pagination || { total: 0, totalPages: 1, page: 1 });
+  const [counts, setCounts] = useState<Record<string, number>>(() => initialOrdersCache?.counts || {});
 
   async function fetchOrders(showSpinner = true) {
     if (showSpinner) setLoading(true);
@@ -85,7 +93,7 @@ export default function OrdersPage() {
         setCounts(data.counts || {});
         if (typeof window !== "undefined" && !searchQuery.trim()) {
           try {
-            sessionStorage.setItem(`aurasmm_orders_${activeTab}_p${page}`, JSON.stringify(data));
+            localStorage.setItem(`aurasmm_orders_v1_${activeTab}_p${page}`, JSON.stringify(data));
           } catch (e) {}
         }
       }
@@ -97,14 +105,15 @@ export default function OrdersPage() {
   }
 
   useEffect(() => {
-    // 0ms instant display from session cache
+    // 0ms instant display from localStorage cache
+    const cacheKey = `aurasmm_orders_v1_${activeTab}_p${page}`;
     let hasCached = false;
     if (typeof window !== "undefined" && !searchQuery.trim()) {
       try {
-        const cachedStr = sessionStorage.getItem(`aurasmm_orders_${activeTab}_p${page}`);
+        const cachedStr = localStorage.getItem(cacheKey);
         if (cachedStr) {
           const parsed = JSON.parse(cachedStr);
-          if (parsed && Array.isArray(parsed.orders)) {
+          if (parsed && Array.isArray(parsed.orders) && parsed.orders.length > 0) {
             setOrders(parsed.orders);
             if (parsed.counts) setCounts(parsed.counts);
             if (parsed.pagination) setPagination(parsed.pagination);
@@ -115,8 +124,6 @@ export default function OrdersPage() {
       } catch (e) {}
     }
     fetchOrders(!hasCached);
-    // Non-blocking background scheduler tick so pending drip feed runs / BD jobs execute without waiting for cron
-    fetch("/api/scheduler/tick", { method: "POST" }).catch((e) => console.warn("Background tick:", e));
   }, [activeTab, page]);
 
   function handleSearchSubmit(e: React.FormEvent) {
@@ -344,7 +351,9 @@ export default function OrdersPage() {
                           <span>
                             {order.scheduleMode === "ADAPTIVE"
                               ? `Likes Analyze · ${order.steps?.length || 0} ${order.steps?.length === 1 ? "batch" : "batches"}`
-                              : `${order.scheduleMode || "Drip"} (${order.steps?.length || 0} steps)`}
+                              : order.scheduleMode === "DRIP_FEED"
+                                ? `Drip Feed (${order.dripFeedRuns?.length || 0} runs)`
+                                : `${order.scheduleMode || "Drip"} (${order.steps?.length || 0} steps)`}
                           </span>
                         </div>
                       ) : (

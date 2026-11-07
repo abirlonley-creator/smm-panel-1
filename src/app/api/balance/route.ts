@@ -7,6 +7,13 @@ import { StandardSMMv2Provider, MockSMMProvider } from "@/lib/provider/adapter";
 
 export const dynamic = "force-dynamic";
 
+interface BalanceCacheEntry {
+  data: any;
+  timestamp: number;
+}
+const BALANCE_CACHE = new Map<string, BalanceCacheEntry>();
+const BALANCE_TTL_MS = 15 * 1000; // 15s memory cache for 0ms header/sidebar speed
+
 /**
  * GET /api/balance
  * Returns the balance for the authenticated user's active provider and all connected providers.
@@ -22,6 +29,19 @@ export async function GET(request: Request) {
 
     if (session.authenticated && session.user) {
       const userId = session.user.id;
+      const cacheKey = `${userId}:${requestedProviderId || "active"}`;
+
+      if (!forceRefresh) {
+        const cached = BALANCE_CACHE.get(cacheKey);
+        if (cached && Date.now() - cached.timestamp < BALANCE_TTL_MS) {
+          return NextResponse.json(cached.data, {
+            headers: {
+              "Cache-Control": "private, max-age=10, stale-while-revalidate=30",
+              "X-Cache": "HIT",
+            },
+          });
+        }
+      }
 
       // 1. Get user preferences for active provider
       const pref = await prisma.userPreference.findUnique({
@@ -53,7 +73,6 @@ export async function GET(request: Request) {
       // Determine active provider ID
       let activeId = requestedProviderId;
       if (!activeId && pref?.activeProviderId) {
-        // verify it exists in user's connections
         if (connections.some((c) => c.id === pref.activeProviderId)) {
           activeId = pref.activeProviderId;
         }
@@ -62,18 +81,17 @@ export async function GET(request: Request) {
         activeId = connections[0].id;
       }
 
-      // If forceRefresh requested, refresh the active provider (or specific requested one)
+      // If forceRefresh requested, refresh the active provider
+      let targetConns = connections;
       if (forceRefresh) {
         await refreshUserBalance(userId, activeId);
+        targetConns = await prisma.userProviderConnection.findMany({
+          where: { userId, active: true },
+          orderBy: { createdAt: "asc" },
+        });
       }
 
-      // Reload fresh connections from DB
-      const freshConnections = await prisma.userProviderConnection.findMany({
-        where: { userId, active: true },
-        orderBy: { createdAt: "asc" },
-      });
-
-      const providerList = freshConnections.map((c) => {
+      const providerList = targetConns.map((c) => {
         const balanceAgeMs = c.lastSyncAt ? Date.now() - c.lastSyncAt.getTime() : null;
         const stale = c.isMock ? false : c.balance === null || balanceAgeMs === null || balanceAgeMs > 60000;
         return {
@@ -93,7 +111,7 @@ export async function GET(request: Request) {
 
       const activeConn = providerList.find((p) => p.id === activeId) || providerList[0];
 
-      return NextResponse.json({
+      const responsePayload = {
         success: true,
         count: providerList.length,
         providers: providerList,
@@ -107,6 +125,15 @@ export async function GET(request: Request) {
         stale: activeConn.stale,
         warning: activeConn.warning || null,
         refreshIntervalMs: 60000,
+      };
+
+      BALANCE_CACHE.set(cacheKey, { data: responsePayload, timestamp: Date.now() });
+
+      return NextResponse.json(responsePayload, {
+        headers: {
+          "Cache-Control": "private, max-age=10, stale-while-revalidate=30",
+          "X-Cache": "MISS",
+        },
       });
     }
 

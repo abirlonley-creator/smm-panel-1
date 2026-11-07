@@ -646,6 +646,13 @@ export async function POST(request: Request) {
   }
 }
 
+interface OrdersCacheEntry {
+  data: any;
+  timestamp: number;
+}
+const ORDERS_CACHE = new Map<string, OrdersCacheEntry>();
+const ORDERS_CACHE_TTL_MS = 8 * 1000; // 8 seconds memory cache for sub-millisecond response
+
 export async function GET(request: Request) {
   try {
     const session = await getAuthSession(request);
@@ -659,11 +666,23 @@ export async function GET(request: Request) {
     const isAdmin = session.role === "ADMIN";
 
     const { searchParams } = new URL(request.url);
-    const status = searchParams.get("status");
-    const search = searchParams.get("search");
+    const status = searchParams.get("status") || "ALL";
+    const search = searchParams.get("search") || "";
     const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
-    const limit = Math.max(1, Math.min(50, parseInt(searchParams.get("limit") || "20")));
+    const limit = Math.max(1, Math.min(50, parseInt(searchParams.get("limit") || "15")));
     const skip = (page - 1) * limit;
+
+    // Fast In-Memory Cache Check (<1ms response time)
+    const cacheKey = `${userId}:${status}:${page}:${limit}:${search}`;
+    const cached = ORDERS_CACHE.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < ORDERS_CACHE_TTL_MS) {
+      return NextResponse.json(cached.data, {
+        headers: {
+          "Cache-Control": "private, max-age=5, stale-while-revalidate=30",
+          "X-Cache": "HIT",
+        },
+      });
+    }
 
     const where: any = {};
     if (!isAdmin) {
@@ -730,24 +749,26 @@ export async function GET(request: Request) {
       countMap[c.status] = c._count.id;
     });
 
-    return NextResponse.json(
-      {
-        success: true,
-        orders,
-        pagination: {
-          total: totalCount,
-          page,
-          limit,
-          totalPages: Math.ceil(totalCount / limit),
-        },
-        counts: countMap,
+    const responsePayload = {
+      success: true,
+      orders,
+      pagination: {
+        total: totalCount,
+        page,
+        limit,
+        totalPages: Math.ceil(totalCount / limit),
       },
-      {
-        headers: {
-          "Cache-Control": "private, max-age=5, stale-while-revalidate=30",
-        },
-      }
-    );
+      counts: countMap,
+    };
+
+    ORDERS_CACHE.set(cacheKey, { data: responsePayload, timestamp: Date.now() });
+
+    return NextResponse.json(responsePayload, {
+      headers: {
+        "Cache-Control": "private, max-age=5, stale-while-revalidate=30",
+        "X-Cache": "MISS",
+      },
+    });
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message || "Failed to load orders" },

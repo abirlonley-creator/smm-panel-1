@@ -30,10 +30,52 @@ interface ProviderBalanceSwitcherProps {
   variant?: "header" | "sidebar";
 }
 
+let sharedBalanceCache: { providers: ProviderItem[]; activeProviderId: string | null } | null = null;
+let sharedBalancePromise: Promise<any> | null = null;
+
 export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceSwitcherProps) {
-  const [providers, setProviders] = useState<ProviderItem[]>([]);
-  const [activeProviderId, setActiveProviderId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [providers, setProviders] = useState<ProviderItem[]>(() => {
+    if (sharedBalanceCache) return sharedBalanceCache.providers;
+    if (typeof window !== "undefined") {
+      try {
+        const local = localStorage.getItem("aurasmm_cached_balance");
+        if (local) {
+          const p = JSON.parse(local);
+          if (p && Array.isArray(p.providers)) return p.providers;
+        }
+      } catch (e) {}
+    }
+    return [];
+  });
+
+  const [activeProviderId, setActiveProviderId] = useState<string | null>(() => {
+    if (sharedBalanceCache) return sharedBalanceCache.activeProviderId;
+    if (typeof window !== "undefined") {
+      try {
+        const local = localStorage.getItem("aurasmm_cached_balance");
+        if (local) {
+          const p = JSON.parse(local);
+          if (p && p.activeProviderId) return p.activeProviderId;
+        }
+      } catch (e) {}
+    }
+    return null;
+  });
+
+  const [loading, setLoading] = useState<boolean>(() => {
+    if (sharedBalanceCache && sharedBalanceCache.providers.length > 0) return false;
+    if (typeof window !== "undefined") {
+      try {
+        const local = localStorage.getItem("aurasmm_cached_balance");
+        if (local) {
+          const p = JSON.parse(local);
+          if (p && Array.isArray(p.providers) && p.providers.length > 0) return false;
+        }
+      } catch (e) {}
+    }
+    return true;
+  });
+
   const [refreshing, setRefreshing] = useState(false);
   const [switching, setSwitching] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -42,17 +84,34 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
   async function loadBalanceData(forceRefresh = false) {
     if (forceRefresh) setRefreshing(true);
     try {
-      const res = await fetch(`/api/balance${forceRefresh ? "?refresh=true" : ""}`, {
+      if (!forceRefresh && sharedBalancePromise) {
+        const data = await sharedBalancePromise;
+        if (data?.success && Array.isArray(data.providers)) {
+          setProviders(data.providers);
+          setActiveProviderId(data.activeProviderId || (data.providers[0]?.id ?? null));
+        }
+        return;
+      }
+
+      sharedBalancePromise = fetch(`/api/balance${forceRefresh ? "?refresh=true" : ""}`, {
         cache: "no-store",
-      });
-      const data = await res.json();
-      if (data.success && Array.isArray(data.providers)) {
+      }).then((res) => res.json());
+
+      const data = await sharedBalancePromise;
+      if (data?.success && Array.isArray(data.providers)) {
+        sharedBalanceCache = { providers: data.providers, activeProviderId: data.activeProviderId };
         setProviders(data.providers);
         setActiveProviderId(data.activeProviderId || (data.providers[0]?.id ?? null));
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.setItem("aurasmm_cached_balance", JSON.stringify(data));
+          } catch (e) {}
+        }
       }
     } catch (err) {
       console.warn("Failed to load provider balance switcher data:", err);
     } finally {
+      sharedBalancePromise = null;
       setLoading(false);
       setRefreshing(false);
     }
