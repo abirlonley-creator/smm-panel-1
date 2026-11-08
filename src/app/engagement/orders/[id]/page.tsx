@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect } from "react";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
   TrendingUp,
@@ -67,7 +68,7 @@ interface EngagementOrderDetail {
   updatedAt: string;
   replanCount: number;
   lastReplanReason?: string | null;
-  viewsSummary: {
+  viewsSummary?: {
     planned: number;
     delivered: number;
     remaining: number;
@@ -75,7 +76,7 @@ interface EngagementOrderDetail {
     completedRuns: number;
     percent: number;
   };
-  likesSummary: {
+  likesSummary?: {
     planned: number;
     delivered: number;
     remaining: number;
@@ -88,17 +89,13 @@ interface EngagementOrderDetail {
   progressPercent: number;
   nextRunTime: string | null;
   runs: EngagementRunItem[];
-  eventLogs: EventLogItem[];
-  delayedLikesEvents: EventLogItem[];
+  eventLogs?: EventLogItem[];
+  delayedLikesEvents?: EventLogItem[];
 }
 
-export default function EngagementOrderDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const resolvedParams = use(params);
-  const orderId = resolvedParams.id;
+export default function EngagementOrderDetailPage() {
+  const routerParams = useParams();
+  const orderId = (typeof routerParams?.id === "string" ? routerParams.id : Array.isArray(routerParams?.id) ? routerParams.id[0] : "") || "";
 
   const [order, setOrder] = useState<EngagementOrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -109,6 +106,7 @@ export default function EngagementOrderDetailPage({
   const [cancelling, setCancelling] = useState(false);
 
   async function fetchOrderDetail() {
+    if (!orderId) return;
     try {
       const res = await fetch(`/api/engagement/orders/${orderId}`, { cache: "no-store" });
       if (!res.ok) throw new Error("Network response was not ok");
@@ -230,8 +228,30 @@ export default function EngagementOrderDetailPage({
     );
   }
 
-  const viewsRuns = order.runs.filter((r) => r.engagementType === "views");
-  const likesRuns = order.runs.filter((r) => r.engagementType === "likes");
+  const allRuns = Array.isArray(order?.runs) ? order.runs : [];
+  const viewsRuns = allRuns.filter((r) => r.engagementType === "views");
+  const likesRuns = allRuns.filter((r) => r.engagementType === "likes");
+
+  const viewsSummary = order.viewsSummary || {
+    planned: viewsRuns.reduce((sum, r) => sum + (r.quantity || 0), 0),
+    delivered: viewsRuns.reduce((sum, r) => sum + (r.deliveredQuantity || 0), 0),
+    remaining: Math.max(0, viewsRuns.reduce((sum, r) => sum + (r.quantity || 0), 0) - viewsRuns.reduce((sum, r) => sum + (r.deliveredQuantity || 0), 0)),
+    totalRuns: viewsRuns.length,
+    completedRuns: viewsRuns.filter((r) => r.status === "completed" || r.status === "confirmed").length,
+    percent: 0,
+  };
+
+  const likesSummary = order.likesSummary || {
+    planned: likesRuns.reduce((sum, r) => sum + (r.quantity || 0), 0),
+    delivered: likesRuns.reduce((sum, r) => sum + (r.deliveredQuantity || 0), 0),
+    remaining: Math.max(0, likesRuns.reduce((sum, r) => sum + (r.quantity || 0), 0) - likesRuns.reduce((sum, r) => sum + (r.deliveredQuantity || 0), 0)),
+    totalRuns: likesRuns.length,
+    completedRuns: likesRuns.filter((r) => r.status === "completed" || r.status === "confirmed").length,
+    percent: 0,
+  };
+
+  const delayedLikesEvents = Array.isArray(order.delayedLikesEvents) ? order.delayedLikesEvents : [];
+  const hasDelayedLikesProtectionTriggered = delayedLikesEvents.length > 0;
 
   // Status badge styling
   const statusColors: Record<string, { bg: string; text: string; border: string }> = {
@@ -250,7 +270,6 @@ export default function EngagementOrderDetailPage({
 
   const isCompleted = order.status === "COMPLETED";
   const isCancelled = order.status === "CANCELLED";
-  const hasDelayedLikesProtectionTriggered = order.delayedLikesEvents && order.delayedLikesEvents.length > 0;
 
   return (
     <div className="max-w-6xl mx-auto pb-20 space-y-6 animate-fadeIn">
@@ -353,7 +372,7 @@ export default function EngagementOrderDetailPage({
               </span>
             </div>
             <p className="text-xs leading-relaxed text-amber-900/90 pl-6">
-              {order.delayedLikesEvents[0]?.message ||
+              {delayedLikesEvents[0]?.message ||
                 "Confirmed views delivered surpassed synchronization threshold. Next scheduled Likes delivery was accelerated immediately to protect organic engagement ratio."}
             </p>
           </div>
@@ -367,20 +386,20 @@ export default function EngagementOrderDetailPage({
               <span className="flex items-center gap-1">
                 <Eye className="w-3.5 h-3.5 text-[#3A4EFB]" /> Views
               </span>
-              <span className="font-mono text-[#3A4EFB]">{order.viewsSummary.percent}%</span>
+              <span className="font-mono text-[#3A4EFB]">{viewsSummary.percent}%</span>
             </div>
             <div className="text-base font-black text-[#252943] font-mono tracking-tight">
-              {order.viewsSummary.delivered.toLocaleString()}{" "}
-              <span className="text-xs font-normal text-[#252943]/50">/ {order.viewsSummary.planned.toLocaleString()}</span>
+              {viewsSummary.delivered.toLocaleString()}{" "}
+              <span className="text-xs font-normal text-[#252943]/50">/ {viewsSummary.planned.toLocaleString()}</span>
             </div>
             <div className="w-full bg-[#DEE0ED] h-1.5 rounded-full overflow-hidden">
               <div
                 className="bg-[#3A4EFB] h-full rounded-full transition-all duration-500"
-                style={{ width: `${order.viewsSummary.percent}%` }}
+                style={{ width: `${viewsSummary.percent}%` }}
               />
             </div>
             <span className="text-[10px] text-[#252943]/50 block">
-              {order.viewsSummary.remaining.toLocaleString()} views remaining
+              {viewsSummary.remaining.toLocaleString()} views remaining
             </span>
           </div>
 
@@ -390,20 +409,20 @@ export default function EngagementOrderDetailPage({
               <span className="flex items-center gap-1">
                 <Heart className="w-3.5 h-3.5 text-rose-500" /> Likes
               </span>
-              <span className="font-mono text-rose-600">{order.likesSummary.percent}%</span>
+              <span className="font-mono text-rose-600">{likesSummary.percent}%</span>
             </div>
             <div className="text-base font-black text-[#252943] font-mono tracking-tight">
-              {order.likesSummary.delivered.toLocaleString()}{" "}
-              <span className="text-xs font-normal text-[#252943]/50">/ {order.likesSummary.planned.toLocaleString()}</span>
+              {likesSummary.delivered.toLocaleString()}{" "}
+              <span className="text-xs font-normal text-[#252943]/50">/ {likesSummary.planned.toLocaleString()}</span>
             </div>
             <div className="w-full bg-[#DEE0ED] h-1.5 rounded-full overflow-hidden">
               <div
                 className="bg-rose-500 h-full rounded-full transition-all duration-500"
-                style={{ width: `${order.likesSummary.percent}%` }}
+                style={{ width: `${likesSummary.percent}%` }}
               />
             </div>
             <span className="text-[10px] text-[#252943]/50 block">
-              {order.likesSummary.remaining.toLocaleString()} likes remaining
+              {likesSummary.remaining.toLocaleString()} likes remaining
             </span>
           </div>
 
@@ -533,24 +552,24 @@ export default function EngagementOrderDetailPage({
                 </div>
               </div>
               <span className="text-xs font-mono font-bold text-[#3A4EFB]">
-                {order.viewsSummary.delivered.toLocaleString()} / {order.viewsSummary.planned.toLocaleString()}
+                {viewsSummary.delivered.toLocaleString()} / {viewsSummary.planned.toLocaleString()}
               </span>
             </div>
 
             <div className="space-y-2">
               <div className="flex justify-between text-xs font-semibold">
                 <span className="text-[#252943]/70">Views Delivered:</span>
-                <span className="font-mono text-[#252943]">{order.viewsSummary.delivered.toLocaleString()} ({order.viewsSummary.percent}%)</span>
+                <span className="font-mono text-[#252943]">{viewsSummary.delivered.toLocaleString()} ({viewsSummary.percent}%)</span>
               </div>
               <div className="w-full bg-[#F0F2FA] h-2.5 rounded-full overflow-hidden">
                 <div
                   className="bg-[#3A4EFB] h-full rounded-full transition-all duration-500"
-                  style={{ width: `${order.viewsSummary.percent}%` }}
+                  style={{ width: `${viewsSummary.percent}%` }}
                 />
               </div>
               <div className="flex justify-between text-[11px] text-[#252943]/50">
-                <span>Completed: {order.viewsSummary.completedRuns} of 16 runs</span>
-                <span>Remaining: {order.viewsSummary.remaining.toLocaleString()} views</span>
+                <span>Completed: {viewsSummary.completedRuns} of 16 runs</span>
+                <span>Remaining: {viewsSummary.remaining.toLocaleString()} views</span>
               </div>
             </div>
 
@@ -591,24 +610,24 @@ export default function EngagementOrderDetailPage({
                 </div>
               </div>
               <span className="text-xs font-mono font-bold text-rose-600">
-                {order.likesSummary.delivered.toLocaleString()} / {order.likesSummary.planned.toLocaleString()}
+                {likesSummary.delivered.toLocaleString()} / {likesSummary.planned.toLocaleString()}
               </span>
             </div>
 
             <div className="space-y-2">
               <div className="flex justify-between text-xs font-semibold">
                 <span className="text-[#252943]/70">Likes Delivered:</span>
-                <span className="font-mono text-[#252943]">{order.likesSummary.delivered.toLocaleString()} ({order.likesSummary.percent}%)</span>
+                <span className="font-mono text-[#252943]">{likesSummary.delivered.toLocaleString()} ({likesSummary.percent}%)</span>
               </div>
               <div className="w-full bg-[#F0F2FA] h-2.5 rounded-full overflow-hidden">
                 <div
                   className="bg-rose-500 h-full rounded-full transition-all duration-500"
-                  style={{ width: `${order.likesSummary.percent}%` }}
+                  style={{ width: `${likesSummary.percent}%` }}
                 />
               </div>
               <div className="flex justify-between text-[11px] text-[#252943]/50">
-                <span>Completed: {order.likesSummary.completedRuns} of 3 runs</span>
-                <span>Remaining: {order.likesSummary.remaining.toLocaleString()} likes</span>
+                <span>Completed: {likesSummary.completedRuns} of 3 runs</span>
+                <span>Remaining: {likesSummary.remaining.toLocaleString()} likes</span>
               </div>
             </div>
 
@@ -657,7 +676,7 @@ export default function EngagementOrderDetailPage({
             </div>
             <div className="flex items-center gap-3 text-xs font-mono">
               <span className="px-3 py-1 rounded-xl bg-blue-50 text-blue-700 font-bold">
-                Delivered: {order.viewsSummary.delivered.toLocaleString()} / {order.viewsSummary.planned.toLocaleString()}
+                Delivered: {viewsSummary.delivered.toLocaleString()} / {viewsSummary.planned.toLocaleString()}
               </span>
             </div>
           </div>
@@ -667,7 +686,7 @@ export default function EngagementOrderDetailPage({
             <span className="text-xs font-bold text-[#252943] block">Planned Cumulative vs Delivered Delivery Curve</span>
             <div className="h-28 w-full flex items-end gap-1.5 pt-4">
               {viewsRuns.map((r, idx) => {
-                const maxQty = order.viewsSummary.planned || 3000;
+                const maxQty = viewsSummary.planned || 3000;
                 const plannedH = Math.min(100, Math.round(((r.plannedCumulative || (idx + 1) * 185) / maxQty) * 100));
                 const delivered = r.deliveredCumulative || (r.status === "completed" ? (r.plannedCumulative || (idx + 1) * 185) : 0);
                 const deliveredH = Math.min(100, Math.round((delivered / maxQty) * 100));
@@ -777,7 +796,7 @@ export default function EngagementOrderDetailPage({
             </div>
             <div className="flex items-center gap-3 text-xs font-mono">
               <span className="px-3 py-1 rounded-xl bg-rose-50 text-rose-700 font-bold">
-                Delivered: {order.likesSummary.delivered.toLocaleString()} / {order.likesSummary.planned.toLocaleString()}
+                Delivered: {likesSummary.delivered.toLocaleString()} / {likesSummary.planned.toLocaleString()}
               </span>
             </div>
           </div>
@@ -887,16 +906,16 @@ export default function EngagementOrderDetailPage({
                   <span>Delayed Likes Protection Accelerated Run</span>
                 </div>
                 <p className="text-xs text-amber-900 leading-relaxed">
-                  {order.delayedLikesEvents[0]?.message}
+                  {delayedLikesEvents[0]?.message}
                 </p>
                 <span className="text-[10px] font-mono text-amber-800/60 block">
-                  {formatBdDateTime(order.delayedLikesEvents[0]?.createdAt)} ({formatBdTime(order.delayedLikesEvents[0]?.createdAt)} BD)
+                  {formatBdDateTime(delayedLikesEvents[0]?.createdAt)} ({formatBdTime(delayedLikesEvents[0]?.createdAt)} BD)
                 </span>
               </div>
             )}
 
             {/* Chronological Runs */}
-            {order.runs.map((r) => {
+            {allRuns.map((r) => {
               const isViews = r.engagementType === "views";
               const isDone = r.status === "completed" || r.status === "confirmed";
 
