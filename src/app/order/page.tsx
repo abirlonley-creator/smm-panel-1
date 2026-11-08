@@ -4,6 +4,14 @@ import { useState, useEffect, useMemo, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
+  formatBdTime,
+  formatBdDate,
+  formatBdDateTime,
+  getBdNowComponents,
+  buildBdIsoString,
+  getBdScheduleSummary,
+} from "@/lib/date-bd";
+import {
   CheckCircle2,
   AlertCircle,
   Loader2,
@@ -127,32 +135,6 @@ function matchesPlatform(service: ServiceItem, platKey: string): boolean {
   return p.includes(k) || c.includes(k) || n.includes(k);
 }
 
-function formatBdTime(date: Date): string {
-  try {
-    return date.toLocaleTimeString("en-US", {
-      timeZone: "Asia/Dhaka",
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    });
-  } catch {
-    return date.toLocaleTimeString();
-  }
-}
-
-function formatBdDate(date: Date): string {
-  try {
-    return date.toLocaleDateString("en-US", {
-      timeZone: "Asia/Dhaka",
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  } catch {
-    return date.toLocaleDateString();
-  }
-}
-
 function NewOrderForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -192,9 +174,12 @@ function NewOrderForm() {
   const [maxQtyRange, setMaxQtyRange] = useState<number>(14);
   const [runItems, setRunItems] = useState<RunItem[]>([]);
 
-  // BD Time Scheduler State
+  // BD Time Scheduler State (Simple 12-Hour format)
+  const [scheduledDateOption, setScheduledDateOption] = useState<"TODAY" | "TOMORROW" | "CUSTOM">("TODAY");
   const [scheduledBdDate, setScheduledBdDate] = useState<string>("");
-  const [scheduledBdTime, setScheduledBdTime] = useState<string>("");
+  const [scheduledBdHour, setScheduledBdHour] = useState<number>(1);
+  const [scheduledBdMinute, setScheduledBdMinute] = useState<number>(30);
+  const [scheduledBdPeriod, setScheduledBdPeriod] = useState<"AM" | "PM">("AM");
   const [bdCurrentTimeDisplay, setBdCurrentTimeDisplay] = useState<string>("");
 
   // Platform Filter State (Matching Xmedia's Clean Pill Bar)
@@ -205,25 +190,56 @@ function NewOrderForm() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [orderReceipt, setOrderReceipt] = useState<OrderReceipt | null>(null);
 
-  // Initialize BD Time clock and default scheduled time (1 hour ahead)
+  // Initialize BD Time clock and default scheduled time (1 hour ahead in 12-hour format)
   useEffect(() => {
     function updateClock() {
-      const now = new Date();
-      setBdCurrentTimeDisplay(`${formatBdDate(now)} at ${formatBdTime(now)} (BST / UTC+6)`);
+      const bdNow = getBdNowComponents();
+      setBdCurrentTimeDisplay(`${bdNow.hour12}:${String(bdNow.minute).padStart(2, "0")} ${bdNow.dayPeriod} BD`);
     }
     updateClock();
-    const interval = setInterval(updateClock, 30000);
+    const interval = setInterval(updateClock, 10000);
 
-    // Default scheduled time: now + 60 minutes in BD Time (UTC+6)
-    const future = new Date(Date.now() + 60 * 60 * 1000 + 6 * 60 * 60 * 1000);
-    const dateStr = future.toISOString().split("T")[0];
-    const hours = String(future.getUTCHours()).padStart(2, "0");
-    const mins = String(future.getUTCMinutes()).padStart(2, "0");
-    setScheduledBdDate(dateStr);
-    setScheduledBdTime(`${hours}:${mins}`);
+    // Default scheduled time: 1 hour ahead
+    const target = getBdNowComponents(60);
+    setScheduledBdDate(target.isoDate);
+    setScheduledBdHour(target.hour12);
+    setScheduledBdMinute(target.minute >= 30 ? 30 : 0);
+    setScheduledBdPeriod(target.dayPeriod);
+
+    const bdNow = getBdNowComponents();
+    if (target.isoDate === bdNow.isoDate) {
+      setScheduledDateOption("TODAY");
+    } else {
+      setScheduledDateOption("TOMORROW");
+    }
 
     return () => clearInterval(interval);
   }, []);
+
+  function applyQuickPreset(minutesFromNow: number) {
+    const target = getBdNowComponents(minutesFromNow);
+    setScheduledBdDate(target.isoDate);
+    setScheduledBdHour(target.hour12);
+    setScheduledBdMinute(target.minute);
+    setScheduledBdPeriod(target.dayPeriod);
+
+    const bdNow = getBdNowComponents();
+    if (target.isoDate === bdNow.isoDate) {
+      setScheduledDateOption("TODAY");
+    } else {
+      const tomorrow = getBdNowComponents(24 * 60);
+      if (target.isoDate === tomorrow.isoDate) {
+        setScheduledDateOption("TOMORROW");
+      } else {
+        setScheduledDateOption("CUSTOM");
+      }
+    }
+  }
+
+  const scheduleSummary = useMemo(() => {
+    if (!scheduledBdDate) return { label: "", isValid: false, diffMinutes: 0 };
+    return getBdScheduleSummary(scheduledBdDate, scheduledBdHour, scheduledBdMinute, scheduledBdPeriod);
+  }, [scheduledBdDate, scheduledBdHour, scheduledBdMinute, scheduledBdPeriod]);
 
   // Compute Service Counts for each provider in memory
   const providerCounts = useMemo(() => {
@@ -747,11 +763,11 @@ function NewOrderForm() {
 
     try {
       if (orderMode === "SCHEDULED") {
-        if (!scheduledBdDate || !scheduledBdTime) {
-          throw new Error("Please select both a date and time in Bangladesh Time.");
+        if (!scheduledBdDate) {
+          throw new Error("Please select a date for Bangladesh scheduled execution.");
         }
 
-        const bdIsoString = `${scheduledBdDate}T${scheduledBdTime}:00+06:00`;
+        const bdIsoString = buildBdIsoString(scheduledBdDate, scheduledBdHour, scheduledBdMinute, scheduledBdPeriod);
         const scheduledUtcDate = new Date(bdIsoString);
 
         if (isNaN(scheduledUtcDate.getTime())) {
@@ -786,6 +802,8 @@ function NewOrderForm() {
         const submittedUrl = targetUrl.trim();
         const provCurrency = activeService.currency || activeProvider?.currency || "USD";
         const newBal = activeProvider?.balance != null ? Math.max(0, activeProvider.balance - totalCost) : null;
+        const formatted12hTime = `${scheduledBdHour}:${String(scheduledBdMinute).padStart(2, "0")} ${scheduledBdPeriod}`;
+        const dayLabel = scheduledDateOption === "TODAY" ? "Today" : scheduledDateOption === "TOMORROW" ? "Tomorrow" : scheduledBdDate;
 
         setOrderReceipt({
           id: data.job?.jobRef || "Scheduled",
@@ -796,7 +814,7 @@ function NewOrderForm() {
           currency: provCurrency,
           balance: newBal,
           isDripFeed: false,
-          finishEstimate: `Scheduled for ${scheduledBdDate} at ${scheduledBdTime} (BD Time)`,
+          finishEstimate: `Scheduled for ${dayLabel} at ${formatted12hTime} (BD Time 🇧🇩)`,
         });
 
         // ONLY remove the video link! Keep all other selections intact!
@@ -907,25 +925,25 @@ function NewOrderForm() {
           <button
             type="button"
             onClick={() => setOrderMode("NOW")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
               orderMode === "NOW"
                 ? "bg-white text-[#3A4EFB] shadow-sm"
                 : "text-[#252943]/70 hover:text-[#252943]"
             }`}
           >
-            Deliver Now / Drip
+            Instant / Drip-feed
           </button>
           <button
             type="button"
             onClick={() => setOrderMode("SCHEDULED")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
               orderMode === "SCHEDULED"
                 ? "bg-white text-[#3A4EFB] shadow-sm"
                 : "text-[#252943]/70 hover:text-[#252943]"
             }`}
           >
-            <Clock className="w-3 h-3 text-[#3A4EFB]" />
-            <span>BD Time Scheduler</span>
+            <Clock className="w-3.5 h-3.5 text-[#3A4EFB]" />
+            <span>Schedule (BD Time 🇧🇩)</span>
           </button>
         </div>
       </div>
@@ -1110,46 +1128,206 @@ function NewOrderForm() {
         <form onSubmit={handleSubmitOrder} className="rounded-2xl bg-white border border-[#DEE0ED] p-6 shadow-sm space-y-4">
           {/* BD Time Scheduler Banner (When in SCHEDULED mode) */}
           {orderMode === "SCHEDULED" && (
-            <div className="p-4 rounded-xl bg-indigo-50/70 border border-indigo-200 space-y-3 animate-fadeIn">
-              <div className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-1.5 font-bold text-indigo-900">
-                  <Clock className="w-4 h-4 text-[#3A4EFB]" />
-                  <span>Bangladesh Standard Time Scheduler (BST / UTC+6)</span>
+            <div className="p-4 rounded-2xl bg-indigo-50/80 border border-indigo-200/90 space-y-3.5 animate-fadeIn shadow-2xs">
+              {/* Header with live ticking Bangladesh Time */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-indigo-200/60">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                  <div>
+                    <span className="font-bold text-xs text-indigo-950 block">
+                      Bangladesh Time Scheduler 🇧🇩
+                    </span>
+                    <span className="text-[10px] text-indigo-800/70">
+                      BST (UTC+6) • Simple 12-Hour Format
+                    </span>
+                  </div>
                 </div>
-                <span className="text-[10px] font-mono text-indigo-700 bg-white px-2 py-0.5 rounded border border-indigo-200">
-                  {bdCurrentTimeDisplay || "Asia/Dhaka"}
-                </span>
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white border border-indigo-200 text-xs font-bold text-indigo-900 shadow-2xs self-start sm:self-auto">
+                  <Clock className="w-3.5 h-3.5 text-[#3A4EFB]" />
+                  <span>Current BD Time: {bdCurrentTimeDisplay || "1:15 AM"}</span>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-indigo-900 mb-1">
-                    Date (BD Time)
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={scheduledBdDate}
-                    onChange={(e) => setScheduledBdDate(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-white border border-indigo-200 text-xs font-semibold text-[#252943] focus:outline-none focus:border-[#3A4EFB]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-indigo-900 mb-1">
-                    Execution Time (BD Time)
-                  </label>
-                  <input
-                    type="time"
-                    required
-                    value={scheduledBdTime}
-                    onChange={(e) => setScheduledBdTime(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-white border border-indigo-200 text-xs font-bold text-[#252943] focus:outline-none focus:border-[#3A4EFB]"
-                  />
+              {/* 1-Click Quick Time Shortcuts */}
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-900/70 block mb-1.5">
+                  Quick Shortcuts (Click to set):
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { label: "+15 min", mins: 15 },
+                    { label: "+30 min", mins: 30 },
+                    { label: "+1 hour", mins: 60 },
+                    { label: "+2 hours", mins: 120 },
+                    { label: "+4 hours", mins: 240 },
+                    { label: "Tomorrow Morning (9:00 AM)", special: "TOMORROW_9AM" },
+                    { label: "Tomorrow Night (8:00 PM)", special: "TOMORROW_8PM" },
+                  ].map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => {
+                        if (preset.special === "TOMORROW_9AM") {
+                          const tmr = getBdNowComponents(24 * 60);
+                          setScheduledBdDate(tmr.isoDate);
+                          setScheduledDateOption("TOMORROW");
+                          setScheduledBdHour(9);
+                          setScheduledBdMinute(0);
+                          setScheduledBdPeriod("AM");
+                        } else if (preset.special === "TOMORROW_8PM") {
+                          const tmr = getBdNowComponents(24 * 60);
+                          setScheduledBdDate(tmr.isoDate);
+                          setScheduledDateOption("TOMORROW");
+                          setScheduledBdHour(8);
+                          setScheduledBdMinute(0);
+                          setScheduledBdPeriod("PM");
+                        } else if (preset.mins) {
+                          applyQuickPreset(preset.mins);
+                        }
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-white hover:bg-indigo-100 text-indigo-900 text-[11px] font-bold border border-indigo-200 transition-colors cursor-pointer active:scale-95 shadow-2xs"
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
                 </div>
               </div>
-              <p className="text-[11px] text-indigo-800 leading-relaxed">
-                Your order will be queued and automatically dispatched at the exact BD time specified above.
-              </p>
+
+              {/* Simple 12-Hour Time & Date Selector */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                {/* Date Selection */}
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-indigo-950 mb-1">
+                    Execution Date
+                  </label>
+                  <div className="grid grid-cols-3 gap-1.5 mb-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setScheduledDateOption("TODAY");
+                        setScheduledBdDate(getBdNowComponents().isoDate);
+                      }}
+                      className={`py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                        scheduledDateOption === "TODAY"
+                          ? "bg-[#3A4EFB] text-white border-[#3A4EFB] shadow-2xs"
+                          : "bg-white text-indigo-900 border-indigo-200 hover:bg-indigo-50"
+                      }`}
+                    >
+                      Today
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setScheduledDateOption("TOMORROW");
+                        setScheduledBdDate(getBdNowComponents(24 * 60).isoDate);
+                      }}
+                      className={`py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                        scheduledDateOption === "TOMORROW"
+                          ? "bg-[#3A4EFB] text-white border-[#3A4EFB] shadow-2xs"
+                          : "bg-white text-indigo-900 border-indigo-200 hover:bg-indigo-50"
+                      }`}
+                    >
+                      Tomorrow
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setScheduledDateOption("CUSTOM")}
+                      className={`py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                        scheduledDateOption === "CUSTOM"
+                          ? "bg-[#3A4EFB] text-white border-[#3A4EFB] shadow-2xs"
+                          : "bg-white text-indigo-900 border-indigo-200 hover:bg-indigo-50"
+                      }`}
+                    >
+                      Pick Date
+                    </button>
+                  </div>
+                  {scheduledDateOption === "CUSTOM" && (
+                    <input
+                      type="date"
+                      required
+                      value={scheduledBdDate}
+                      onChange={(e) => setScheduledBdDate(e.target.value)}
+                      className="w-full px-3 py-1.5 rounded-lg bg-white border border-indigo-200 text-xs font-bold text-[#252943] focus:outline-none focus:border-[#3A4EFB]"
+                    />
+                  )}
+                </div>
+
+                {/* 12-Hour Time Selection */}
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-indigo-950 mb-1">
+                    Execution Time (12-Hour)
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    {/* Hour (1-12) */}
+                    <div className="flex-1">
+                      <select
+                        value={scheduledBdHour}
+                        onChange={(e) => setScheduledBdHour(parseInt(e.target.value, 10))}
+                        className="w-full px-2.5 py-2 rounded-lg bg-white border border-indigo-200 text-xs font-bold text-[#252943] focus:outline-none focus:border-[#3A4EFB] cursor-pointer"
+                      >
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((h) => (
+                          <option key={h} value={h}>
+                            {h}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <span className="font-bold text-indigo-900 text-base shrink-0">:</span>
+
+                    {/* Minute (00-59) */}
+                    <div className="flex-1">
+                      <select
+                        value={scheduledBdMinute}
+                        onChange={(e) => setScheduledBdMinute(parseInt(e.target.value, 10))}
+                        className="w-full px-2.5 py-2 rounded-lg bg-white border border-indigo-200 text-xs font-bold text-[#252943] focus:outline-none focus:border-[#3A4EFB] cursor-pointer"
+                      >
+                        {[0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55].map((m) => (
+                          <option key={m} value={m}>
+                            {String(m).padStart(2, "0")}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* AM / PM Toggle */}
+                    <div className="flex items-center p-0.5 rounded-lg bg-white border border-indigo-200 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setScheduledBdPeriod("AM")}
+                        className={`px-3 py-1.5 rounded text-xs font-black transition-all cursor-pointer ${
+                          scheduledBdPeriod === "AM"
+                            ? "bg-[#3A4EFB] text-white shadow-2xs"
+                            : "text-indigo-900 hover:bg-indigo-50"
+                        }`}
+                      >
+                        AM
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setScheduledBdPeriod("PM")}
+                        className={`px-3 py-1.5 rounded text-xs font-black transition-all cursor-pointer ${
+                          scheduledBdPeriod === "PM"
+                            ? "bg-[#3A4EFB] text-white shadow-2xs"
+                            : "text-indigo-900 hover:bg-indigo-50"
+                        }`}
+                      >
+                        PM
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Dynamic Real-time Plain-English Clarification Card */}
+              <div className={`p-3 rounded-xl border flex items-center gap-2 text-xs font-semibold animate-fadeIn ${
+                scheduleSummary.isValid
+                  ? "bg-white/80 border-emerald-300 text-emerald-950"
+                  : "bg-white/80 border-amber-300 text-amber-950"
+              }`}>
+                <Clock className="w-4 h-4 shrink-0 text-[#3A4EFB]" />
+                <span className="leading-snug">{scheduleSummary.label}</span>
+              </div>
             </div>
           )}
 

@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { redistributeRemaining } from "@/lib/scheduler/calculator";
 import { normalizeOrderDetail, type OrderDetailStep } from "@/lib/orders/order-detail";
+import { formatBdTime, formatBdDateTime } from "@/lib/date-bd";
 
 type StepRecord = OrderDetailStep;
 
@@ -366,6 +367,11 @@ export default function OrderDetailPage() {
   const dripCompletedQuantity = order.dripFeedRuns
     ? order.dripFeedRuns.filter((r) => r.status === "COMPLETED").reduce((sum, r) => sum + r.quantity, 0)
     : 0;
+  const dripDispatchedQuantity = order.dripFeedRuns
+    ? order.dripFeedRuns
+        .filter((r) => ["COMPLETED", "SUBMITTED", "PROCESSING"].includes(r.status))
+        .reduce((sum, r) => sum + r.quantity, 0)
+    : 0;
 
   const isDripFeedOrder = order.scheduleMode === "DRIP_FEED" || (Boolean(order.dripFeedRuns) && (order.dripFeedRuns?.length ?? 0) > 0);
   const totalBatchesCount = isDripFeedOrder
@@ -383,10 +389,10 @@ export default function OrderDetailPage() {
 
   const effectiveDeliveredQuantity = isDripFeedOrder
     ? hasPendingBatches
-      ? Math.max(order.deliveredQuantity, dripCompletedQuantity)
+      ? Math.min(dripDispatchedQuantity, Math.max(0, dripCompletedQuantity))
       : order.status === "COMPLETED"
         ? Math.max(order.deliveredQuantity, order.submittedQuantity || order.requestedQuantity)
-        : Math.max(order.deliveredQuantity, dripCompletedQuantity)
+        : Math.min(dripDispatchedQuantity, Math.max(order.deliveredQuantity, dripCompletedQuantity))
     : steps && steps.length > 0
       ? hasPendingBatches
         ? Math.min(order.requestedQuantity, steps.filter((s) => s.status === "COMPLETED").reduce((sum, s) => sum + s.quantity, 0))
@@ -481,7 +487,7 @@ export default function OrderDetailPage() {
               )}
             </div>
             <p className="text-xs text-[#252943]/60 mt-1">
-              Created on {new Date(order.createdAt).toLocaleString()}
+              Created on {formatBdDateTime(order.createdAt)} (BD Time 🇧🇩)
             </p>
           </div>
 
@@ -703,8 +709,8 @@ export default function OrderDetailPage() {
                 <div><span className="text-[10px] text-[#252943]/50 block">Pacing Strategy</span><span className="font-semibold text-[#252943]">{order.scheduleMode ? order.scheduleMode.replace("_", " ") : "Custom Schedule"}</span></div>
                 <div><span className="text-[10px] text-[#252943]/50 block">Batch Progress</span><span className="font-semibold text-[#252943]">{dispatchedBatchesCount} / {totalBatchesCount} dispatched</span></div>
                 <div><span className="text-[10px] text-[#252943]/50 block">Pending Batches</span><span className="font-semibold text-[#252943]">{pendingBatchesCount} batches remaining</span></div>
-                <div><span className="text-[10px] text-[#252943]/50 block">Next Scheduled Dispatch</span><span className="font-semibold text-[#3A4EFB]">{nextPendingTimeString ? new Date(nextPendingTimeString).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "All Dispatched"}</span></div>
-                <div><span className="text-[10px] text-[#252943]/50 block">Estimated Completion</span><span className="font-semibold text-emerald-700">{order.status === "COMPLETED" && !hasPendingBatches ? "Delivered" : lastDispatchTimeString ? new Date(lastDispatchTimeString).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Instant"}</span></div>
+                <div><span className="text-[10px] text-[#252943]/50 block">Next Scheduled Dispatch</span><span className="font-semibold text-[#3A4EFB]">{nextPendingTimeString ? `${formatBdTime(nextPendingTimeString)} BD` : "All Dispatched"}</span></div>
+                <div><span className="text-[10px] text-[#252943]/50 block">Estimated Completion</span><span className="font-semibold text-emerald-700">{order.status === "COMPLETED" && !hasPendingBatches ? "Delivered" : lastDispatchTimeString ? `${formatBdTime(lastDispatchTimeString)} BD` : "Instant"}</span></div>
               </div>
             )}
           </>
@@ -842,13 +848,8 @@ export default function OrderDetailPage() {
                         <td className="py-3 px-4 font-bold text-[#252943]">
                           Run #{run.runNumber}
                         </td>
-                        <td className="py-3 px-4 text-[#252943]/80">
-                          {new Date(run.scheduledAt).toLocaleString([], {
-                            month: "short",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
+                        <td className="py-3 px-4 text-[#252943]/80 font-medium">
+                          {formatBdDateTime(run.scheduledAt)} BD
                         </td>
                         <td className="py-3 px-4 text-right font-bold text-[#252943]">
                           {run.quantity.toLocaleString()}
@@ -905,16 +906,11 @@ export default function OrderDetailPage() {
                           </td>
                           <td className="py-3 px-4 text-[#252943]">
                             <div className="font-medium">
-                              {new Date(step.scheduledTime).toLocaleString([], {
-                                month: "short",
-                                day: "numeric",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
+                              {formatBdDateTime(step.scheduledTime)} BD
                             </div>
                             {step.executedAt && (
                               <div className="text-[11px] text-emerald-700 font-semibold">
-                                Executed: {new Date(step.executedAt).toLocaleTimeString()}
+                                Executed: {formatBdTime(step.executedAt)} BD
                               </div>
                             )}
                             {isDelayed && (

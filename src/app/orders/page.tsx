@@ -10,6 +10,7 @@ import {
   Loader2,
   RefreshCw
 } from "lucide-react";
+import { formatBdDateTime } from "@/lib/date-bd";
 
 interface OrderItem {
   id: string;
@@ -324,7 +325,7 @@ export default function OrdersPage() {
                       </div>
 
                       <div className="text-[10px] text-[#252943]/50 font-normal mt-0.5">
-                        {new Date(order.createdAt).toLocaleDateString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        {formatBdDateTime(order.createdAt)} BD
                       </div>
                     </td>
 
@@ -358,6 +359,9 @@ export default function OrdersPage() {
                           const dripCompleted = order.dripFeedRuns
                             ? order.dripFeedRuns.filter((r) => r.status === "COMPLETED").reduce((sum, r) => sum + r.quantity, 0)
                             : 0;
+                          const dripDispatched = order.dripFeedRuns
+                            ? order.dripFeedRuns.filter((r) => ["COMPLETED", "SUBMITTED", "PROCESSING"].includes(r.status)).reduce((sum, r) => sum + r.quantity, 0)
+                            : 0;
                           const hasPendingBatches = Boolean(
                             (order.dripFeedRuns && order.dripFeedRuns.some((r) => ["PENDING", "PROCESSING"].includes(r.status))) ||
                             (order.steps && order.steps.some((s) => ["PENDING", "PROCESSING"].includes(s.status)))
@@ -365,10 +369,10 @@ export default function OrdersPage() {
                           const delivered =
                             order.dripFeedRuns && order.dripFeedRuns.length > 0
                               ? hasPendingBatches
-                                ? Math.max(order.deliveredQuantity, dripCompleted)
+                                ? Math.min(dripDispatched, Math.max(0, dripCompleted))
                                 : order.status === "COMPLETED"
                                   ? Math.max(order.deliveredQuantity, order.submittedQuantity || order.requestedQuantity)
-                                  : Math.max(order.deliveredQuantity, dripCompleted)
+                                  : Math.min(dripDispatched, Math.max(order.deliveredQuantity, dripCompleted))
                               : order.steps && order.steps.length > 0
                                 ? hasPendingBatches
                                   ? Math.min(order.requestedQuantity, order.steps.filter((s) => s.status === "COMPLETED").reduce((sum, s) => sum + s.quantity, 0))

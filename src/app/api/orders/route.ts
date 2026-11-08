@@ -766,13 +766,14 @@ export async function GET(request: Request) {
     for (const ord of orders) {
       if (ord.dripFeedRuns && ord.dripFeedRuns.length > 0) {
         const hasPending = ord.dripFeedRuns.some((r) => ["PENDING", "PROCESSING"].includes(r.status));
-        if (hasPending && ord.status === "COMPLETED") {
-          const completedRunsQty = ord.dripFeedRuns
-            .filter((r) => r.status === "COMPLETED")
-            .reduce((sum, r) => sum + r.quantity, 0);
-          const submittedQty = ord.dripFeedRuns
-            .filter((r) => r.status !== "PENDING")
-            .reduce((sum, r) => sum + r.quantity, 0);
+        const completedRunsQty = ord.dripFeedRuns
+          .filter((r) => r.status === "COMPLETED")
+          .reduce((sum, r) => sum + r.quantity, 0);
+        const submittedQty = ord.dripFeedRuns
+          .filter((r) => r.status !== "PENDING")
+          .reduce((sum, r) => sum + r.quantity, 0);
+
+        if (hasPending && (ord.status === "COMPLETED" || ord.deliveredQuantity > completedRunsQty)) {
           const remainingQty = Math.max(0, ord.requestedQuantity - completedRunsQty);
 
           await prisma.order.update({
