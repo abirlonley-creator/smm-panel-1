@@ -289,7 +289,7 @@ export async function syncOrderDeliveryAndDeviation(orderId: string, now: Date) 
                   engagementOrderId: order.id,
                   engagementType: t,
                   serviceId: lastRun.serviceId,
-                  providerId: lastRun.providerId,
+                  providerId: null,
                   providerServiceId: lastRun.providerServiceId,
                   runNumber: (lastRun.runNumber ?? remainingRuns.length) + e + 1,
                   scheduledAt: new Date(nextRunTime),

@@ -203,26 +203,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Resolve legacy provider ID only if it exists in the Provider table, else null
-    // (UserProviderConnection is tracked via service.userProviderId; EngagementRun.providerId has foreign key to Provider)
-    let legacyXmediaProviderId: string | null = null;
-    if (xmediaService.providerId) {
-      const leg = await prisma.provider.findUnique({
-        where: { id: xmediaService.providerId },
-        select: { id: true },
-      });
-      if (leg) legacyXmediaProviderId = leg.id;
-    }
-
-    let legacyZeofameProviderId: string | null = null;
-    if (zeofameService.providerId) {
-      const leg = await prisma.provider.findUnique({
-        where: { id: zeofameService.providerId },
-        select: { id: true },
-      });
-      if (leg) legacyZeofameProviderId = leg.id;
-    }
-
     // 2. Generate Randomized Runs matching Section 3 specification
     const now = Date.now();
     const viewsRate = xmediaService.ratePer1000;
@@ -339,7 +319,7 @@ export async function POST(request: Request) {
             engagementOrderId: engagementOrder.id,
             engagementType: "views",
             serviceId: xmediaService.id,
-            providerId: legacyXmediaProviderId,
+            providerId: null,
             providerServiceId: xmediaTargetServiceId,
             runNumber: run.runNumber,
             scheduledAt: run.scheduledAt,
@@ -366,7 +346,7 @@ export async function POST(request: Request) {
             engagementOrderId: engagementOrder.id,
             engagementType: "likes",
             serviceId: zeofameService.id,
-            providerId: legacyZeofameProviderId,
+            providerId: null,
             providerServiceId: zeofameTargetServiceId,
             runNumber: run.runNumber,
             scheduledAt: run.scheduledAt,
@@ -389,7 +369,7 @@ export async function POST(request: Request) {
         data: {
           orderRef,
           serviceId: xmediaService.id,
-          providerId: legacyXmediaProviderId,
+          providerId: null,
           targetUrl,
           requestedQuantity: totalPlannedViews,
           submittedQuantity: 0,
