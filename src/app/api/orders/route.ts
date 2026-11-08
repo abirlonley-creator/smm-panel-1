@@ -762,11 +762,47 @@ export async function GET(request: Request) {
       countMap[c.status] = c._count.id;
     });
 
-    // Proactive auto-sync for active orders on the current page
+    // Self-healing for drip-feed & scheduled orders that were previously marked COMPLETED while batches were still pending
+    for (const ord of orders) {
+      if (ord.dripFeedRuns && ord.dripFeedRuns.length > 0) {
+        const hasPending = ord.dripFeedRuns.some((r) => ["PENDING", "PROCESSING"].includes(r.status));
+        if (hasPending && ord.status === "COMPLETED") {
+          const completedRunsQty = ord.dripFeedRuns
+            .filter((r) => r.status === "COMPLETED")
+            .reduce((sum, r) => sum + r.quantity, 0);
+          const submittedQty = ord.dripFeedRuns
+            .filter((r) => r.status !== "PENDING")
+            .reduce((sum, r) => sum + r.quantity, 0);
+          const remainingQty = Math.max(0, ord.requestedQuantity - completedRunsQty);
+
+          await prisma.order.update({
+            where: { id: ord.id },
+            data: {
+              status: "PROCESSING",
+              submittedQuantity: submittedQty,
+              deliveredQuantity: completedRunsQty,
+              remainingQuantity: remainingQty,
+            },
+          }).catch(() => {});
+
+          ord.status = "PROCESSING";
+          ord.submittedQuantity = submittedQty;
+          ord.deliveredQuantity = completedRunsQty;
+          ord.remainingQuantity = remainingQty;
+        }
+      }
+    }
+
+    // Proactive auto-sync for active SINGLE-INSTANT orders on the current page
+    // (Drip-feed and scheduled orders are excluded so batch-1 status never overwrites the parent order)
     const activeOrdersWithRef = orders.filter(
       (o) =>
         !["COMPLETED", "CANCELLED", "FAILED"].includes(o.status) &&
-        Boolean(o.providerOrderId)
+        Boolean(o.providerOrderId) &&
+        !o.isScheduled &&
+        o.scheduleMode !== "DRIP_FEED" &&
+        (!o.dripFeedRuns || o.dripFeedRuns.length === 0) &&
+        (!o.steps || o.steps.length === 0)
     );
 
     if (activeOrdersWithRef.length > 0) {

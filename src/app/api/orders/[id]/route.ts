@@ -4,7 +4,7 @@ import { getActiveProvider } from "@/lib/provider/adapter";
 import { getAuthSession } from "@/lib/auth/session";
 import { cancelOrder } from "@/lib/orders/cancellation";
 import { normalizeOrderDetail, orderDetailInclude } from "@/lib/orders/order-detail";
-import { reconcileScheduledOrderStatus } from "@/lib/scheduler/scheduled-order-status";
+import { reconcileScheduledOrderStatus, reconcileDripFeedOrderStatus } from "@/lib/scheduler/scheduled-order-status";
 
 async function findOrderDetailById(id: string) {
   const order = await prisma.order.findUnique({
@@ -45,8 +45,41 @@ export async function GET(
       );
     }
 
-    // Proactive auto-reconciliation: If order is active and has providerOrderId, check provider status
-    if (order.providerOrderId && !["COMPLETED", "CANCELLED", "FAILED"].includes(order.status)) {
+    // Proactive auto-reconciliation:
+    // 1. Drip-feed orders must be reconciled via reconcileDripFeedOrderStatus
+    if (order.dripFeedRuns && order.dripFeedRuns.length > 0) {
+      try {
+        const targetProviderId = order.service?.userProviderId || order.service?.providerId || undefined;
+        const { adapter } = await getActiveProvider(order.userId || undefined, targetProviderId);
+        await reconcileDripFeedOrderStatus(order.id, adapter);
+        const refreshed = await prisma.order.findUnique({
+          where: { id: order.id },
+          include: orderDetailInclude,
+        });
+        if (refreshed) {
+          return NextResponse.json({ success: true, order: normalizeOrderDetail(refreshed) });
+        }
+      } catch {
+        // Fallback to cached state
+      }
+    } else if (order.steps && order.steps.length > 0) {
+      // 2. Scheduled steps orders must be reconciled via reconcileScheduledOrderStatus
+      try {
+        const targetProviderId = order.service?.userProviderId || order.service?.providerId || undefined;
+        const { adapter } = await getActiveProvider(order.userId || undefined, targetProviderId);
+        await reconcileScheduledOrderStatus(order.id, adapter);
+        const refreshed = await prisma.order.findUnique({
+          where: { id: order.id },
+          include: orderDetailInclude,
+        });
+        if (refreshed) {
+          return NextResponse.json({ success: true, order: normalizeOrderDetail(refreshed) });
+        }
+      } catch {
+        // Fallback to cached state
+      }
+    } else if (order.providerOrderId && !["COMPLETED", "CANCELLED", "FAILED"].includes(order.status)) {
+      // 3. Single instant orders (no sub-batches) can directly check the provider order ID
       try {
         const targetProviderId = order.service?.userProviderId || order.service?.providerId || undefined;
         const { adapter } = await getActiveProvider(order.userId || undefined, targetProviderId);
@@ -171,19 +204,31 @@ export async function POST(
 
     // Reconcile individual drip feed runs if present
     if (order.dripFeedRuns && order.dripFeedRuns.length > 0) {
-      for (const run of order.dripFeedRuns) {
-        if (run.providerOrderId && run.status !== "COMPLETED") {
-          try {
-            const runStatus = await adapter.getOrderStatus(run.providerOrderId);
-            if (runStatus.success && runStatus.status === "COMPLETED") {
-              await prisma.dripFeedRun.update({
-                where: { id: run.id },
-                data: { status: "COMPLETED" },
-              });
-            }
-          } catch (e) {}
-        }
+      const reconciled = await reconcileDripFeedOrderStatus(order.id, adapter);
+      if (!reconciled) {
+        return NextResponse.json(
+          { success: false, error: "Order not found." },
+          { status: 404 }
+        );
       }
+
+      const updated = await findOrderDetailById(order.id);
+      if (!updated) {
+        return NextResponse.json(
+          { success: false, error: "Order status was updated but order details could not be loaded." },
+          { status: 500 }
+        );
+      }
+
+      await prisma.auditLog.create({
+        data: {
+          action: "RECONCILE_ORDER_STATUS",
+          actor: "Customer / Admin",
+          details: `Reconciled drip-feed order ${order.orderRef}: status is now ${reconciled.status}`,
+        },
+      });
+
+      return NextResponse.json({ success: true, order: updated });
     }
 
     if (!order.providerOrderId) {

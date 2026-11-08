@@ -367,22 +367,6 @@ export default function OrderDetailPage() {
     ? order.dripFeedRuns.filter((r) => r.status === "COMPLETED").reduce((sum, r) => sum + r.quantity, 0)
     : 0;
 
-  const effectiveDeliveredQuantity =
-    order.status === "COMPLETED"
-      ? Math.max(order.deliveredQuantity, order.submittedQuantity || order.requestedQuantity)
-      : Math.max(order.deliveredQuantity, dripCompletedQuantity);
-
-  const effectiveRemainingQuantity = Math.max(0, order.requestedQuantity - effectiveDeliveredQuantity);
-
-  const percentComplete = Math.min(
-    100,
-    Math.round(
-      (effectiveDeliveredQuantity /
-        ((isAdaptiveMonitor ? adaptiveSubmittedQuantity : order?.requestedQuantity) || 1)) *
-        100
-    )
-  );
-
   const isDripFeedOrder = order.scheduleMode === "DRIP_FEED" || (Boolean(order.dripFeedRuns) && (order.dripFeedRuns?.length ?? 0) > 0);
   const totalBatchesCount = isDripFeedOrder
     ? (order.dripFeedRuns?.length || 0)
@@ -394,6 +378,35 @@ export default function OrderDetailPage() {
   const pendingBatchesCount = isDripFeedOrder
     ? (order.dripFeedRuns?.filter((r) => ["PENDING", "PAUSED"].includes(r.status)).length || 0)
     : steps.filter((s) => ["PENDING", "PAUSED"].includes(s.status)).length;
+
+  const hasPendingBatches = pendingBatchesCount > 0;
+
+  const effectiveDeliveredQuantity = isDripFeedOrder
+    ? hasPendingBatches
+      ? Math.max(order.deliveredQuantity, dripCompletedQuantity)
+      : order.status === "COMPLETED"
+        ? Math.max(order.deliveredQuantity, order.submittedQuantity || order.requestedQuantity)
+        : Math.max(order.deliveredQuantity, dripCompletedQuantity)
+    : steps && steps.length > 0
+      ? hasPendingBatches
+        ? Math.min(order.requestedQuantity, steps.filter((s) => s.status === "COMPLETED").reduce((sum, s) => sum + s.quantity, 0))
+        : order.status === "COMPLETED"
+          ? Math.max(order.deliveredQuantity, order.submittedQuantity || order.requestedQuantity)
+          : order.deliveredQuantity
+      : order.status === "COMPLETED"
+        ? Math.max(order.deliveredQuantity, order.submittedQuantity || order.requestedQuantity)
+        : order.deliveredQuantity;
+
+  const effectiveRemainingQuantity = Math.max(0, order.requestedQuantity - effectiveDeliveredQuantity);
+
+  const percentComplete = Math.min(
+    100,
+    Math.round(
+      (effectiveDeliveredQuantity /
+        ((isAdaptiveMonitor ? adaptiveSubmittedQuantity : order?.requestedQuantity) || 1)) *
+        100
+    )
+  );
 
   const failedBatchesCount = isDripFeedOrder
     ? (order.dripFeedRuns?.filter((r) => r.status === "FAILED").length || 0)
@@ -451,7 +464,7 @@ export default function OrderDetailPage() {
                 {order.orderRef}
               </h1>
               <StatusBadge
-                status={order.status}
+                status={hasPendingBatches && order.status === "COMPLETED" ? "PROCESSING" : order.status}
                 label={isAdaptiveMonitor
                   ? order.status === "CANCELLED" ? "Cancelled" : monitorStatusLabel
                   : undefined}
@@ -691,7 +704,7 @@ export default function OrderDetailPage() {
                 <div><span className="text-[10px] text-[#252943]/50 block">Batch Progress</span><span className="font-semibold text-[#252943]">{dispatchedBatchesCount} / {totalBatchesCount} dispatched</span></div>
                 <div><span className="text-[10px] text-[#252943]/50 block">Pending Batches</span><span className="font-semibold text-[#252943]">{pendingBatchesCount} batches remaining</span></div>
                 <div><span className="text-[10px] text-[#252943]/50 block">Next Scheduled Dispatch</span><span className="font-semibold text-[#3A4EFB]">{nextPendingTimeString ? new Date(nextPendingTimeString).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "All Dispatched"}</span></div>
-                <div><span className="text-[10px] text-[#252943]/50 block">Estimated Completion</span><span className="font-semibold text-emerald-700">{order.status === "COMPLETED" ? "Delivered" : lastDispatchTimeString ? new Date(lastDispatchTimeString).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Instant"}</span></div>
+                <div><span className="text-[10px] text-[#252943]/50 block">Estimated Completion</span><span className="font-semibold text-emerald-700">{order.status === "COMPLETED" && !hasPendingBatches ? "Delivered" : lastDispatchTimeString ? new Date(lastDispatchTimeString).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Instant"}</span></div>
               </div>
             )}
           </>

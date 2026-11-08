@@ -3,7 +3,7 @@ import { getActiveProvider } from "./lib/provider/adapter";
 import { getProviderBalanceRefreshIntervalMs } from "./lib/provider/balance";
 import { formatProviderBalance } from "./lib/currency";
 import { runSchedulerTick } from "./lib/scheduler/runner";
-import { reconcileScheduledOrderStatus } from "./lib/scheduler/scheduled-order-status";
+import { reconcileScheduledOrderStatus, reconcileDripFeedOrderStatus } from "./lib/scheduler/scheduled-order-status";
 import { runMonitoringTick } from "./lib/monitoring/engine";
 import { runScheduledJobsTick } from "./lib/scheduler/job-runner";
 import { runEngagementTick } from "./lib/engagement/worker";
@@ -52,9 +52,18 @@ async function syncActiveOrders(defaultAdapter: any): Promise<number> {
             some: { status: { in: ["PENDING", "PROCESSING", "SUBMITTED", "PARTIAL"] } },
           },
         },
+        {
+          dripFeedRuns: {
+            some: { status: { in: ["PENDING", "PROCESSING", "SUBMITTED", "PARTIAL"] } },
+          },
+        },
       ],
     },
-    include: { steps: { orderBy: { stepNumber: "asc" } }, service: true },
+    include: {
+      steps: { orderBy: { stepNumber: "asc" } },
+      dripFeedRuns: { orderBy: { runNumber: "asc" } },
+      service: true,
+    },
     take: 25,
     orderBy: { updatedAt: "asc" },
   });
@@ -66,6 +75,17 @@ async function syncActiveOrders(defaultAdapter: any): Promise<number> {
   async function syncOrder(order: (typeof activeOrders)[0]) {
     try {
       const { adapter } = await getActiveProvider(order.userId || undefined);
+
+      if (order.dripFeedRuns && order.dripFeedRuns.length > 0) {
+        try {
+          await reconcileDripFeedOrderStatus(order.id, adapter);
+          syncedCount++;
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.warn(`[WORKER] Drip-feed order ${order.orderRef} status sync warning: ${msg}`);
+        }
+        return;
+      }
 
       if (order.steps.length > 0) {
         try {

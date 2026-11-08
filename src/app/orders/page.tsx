@@ -358,17 +358,33 @@ export default function OrdersPage() {
                           const dripCompleted = order.dripFeedRuns
                             ? order.dripFeedRuns.filter((r) => r.status === "COMPLETED").reduce((sum, r) => sum + r.quantity, 0)
                             : 0;
+                          const hasPendingBatches = Boolean(
+                            (order.dripFeedRuns && order.dripFeedRuns.some((r) => ["PENDING", "PROCESSING"].includes(r.status))) ||
+                            (order.steps && order.steps.some((s) => ["PENDING", "PROCESSING"].includes(s.status)))
+                          );
                           const delivered =
-                            order.status === "COMPLETED"
-                              ? Math.max(order.deliveredQuantity, order.submittedQuantity || order.requestedQuantity)
-                              : Math.max(order.deliveredQuantity, dripCompleted);
+                            order.dripFeedRuns && order.dripFeedRuns.length > 0
+                              ? hasPendingBatches
+                                ? Math.max(order.deliveredQuantity, dripCompleted)
+                                : order.status === "COMPLETED"
+                                  ? Math.max(order.deliveredQuantity, order.submittedQuantity || order.requestedQuantity)
+                                  : Math.max(order.deliveredQuantity, dripCompleted)
+                              : order.steps && order.steps.length > 0
+                                ? hasPendingBatches
+                                  ? Math.min(order.requestedQuantity, order.steps.filter((s) => s.status === "COMPLETED").reduce((sum, s) => sum + s.quantity, 0))
+                                  : order.status === "COMPLETED"
+                                    ? Math.max(order.deliveredQuantity, order.submittedQuantity || order.requestedQuantity)
+                                    : order.deliveredQuantity
+                                : order.status === "COMPLETED"
+                                  ? Math.max(order.deliveredQuantity, order.submittedQuantity || order.requestedQuantity)
+                                  : order.deliveredQuantity;
                           const pct = Math.min(100, Math.round((delivered / (order.requestedQuantity || 1)) * 100));
                           return (
                             <>
                               <div className="font-bold text-[#252943]">
                                 {delivered.toLocaleString()} / {order.requestedQuantity.toLocaleString()}
                               </div>
-                              <div className={`text-[10px] font-medium ${pct >= 100 ? "text-emerald-600 font-bold" : "text-[#252943]/60"}`}>
+                              <div className={`text-[10px] font-medium ${pct >= 100 && !hasPendingBatches ? "text-emerald-600 font-bold" : "text-[#252943]/60"}`}>
                                 {pct}% delivered
                               </div>
                             </>
@@ -405,7 +421,14 @@ export default function OrdersPage() {
 
                     <td className="py-3.5 px-4">
                       <StatusBadge
-                        status={order.status}
+                        status={
+                          Boolean(
+                            (order.dripFeedRuns && order.dripFeedRuns.some((r) => ["PENDING", "PROCESSING"].includes(r.status))) ||
+                            (order.steps && order.steps.some((s) => ["PENDING", "PROCESSING"].includes(s.status)))
+                          ) && order.status === "COMPLETED"
+                            ? "PROCESSING"
+                            : order.status
+                        }
                         label={order.scheduleMode === "ADAPTIVE" && order.status === "SCHEDULED" ? "Monitoring" : undefined}
                       />
                     </td>
