@@ -494,8 +494,8 @@ export default function EngagementPage() {
                 <span className="font-bold text-[#252943]">{config?.likes.minQuantity} – {config?.likes.maxQuantity} randomized / run</span>
               </div>
               <div className="flex justify-between">
-                <span>Interval:</span>
-                <span className="font-bold text-[#252943]">Every {config?.likes.intervalMinutes}m (1st run at 120m, then 240m, 360m)</span>
+                <span>Pacing & Cleared:</span>
+                <span className="font-bold text-[#252943]">Runs at 120m, 200m, 280m (before last view batch)</span>
               </div>
               <div className="flex justify-between">
                 <span>Estimated Total Likes:</span>
@@ -509,10 +509,10 @@ export default function EngagementPage() {
         <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-200 text-xs text-blue-950 space-y-1.5">
           <div className="flex items-center gap-2 font-bold text-sm text-blue-900">
             <ShieldCheck className="w-4 h-4 text-[#3A4EFB]" />
-            <span>Smart Synchronization Condition: Delayed Likes Protection</span>
+            <span>Smart Synchronization: Organic Pacing Protection</span>
           </div>
           <p className="leading-relaxed">
-            Views start immediately upon ordering (Run #1 at 0m). Likes first run starts after <strong>120 minutes</strong>. However, if the views provider has already confirmed between <strong>{config?.syncThreshold.minViews} and {config?.syncThreshold.maxViews} views</strong>, the system detects this and triggers the next 12–16 likes delivery immediately without waiting for the 120-minute timer.
+            Views start immediately upon ordering (Run #1 at 0m through Run #16 at 300m). Likes are dispatched at <strong>120m, 200m, and 280m</strong>, ensuring all likes batches are completed <strong>before the final view batch</strong> so no likes ever arrive without views. If views reach <strong>{config?.syncThreshold.minViews}–{config?.syncThreshold.maxViews} views</strong> early, Delayed Likes Protection accelerates likes immediately.
           </p>
         </div>
 
@@ -541,7 +541,7 @@ export default function EngagementPage() {
           <div className="p-5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] space-y-3">
             <div className="flex items-center justify-between text-xs text-[#252943]/70 pb-2 border-b border-[#DEE0ED]/60">
               <span>Estimated Duration:</span>
-              <span className="font-bold text-[#252943]">~6 Hours (360 minutes)</span>
+              <span className="font-bold text-[#252943]">~5 Hours (300 minutes)</span>
             </div>
 
             <div className="flex items-center justify-between text-xs text-[#252943]/70">

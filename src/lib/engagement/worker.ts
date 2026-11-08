@@ -429,6 +429,42 @@ export async function checkAndApplyDelayedLikesProtection(orderId: string, now: 
     }
   }
 
+  // Safety Condition: Before the last view batch, make sure all likes batches are cleared!
+  // No likes batch should go after the last view batch.
+  const pendingViewsRuns = viewsRuns.filter((r) => ["scheduled", "delayed"].includes(r.status));
+  const pendingLikesRuns = likesRuns.filter((r) => ["scheduled", "delayed"].includes(r.status));
+
+  if (pendingViewsRuns.length <= 1 && pendingLikesRuns.length > 0) {
+    const likesToAccelerate = pendingLikesRuns[0];
+    if (likesToAccelerate && likesToAccelerate.scheduledAt.getTime() > now.getTime()) {
+      await prisma.engagementRun.update({
+        where: { id: likesToAccelerate.id },
+        data: {
+          scheduledAt: now,
+          isReplan: true,
+        },
+      });
+
+      const reason = `Final Pace Synchronization: Accelerated remaining Likes Run #${likesToAccelerate.runNumber} to ensure all likes batches clear before the final view batch.`;
+      await prisma.engagementOrder.update({
+        where: { id: order.id },
+        data: {
+          lastReplanReason: reason,
+          replanCount: { increment: 1 },
+        },
+      });
+
+      await logOrderEvent({
+        orderId: order.id,
+        runId: likesToAccelerate.id,
+        eventType: "REPLAN",
+        message: reason,
+      }).catch(() => {});
+
+      return true;
+    }
+  }
+
   return false;
 }
 

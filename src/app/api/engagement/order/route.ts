@@ -226,20 +226,45 @@ export async function POST(request: Request) {
       viewsRuns.push({ runNumber: i + 1, scheduledAt, quantity: qty, cost: runCost });
     }
 
-    // 3 Likes runs, randomly 12 - 16, every 120 minutes
-    // NOTE: Likes do NOT send immediately upon clicking Order!
-    // Run #1 begins after 120 minutes (2h), Run #2 at 240 minutes (4h), and Run #3 at 360 minutes (6h).
-    // (If views delivery surpasses 500-700 views earlier, Delayed Likes Protection will accelerate Run #1 immediately).
+    // 3 Likes runs, randomly 12 - 16
+    // CRITICAL ORGANIC TIMING RULE:
+    // 1. Likes do NOT send immediately upon clicking Order (views must roll in first).
+    // 2. All Likes batches MUST be cleared BEFORE the last View batch (Run 16 at 300m).
+    //    No Likes batch should ever go after the last View batch (which would send likes with 0 views).
+    // 3. For 3 runs with views ending at 300m:
+    //    Run #1: 120m (after views are established)
+    //    Run #2: 200m
+    //    Run #3: 280m (cleared before the final view batch at 300m)
     const likesRuns: Array<{ runNumber: number; scheduledAt: Date; quantity: number; cost: number }> = [];
     let totalPlannedLikes = 0;
     let totalLikesCost = 0;
 
-    for (let i = 0; i < config.likes.runsCount; i++) {
+    const lastViewRunTime = viewsRuns.length > 0
+      ? viewsRuns[viewsRuns.length - 1].scheduledAt.getTime()
+      : now + 300 * 60 * 1000;
+
+    // Start likes after 120 minutes (or 40% of view duration if total view campaign is shorter)
+    const targetFirstLikesOffsetMs = Math.min(
+      config.likes.intervalMinutes * 60 * 1000,
+      Math.max(20 * 60 * 1000, Math.floor((lastViewRunTime - now) * 0.4))
+    );
+    // Ensure final likes batch completes before the last view batch (1 view interval before last view run)
+    const targetLastLikesOffsetMs = Math.max(
+      targetFirstLikesOffsetMs,
+      (lastViewRunTime - now) - (config.views.intervalMinutes * 60 * 1000)
+    );
+
+    const likesRunsCount = config.likes.runsCount;
+    const likesStepMs = likesRunsCount > 1
+      ? (targetLastLikesOffsetMs - targetFirstLikesOffsetMs) / (likesRunsCount - 1)
+      : 0;
+
+    for (let i = 0; i < likesRunsCount; i++) {
       const minL = Math.min(config.likes.minQuantity, config.likes.maxQuantity);
       const maxL = Math.max(config.likes.minQuantity, config.likes.maxQuantity);
       const qty = Math.floor(Math.random() * (maxL - minL + 1)) + minL;
-      // Start likes at +120 minutes (i + 1), not immediately at 0m
-      const scheduledAt = new Date(now + (i + 1) * config.likes.intervalMinutes * 60 * 1000);
+      const scheduledOffsetMs = Math.round(targetFirstLikesOffsetMs + i * likesStepMs);
+      const scheduledAt = new Date(now + scheduledOffsetMs);
       const runCost = Number(((qty / 1000) * likesRate).toFixed(4));
 
       totalPlannedLikes += qty;
@@ -267,10 +292,9 @@ export async function POST(request: Request) {
 
     const orderRef = `ENG-${Math.floor(100000 + Math.random() * 900000)}`;
     const newBalance = Number((currentBalance - totalCost).toFixed(2));
-    const maxDurationMinutes = Math.max(
-      (config.views.runsCount - 1) * config.views.intervalMinutes,
-      config.likes.runsCount * config.likes.intervalMinutes
-    );
+    const maxDurationMinutes = viewsRuns.length > 0
+      ? (viewsRuns.length - 1) * config.views.intervalMinutes
+      : 300;
     const durationHours = Number((maxDurationMinutes / 60).toFixed(1));
 
     // 4. Transactionally Deduct Balance, Create EngagementOrder, Runs, and Main Order
