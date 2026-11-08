@@ -14,8 +14,6 @@ import {
   Shuffle,
   Calendar,
   Server,
-  Wallet,
-  Check,
   Search,
   X,
   RefreshCw,
@@ -1021,90 +1019,8 @@ function NewOrderForm() {
         </div>
       )}
 
-      {/* 4. ALWAYS VISIBLE TOP BAR: Selected API Provider & Double/Multi API Switcher */}
-      {providers.length > 0 ? (
-        <div className="p-3.5 rounded-2xl bg-white border border-[#DEE0ED] shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-[#3A4EFB]/10 border border-[#3A4EFB]/20 flex items-center justify-center text-[#3A4EFB] shrink-0">
-              <Server className="w-4 h-4" />
-            </div>
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-[#252943]/50 block">
-                Selected API Provider
-              </span>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs sm:text-sm font-bold text-[#252943]">
-                  {providerFilter === "ALL"
-                    ? "All Connected APIs"
-                    : activeProvider?.name || "Connected API"}
-                </span>
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                  <Check className="w-2.5 h-2.5" />
-                  Active
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 self-start sm:self-center flex-wrap">
-            {/* Live Upstream Balance of Selected Provider */}
-            {activeProvider && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED] shadow-subtle">
-                <Wallet className="w-3.5 h-3.5 text-[#3A4EFB]" />
-                <span className="text-xs font-bold text-[#252943]">
-                  {activeProvider.balance !== null && activeProvider.balance !== undefined
-                    ? `${activeProvider.currency || "USD"} ${activeProvider.balance.toFixed(2)}`
-                    : "Available"}
-                </span>
-              </div>
-            )}
-
-            {/* Double / Multi API switcher buttons (Always clickable, 0ms latency) */}
-            {providers.length > 1 && (
-              <div className="flex items-center p-0.5 rounded-xl bg-[#EBEFFA] border border-[#DEE0ED] flex-wrap gap-1">
-                <button
-                  type="button"
-                  onClick={() => handleSelectProvider("ALL")}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    providerFilter === "ALL"
-                      ? "bg-[#3A4EFB] text-white shadow-sm"
-                      : "text-[#252943]/70 hover:text-[#252943] hover:bg-white/60"
-                  }`}
-                  title="Show all services across all connected APIs"
-                >
-                  All APIs ({allServices.length})
-                </button>
-                {providers.map((p) => {
-                  const isSel = providerFilter === p.id;
-                  const sCount = providerCounts[p.id] ?? 0;
-                  return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => handleSelectProvider(p.id)}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                        isSel
-                          ? "bg-[#3A4EFB] text-white shadow-sm"
-                          : "text-[#252943]/70 hover:text-[#252943] hover:bg-white/60"
-                      }`}
-                      title={`Switch to ${p.name} (${sCount} services)`}
-                    >
-                      <span>{p.name}</span>
-                      <span
-                        className={`text-[10px] px-1 py-0.2 rounded ${
-                          isSel ? "bg-white/20 text-white" : "bg-[#252943]/10 text-[#252943]/60"
-                        }`}
-                      >
-                        {sCount}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      ) : (
+      {/* 4. Warning if no API Provider is connected */}
+      {providers.length === 0 && (
         <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center justify-between">
           <div className="flex items-center gap-2">
             <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
