@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { 
   ShieldCheck, 
   Key, 
@@ -28,6 +29,10 @@ import {
   Layers,
   Edit3,
   Search,
+  Zap,
+  Sparkles,
+  Eye,
+  Heart,
 } from "lucide-react";
 import { formatProviderBalance } from "@/lib/currency";
 import { OrderMonitorTab } from "@/components/admin/OrderMonitorTab";
@@ -200,6 +205,10 @@ export default function AdminPage() {
   const [testingConnection, setTestingConnection] = useState(false);
   const [testResult, setTestResult] = useState<any>(null);
 
+  // TikTok Engagement Preset Config state
+  const [tiktokConfig, setTiktokConfig] = useState<any>(null);
+  const [savingTiktokConfig, setSavingTiktokConfig] = useState(false);
+
   // Check auth on load
   async function checkAuth() {
     try {
@@ -314,19 +323,21 @@ export default function AdminPage() {
   async function loadAllAdminData() {
     setLoadingData(true);
     try {
-      const [keysRes, diagRes, provRes, engRes, alertsRes, engOrdersRes] = await Promise.all([
+      const [keysRes, diagRes, provRes, engRes, alertsRes, engOrdersRes, tiktokRes] = await Promise.all([
         fetch("/api/admin/keys").then((r) => r.json()),
         fetch("/api/admin/diagnostics").then((r) => r.json()),
         fetch("/api/admin/provider").then((r) => r.json()),
         fetch("/api/admin/engagement-profiles").then((r) => r.json()).catch(() => ({ success: false })),
         fetch("/api/admin/alerts").then((r) => r.json()).catch(() => ({ success: false })),
         fetch("/api/engagement/orders").then((r) => r.json()).catch(() => ({ success: false })),
+        fetch("/api/admin/engagement-config").then((r) => r.json()).catch(() => ({ success: false })),
       ]);
 
       if (keysRes.success) setPasskeys(keysRes.keys);
       if (diagRes.success) setDiagnostics(diagRes);
       if (engRes.success && engRes.profiles) setEngagementProfiles(engRes.profiles);
       if (engOrdersRes.success && Array.isArray(engOrdersRes.orders)) setEngagementOrders(engOrdersRes.orders);
+      if (tiktokRes.success && tiktokRes.config) setTiktokConfig(tiktokRes.config);
       if (alertsRes.success) {
         setAlerts(alertsRes.alerts || []);
         setAlertsMetrics(alertsRes.metrics || null);
@@ -341,6 +352,30 @@ export default function AdminPage() {
       console.error("Failed to load admin data", err);
     } finally {
       setLoadingData(false);
+    }
+  }
+
+  async function handleSaveTiktokConfig(e: React.FormEvent) {
+    e.preventDefault();
+    if (!tiktokConfig) return;
+    setSavingTiktokConfig(true);
+    setActionMsg(null);
+    try {
+      const res = await fetch("/api/admin/engagement-config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(tiktokConfig),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to update TikTok engagement configuration");
+      }
+      setTiktokConfig(data.config);
+      setActionMsg({ text: "TikTok Engagement configuration saved successfully.", type: "success" });
+    } catch (err: any) {
+      setActionMsg({ text: err.message || "Failed to save configuration", type: "error" });
+    } finally {
+      setSavingTiktokConfig(false);
     }
   }
 
@@ -1396,6 +1431,359 @@ export default function AdminPage() {
       ====================================================================== */}
       {activeTab === "engagement" && (
         <div className="space-y-6 animate-fadeIn">
+          {/* TikTok Organic Engagement System Admin Configuration (Section 8) */}
+          <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 sm:p-8 shadow-subtle space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[#DEE0ED]">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-[#3A4EFB]/10 text-[#3A4EFB] flex items-center justify-center font-bold">
+                    <Zap className="w-4 h-4" />
+                  </div>
+                  <h2 className="text-base font-black text-[#252943]">
+                    TikTok Organic Engagement Automation Preset
+                  </h2>
+                  <span className="px-2.5 py-0.5 rounded-full bg-[#E3FF3B]/30 border border-[#252943]/20 text-[#252943] text-[10px] font-black uppercase">
+                    Admin Controlled
+                  </span>
+                </div>
+                <p className="text-xs text-[#252943]/60 max-w-2xl">
+                  Configure delivery quantities, run counts, intervals, and Delayed Likes Protection thresholds for the standalone TikTok Organic Working Preset.
+                </p>
+              </div>
+
+              {tiktokConfig && (
+                <button
+                  type="button"
+                  onClick={handleSaveTiktokConfig}
+                  disabled={savingTiktokConfig}
+                  className="px-4 py-2 rounded-xl bg-[#3A4EFB] hover:bg-[#252943] text-white text-xs font-bold transition-all shadow-subtle flex items-center gap-1.5 self-start sm:self-center"
+                >
+                  {savingTiktokConfig ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                  )}
+                  <span>Save Preset Settings</span>
+                </button>
+              )}
+            </div>
+
+            {tiktokConfig ? (
+              <form onSubmit={handleSaveTiktokConfig} className="space-y-6 text-xs">
+                {/* Master Switch & Preset Name */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED]">
+                  <div className="flex items-center justify-between sm:justify-start gap-4">
+                    <div>
+                      <span className="font-bold text-[#252943] block">Engagement System</span>
+                      <span className="text-[11px] text-[#252943]/60">Allow users to place organic orders</span>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={tiktokConfig.enabled}
+                        onChange={(e) => setTiktokConfig({ ...tiktokConfig, enabled: e.target.checked })}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                    </label>
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="block font-bold text-[#252943] mb-1">Preset Display Name</label>
+                    <input
+                      type="text"
+                      value={tiktokConfig.presetName}
+                      onChange={(e) => setTiktokConfig({ ...tiktokConfig, presetName: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold text-[#252943]"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* Two Column Grid: Views vs Likes Configurations */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* VIEWS CONFIGURATION (Xmedia #10322) */}
+                  <div className="p-5 rounded-2xl border border-[#DEE0ED] bg-[#F8F9FD]/50 space-y-4">
+                    <div className="flex items-center justify-between pb-2 border-b border-[#DEE0ED]">
+                      <div className="flex items-center gap-2">
+                        <Eye className="w-4 h-4 text-[#3A4EFB]" />
+                        <span className="font-bold text-sm text-[#252943]">TikTok Views Configuration</span>
+                      </div>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-bold">
+                        {tiktokConfig.views?.providerName || "Xmedia"}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-bold text-[#252943]/70 mb-1">Provider Name</label>
+                        <input
+                          type="text"
+                          value={tiktokConfig.views?.providerName || "Xmedia"}
+                          onChange={(e) =>
+                            setTiktokConfig({
+                              ...tiktokConfig,
+                              views: { ...tiktokConfig.views, providerName: e.target.value },
+                            })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-medium"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-[#252943]/70 mb-1">Service ID</label>
+                        <input
+                          type="text"
+                          value={tiktokConfig.views?.serviceId || "10322"}
+                          onChange={(e) =>
+                            setTiktokConfig({
+                              ...tiktokConfig,
+                              views: { ...tiktokConfig.views, serviceId: e.target.value },
+                            })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-mono font-bold text-[#3A4EFB]"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-[#252943]/70 mb-1">Min Batch Quantity</label>
+                        <input
+                          type="number"
+                          value={tiktokConfig.views?.minQuantity ?? 150}
+                          onChange={(e) =>
+                            setTiktokConfig({
+                              ...tiktokConfig,
+                              views: { ...tiktokConfig.views, minQuantity: Number(e.target.value) },
+                            })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
+                          min={1}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-[#252943]/70 mb-1">Max Batch Quantity</label>
+                        <input
+                          type="number"
+                          value={tiktokConfig.views?.maxQuantity ?? 220}
+                          onChange={(e) =>
+                            setTiktokConfig({
+                              ...tiktokConfig,
+                              views: { ...tiktokConfig.views, maxQuantity: Number(e.target.value) },
+                            })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
+                          min={1}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-[#252943]/70 mb-1">Number of Runs</label>
+                        <input
+                          type="number"
+                          value={tiktokConfig.views?.runsCount ?? 16}
+                          onChange={(e) =>
+                            setTiktokConfig({
+                              ...tiktokConfig,
+                              views: { ...tiktokConfig.views, runsCount: Number(e.target.value) },
+                            })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
+                          min={1}
+                          max={100}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-[#252943]/70 mb-1">Interval (Minutes)</label>
+                        <input
+                          type="number"
+                          value={tiktokConfig.views?.intervalMinutes ?? 20}
+                          onChange={(e) =>
+                            setTiktokConfig({
+                              ...tiktokConfig,
+                              views: { ...tiktokConfig.views, intervalMinutes: Number(e.target.value) },
+                            })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
+                          min={1}
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* LIKES CONFIGURATION (Zeofame #1123) */}
+                  <div className="p-5 rounded-2xl border border-[#DEE0ED] bg-[#F8F9FD]/50 space-y-4">
+                    <div className="flex items-center justify-between pb-2 border-b border-[#DEE0ED]">
+                      <div className="flex items-center gap-2">
+                        <Heart className="w-4 h-4 text-rose-600" />
+                        <span className="font-bold text-sm text-[#252943]">TikTok Likes Configuration</span>
+                      </div>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-rose-100 text-rose-800 font-bold">
+                        {tiktokConfig.likes?.providerName || "Zeofame"}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-bold text-[#252943]/70 mb-1">Provider Name</label>
+                        <input
+                          type="text"
+                          value={tiktokConfig.likes?.providerName || "Zeofame"}
+                          onChange={(e) =>
+                            setTiktokConfig({
+                              ...tiktokConfig,
+                              likes: { ...tiktokConfig.likes, providerName: e.target.value },
+                            })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-medium"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-[#252943]/70 mb-1">Service ID</label>
+                        <input
+                          type="text"
+                          value={tiktokConfig.likes?.serviceId || "1123"}
+                          onChange={(e) =>
+                            setTiktokConfig({
+                              ...tiktokConfig,
+                              likes: { ...tiktokConfig.likes, serviceId: e.target.value },
+                            })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-mono font-bold text-[#3A4EFB]"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-[#252943]/70 mb-1">Min Batch Quantity</label>
+                        <input
+                          type="number"
+                          value={tiktokConfig.likes?.minQuantity ?? 12}
+                          onChange={(e) =>
+                            setTiktokConfig({
+                              ...tiktokConfig,
+                              likes: { ...tiktokConfig.likes, minQuantity: Number(e.target.value) },
+                            })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
+                          min={1}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-[#252943]/70 mb-1">Max Batch Quantity</label>
+                        <input
+                          type="number"
+                          value={tiktokConfig.likes?.maxQuantity ?? 16}
+                          onChange={(e) =>
+                            setTiktokConfig({
+                              ...tiktokConfig,
+                              likes: { ...tiktokConfig.likes, maxQuantity: Number(e.target.value) },
+                            })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
+                          min={1}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-[#252943]/70 mb-1">Number of Runs</label>
+                        <input
+                          type="number"
+                          value={tiktokConfig.likes?.runsCount ?? 3}
+                          onChange={(e) =>
+                            setTiktokConfig({
+                              ...tiktokConfig,
+                              likes: { ...tiktokConfig.likes, runsCount: Number(e.target.value) },
+                            })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
+                          min={1}
+                          max={50}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-[#252943]/70 mb-1">Interval (Minutes)</label>
+                        <input
+                          type="number"
+                          value={tiktokConfig.likes?.intervalMinutes ?? 120}
+                          onChange={(e) =>
+                            setTiktokConfig({
+                              ...tiktokConfig,
+                              likes: { ...tiktokConfig.likes, intervalMinutes: Number(e.target.value) },
+                            })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
+                          min={1}
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 4: Delayed Likes Protection Synchronization Threshold */}
+                <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-300 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-amber-700" />
+                    <span className="font-bold text-sm text-amber-950">
+                      Delayed Likes Protection Synchronization Threshold
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-amber-900/80 leading-relaxed">
+                    If confirmed views delivered reach between the configured min and max threshold while likes delivery is lagging or pending beyond the scheduled interval, the system triggers the next eligible likes delivery immediately.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-md">
+                    <div>
+                      <label className="block font-bold text-amber-950 mb-1">Min Views Threshold</label>
+                      <input
+                        type="number"
+                        value={tiktokConfig.syncThreshold?.minViews ?? 500}
+                        onChange={(e) =>
+                          setTiktokConfig({
+                            ...tiktokConfig,
+                            syncThreshold: {
+                              ...tiktokConfig.syncThreshold,
+                              minViews: Number(e.target.value),
+                            },
+                          })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-amber-300 bg-white text-xs font-bold text-[#252943]"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-amber-950 mb-1">Max Views Threshold</label>
+                      <input
+                        type="number"
+                        value={tiktokConfig.syncThreshold?.maxViews ?? 700}
+                        onChange={(e) =>
+                          setTiktokConfig({
+                            ...tiktokConfig,
+                            syncThreshold: {
+                              ...tiktokConfig.syncThreshold,
+                              maxViews: Number(e.target.value),
+                            },
+                          })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-amber-300 bg-white text-xs font-bold text-[#252943]"
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+              </form>
+            ) : (
+              <div className="p-8 text-center text-xs text-[#252943]/60 flex items-center justify-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin text-[#3A4EFB]" />
+                <span>Loading TikTok Engagement configuration...</span>
+              </div>
+            )}
+          </div>
+
           <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 sm:p-8 shadow-subtle space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#DEE0ED]">
               <div>
@@ -1538,7 +1926,13 @@ export default function AdminPage() {
                       {engagementOrders.slice(0, 10).map((ord: any) => (
                         <tr key={ord.id} className="hover:bg-[#F8F9FD]/50">
                           <td className="py-2.5 px-3 font-mono font-bold text-[#252943]">
-                            {ord.orderRef}
+                            <Link
+                              href={`/engagement/orders/${ord.id}`}
+                              className="text-[#3A4EFB] hover:underline"
+                              title="Open Live Delivery Dashboard"
+                            >
+                              {ord.orderRef}
+                            </Link>
                           </td>
                           <td className="py-2.5 px-3 capitalize font-semibold text-[#252943]">
                             {ord.platform?.replace(/_/g, " ")}

@@ -1,35 +1,16 @@
 import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
-import {
-  generateOrganicPlan,
-  type DurationPreset,
-  type EngagementType,
-} from "@/lib/engagement/planner";
-import { getPlatformProfile } from "@/lib/engagement/platform-profiles";
-import { checkProviderHealthGate } from "@/lib/engagement/health-gate";
-import { recordAdminAlert } from "@/lib/engagement/alert-service";
 import { prisma } from "@/lib/prisma";
+import { decryptApiKey } from "@/lib/security/crypto";
+import { StandardSMMv2Provider, MockSMMProvider } from "@/lib/provider/adapter";
+import { getTikTokEngagementConfig } from "@/lib/engagement/tiktok-preset-config";
+import { logOrderEvent } from "@/lib/engagement/event-logger";
 import { z } from "zod";
 
 const createEngagementOrderSchema = z.object({
   targetUrl: z.string().url("Valid post or video URL required"),
-  profileId: z.string().optional(),
-  platform: z.string().default("Instagram"),
-  baseViews: z.number().int().min(1).max(10000000),
-  presetKey: z.enum(["fast", "normal", "slow"]).optional(),
-  pacingMode: z.enum(["auto", "custom"]).default("auto"),
-  customSpeedPreset: z.enum(["faster", "slower", "exact"]).optional(),
-  customDurationHours: z.number().min(0.2).max(400).optional(),
-  durationPreset: z.enum(["24h", "48h", "72h", "96h", "168h"]).optional(),
-  durationHours: z.number().min(0.2).max(400).optional(),
-  seed: z.union([z.string(), z.number()]).default(() => String(Math.floor(Math.random() * 100000000))),
-  targetTz: z.string().default("Asia/Kolkata"),
-  peakHourWeighting: z.boolean().default(true),
-  enabledTypes: z.array(z.enum(["views", "likes", "shares", "saves", "comments"])).optional(),
-  typeToggles: z.record(z.string(), z.boolean()).optional(),
-  customQuantities: z.record(z.string(), z.number()).optional(),
-  customSources: z.record(z.string(), z.enum(["suggested", "custom"])).optional(),
-  customRatios: z.record(z.string(), z.number()).optional(),
+  presetName: z.string().optional().default("TikTok Organic Working Preset"),
+  platform: z.string().default("TikTok"),
 });
 
 export async function POST(request: Request) {
@@ -42,8 +23,26 @@ export async function POST(request: Request) {
     const body = await request.json();
     const parsed = createEngagementOrderSchema.parse(body);
 
+    const targetUrl = parsed.targetUrl.trim();
+    const lowerUrl = targetUrl.toLowerCase();
+    if (!lowerUrl.includes("tiktok.com")) {
+      return NextResponse.json(
+        { success: false, error: "Please enter a valid TikTok video URL (e.g. https://www.tiktok.com/@username/video/...)" },
+        { status: 400 }
+      );
+    }
+
+    const config = getTikTokEngagementConfig();
+    if (!config.enabled) {
+      return NextResponse.json(
+        { success: false, error: "TikTok Engagement system is currently disabled by administrator." },
+        { status: 503 }
+      );
+    }
+
+    const userId = session.user.id;
     const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
+      where: { id: userId },
       select: { id: true, walletBalance: true },
     });
 
@@ -51,77 +50,202 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: "User account not found" }, { status: 404 });
     }
 
-    // 1. Resolve Config-Driven Platform Profile & Backend Service Mappings
-    const profileId = parsed.profileId || (parsed.platform?.toLowerCase() === "tiktok" ? "tiktok" : "instagram_reel");
-    const profile = getPlatformProfile(profileId);
+    // 1. Verify User's API Connections (Independently Managed per user)
+    const userConnections = await prisma.userProviderConnection.findMany({
+      where: { userId },
+    });
 
-    const activeTypes = (parsed.enabledTypes || ["views", "likes", "saves", "shares", "comments"]).filter(
-      (t) => parsed.typeToggles?.[t] !== false
-    ) as EngagementType[];
+    // A. Zeofame for Likes (Service 1123)
+    const zeofameTargetServiceId = config.likes.serviceId;
+    const zeofameConn = userConnections.find((c) => {
+      const name = (c.name || "").toLowerCase();
+      const url = (c.apiUrl || "").toLowerCase();
+      return name.includes("zeofame") || name.includes("zefame") || url.includes("zeofame") || url.includes("zefame");
+    });
 
-    // 2. Health Gate Pre-Check with user's mapped providers
-    const health = await checkProviderHealthGate(profile.id, activeTypes, 0, user.id);
-    if (!health.ok) {
+    if (!zeofameConn || !zeofameConn.active) {
       return NextResponse.json(
         {
           success: false,
-          error: health.userMessage || "Delivery for this service is temporarily unavailable. Nothing was charged. Please try again in a few minutes.",
-          providerUnavailable: true,
+          error: "API Connection Required: Connect your Zeofame API to activate the TikTok Likes service.",
+          missingProvider: "Zeofame",
         },
-        { status: 503 }
+        { status: 400 }
       );
     }
 
-    // Resolve user's configured provider service mappings
-    const userMappings = await prisma.userEngagementMapping.findMany({
-      where: { userId: user.id, platform: profile.platform },
-      include: { provider: true },
-    });
-    const mappingMap = new Map(userMappings.map((m) => [m.engagementType, m]));
-    const resolvedServices: Record<EngagementType, any> = { ...profile.serviceMappings };
+    // Test Zeofame connection
+    const rawZeofameKey = zeofameConn.apiKeyEncrypted ? decryptApiKey(zeofameConn.apiKeyEncrypted) : null;
+    const zeofameAdapter = (zeofameConn.isMock || !rawZeofameKey)
+      ? new MockSMMProvider()
+      : new StandardSMMv2Provider(zeofameConn.apiUrl, rawZeofameKey);
 
-    for (const t of activeTypes) {
-      const m = mappingMap.get(t);
-      if (m && m.provider) {
-        resolvedServices[t] = {
-          id: m.id,
-          providerId: m.providerId,
-          providerServiceId: m.providerServiceId,
-          name: m.serviceName || `${profile.name} ${t}`,
-          minQuantity: m.minQuantity,
-          maxQuantity: m.maxQuantity,
-          ratePer1000: m.ratePer1000,
-        };
-      }
+    try {
+      await zeofameAdapter.getBalance();
+    } catch (e: any) {
+      return NextResponse.json(
+        { success: false, error: `Zeofame API connection invalid: ${e.message}. Please check your credentials in API Key settings.` },
+        { status: 400 }
+      );
     }
 
-    // 3. Generate the deterministic delivery plan using the shared engine
-    const plan = generateOrganicPlan({
-      profileId: profile.id,
-      platform: profile.platform,
-      presetKey: parsed.presetKey,
-      pacingMode: parsed.pacingMode,
-      customSpeedPreset: parsed.customSpeedPreset,
-      customDurationHours: parsed.customDurationHours,
-      baseViews: parsed.baseViews,
-      durationPreset: parsed.durationPreset as DurationPreset | undefined,
-      durationHours: parsed.durationHours,
-      seed: parsed.seed,
-      targetTz: parsed.targetTz,
-      peakHourWeighting: parsed.peakHourWeighting,
-      enabledTypes: activeTypes,
-      typeToggles: parsed.typeToggles,
-      customQuantities: parsed.customQuantities as Partial<Record<EngagementType, number>> | undefined,
-      customSources: parsed.customSources as Partial<Record<EngagementType, "suggested" | "custom">> | undefined,
-      customRatios: parsed.customRatios as Partial<Record<EngagementType, number>> | undefined,
-      services: resolvedServices, // User-resolved service mappings
-      autoDisableBelowMin: true,
+    // Find or import Zeofame service 1123
+    let zeofameService = await prisma.service.findFirst({
+      where: {
+        userProviderId: zeofameConn.id,
+        OR: [{ providerServiceId: zeofameTargetServiceId }, { externalId: zeofameTargetServiceId }],
+      },
     });
 
-    const totalCost = plan.totalCost;
+    if (!zeofameService && !zeofameConn.isMock) {
+      try {
+        const services = await zeofameAdapter.getServices();
+        const match = services.find((s) => String(s.id) === zeofameTargetServiceId);
+        if (match) {
+          zeofameService = await prisma.service.create({
+            data: {
+              externalId: String(match.id),
+              providerServiceId: String(match.id),
+              name: match.name,
+              type: match.type || "Default",
+              platform: "TikTok",
+              category: "TikTok Likes",
+              description: match.description || "TikTok Likes",
+              minQuantity: match.minQuantity || config.likes.minQuantity,
+              maxQuantity: match.maxQuantity || 500000,
+              ratePer1000: match.ratePer1000 || 0.95,
+              userProviderId: zeofameConn.id,
+              active: true,
+            },
+          });
+        }
+      } catch {}
+    }
+
+    if (!zeofameService) {
+      return NextResponse.json(
+        { success: false, error: `Service ID ${zeofameTargetServiceId} does not exist on your connected Zeofame provider.` },
+        { status: 400 }
+      );
+    }
+
+    // B. Xmedia for Views (Service 10322)
+    const xmediaTargetServiceId = config.views.serviceId;
+    const xmediaConn = userConnections.find((c) => {
+      const name = (c.name || "").toLowerCase();
+      const url = (c.apiUrl || "").toLowerCase();
+      return name.includes("xmedia") || url.includes("xmedia");
+    });
+
+    if (!xmediaConn || !xmediaConn.active) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "API Connection Required: Connect your Xmedia API to activate the TikTok Views service.",
+          missingProvider: "Xmedia",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Test Xmedia connection
+    const rawXmediaKey = xmediaConn.apiKeyEncrypted ? decryptApiKey(xmediaConn.apiKeyEncrypted) : null;
+    const xmediaAdapter = (xmediaConn.isMock || !rawXmediaKey)
+      ? new MockSMMProvider()
+      : new StandardSMMv2Provider(xmediaConn.apiUrl, rawXmediaKey);
+
+    try {
+      await xmediaAdapter.getBalance();
+    } catch (e: any) {
+      return NextResponse.json(
+        { success: false, error: `Xmedia API connection invalid: ${e.message}. Please check your credentials in API Key settings.` },
+        { status: 400 }
+      );
+    }
+
+    // Find or import Xmedia service 10322
+    let xmediaService = await prisma.service.findFirst({
+      where: {
+        userProviderId: xmediaConn.id,
+        OR: [{ providerServiceId: xmediaTargetServiceId }, { externalId: xmediaTargetServiceId }],
+      },
+    });
+
+    if (!xmediaService && !xmediaConn.isMock) {
+      try {
+        const services = await xmediaAdapter.getServices();
+        const match = services.find((s) => String(s.id) === xmediaTargetServiceId);
+        if (match) {
+          xmediaService = await prisma.service.create({
+            data: {
+              externalId: String(match.id),
+              providerServiceId: String(match.id),
+              name: match.name,
+              type: match.type || "Default",
+              platform: "TikTok",
+              category: "TikTok Views",
+              description: match.description || "TikTok Views",
+              minQuantity: match.minQuantity || config.views.minQuantity,
+              maxQuantity: match.maxQuantity || 10000000,
+              ratePer1000: match.ratePer1000 || 0.15,
+              userProviderId: xmediaConn.id,
+              active: true,
+            },
+          });
+        }
+      } catch {}
+    }
+
+    if (!xmediaService) {
+      return NextResponse.json(
+        { success: false, error: `Service ID ${xmediaTargetServiceId} does not exist on your connected Xmedia provider.` },
+        { status: 400 }
+      );
+    }
+
+    // 2. Generate Randomized Runs matching Section 3 specification
+    const now = Date.now();
+    const viewsRate = xmediaService.ratePer1000;
+    const likesRate = zeofameService.ratePer1000;
+
+    // 16 Views runs, randomly 150 - 220, every 20 minutes
+    const viewsRuns: Array<{ runNumber: number; scheduledAt: Date; quantity: number; cost: number }> = [];
+    let totalPlannedViews = 0;
+    let totalViewsCost = 0;
+
+    for (let i = 0; i < config.views.runsCount; i++) {
+      const minV = Math.min(config.views.minQuantity, config.views.maxQuantity);
+      const maxV = Math.max(config.views.minQuantity, config.views.maxQuantity);
+      const qty = Math.floor(Math.random() * (maxV - minV + 1)) + minV;
+      const scheduledAt = new Date(now + i * config.views.intervalMinutes * 60 * 1000);
+      const runCost = Number(((qty / 1000) * viewsRate).toFixed(4));
+
+      totalPlannedViews += qty;
+      totalViewsCost += runCost;
+      viewsRuns.push({ runNumber: i + 1, scheduledAt, quantity: qty, cost: runCost });
+    }
+
+    // 3 Likes runs, randomly 12 - 16, every 120 minutes (run 1 at 0m, run 2 at 120m, run 3 at 240m)
+    const likesRuns: Array<{ runNumber: number; scheduledAt: Date; quantity: number; cost: number }> = [];
+    let totalPlannedLikes = 0;
+    let totalLikesCost = 0;
+
+    for (let i = 0; i < config.likes.runsCount; i++) {
+      const minL = Math.min(config.likes.minQuantity, config.likes.maxQuantity);
+      const maxL = Math.max(config.likes.minQuantity, config.likes.maxQuantity);
+      const qty = Math.floor(Math.random() * (maxL - minL + 1)) + minL;
+      const scheduledAt = new Date(now + i * config.likes.intervalMinutes * 60 * 1000);
+      const runCost = Number(((qty / 1000) * likesRate).toFixed(4));
+
+      totalPlannedLikes += qty;
+      totalLikesCost += runCost;
+      likesRuns.push({ runNumber: i + 1, scheduledAt, quantity: qty, cost: runCost });
+    }
+
+    const totalCost = Number((totalViewsCost + totalLikesCost).toFixed(2));
     const currentBalance = user.walletBalance ?? 0;
 
-    // Check wallet funds
+    // 3. Wallet Balance Check
     if (currentBalance < totalCost) {
       const needed = Number((totalCost - currentBalance).toFixed(2));
       return NextResponse.json(
@@ -138,31 +262,17 @@ export async function POST(request: Request) {
 
     const orderRef = `ENG-${Math.floor(100000 + Math.random() * 900000)}`;
     const newBalance = Number((currentBalance - totalCost).toFixed(2));
+    const durationHours = Number(((config.views.runsCount * config.views.intervalMinutes) / 60).toFixed(1));
 
-    if (plan.chunkyAlertNotice) {
-      recordAdminAlert({
-        severity: "low",
-        type: plan.chunkyAlertNotice.type,
-        orderId: orderRef,
-        userId: user.id,
-        platform: profile.platform,
-        engagementType: "views",
-        providerId: resolvedServices.views?.providerId,
-        serviceId: resolvedServices.views?.providerServiceId,
-        reason: plan.chunkyAlertNotice.reason,
-        suggestedAction: "Select or map a views service with minimum <= 50 for smoother delivery.",
-      }).catch((e) => console.warn("[ADMIN-ALERT] Failed to record chunky notice:", e));
-    }
-
-    // 4. Transactionally deduct wallet funds, record transaction, and create order + scheduled runs with stored plan
+    // 4. Transactionally Deduct Balance, Create EngagementOrder, Runs, and Main Order
     const result = await prisma.$transaction(async (tx) => {
-      // Deduct balance
+      // A. Deduct user wallet
       await tx.user.update({
         where: { id: user.id },
         data: { walletBalance: newBalance },
       });
 
-      // Record transaction
+      // B. Create wallet audit transaction
       await tx.walletTransaction.create({
         data: {
           userId: user.id,
@@ -170,68 +280,55 @@ export async function POST(request: Request) {
           amount: -totalCost,
           balanceAfter: newBalance,
           referenceId: orderRef,
-          description: `Full Organic Engagement: ${profile.name} (${parsed.baseViews.toLocaleString()} Views, ${plan.durationHours}h)`,
+          description: `TikTok Organic Engagement (${totalPlannedViews} Views via Xmedia, ${totalPlannedLikes} Likes via Zeofame)`,
         },
       });
 
-      // Initial type statuses
-      const initialTypeStatuses: Record<string, string> = {};
-      for (const t of activeTypes) {
-        initialTypeStatuses[t] = "on_track";
-      }
-
-      // Create Engagement Order with stored plan per Change D
+      // C. Create EngagementOrder
       const engagementOrder = await tx.engagementOrder.create({
         data: {
           orderRef,
           userId: user.id,
-          targetUrl: parsed.targetUrl.trim(),
-          platform: profile.platform,
-          profileId: profile.id,
-          presetKey: parsed.presetKey || profile.defaultPreset,
-          baseViews: parsed.baseViews,
-          durationHours: plan.durationHours,
-          seed: String(plan.seed),
+          targetUrl,
+          platform: "TikTok",
+          profileId: "tiktok_organic_working",
+          presetKey: config.presetName,
+          baseViews: totalPlannedViews,
+          durationHours: Math.ceil(durationHours),
+          seed: `aurasmm_${Date.now()}`,
           status: "PROCESSING",
           totalCost,
           refundedAmount: 0,
-          plannedViews: plan.plans.views?.totalQuantity ?? 0,
-          plannedLikes: plan.plans.likes?.totalQuantity ?? 0,
-          plannedShares: plan.plans.shares?.totalQuantity ?? 0,
-          plannedSaves: plan.plans.saves?.totalQuantity ?? 0,
-          plannedComments: plan.plans.comments?.totalQuantity ?? 0,
-          viewsSource: parsed.customSources?.views || "suggested",
-          likesSource: parsed.customSources?.likes || "suggested",
-          savesSource: parsed.customSources?.saves || "suggested",
-          sharesSource: parsed.customSources?.shares || "suggested",
-          commentsSource: parsed.customSources?.comments || "suggested",
-          enabledTypes: JSON.stringify(activeTypes),
-          planParams: JSON.stringify(plan.params),
-          expectedCurve: JSON.stringify(plan.curvePoints),
-          statusSamples: JSON.stringify([]),
+          plannedViews: totalPlannedViews,
+          plannedLikes: totalPlannedLikes,
+          plannedShares: 0,
+          plannedSaves: 0,
+          plannedComments: 0,
+          enabledTypes: JSON.stringify(["views", "likes"]),
           deviationStatus: "on_track",
-          typeStatuses: JSON.stringify(initialTypeStatuses),
           replanCount: 0,
         },
       });
 
-      // Create all Scheduled Runs with unique idempotency keys and plannedCumulative
-      for (const run of plan.allRuns) {
+      // D. Create 16 Views Runs
+      let runningPlannedViews = 0;
+      for (const run of viewsRuns) {
+        runningPlannedViews += run.quantity;
         await tx.engagementRun.create({
           data: {
             engagementOrderId: engagementOrder.id,
-            engagementType: run.engagementType,
-            serviceId: run.serviceId || null,
-            providerId: run.providerId || null,
-            providerServiceId: run.providerServiceId || null,
-            runNumber: run.runIndex,
-            scheduledAt: new Date(run.scheduledAt),
+            engagementType: "views",
+            serviceId: xmediaService.id,
+            providerId: xmediaConn.id,
+            providerServiceId: xmediaTargetServiceId,
+            runNumber: run.runNumber,
+            scheduledAt: run.scheduledAt,
             quantity: run.quantity,
-            plannedCumulative: run.cumulativeQuantity,
+            plannedCumulative: runningPlannedViews,
             deliveredQuantity: 0,
             deliveredCumulative: 0,
             status: "scheduled",
-            idempotencyKey: `ENG-RUN-${engagementOrder.id}-${run.engagementType}-${run.runIndex}`,
+            idempotencyKey: `ENG-RUN-${engagementOrder.id}-views-${run.runNumber}`,
             cost: run.cost,
             attempts: 0,
             latenessSeconds: 0,
@@ -240,21 +337,83 @@ export async function POST(request: Request) {
         });
       }
 
+      // E. Create 3 Likes Runs
+      let runningPlannedLikes = 0;
+      for (const run of likesRuns) {
+        runningPlannedLikes += run.quantity;
+        await tx.engagementRun.create({
+          data: {
+            engagementOrderId: engagementOrder.id,
+            engagementType: "likes",
+            serviceId: zeofameService.id,
+            providerId: zeofameConn.id,
+            providerServiceId: zeofameTargetServiceId,
+            runNumber: run.runNumber,
+            scheduledAt: run.scheduledAt,
+            quantity: run.quantity,
+            plannedCumulative: runningPlannedLikes,
+            deliveredQuantity: 0,
+            deliveredCumulative: 0,
+            status: "scheduled",
+            idempotencyKey: `ENG-RUN-${engagementOrder.id}-likes-${run.runNumber}`,
+            cost: run.cost,
+            attempts: 0,
+            latenessSeconds: 0,
+            isReplan: false,
+          },
+        });
+      }
+
+      // F. Create Linked Main Order so it appears in the existing Orders page (/orders)
+      await tx.order.create({
+        data: {
+          orderRef,
+          serviceId: xmediaService.id,
+          providerId: xmediaConn.id,
+          targetUrl,
+          requestedQuantity: totalPlannedViews,
+          submittedQuantity: 0,
+          deliveredQuantity: 0,
+          remainingQuantity: totalPlannedViews,
+          failedQuantity: 0,
+          unitCost: viewsRate,
+          totalCost,
+          isScheduled: true,
+          scheduleMode: "TIKTOK_ENGAGEMENT",
+          status: "PROCESSING",
+          notes: JSON.stringify({
+            presetName: config.presetName,
+            plannedViews: totalPlannedViews,
+            plannedLikes: totalPlannedLikes,
+            viewsProvider: xmediaConn.name,
+            likesProvider: zeofameConn.name,
+            viewsServiceId: xmediaTargetServiceId,
+            likesServiceId: zeofameTargetServiceId,
+          }),
+          userId: user.id,
+        },
+      });
+
       return engagementOrder;
     });
+
+    await logOrderEvent({
+      orderId: result.id,
+      eventType: "STATE_CHANGE",
+      message: `TikTok Organic Engagement started with 16 Views runs via Xmedia (#${xmediaTargetServiceId}) and 3 Likes runs via Zeofame (#${zeofameTargetServiceId}).`,
+    }).catch(() => {});
 
     return NextResponse.json({
       success: true,
       orderId: result.id,
       orderRef: result.orderRef,
-      seed: plan.seed,
-      profileId: profile.id,
-      profileName: profile.name,
-      archetype: plan.params.archetype,
+      presetName: config.presetName,
       totalCost,
+      totalPlannedViews,
+      totalPlannedLikes,
+      runsCount: viewsRuns.length + likesRuns.length,
       remainingBalance: newBalance,
-      runsCount: plan.allRuns.length,
-      message: `Full Engagement order ${result.orderRef} scheduled successfully! All ${plan.allRuns.length} batches are queued.`,
+      message: `TikTok Organic Engagement order ${result.orderRef} placed successfully! 16 Views batches and 3 Likes batches are queued.`,
     });
   } catch (error: any) {
     return NextResponse.json(

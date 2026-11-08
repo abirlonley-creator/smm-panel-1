@@ -762,6 +762,37 @@ export async function GET(request: Request) {
       countMap[c.status] = c._count.id;
     });
 
+    // Attach EngagementOrder telemetry for TikTok Engagement orders (Requirement 6)
+    const engOrderRefs = orders
+      .filter((o) => o.scheduleMode === "TIKTOK_ENGAGEMENT" || o.orderRef.startsWith("ENG-"))
+      .map((o) => o.orderRef);
+
+    if (engOrderRefs.length > 0) {
+      const engOrders = await prisma.engagementOrder.findMany({
+        where: { orderRef: { in: engOrderRefs } },
+        select: {
+          id: true,
+          orderRef: true,
+          deliveredViews: true,
+          plannedViews: true,
+          deliveredLikes: true,
+          plannedLikes: true,
+          status: true,
+          presetKey: true,
+          updatedAt: true,
+          runs: {
+            select: { id: true, status: true, engagementType: true, runNumber: true },
+          },
+        },
+      });
+      const engMap = new Map(engOrders.map((e) => [e.orderRef, e]));
+      for (const ord of orders as any[]) {
+        if (engMap.has(ord.orderRef)) {
+          ord.engagementOrder = engMap.get(ord.orderRef);
+        }
+      }
+    }
+
     // Self-healing for drip-feed & scheduled orders that were previously marked COMPLETED while batches were still pending
     for (const ord of orders) {
       if (ord.dripFeedRuns && ord.dripFeedRuns.length > 0) {

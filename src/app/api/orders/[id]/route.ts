@@ -32,6 +32,24 @@ export async function GET(
     });
 
     if (!order) {
+      // Check if this ID belongs to an EngagementOrder
+      const engOrder = await prisma.engagementOrder.findFirst({
+        where: {
+          OR: [{ id: params.id }, { orderRef: params.id }],
+        },
+      });
+
+      if (engOrder) {
+        if (session.role !== "ADMIN" && engOrder.userId !== session.user.id) {
+          return NextResponse.json({ success: false, error: "Order not found." }, { status: 404 });
+        }
+        return NextResponse.json({
+          success: true,
+          isEngagementOrder: true,
+          engagementOrderId: engOrder.id,
+        });
+      }
+
       return NextResponse.json(
         { success: false, error: "Order not found." },
         { status: 404 }

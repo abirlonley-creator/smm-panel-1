@@ -15,6 +15,7 @@ import {
   Send,
   ListTree,
   ShieldCheck,
+  Zap,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { DEFAULT_PROVIDER_BALANCE_REFRESH_INTERVAL_MS } from "@/lib/provider/balance";
@@ -23,6 +24,7 @@ import { ProviderBalanceSwitcher } from "@/components/ProviderBalanceSwitcher";
 
 const ALL_NAV_ITEMS = [
   { href: "/order", label: "New Order", icon: PlusCircle, adminOnly: false },
+  { href: "/engagement", label: "Engagement", icon: Zap, adminOnly: false },
   { href: "/services", label: "Services", icon: ListTree, adminOnly: false },
   { href: "/orders", label: "Orders", icon: Layers, adminOnly: false },
   { href: "/api-key", label: "API Key", icon: KeyRound, adminOnly: false },

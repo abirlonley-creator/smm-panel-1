@@ -5,6 +5,7 @@ import { classifyProviderError } from "./error-classifier";
 import { logOrderEvent } from "./event-logger";
 import { recordAdminAlert } from "./alert-service";
 import { runWatchdogCycle } from "./watchdog";
+import { getTikTokEngagementConfig } from "./tiktok-preset-config";
 
 export interface EngagementTickResult {
   processedRuns: number;
@@ -349,6 +350,86 @@ export async function syncOrderDeliveryAndDeviation(orderId: string, now: Date) 
       deliveredComments: deliveredTotals.comments,
     },
   });
+}
+
+/**
+ * Smart Engagement Delivery Logic: Delayed Likes Protection (Requirement 4)
+ * 
+ * If the views provider has confirmed delivery of 500-700 views (or >= configured sync threshold),
+ * but likes delivery is lagging or waiting unnecessarily for the next 120-minute interval,
+ * trigger the next eligible likes batch immediately.
+ */
+export async function checkAndApplyDelayedLikesProtection(orderId: string, now: Date): Promise<boolean> {
+  const order = await prisma.engagementOrder.findUnique({
+    where: { id: orderId },
+    include: {
+      runs: { orderBy: { runNumber: "asc" } },
+    },
+  });
+
+  if (!order || order.platform !== "TikTok" || ["COMPLETED", "CANCELLED", "FAILED"].includes(order.status)) {
+    return false;
+  }
+
+  const config = getTikTokEngagementConfig();
+  const minViewsThreshold = config.syncThreshold?.minViews ?? 500;
+  const maxViewsThreshold = config.syncThreshold?.maxViews ?? 700;
+
+  // Calculate confirmed views delivered
+  const viewsRuns = order.runs.filter((r) => r.engagementType === "views");
+  const confirmedDeliveredViews = viewsRuns.reduce((sum, r) => {
+    return sum + (r.deliveredQuantity ?? (r.status === "confirmed" || r.status === "completed" ? r.quantity : 0));
+  }, 0);
+
+  // Calculate confirmed likes delivered
+  const likesRuns = order.runs.filter((r) => r.engagementType === "likes");
+  const confirmedDeliveredLikes = likesRuns.reduce((sum, r) => {
+    return sum + (r.deliveredQuantity ?? (r.status === "confirmed" || r.status === "completed" ? r.quantity : 0));
+  }, 0);
+
+  // If confirmed views reached the synchronization threshold (e.g. >= 500 views):
+  if (confirmedDeliveredViews >= minViewsThreshold) {
+    // Check if there is an eligible scheduled likes run waiting in the future
+    const nextPendingLikesRun = likesRuns.find(
+      (r) => r.status === "scheduled" && r.scheduledAt.getTime() > now.getTime()
+    );
+
+    // If likes are lagging (e.g. 0 confirmed likes, or only 1 run confirmed while views already surged past 500):
+    const likesConfirmedRunsCount = likesRuns.filter((r) => r.status === "confirmed" || r.status === "completed").length;
+    const shouldAccelerate = confirmedDeliveredLikes === 0 || (likesConfirmedRunsCount < 2 && confirmedDeliveredViews >= minViewsThreshold);
+
+    if (nextPendingLikesRun && shouldAccelerate) {
+      // Accelerate the run to NOW (run immediately without waiting for the 120-minute interval)
+      await prisma.engagementRun.update({
+        where: { id: nextPendingLikesRun.id },
+        data: {
+          scheduledAt: now,
+          isReplan: true,
+        },
+      });
+
+      const reason = `Delayed Likes Protection triggered: Confirmed views reached ${confirmedDeliveredViews.toLocaleString()} (sync threshold ${minViewsThreshold}–${maxViewsThreshold}). Accelerated Likes Run #${nextPendingLikesRun.runNumber} immediately to protect organic engagement ratio.`;
+
+      await prisma.engagementOrder.update({
+        where: { id: order.id },
+        data: {
+          lastReplanReason: reason,
+          replanCount: { increment: 1 },
+        },
+      });
+
+      await logOrderEvent({
+        orderId: order.id,
+        runId: nextPendingLikesRun.id,
+        eventType: "REPLAN",
+        message: reason,
+      }).catch(() => {});
+
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /**
@@ -849,6 +930,13 @@ export async function runEngagementTick(): Promise<EngagementTickResult> {
       console.error(`Deviation sync error for order ${ord.id}:`, syncErr);
     }
 
+    // Delayed Likes Protection: Coordinated smart synchronization between Views and Likes
+    try {
+      await checkAndApplyDelayedLikesProtection(ord.id, now);
+    } catch (smartSyncErr) {
+      console.warn(`Smart sync warning for order ${ord.id}:`, smartSyncErr);
+    }
+
     const unsettled = ord.runs.filter((r) => ["scheduled", "delayed", "sending"].includes(r.status));
     if (unsettled.length === 0 && ord.runs.length > 0) {
       const hasFailed = ord.runs.some((r) => r.status === "failed");
@@ -859,6 +947,47 @@ export async function runEngagementTick(): Promise<EngagementTickResult> {
         data: { status: finalStatus },
       });
       ordersCompleted++;
+    }
+
+    // Synchronize delivery and status with the main Order table if linked
+    try {
+      const linkedMainOrder = await prisma.order.findUnique({
+        where: { orderRef: ord.orderRef },
+      });
+
+      if (linkedMainOrder) {
+        const fullOrd = await prisma.engagementOrder.findUnique({
+          where: { id: ord.id },
+          include: { runs: true },
+        });
+
+        if (fullOrd) {
+          let mainStatus = fullOrd.status;
+          const activeViewsRun = fullOrd.runs.some((r) => r.engagementType === "views" && ["sending", "sent"].includes(r.status));
+          const activeLikesRun = fullOrd.runs.some((r) => r.engagementType === "likes" && ["sending", "sent"].includes(r.status));
+
+          if (fullOrd.status === "PROCESSING") {
+            if (activeViewsRun) mainStatus = "Views Delivering";
+            else if (activeLikesRun) mainStatus = "Likes Delivering";
+          }
+
+          const confirmedViews = fullOrd.runs
+            .filter((r) => r.engagementType === "views")
+            .reduce((sum, r) => sum + (r.deliveredQuantity ?? (r.status === "completed" || r.status === "confirmed" ? r.quantity : 0)), 0);
+
+          await prisma.order.update({
+            where: { id: linkedMainOrder.id },
+            data: {
+              status: mainStatus,
+              submittedQuantity: fullOrd.runs.filter((r) => r.status !== "scheduled").reduce((sum, r) => sum + r.quantity, 0),
+              deliveredQuantity: confirmedViews,
+              remainingQuantity: Math.max(0, fullOrd.plannedViews - confirmedViews),
+            },
+          });
+        }
+      }
+    } catch (mainSyncErr) {
+      console.warn(`Main order sync warning for order ${ord.orderRef}:`, mainSyncErr);
     }
   }
 

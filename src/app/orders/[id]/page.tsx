@@ -120,6 +120,10 @@ export default function OrderDetailPage() {
     try {
       const res = await fetch(`/api/orders/${params.id}`, { cache: "no-store" });
       const data = await res.json();
+      if (data.isEngagementOrder && data.engagementOrderId) {
+        window.location.replace(`/engagement/orders/${data.engagementOrderId}`);
+        return;
+      }
       if (res.ok && data.success && data.order) setOrderFromResponse(data.order);
       else setOrder(null);
     } catch (err) {

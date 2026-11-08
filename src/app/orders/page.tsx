@@ -8,7 +8,8 @@ import {
   ChevronRight, 
   TrendingUp, 
   Loader2,
-  RefreshCw
+  RefreshCw,
+  Zap
 } from "lucide-react";
 import { formatBdDateTime } from "@/lib/date-bd";
 
@@ -26,6 +27,17 @@ interface OrderItem {
   status: string;
   providerOrderId?: string;
   createdAt: string;
+  notes?: string | null;
+  engagementOrder?: {
+    id: string;
+    orderRef: string;
+    deliveredViews: number;
+    plannedViews: number;
+    deliveredLikes: number;
+    plannedLikes: number;
+    status: string;
+    presetKey?: string | null;
+  } | null;
   service: {
     name: string;
     platform: string;
@@ -293,160 +305,194 @@ export default function OrdersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#DEE0ED]/60">
-                {orders.map((order) => (
-                  <tr key={order.id} className="hover:bg-[#F8F9FD]/60 transition-colors">
-                    <td className="py-3.5 px-4 font-bold text-[#252943]">
-                      <div className="flex items-center gap-2">
-                        <Link href={`/orders/${order.id}`} className="hover:text-[#3A4EFB] font-bold text-sm">
-                          {order.orderRef}
-                        </Link>
-                      </div>
+                {orders.map((order) => {
+                  const isEngagement = order.scheduleMode === "TIKTOK_ENGAGEMENT" || Boolean(order.engagementOrder);
+                  const dashboardHref = order.engagementOrder ? `/engagement/orders/${order.engagementOrder.id}` : `/orders/${order.id}`;
 
-                      {/* Prominent Upstream API Provider & Order ID Badge */}
-                      <div className="mt-1 flex items-center gap-1.5 flex-wrap">
-                        {order.providerOrderId ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-                            {order.service.userProvider?.name || order.service.provider?.name || "API"}: #{order.providerOrderId}
-                          </span>
-                        ) : order.dripFeedRuns && order.dripFeedRuns.length > 0 ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
-                            {order.service.userProvider?.name || order.service.provider?.name || "API"}: {order.dripFeedRuns.filter((r) => r.status === "COMPLETED").length}/{order.dripFeedRuns.length} runs sent
-                          </span>
-                        ) : order.isScheduled ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                            {order.service.userProvider?.name || order.service.provider?.name || "API"}: Scheduled
-                          </span>
+                  return (
+                    <tr key={order.id} className="hover:bg-[#F8F9FD]/60 transition-colors">
+                      <td className="py-3.5 px-4 font-bold text-[#252943]">
+                        <div className="flex items-center gap-2">
+                          <Link href={dashboardHref} className="hover:text-[#3A4EFB] font-bold text-sm">
+                            {order.orderRef}
+                          </Link>
+                        </div>
+
+                        {/* Prominent Upstream API Provider & Order ID Badge */}
+                        <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                          {isEngagement ? (
+                            <>
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-[#3A4EFB]/10 text-[#3A4EFB] border border-[#3A4EFB]/20">
+                                <Zap className="w-2.5 h-2.5" /> TikTok Engagement
+                              </span>
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                Xmedia (Views)
+                              </span>
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                                Zeofame (Likes)
+                              </span>
+                            </>
+                          ) : order.providerOrderId ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                              {order.service.userProvider?.name || order.service.provider?.name || "API"}: #{order.providerOrderId}
+                            </span>
+                          ) : order.dripFeedRuns && order.dripFeedRuns.length > 0 ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                              {order.service.userProvider?.name || order.service.provider?.name || "API"}: {order.dripFeedRuns.filter((r) => r.status === "COMPLETED").length}/{order.dripFeedRuns.length} runs sent
+                            </span>
+                          ) : order.isScheduled ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                              {order.service.userProvider?.name || order.service.provider?.name || "API"}: Scheduled
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-gray-50 text-gray-500 border border-gray-200">
+                              {order.service.userProvider?.name || order.service.provider?.name || "API"}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="text-[10px] text-[#252943]/50 font-normal mt-0.5">
+                          {formatBdDateTime(order.createdAt)} BD
+                        </div>
+                      </td>
+
+                      <td className="py-3.5 px-4 max-w-[220px]">
+                        <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-[#DEE0ED]/60 text-[#252943] mr-1.5">
+                          {isEngagement ? "TikTok" : order.service.platform}
+                        </span>
+                        <span className="font-semibold text-[#252943] truncate block mt-0.5">
+                          {isEngagement ? "TikTok Organic Working Preset" : order.service.name}
+                        </span>
+                      </td>
+
+                      <td className="py-3.5 px-4 max-w-[180px] truncate font-normal text-[#252943]/80">
+                        {order.targetUrl}
+                      </td>
+
+                      <td className="py-3.5 px-4 text-right">
+                        {isEngagement ? (
+                          <div className="space-y-0.5">
+                            <div className="font-extrabold text-[#252943] text-xs">
+                              👁️ {(order.engagementOrder?.deliveredViews ?? 0).toLocaleString()} / {(order.engagementOrder?.plannedViews ?? order.requestedQuantity).toLocaleString()}
+                            </div>
+                            <div className="font-extrabold text-rose-600 text-[11px]">
+                              ❤️ {(order.engagementOrder?.deliveredLikes ?? 0).toLocaleString()} / {(order.engagementOrder?.plannedLikes ?? 42).toLocaleString()}
+                            </div>
+                          </div>
+                        ) : order.scheduleMode === "ADAPTIVE" ? (
+                          <>
+                            <div className="font-bold text-[#252943]">
+                              {order.steps?.reduce((total, step) => total + (step.quantity || 0), 0).toLocaleString() || "0"}
+                            </div>
+                            <div className="text-[10px] text-[#252943]/60 font-medium">
+                              {order.steps?.length
+                                ? `from ${order.steps.length} measured ${order.steps.length === 1 ? "batch" : "batches"}`
+                                : "no batches measured yet"}
+                            </div>
+                          </>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-gray-50 text-gray-500 border border-gray-200">
-                            {order.service.userProvider?.name || order.service.provider?.name || "API"}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="text-[10px] text-[#252943]/50 font-normal mt-0.5">
-                        {formatBdDateTime(order.createdAt)} BD
-                      </div>
-                    </td>
-
-                    <td className="py-3.5 px-4 max-w-[220px]">
-                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-[#DEE0ED]/60 text-[#252943] mr-1.5">
-                        {order.service.platform}
-                      </span>
-                      <span className="font-semibold text-[#252943] truncate block mt-0.5">
-                        {order.service.name}
-                      </span>
-                    </td>
-
-                    <td className="py-3.5 px-4 max-w-[180px] truncate font-normal text-[#252943]/80">
-                      {order.targetUrl}
-                    </td>
-
-                    <td className="py-3.5 px-4 text-right">
-                      {order.scheduleMode === "ADAPTIVE" ? (
-                        <>
-                          <div className="font-bold text-[#252943]">
-                            {order.steps?.reduce((total, step) => total + (step.quantity || 0), 0).toLocaleString() || "0"}
-                          </div>
-                          <div className="text-[10px] text-[#252943]/60 font-medium">
-                            {order.steps?.length
-                              ? `from ${order.steps.length} measured ${order.steps.length === 1 ? "batch" : "batches"}`
-                              : "no batches measured yet"}
-                          </div>
-                        </>
-                      ) : (
-                        (() => {
-                          const dripCompleted = order.dripFeedRuns
-                            ? order.dripFeedRuns.filter((r) => r.status === "COMPLETED").reduce((sum, r) => sum + r.quantity, 0)
-                            : 0;
-                          const dripDispatched = order.dripFeedRuns
-                            ? order.dripFeedRuns.filter((r) => ["COMPLETED", "SUBMITTED", "PROCESSING"].includes(r.status)).reduce((sum, r) => sum + r.quantity, 0)
-                            : 0;
-                          const hasPendingBatches = Boolean(
-                            (order.dripFeedRuns && order.dripFeedRuns.some((r) => ["PENDING", "PROCESSING"].includes(r.status))) ||
-                            (order.steps && order.steps.some((s) => ["PENDING", "PROCESSING"].includes(s.status)))
-                          );
-                          const delivered =
-                            order.dripFeedRuns && order.dripFeedRuns.length > 0
-                              ? hasPendingBatches
-                                ? Math.min(dripDispatched, Math.max(0, dripCompleted))
-                                : order.status === "COMPLETED"
-                                  ? Math.max(order.deliveredQuantity, order.submittedQuantity || order.requestedQuantity)
-                                  : Math.min(dripDispatched, Math.max(order.deliveredQuantity, dripCompleted))
-                              : order.steps && order.steps.length > 0
+                          (() => {
+                            const dripCompleted = order.dripFeedRuns
+                              ? order.dripFeedRuns.filter((r) => r.status === "COMPLETED").reduce((sum, r) => sum + r.quantity, 0)
+                              : 0;
+                            const dripDispatched = order.dripFeedRuns
+                              ? order.dripFeedRuns.filter((r) => ["COMPLETED", "SUBMITTED", "PROCESSING"].includes(r.status)).reduce((sum, r) => sum + r.quantity, 0)
+                              : 0;
+                            const hasPendingBatches = Boolean(
+                              (order.dripFeedRuns && order.dripFeedRuns.some((r) => ["PENDING", "PROCESSING"].includes(r.status))) ||
+                              (order.steps && order.steps.some((s) => ["PENDING", "PROCESSING"].includes(s.status)))
+                            );
+                            const delivered =
+                              order.dripFeedRuns && order.dripFeedRuns.length > 0
                                 ? hasPendingBatches
-                                  ? Math.min(order.requestedQuantity, order.steps.filter((s) => s.status === "COMPLETED").reduce((sum, s) => sum + s.quantity, 0))
+                                  ? Math.min(dripDispatched, Math.max(0, dripCompleted))
                                   : order.status === "COMPLETED"
                                     ? Math.max(order.deliveredQuantity, order.submittedQuantity || order.requestedQuantity)
-                                    : order.deliveredQuantity
-                                : order.status === "COMPLETED"
-                                  ? Math.max(order.deliveredQuantity, order.submittedQuantity || order.requestedQuantity)
-                                  : order.deliveredQuantity;
-                          const pct = Math.min(100, Math.round((delivered / (order.requestedQuantity || 1)) * 100));
-                          return (
-                            <>
-                              <div className="font-bold text-[#252943]">
-                                {delivered.toLocaleString()} / {order.requestedQuantity.toLocaleString()}
-                              </div>
-                              <div className={`text-[10px] font-medium ${pct >= 100 && !hasPendingBatches ? "text-emerald-600 font-bold" : "text-[#252943]/60"}`}>
-                                {pct}% delivered
-                              </div>
-                            </>
-                          );
-                        })()
-                      )}
-                    </td>
+                                    : Math.min(dripDispatched, Math.max(order.deliveredQuantity, dripCompleted))
+                                : order.steps && order.steps.length > 0
+                                  ? hasPendingBatches
+                                    ? Math.min(order.requestedQuantity, order.steps.filter((s) => s.status === "COMPLETED").reduce((sum, s) => sum + s.quantity, 0))
+                                    : order.status === "COMPLETED"
+                                      ? Math.max(order.deliveredQuantity, order.submittedQuantity || order.requestedQuantity)
+                                      : order.deliveredQuantity
+                                  : order.status === "COMPLETED"
+                                    ? Math.max(order.deliveredQuantity, order.submittedQuantity || order.requestedQuantity)
+                                    : order.deliveredQuantity;
+                            const pct = Math.min(100, Math.round((delivered / (order.requestedQuantity || 1)) * 100));
+                            return (
+                              <>
+                                <div className="font-bold text-[#252943]">
+                                  {delivered.toLocaleString()} / {order.requestedQuantity.toLocaleString()}
+                                </div>
+                                <div className={`text-[10px] font-medium ${pct >= 100 && !hasPendingBatches ? "text-emerald-600 font-bold" : "text-[#252943]/60"}`}>
+                                  {pct}% delivered
+                                </div>
+                              </>
+                            );
+                          })()
+                        )}
+                      </td>
 
-                    <td className="py-3.5 px-4 text-right font-bold text-[#3A4EFB] text-sm">
-                      {order.scheduleMode === "ADAPTIVE"
-                        ? `₹${((Math.max(0, order.submittedQuantity) / 1000) * order.service.ratePer1000).toFixed(2)}`
-                        : `₹${Number(order.totalCost).toFixed(2)}`}
-                      {order.scheduleMode === "ADAPTIVE" && (
-                        <span className="block text-[9px] font-normal text-[#252943]/50">estimated value sent</span>
-                      )}
-                    </td>
+                      <td className="py-3.5 px-4 text-right font-bold text-[#3A4EFB] text-sm">
+                        {order.scheduleMode === "ADAPTIVE"
+                          ? `₹${((Math.max(0, order.submittedQuantity) / 1000) * order.service.ratePer1000).toFixed(2)}`
+                          : `₹${Number(order.totalCost).toFixed(2)}`}
+                        {order.scheduleMode === "ADAPTIVE" && (
+                          <span className="block text-[9px] font-normal text-[#252943]/50">estimated value sent</span>
+                        )}
+                      </td>
 
-                    <td className="py-3.5 px-4">
-                      {order.isScheduled ? (
-                        <div className="inline-flex items-center gap-1 text-[11px] font-medium text-[#252943] bg-[#DEE0ED]/60 px-2 py-0.5 rounded-full">
-                          <TrendingUp className="w-3 h-3 text-[#3A4EFB]" />
-                          <span>
-                            {order.scheduleMode === "ADAPTIVE"
-                              ? `Likes Analyze · ${order.steps?.length || 0} ${order.steps?.length === 1 ? "batch" : "batches"}`
-                              : order.scheduleMode === "DRIP_FEED"
-                                ? `Drip Feed (${order.dripFeedRuns?.length || 0} runs)`
-                                : `${order.scheduleMode || "Drip"} (${order.steps?.length || 0} steps)`}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-[11px] text-[#252943]/70">Instant</span>
-                      )}
-                    </td>
+                      <td className="py-3.5 px-4">
+                        {isEngagement ? (
+                          <div className="inline-flex items-center gap-1 text-[11px] font-extrabold text-purple-900 bg-purple-50 border border-purple-200 px-2.5 py-0.5 rounded-full">
+                            <Zap className="w-3 h-3 text-[#3A4EFB]" />
+                            <span>16 Views + 3 Likes Runs</span>
+                          </div>
+                        ) : order.isScheduled ? (
+                          <div className="inline-flex items-center gap-1 text-[11px] font-medium text-[#252943] bg-[#DEE0ED]/60 px-2 py-0.5 rounded-full">
+                            <TrendingUp className="w-3 h-3 text-[#3A4EFB]" />
+                            <span>
+                              {order.scheduleMode === "ADAPTIVE"
+                                ? `Likes Analyze · ${order.steps?.length || 0} ${order.steps?.length === 1 ? "batch" : "batches"}`
+                                : order.scheduleMode === "DRIP_FEED"
+                                  ? `Drip Feed (${order.dripFeedRuns?.length || 0} runs)`
+                                  : `${order.scheduleMode || "Drip"} (${order.steps?.length || 0} steps)`}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-[11px] text-[#252943]/70">Instant</span>
+                        )}
+                      </td>
 
-                    <td className="py-3.5 px-4">
-                      <StatusBadge
-                        status={
-                          Boolean(
-                            (order.dripFeedRuns && order.dripFeedRuns.some((r) => ["PENDING", "PROCESSING"].includes(r.status))) ||
-                            (order.steps && order.steps.some((s) => ["PENDING", "PROCESSING"].includes(s.status)))
-                          ) && order.status === "COMPLETED"
-                            ? "PROCESSING"
-                            : order.status
-                        }
-                        label={order.scheduleMode === "ADAPTIVE" && order.status === "SCHEDULED" ? "Monitoring" : undefined}
-                      />
-                    </td>
+                      <td className="py-3.5 px-4">
+                        <StatusBadge
+                          status={
+                            isEngagement
+                              ? (order.engagementOrder?.status || order.status)
+                              : Boolean(
+                                  (order.dripFeedRuns && order.dripFeedRuns.some((r) => ["PENDING", "PROCESSING"].includes(r.status))) ||
+                                  (order.steps && order.steps.some((s) => ["PENDING", "PROCESSING"].includes(s.status)))
+                                ) && order.status === "COMPLETED"
+                                ? "PROCESSING"
+                                : order.status
+                          }
+                          label={order.scheduleMode === "ADAPTIVE" && order.status === "SCHEDULED" ? "Monitoring" : undefined}
+                        />
+                      </td>
 
-                    <td className="py-3.5 px-4 text-right">
-                      <Link
-                        href={`/orders/${order.id}`}
-                        className="inline-flex items-center gap-1 text-xs font-semibold text-[#3A4EFB] hover:text-[#2C3FE0]"
-                      >
-                        Inspect <ChevronRight className="w-3.5 h-3.5" />
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
+                      <td className="py-3.5 px-4 text-right">
+                        <Link
+                          href={dashboardHref}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-[#3A4EFB] hover:text-[#2C3FE0]"
+                        >
+                          <span>{isEngagement ? "Inspect Dashboard" : "Inspect"}</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
