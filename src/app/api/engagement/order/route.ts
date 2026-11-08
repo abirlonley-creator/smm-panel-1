@@ -5,6 +5,7 @@ import { decryptApiKey } from "@/lib/security/crypto";
 import { StandardSMMv2Provider, MockSMMProvider } from "@/lib/provider/adapter";
 import { getTikTokEngagementConfig } from "@/lib/engagement/tiktok-preset-config";
 import { logOrderEvent } from "@/lib/engagement/event-logger";
+import { runEngagementTick } from "@/lib/engagement/worker";
 import { z } from "zod";
 
 const createEngagementOrderSchema = z.object({
@@ -225,7 +226,10 @@ export async function POST(request: Request) {
       viewsRuns.push({ runNumber: i + 1, scheduledAt, quantity: qty, cost: runCost });
     }
 
-    // 3 Likes runs, randomly 12 - 16, every 120 minutes (run 1 at 0m, run 2 at 120m, run 3 at 240m)
+    // 3 Likes runs, randomly 12 - 16, every 120 minutes
+    // NOTE: Likes do NOT send immediately upon clicking Order!
+    // Run #1 begins after 120 minutes (2h), Run #2 at 240 minutes (4h), and Run #3 at 360 minutes (6h).
+    // (If views delivery surpasses 500-700 views earlier, Delayed Likes Protection will accelerate Run #1 immediately).
     const likesRuns: Array<{ runNumber: number; scheduledAt: Date; quantity: number; cost: number }> = [];
     let totalPlannedLikes = 0;
     let totalLikesCost = 0;
@@ -234,7 +238,8 @@ export async function POST(request: Request) {
       const minL = Math.min(config.likes.minQuantity, config.likes.maxQuantity);
       const maxL = Math.max(config.likes.minQuantity, config.likes.maxQuantity);
       const qty = Math.floor(Math.random() * (maxL - minL + 1)) + minL;
-      const scheduledAt = new Date(now + i * config.likes.intervalMinutes * 60 * 1000);
+      // Start likes at +120 minutes (i + 1), not immediately at 0m
+      const scheduledAt = new Date(now + (i + 1) * config.likes.intervalMinutes * 60 * 1000);
       const runCost = Number(((qty / 1000) * likesRate).toFixed(4));
 
       totalPlannedLikes += qty;
@@ -262,7 +267,11 @@ export async function POST(request: Request) {
 
     const orderRef = `ENG-${Math.floor(100000 + Math.random() * 900000)}`;
     const newBalance = Number((currentBalance - totalCost).toFixed(2));
-    const durationHours = Number(((config.views.runsCount * config.views.intervalMinutes) / 60).toFixed(1));
+    const maxDurationMinutes = Math.max(
+      (config.views.runsCount - 1) * config.views.intervalMinutes,
+      config.likes.runsCount * config.likes.intervalMinutes
+    );
+    const durationHours = Number((maxDurationMinutes / 60).toFixed(1));
 
     // 4. Transactionally Deduct Balance, Create EngagementOrder, Runs, and Main Order
     const result = await prisma.$transaction(async (tx) => {
@@ -400,8 +409,13 @@ export async function POST(request: Request) {
     await logOrderEvent({
       orderId: result.id,
       eventType: "STATE_CHANGE",
-      message: `TikTok Organic Engagement started with 16 Views runs via Xmedia (#${xmediaTargetServiceId}) and 3 Likes runs via Zeofame (#${zeofameTargetServiceId}).`,
+      message: `TikTok Organic Engagement started with 16 Views runs via Xmedia (#${xmediaTargetServiceId}) and 3 Likes runs via Zeofame (#${zeofameTargetServiceId}). Views begin immediately (Run #1 at 0m), while Likes start after 120 minutes.`,
     }).catch(() => {});
+
+    // Dispatch immediate views delivery (Run #1 at t=0) as soon as user hits Order button
+    runEngagementTick().catch((tickErr) => {
+      console.warn("[ENGAGEMENT] Immediate views dispatch tick warning:", tickErr);
+    });
 
     return NextResponse.json({
       success: true,

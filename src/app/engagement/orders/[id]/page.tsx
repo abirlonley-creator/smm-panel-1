@@ -893,7 +893,7 @@ export default function EngagementOrderDetailPage() {
                 {formatBdDateTime(order.createdAt)} ({formatBdTime(order.createdAt)} BD)
               </span>
               <p className="text-xs text-[#252943]/70">
-                16 Views batches (Xmedia #10322) and 3 Likes batches (Zeofame #1123) successfully queued with transaction-safe wallet deduction.
+                16 Views batches (Xmedia #10322, Run #1 immediate) and 3 Likes batches (Zeofame #1123, 1st batch after 120m) successfully queued with transaction-safe wallet deduction.
               </p>
             </div>
 

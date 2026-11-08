@@ -495,7 +495,7 @@ export default function EngagementPage() {
               </div>
               <div className="flex justify-between">
                 <span>Interval:</span>
-                <span className="font-bold text-[#252943]">Every {config?.likes.intervalMinutes} minutes (0m, 120m, 240m)</span>
+                <span className="font-bold text-[#252943]">Every {config?.likes.intervalMinutes}m (1st run at 120m, then 240m, 360m)</span>
               </div>
               <div className="flex justify-between">
                 <span>Estimated Total Likes:</span>
@@ -512,7 +512,7 @@ export default function EngagementPage() {
             <span>Smart Synchronization Condition: Delayed Likes Protection</span>
           </div>
           <p className="leading-relaxed">
-            If the views provider has confirmed between <strong>{config?.syncThreshold.minViews} and {config?.syncThreshold.maxViews} views</strong>, but likes delivery is lagging or waiting unnecessarily for the next 120-minute interval, the system automatically accelerates the next 12–16 likes delivery immediately.
+            Views start immediately upon ordering (Run #1 at 0m). Likes first run starts after <strong>120 minutes</strong>. However, if the views provider has already confirmed between <strong>{config?.syncThreshold.minViews} and {config?.syncThreshold.maxViews} views</strong>, the system detects this and triggers the next 12–16 likes delivery immediately without waiting for the 120-minute timer.
           </p>
         </div>
 
@@ -541,7 +541,7 @@ export default function EngagementPage() {
           <div className="p-5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] space-y-3">
             <div className="flex items-center justify-between text-xs text-[#252943]/70 pb-2 border-b border-[#DEE0ED]/60">
               <span>Estimated Duration:</span>
-              <span className="font-bold text-[#252943]">~5 Hours 20 Minutes (320 minutes)</span>
+              <span className="font-bold text-[#252943]">~6 Hours (360 minutes)</span>
             </div>
 
             <div className="flex items-center justify-between text-xs text-[#252943]/70">
