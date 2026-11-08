@@ -827,6 +827,11 @@ export async function runEngagementTick(): Promise<EngagementTickResult> {
           const res = await resolveProviderById(sRun.providerId);
           adapter = res.adapter;
         } catch {}
+      } else if (sRun.serviceId) {
+        try {
+          const routing = await resolveServiceRouting(sRun.serviceId);
+          adapter = routing.adapter;
+        } catch {}
       }
 
       const statusRes = await adapter.getOrderStatus(sRun.providerOrderId!);
