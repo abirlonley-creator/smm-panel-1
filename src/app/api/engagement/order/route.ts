@@ -12,6 +12,8 @@ const createEngagementOrderSchema = z.object({
   targetUrl: z.string().url("Valid post or video URL required"),
   presetName: z.string().optional().default("TikTok Organic Working Preset"),
   platform: z.string().default("TikTok"),
+  plannedViews: z.array(z.number().int()).optional(),
+  plannedLikes: z.array(z.number().int()).optional(),
 });
 
 export async function POST(request: Request) {
@@ -214,10 +216,21 @@ export async function POST(request: Request) {
     let totalPlannedViews = 0;
     let totalViewsCost = 0;
 
+    const minV = Math.min(config.views.minQuantity, config.views.maxQuantity);
+    const maxV = Math.max(config.views.minQuantity, config.views.maxQuantity);
+
     for (let i = 0; i < config.views.runsCount; i++) {
-      const minV = Math.min(config.views.minQuantity, config.views.maxQuantity);
-      const maxV = Math.max(config.views.minQuantity, config.views.maxQuantity);
-      const qty = Math.floor(Math.random() * (maxV - minV + 1)) + minV;
+      let qty: number;
+      if (
+        parsed.plannedViews &&
+        typeof parsed.plannedViews[i] === "number" &&
+        parsed.plannedViews[i] >= minV &&
+        parsed.plannedViews[i] <= maxV
+      ) {
+        qty = parsed.plannedViews[i];
+      } else {
+        qty = Math.floor(Math.random() * (maxV - minV + 1)) + minV;
+      }
       const scheduledAt = new Date(now + i * config.views.intervalMinutes * 60 * 1000);
       const runCost = Number(((qty / 1000) * viewsRate).toFixed(4));
 
@@ -259,10 +272,21 @@ export async function POST(request: Request) {
       ? (targetLastLikesOffsetMs - targetFirstLikesOffsetMs) / (likesRunsCount - 1)
       : 0;
 
+    const minL = Math.min(config.likes.minQuantity, config.likes.maxQuantity);
+    const maxL = Math.max(config.likes.minQuantity, config.likes.maxQuantity);
+
     for (let i = 0; i < likesRunsCount; i++) {
-      const minL = Math.min(config.likes.minQuantity, config.likes.maxQuantity);
-      const maxL = Math.max(config.likes.minQuantity, config.likes.maxQuantity);
-      const qty = Math.floor(Math.random() * (maxL - minL + 1)) + minL;
+      let qty: number;
+      if (
+        parsed.plannedLikes &&
+        typeof parsed.plannedLikes[i] === "number" &&
+        parsed.plannedLikes[i] >= minL &&
+        parsed.plannedLikes[i] <= maxL
+      ) {
+        qty = parsed.plannedLikes[i];
+      } else {
+        qty = Math.floor(Math.random() * (maxL - minL + 1)) + minL;
+      }
       const scheduledOffsetMs = Math.round(targetFirstLikesOffsetMs + i * likesStepMs);
       const scheduledAt = new Date(now + scheduledOffsetMs);
       const runCost = Number(((qty / 1000) * likesRate).toFixed(4));
