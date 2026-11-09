@@ -103,6 +103,7 @@ export default function EngagementOrderDetailPage() {
   const [actionMsg, setActionMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [activeTab, setActiveTab] = useState<"overview" | "views" | "likes" | "timeline">("overview");
   const [retryingRunId, setRetryingRunId] = useState<string | null>(null);
+  const [retryingAll, setRetryingAll] = useState(false);
   const [cancelling, setCancelling] = useState(false);
 
   async function fetchOrderDetail() {
@@ -171,6 +172,29 @@ export default function EngagementOrderDetailPage() {
       setActionMsg({ text: err.message || "Retry failed", type: "error" });
     } finally {
       setRetryingRunId(null);
+    }
+  }
+
+  async function handleRetryAllFailed() {
+    setRetryingAll(true);
+    setActionMsg(null);
+    try {
+      const res = await fetch(`/api/engagement/orders/${orderId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "retry_all_failed" }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setActionMsg({ text: data.message, type: "success" });
+        await fetchOrderDetail();
+      } else {
+        setActionMsg({ text: data.error || "Failed to retry all runs.", type: "error" });
+      }
+    } catch (err: any) {
+      setActionMsg({ text: err.message || "Retry all failed", type: "error" });
+    } finally {
+      setRetryingAll(false);
     }
   }
 
@@ -252,6 +276,8 @@ export default function EngagementOrderDetailPage() {
 
   const delayedLikesEvents = Array.isArray(order.delayedLikesEvents) ? order.delayedLikesEvents : [];
   const hasDelayedLikesProtectionTriggered = delayedLikesEvents.length > 0;
+  const failedRuns = allRuns.filter((r) => r.status === "failed");
+  const hasFailedRuns = failedRuns.length > 0;
 
   // Status badge styling
   const statusColors: Record<string, { bg: string; text: string; border: string }> = {
@@ -359,6 +385,32 @@ export default function EngagementOrderDetailPage() {
               <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
             )}
             <span>{actionMsg.text}</span>
+          </div>
+        )}
+
+        {/* Failed Runs Banner with 1-Click Safe Staggered Retry */}
+        {hasFailedRuns && (
+          <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-subtle">
+            <div className="flex items-center gap-2.5">
+              <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+              <div>
+                <span className="text-xs font-bold block text-rose-900">
+                  {failedRuns.length} delivery batches encountered upstream provider conflicts (active delivery on link)
+                </span>
+                <span className="text-[11px] text-rose-800/80">
+                  Click below to resume and retry all failed batches safely spaced 20 minutes apart without link collisions.
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleRetryAllFailed}
+              disabled={retryingAll}
+              className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all shadow-subtle shrink-0 flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              {retryingAll ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+              <span>Retry All Failed ({failedRuns.length})</span>
+            </button>
           </div>
         )}
 

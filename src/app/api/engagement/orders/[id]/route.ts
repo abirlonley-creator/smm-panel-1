@@ -276,11 +276,19 @@ export async function POST(
         return NextResponse.json({ success: false, error: `Run cannot be retried from '${run.status}' status` }, { status: 400 });
       }
 
+      // Check if another run for this metric is currently in-flight
+      const activeInFlight = order.runs.some(
+        (r) => r.id !== run.id && r.engagementType === run.engagementType && ["sending", "sent"].includes(r.status)
+      );
+      const scheduledAt = activeInFlight
+        ? new Date(Date.now() + 5 * 60 * 1000)
+        : new Date();
+
       await prisma.engagementRun.update({
         where: { id: run.id },
         data: {
           status: "scheduled",
-          scheduledAt: new Date(),
+          scheduledAt,
           attempts: 0,
           errorMessage: null,
           isReplan: true,
@@ -288,7 +296,7 @@ export async function POST(
       });
 
       // Also reset parent order to PROCESSING if it had failed
-      if (order.status === "FAILED" || order.status === "PARTIAL") {
+      if (order.status === "FAILED" || order.status === "PARTIAL" || order.status === "COMPLETED") {
         await prisma.engagementOrder.update({
           where: { id: order.id },
           data: { status: "PROCESSING" },
@@ -297,7 +305,39 @@ export async function POST(
 
       return NextResponse.json({
         success: true,
-        message: `Run #${run.runNumber} scheduled for immediate retry.`,
+        message: `Run #${run.runNumber} scheduled for ${activeInFlight ? "staggered retry in 5m (waiting for in-flight batch)" : "immediate retry"}.`,
+      });
+    }
+
+    if (action === "retry_all_failed") {
+      const failedRuns = order.runs.filter((r) => r.status === "failed");
+      if (failedRuns.length === 0) {
+        return NextResponse.json({ success: false, error: "No failed runs to retry" }, { status: 400 });
+      }
+
+      const now = Date.now();
+      for (let i = 0; i < failedRuns.length; i++) {
+        const fr = failedRuns[i];
+        await prisma.engagementRun.update({
+          where: { id: fr.id },
+          data: {
+            status: "scheduled",
+            scheduledAt: new Date(now + i * 20 * 60 * 1000),
+            attempts: 0,
+            errorMessage: null,
+            isReplan: true,
+          },
+        });
+      }
+
+      await prisma.engagementOrder.update({
+        where: { id: order.id },
+        data: { status: "PROCESSING" },
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: `${failedRuns.length} failed runs rescheduled safely spaced 20 minutes apart.`,
       });
     }
 

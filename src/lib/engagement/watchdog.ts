@@ -130,26 +130,40 @@ export async function runWatchdogCycle(): Promise<WatchdogResult> {
       engagementOrder: true,
     },
     take: 20,
+    orderBy: { scheduledAt: "asc" },
   });
 
+  // Group by engagementOrderId + engagementType to space them apart and prevent concurrent provider collisions
+  const missedGroups = new Map<string, typeof missedRuns>();
   for (const missed of missedRuns) {
-    const latenessSeconds = Math.max(0, Math.round((now.getTime() - missed.scheduledAt.getTime()) / 1000));
-    // Re-schedule immediately without shifting or compressing future runs
-    await prisma.engagementRun.update({
-      where: { id: missed.id },
-      data: {
-        scheduledAt: now,
-        latenessSeconds,
-      },
-    });
+    const key = `${missed.engagementOrderId}:${missed.engagementType}`;
+    if (!missedGroups.has(key)) missedGroups.set(key, []);
+    missedGroups.get(key)!.push(missed);
+  }
 
-    await logOrderEvent({
-      orderId: missed.engagementOrderId,
-      runId: missed.id,
-      eventType: "WATCHDOG",
-      message: `Watchdog identified missed run #${missed.runNumber} (${latenessSeconds}s late) and queued it for immediate execution.`,
-    });
-    missedRecovered++;
+  for (const group of Array.from(missedGroups.values())) {
+    for (let i = 0; i < group.length; i++) {
+      const missed = group[i];
+      const latenessSeconds = Math.max(0, Math.round((now.getTime() - missed.scheduledAt.getTime()) / 1000));
+      // First missed run starts now; subsequent missed runs are safely spaced 20 minutes apart so providers never reject concurrent links!
+      const staggeredAt = new Date(now.getTime() + i * 20 * 60 * 1000);
+
+      await prisma.engagementRun.update({
+        where: { id: missed.id },
+        data: {
+          scheduledAt: staggeredAt,
+          latenessSeconds,
+        },
+      });
+
+      await logOrderEvent({
+        orderId: missed.engagementOrderId,
+        runId: missed.id,
+        eventType: "WATCHDOG",
+        message: `Watchdog recovered missed run #${missed.runNumber} (${latenessSeconds}s late). Rescheduled safely for ${i === 0 ? "immediate dispatch" : `+${i * 20}m staggered`}.`,
+      });
+      missedRecovered++;
+    }
   }
 
   return {

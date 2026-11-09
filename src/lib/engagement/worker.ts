@@ -584,6 +584,35 @@ export async function runEngagementTick(): Promise<EngagementTickResult> {
       continue;
     }
 
+    const order = run.engagementOrder;
+
+    // CRITICAL CONCURRENCY GUARD: Check if there is already an active run in-flight for this order and metric!
+    // Upstream SMM providers (like Xmedia) reject concurrent orders for the same URL:
+    // "You have active order with this link. Please wait until order being completed."
+    const existingInFlightRun = await prisma.engagementRun.findFirst({
+      where: {
+        engagementOrderId: run.engagementOrderId,
+        engagementType: run.engagementType,
+        status: { in: ["sending", "sent"] },
+        id: { not: run.id },
+      },
+    });
+
+    if (existingInFlightRun) {
+      // An earlier batch for this link is already running upstream!
+      // Revert this run back to scheduled, deferred by 3 minutes so it waits for the current batch to complete
+      await prisma.engagementRun.update({
+        where: { id: run.id },
+        data: {
+          status: "scheduled",
+          scheduledAt: new Date(now.getTime() + 3 * 60 * 1000),
+          claimedAt: null,
+          attempts: { decrement: 1 }, // do NOT penalize attempt count for waiting
+        },
+      });
+      continue;
+    }
+
     // Immediately transition to sending
     await prisma.engagementRun.update({
       where: { id: run.id },
@@ -591,7 +620,6 @@ export async function runEngagementTick(): Promise<EngagementTickResult> {
     });
 
     processedRuns++;
-    const order = run.engagementOrder;
     const currentAttempt = run.attempts + 1;
 
     // Lateness Alert if delayed > 120s
@@ -712,6 +740,34 @@ export async function runEngagementTick(): Promise<EngagementTickResult> {
         responseCode: classified.httpStatus,
         rawResponse: errMsg,
       });
+
+      // Active Order Conflict: Upstream provider is still completing an active delivery on this link!
+      if (classified.errorType === "active_order_conflict") {
+        delayedRuns++;
+        const nextScheduled = new Date(now.getTime() + 4 * 60 * 1000);
+
+        await prisma.engagementRun.update({
+          where: { id: run.id },
+          data: {
+            status: "delayed",
+            scheduledAt: nextScheduled,
+            errorType: classified.errorType,
+            httpStatus: classified.httpStatus,
+            errorMessage: "Active upstream batch in progress. Auto-waiting 4m for provider to complete.",
+            rawResponse: sanitizeProviderResponse(errMsg),
+            attempts: { decrement: 1 }, // do NOT penalize attempt count for upstream completion wait
+          },
+        });
+
+        await logOrderEvent({
+          orderId: order.id,
+          runId: run.id,
+          eventType: "PROVIDER_CALL",
+          message: `Run #${run.runNumber} (${run.engagementType}) waiting: Upstream provider has an active order running for this video link. Automatically waiting 4 minutes before next attempt.`,
+        }).catch(() => {});
+
+        continue;
+      }
 
       if (isFatal || isMaxAttempts) {
         // Permanent failure: transition to 'failed', refund run cost, log event, record deduplicated alert

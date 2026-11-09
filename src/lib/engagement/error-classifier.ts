@@ -10,6 +10,7 @@ export type SMMErrorType =
   | "service_not_found"
   | "rate_limit"
   | "link_rejected"
+  | "active_order_conflict"
   | "dns_tls"
   | "unknown";
 
@@ -112,7 +113,24 @@ export function classifyProviderError(err: string | Error | any, httpStatus?: nu
     };
   }
 
-  // 7. Link / Target URL Rejected
+  // 7. Active Order Conflict on Upstream Provider (e.g. Xmedia: "You have active order with this link")
+  if (
+    lower.includes("active order with this link") ||
+    lower.includes("wait until order being completed") ||
+    lower.includes("already in progress") ||
+    lower.includes("order already exists for this link") ||
+    lower.includes("order already in progress")
+  ) {
+    return {
+      errorType: "active_order_conflict",
+      httpStatus: 409,
+      plainLanguage: "Upstream provider is currently fulfilling an active delivery for this video link.",
+      isFatal: false,
+      suggestedAction: "System automatically defers this run until the active batch finishes on the provider.",
+    };
+  }
+
+  // 8. Link / Target URL Rejected
   if (
     lower.includes("invalid link") ||
     lower.includes("link rejected") ||
