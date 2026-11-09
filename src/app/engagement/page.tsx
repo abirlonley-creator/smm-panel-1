@@ -357,7 +357,7 @@ export default function EngagementPage() {
       if (runNumber === 1) {
         note = "Instant Launch • View batch #1 dispatches immediately";
       } else if (runNumber === Math.ceil(currentPreset.views.count * 0.25)) {
-        note = `Views crossing ${currentPreset.syncThreshold.minViews}+ • Delayed Likes Protection active`;
+        note = "Steady Momentum • Natural scheduled pacing active";
       } else if (runNumber === currentPreset.views.count) {
         note = "Final Views Batch • Campaign 100% Completed";
       }
@@ -846,11 +846,11 @@ export default function EngagementPage() {
             </div>
           </div>
 
-          {/* Delayed Likes Protection Explainer */}
-          <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-2.5 text-xs text-amber-950">
-            <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-            <p className="text-[11px] text-amber-900/90 leading-relaxed">
-              <strong>Delayed Likes Protection is Active:</strong> If views surge past {currentPreset.syncThreshold.minViews.toLocaleString()} early, the system immediately pulls forward the next likes and saves wave to preserve natural organic ratios.
+          {/* Organic Timetable Explainer */}
+          <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 flex items-start gap-2.5 text-xs text-blue-950">
+            <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+            <p className="text-[11px] text-blue-900/90 leading-relaxed">
+              <strong>Natural Timetable Enforcement:</strong> All views, likes, saves, and shares follow their exact planned schedule without artificial early acceleration, ensuring perfectly balanced delivery from start to finish.
             </p>
           </div>
         </div>

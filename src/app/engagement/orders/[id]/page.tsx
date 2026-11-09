@@ -843,7 +843,7 @@ export default function EngagementOrderDetailPage() {
             <div>
               <h2 className="text-base font-bold text-[#252943]">TikTok Likes Delivery Progress (Zeofame #1123)</h2>
               <p className="text-xs text-[#252943]/60">
-                3 randomized delivery runs (12–16 likes/run) scheduled at 120-minute intervals (or accelerated by Delayed Likes Protection).
+                Natural delivery runs scheduled at steady intervals across the campaign.
               </p>
             </div>
             <div className="flex items-center gap-3 text-xs font-mono">

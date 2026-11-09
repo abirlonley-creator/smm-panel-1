@@ -353,118 +353,16 @@ export async function syncOrderDeliveryAndDeviation(orderId: string, now: Date) 
 }
 
 /**
- * Smart Engagement Delivery Logic: Delayed Likes Protection (Requirement 4)
+ * Smart Engagement Delivery Logic: Delayed Likes Protection (REMOVED per user request)
  * 
- * If the views provider has confirmed delivery of 500-700 views (or >= configured sync threshold),
- * but likes delivery is lagging or waiting unnecessarily for the next 120-minute interval,
- * trigger the next eligible likes batch immediately.
+ * Previously, this accelerated likes runs whenever views reached 500-700 views,
+ * causing all likes batches to be dumped immediately in rapid succession while 11+
+ * view runs were still pending.
+ * 
+ * Disabled so all batches strictly follow their natural planned timetable without artificial early rushes.
  */
 export async function checkAndApplyDelayedLikesProtection(orderId: string, now: Date): Promise<boolean> {
-  const order = await prisma.engagementOrder.findUnique({
-    where: { id: orderId },
-    include: {
-      runs: { orderBy: { runNumber: "asc" } },
-    },
-  });
-
-  if (!order || order.platform !== "TikTok" || ["COMPLETED", "CANCELLED", "FAILED"].includes(order.status)) {
-    return false;
-  }
-
-  const config = getTikTokEngagementConfig();
-  const minViewsThreshold = config.syncThreshold?.minViews ?? 500;
-  const maxViewsThreshold = config.syncThreshold?.maxViews ?? 700;
-
-  // Calculate confirmed views delivered
-  const viewsRuns = order.runs.filter((r) => r.engagementType === "views");
-  const confirmedDeliveredViews = viewsRuns.reduce((sum, r) => {
-    return sum + (r.deliveredQuantity ?? (r.status === "confirmed" || r.status === "completed" ? r.quantity : 0));
-  }, 0);
-
-  // Calculate confirmed likes delivered
-  const likesRuns = order.runs.filter((r) => r.engagementType === "likes");
-  const confirmedDeliveredLikes = likesRuns.reduce((sum, r) => {
-    return sum + (r.deliveredQuantity ?? (r.status === "confirmed" || r.status === "completed" ? r.quantity : 0));
-  }, 0);
-
-  // If confirmed views reached the synchronization threshold (e.g. >= 500 views):
-  if (confirmedDeliveredViews >= minViewsThreshold) {
-    // Check if there is an eligible scheduled likes run waiting in the future
-    const nextPendingLikesRun = likesRuns.find(
-      (r) => r.status === "scheduled" && r.scheduledAt.getTime() > now.getTime()
-    );
-
-    // If likes are lagging (e.g. 0 confirmed likes, or only 1 run confirmed while views already surged past 500):
-    const likesConfirmedRunsCount = likesRuns.filter((r) => r.status === "confirmed" || r.status === "completed").length;
-    const shouldAccelerate = confirmedDeliveredLikes === 0 || (likesConfirmedRunsCount < 2 && confirmedDeliveredViews >= minViewsThreshold);
-
-    if (nextPendingLikesRun && shouldAccelerate) {
-      // Accelerate the run to NOW (run immediately without waiting for the 120-minute interval)
-      await prisma.engagementRun.update({
-        where: { id: nextPendingLikesRun.id },
-        data: {
-          scheduledAt: now,
-          isReplan: true,
-        },
-      });
-
-      const reason = `Delayed Likes Protection triggered: Confirmed views reached ${confirmedDeliveredViews.toLocaleString()} (sync threshold ${minViewsThreshold}–${maxViewsThreshold}). Accelerated Likes Run #${nextPendingLikesRun.runNumber} immediately to protect organic engagement ratio.`;
-
-      await prisma.engagementOrder.update({
-        where: { id: order.id },
-        data: {
-          lastReplanReason: reason,
-          replanCount: { increment: 1 },
-        },
-      });
-
-      await logOrderEvent({
-        orderId: order.id,
-        runId: nextPendingLikesRun.id,
-        eventType: "REPLAN",
-        message: reason,
-      }).catch(() => {});
-
-      return true;
-    }
-  }
-
-  // Safety Condition: Before the last view batch, make sure all likes batches are cleared!
-  // No likes batch should go after the last view batch.
-  const pendingViewsRuns = viewsRuns.filter((r) => ["scheduled", "delayed"].includes(r.status));
-  const pendingLikesRuns = likesRuns.filter((r) => ["scheduled", "delayed"].includes(r.status));
-
-  if (pendingViewsRuns.length <= 1 && pendingLikesRuns.length > 0) {
-    const likesToAccelerate = pendingLikesRuns[0];
-    if (likesToAccelerate && likesToAccelerate.scheduledAt.getTime() > now.getTime()) {
-      await prisma.engagementRun.update({
-        where: { id: likesToAccelerate.id },
-        data: {
-          scheduledAt: now,
-          isReplan: true,
-        },
-      });
-
-      const reason = `Final Pace Synchronization: Accelerated remaining Likes Run #${likesToAccelerate.runNumber} to ensure all likes batches clear before the final view batch.`;
-      await prisma.engagementOrder.update({
-        where: { id: order.id },
-        data: {
-          lastReplanReason: reason,
-          replanCount: { increment: 1 },
-        },
-      });
-
-      await logOrderEvent({
-        orderId: order.id,
-        runId: likesToAccelerate.id,
-        eventType: "REPLAN",
-        message: reason,
-      }).catch(() => {});
-
-      return true;
-    }
-  }
-
+  // Completely disabled: Batches adhere to their natural scheduled intervals.
   return false;
 }
 
