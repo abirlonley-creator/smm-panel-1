@@ -3,7 +3,11 @@ import { getAuthSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { decryptApiKey } from "@/lib/security/crypto";
 import { StandardSMMv2Provider, MockSMMProvider } from "@/lib/provider/adapter";
-import { getTikTokEngagementConfig } from "@/lib/engagement/tiktok-preset-config";
+import {
+  getTikTokEngagementConfig,
+  TIKTOK_TIER_PRESETS,
+  getAllTikTokPresets,
+} from "@/lib/engagement/tiktok-preset-config";
 
 export const dynamic = "force-dynamic";
 
@@ -37,8 +41,7 @@ export async function GET(request: Request) {
     where: { userId },
   });
 
-  // 1. Check Zeofame connection (for Likes, Service 1123)
-  const zeofameTargetServiceId = config.likes.serviceId; // "1123"
+  // 1. Check Zeofame connection (for Likes #1123, Saves #807, Shares #718)
   const zeofameConn = userConnections.find((c) => {
     const name = (c.name || "").toLowerCase();
     const url = (c.apiUrl || "").toLowerCase();
@@ -54,7 +57,9 @@ export async function GET(request: Request) {
     currency: "EUR",
     hasService: false,
     service: null as any,
-    message: "Connect your Zeofame API to activate the TikTok Likes service.",
+    savesService: null as any,
+    sharesService: null as any,
+    message: "Connect your Zeofame API to activate TikTok Likes, Saves & Reposts.",
   };
 
   if (zeofameConn && zeofameConn.active) {
@@ -73,58 +78,126 @@ export async function GET(request: Request) {
         zeofameStatus.connected = true;
         zeofameStatus.balance = typeof balRes.balance === "number" ? balRes.balance : zeofameConn.balance;
 
-        // Check if service 1123 is in DB for this connection
-        let srv = await prisma.service.findFirst({
+        // Check or import Likes service 1123
+        let likesSrv = await prisma.service.findFirst({
           where: {
             userProviderId: zeofameConn.id,
-            OR: [
-              { providerServiceId: zeofameTargetServiceId },
-              { externalId: zeofameTargetServiceId },
-            ],
+            OR: [{ providerServiceId: "1123" }, { externalId: "1123" }],
           },
         });
 
-        // If not in DB, query adapter's services live and import it
-        if (!srv && !zeofameConn.isMock) {
+        // Check or import Saves service 807
+        let savesSrv = await prisma.service.findFirst({
+          where: {
+            userProviderId: zeofameConn.id,
+            OR: [{ providerServiceId: "807" }, { externalId: "807" }],
+          },
+        });
+
+        // Check or import Shares service 718
+        let sharesSrv = await prisma.service.findFirst({
+          where: {
+            userProviderId: zeofameConn.id,
+            OR: [{ providerServiceId: "718" }, { externalId: "718" }],
+          },
+        });
+
+        if ((!likesSrv || !savesSrv || !sharesSrv) && !zeofameConn.isMock) {
           try {
             const allServices = await adapter.getServices();
-            const match = allServices.find((s) => String(s.id) === zeofameTargetServiceId);
-            if (match) {
-              srv = await prisma.service.create({
-                data: {
-                  externalId: String(match.id),
-                  providerServiceId: String(match.id),
-                  name: match.name,
-                  type: match.type || "Default",
-                  platform: match.platform || "TikTok",
-                  category: match.category || "TikTok Likes",
-                  description: match.description || "TikTok Likes",
-                  minQuantity: match.minQuantity || config.likes.minQuantity,
-                  maxQuantity: match.maxQuantity || 500000,
-                  ratePer1000: match.ratePer1000 || 0.85,
-                  userProviderId: zeofameConn.id,
-                  active: true,
-                },
-              });
+            if (!likesSrv) {
+              const match = allServices.find((s) => String(s.id) === "1123");
+              if (match) {
+                likesSrv = await prisma.service.create({
+                  data: {
+                    externalId: "1123",
+                    providerServiceId: "1123",
+                    name: match.name,
+                    type: match.type || "Default",
+                    platform: "TikTok",
+                    category: "TikTok Likes",
+                    description: match.description || match.name || "TikTok Likes",
+                    minQuantity: match.minQuantity || 10,
+                    maxQuantity: match.maxQuantity || 500000,
+                    ratePer1000: match.ratePer1000 || 0.88,
+                    userProviderId: zeofameConn.id,
+                    active: true,
+                  },
+                });
+              }
+            }
+            if (!savesSrv) {
+              const match = allServices.find((s) => String(s.id) === "807");
+              if (match) {
+                savesSrv = await prisma.service.create({
+                  data: {
+                    externalId: "807",
+                    providerServiceId: "807",
+                    name: match.name,
+                    type: match.type || "Default",
+                    platform: "TikTok",
+                    category: "TikTok Saves",
+                    description: match.description || match.name || "TikTok Saves",
+                    minQuantity: match.minQuantity || 10,
+                    maxQuantity: match.maxQuantity || 500000,
+                    ratePer1000: match.ratePer1000 || 0.22,
+                    userProviderId: zeofameConn.id,
+                    active: true,
+                  },
+                });
+              }
+            }
+            if (!sharesSrv) {
+              const match = allServices.find((s) => String(s.id) === "718");
+              if (match) {
+                sharesSrv = await prisma.service.create({
+                  data: {
+                    externalId: "718",
+                    providerServiceId: "718",
+                    name: match.name,
+                    type: match.type || "Default",
+                    platform: "TikTok",
+                    category: "TikTok Shares",
+                    description: match.description || match.name || "TikTok Shares",
+                    minQuantity: match.minQuantity || 10,
+                    maxQuantity: match.maxQuantity || 500000,
+                    ratePer1000: match.ratePer1000 || 0.22,
+                    userProviderId: zeofameConn.id,
+                    active: true,
+                  },
+                });
+              }
             }
           } catch (syncErr: any) {
-            console.warn("[ENGAGEMENT] Could not sync Zeofame service 1123:", syncErr.message);
+            console.warn("[ENGAGEMENT] Could not sync Zeofame services:", syncErr.message);
           }
         }
 
-        if (srv) {
+        if (likesSrv) {
           zeofameStatus.hasService = true;
           zeofameStatus.service = {
-            id: srv.id,
-            providerServiceId: srv.providerServiceId || srv.externalId,
-            name: srv.name,
-            minQuantity: srv.minQuantity,
-            maxQuantity: srv.maxQuantity,
-            ratePer1000: srv.ratePer1000,
+            id: likesSrv.id,
+            providerServiceId: likesSrv.providerServiceId || likesSrv.externalId,
+            name: likesSrv.name,
+            minQuantity: likesSrv.minQuantity,
+            maxQuantity: likesSrv.maxQuantity,
+            ratePer1000: likesSrv.ratePer1000,
           };
           zeofameStatus.message = "Connected & Active";
-        } else {
-          zeofameStatus.message = `Service ID ${zeofameTargetServiceId} not found on Zeofame. Please update service configuration.`;
+        }
+        if (savesSrv) {
+          zeofameStatus.savesService = {
+            id: savesSrv.id,
+            providerServiceId: savesSrv.providerServiceId || savesSrv.externalId,
+            ratePer1000: savesSrv.ratePer1000,
+          };
+        }
+        if (sharesSrv) {
+          zeofameStatus.sharesService = {
+            id: sharesSrv.id,
+            providerServiceId: sharesSrv.providerServiceId || sharesSrv.externalId,
+            ratePer1000: sharesSrv.ratePer1000,
+          };
         }
       } catch (err: any) {
         zeofameStatus.connected = false;
@@ -135,7 +208,6 @@ export async function GET(request: Request) {
   }
 
   // 2. Check Xmedia connection (for Views, Service 10322)
-  const xmediaTargetServiceId = config.views.serviceId; // "10322"
   const xmediaConn = userConnections.find((c) => {
     const name = (c.name || "").toLowerCase();
     const url = (c.apiUrl || "").toLowerCase();
@@ -175,30 +247,29 @@ export async function GET(request: Request) {
           where: {
             userProviderId: xmediaConn.id,
             OR: [
-              { providerServiceId: xmediaTargetServiceId },
-              { externalId: xmediaTargetServiceId },
+              { providerServiceId: "10322" },
+              { externalId: "10322" },
             ],
           },
         });
 
-        // If not in DB, query adapter's services live and import it
         if (!srv && !xmediaConn.isMock) {
           try {
             const allServices = await adapter.getServices();
-            const match = allServices.find((s) => String(s.id) === xmediaTargetServiceId);
+            const match = allServices.find((s) => String(s.id) === "10322");
             if (match) {
               srv = await prisma.service.create({
                 data: {
-                  externalId: String(match.id),
-                  providerServiceId: String(match.id),
+                  externalId: "10322",
+                  providerServiceId: "10322",
                   name: match.name,
                   type: match.type || "Default",
-                  platform: match.platform || "TikTok",
-                  category: match.category || "TikTok Views",
-                  description: match.description || "TikTok Views",
-                  minQuantity: match.minQuantity || config.views.minQuantity,
+                  platform: "TikTok",
+                  category: "TikTok Views",
+                  description: match.description || match.name || "TikTok Views",
+                  minQuantity: match.minQuantity || 100,
                   maxQuantity: match.maxQuantity || 10000000,
-                  ratePer1000: match.ratePer1000 || 0.15,
+                  ratePer1000: match.ratePer1000 || 5.7,
                   userProviderId: xmediaConn.id,
                   active: true,
                 },
@@ -220,8 +291,6 @@ export async function GET(request: Request) {
             ratePer1000: srv.ratePer1000,
           };
           xmediaStatus.message = "Connected & Active";
-        } else {
-          xmediaStatus.message = `Service ID ${xmediaTargetServiceId} not found on Xmedia. Please update service configuration.`;
         }
       } catch (err: any) {
         xmediaStatus.connected = false;
@@ -231,21 +300,34 @@ export async function GET(request: Request) {
     }
   }
 
-  // Calculate pricing estimates
-  const avgViewsPerRun = Math.round((config.views.minQuantity + config.views.maxQuantity) / 2); // ~185
-  const totalPlannedViews = avgViewsPerRun * config.views.runsCount; // 185 * 16 = 2960
-  const viewsRate = xmediaStatus.service?.ratePer1000 ?? 0.15;
-  const estimatedViewsCost = Number(((totalPlannedViews / 1000) * viewsRate).toFixed(4));
+  // Base Rates
+  const viewsRate = xmediaStatus.service?.ratePer1000 ?? 5.7;
+  const likesRate = zeofameStatus.service?.ratePer1000 ?? 0.88;
+  const savesRate = zeofameStatus.savesService?.ratePer1000 ?? 0.22;
+  const sharesRate = zeofameStatus.sharesService?.ratePer1000 ?? 0.22;
 
-  const avgLikesPerRun = Math.round((config.likes.minQuantity + config.likes.maxQuantity) / 2); // ~14
-  const totalPlannedLikes = avgLikesPerRun * config.likes.runsCount; // 14 * 3 = 42
-  const likesRate = zeofameStatus.service?.ratePer1000 ?? 0.95;
-  const estimatedLikesCost = Number(((totalPlannedLikes / 1000) * likesRate).toFixed(4));
+  // Calculate costs for all 4 presets
+  const presetsList = getAllTikTokPresets().map((preset) => {
+    const vCost = Number(((preset.targetViews / 1000) * viewsRate).toFixed(4));
+    const lCost = Number(((preset.targetLikes / 1000) * likesRate).toFixed(4));
+    const sCost = preset.saves?.enabled ? Number(((preset.targetSaves / 1000) * savesRate).toFixed(4)) : 0;
+    const rCost = preset.shares?.enabled ? Number(((preset.targetShares / 1000) * sharesRate).toFixed(4)) : 0;
+    const totalCost = Number((vCost + lCost + sCost + rCost).toFixed(2));
 
-  const totalEstimatedCost = Number((estimatedViewsCost + estimatedLikesCost).toFixed(2));
+    return {
+      ...preset,
+      pricing: {
+        viewsCost: vCost,
+        likesCost: lCost,
+        savesCost: sCost,
+        sharesCost: rCost,
+        totalCost,
+      },
+    };
+  });
 
-  const readyToOrder = zeofameStatus.connected && zeofameStatus.hasService &&
-                       xmediaStatus.connected && xmediaStatus.hasService;
+  const defaultPreset = presetsList[0];
+  const readyToOrder = Boolean(zeofameStatus.connected && xmediaStatus.connected);
 
   return NextResponse.json({
     success: true,
@@ -254,18 +336,25 @@ export async function GET(request: Request) {
     readyToOrder,
     zeofame: zeofameStatus,
     xmedia: xmediaStatus,
-    config,
-    pricing: {
-      totalEstimatedCost,
-      viewsCost: estimatedViewsCost,
-      likesCost: estimatedLikesCost,
+    rates: {
       viewsRate,
       likesRate,
-      totalPlannedViews,
-      totalPlannedLikes,
-      viewsRuns: config.views.runsCount,
-      likesRuns: config.likes.runsCount,
-      durationMinutes: config.views.runsCount * config.views.intervalMinutes, // 320 minutes
+      savesRate,
+      sharesRate,
+    },
+    presets: presetsList,
+    config,
+    pricing: {
+      totalEstimatedCost: defaultPreset.pricing.totalCost,
+      viewsCost: defaultPreset.pricing.viewsCost,
+      likesCost: defaultPreset.pricing.likesCost,
+      viewsRate,
+      likesRate,
+      totalPlannedViews: defaultPreset.targetViews,
+      totalPlannedLikes: defaultPreset.targetLikes,
+      viewsRuns: defaultPreset.views.runsCount,
+      likesRuns: defaultPreset.likes.runsCount,
+      durationMinutes: defaultPreset.totalDurationMinutes,
     },
   });
 }
