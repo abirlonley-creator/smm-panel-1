@@ -19,8 +19,15 @@ import {
   Flame,
   Check,
   RefreshCw,
+  Eye,
+  Heart,
+  Sparkles,
+  Info,
+  ChevronDown,
+  ChevronUp,
+  Sliders,
+  Award,
 } from "lucide-react";
-import { formatBdDateTime } from "@/lib/date-bd";
 
 interface ApiStatusItem {
   connected: boolean;
@@ -98,6 +105,8 @@ export default function EngagementPage() {
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successReceipt, setSuccessReceipt] = useState<any | null>(null);
+  const [showApiDetails, setShowApiDetails] = useState(false);
+  const [selectedTimelineTab, setSelectedTimelineTab] = useState<"overview" | "timeline">("overview");
 
   async function fetchStatus(isManual = false) {
     if (isManual) setRefreshing(true);
@@ -179,9 +188,16 @@ export default function EngagementPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-3">
-        <Loader2 className="w-8 h-8 animate-spin text-[#3A4EFB]" />
-        <span className="text-xs font-semibold text-[#252943]/60">Verifying API connections and engagement services...</span>
+      <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
+        <div className="relative">
+          <div className="w-12 h-12 rounded-2xl bg-[#3A4EFB]/10 flex items-center justify-center text-[#3A4EFB]">
+            <Loader2 className="w-6 h-6 animate-spin" />
+          </div>
+        </div>
+        <div className="text-center">
+          <p className="text-sm font-bold text-[#252943]">Verifying Dual Provider Engine</p>
+          <p className="text-xs text-[#252943]/60 mt-0.5">Checking Xmedia (Views) & Zeofame (Likes) connections...</p>
+        </div>
       </div>
     );
   }
@@ -194,71 +210,188 @@ export default function EngagementPage() {
   const hasSufficientFunds = walletBalance >= (pricing?.totalEstimatedCost ?? 0);
   const isReady = Boolean(statusData?.readyToOrder);
 
+  // Timeline schedule visualization events
+  const timelineSchedule = [
+    { time: "0 min", label: "Views Run #1 (Instant)", type: "views", desc: "~185 views sent immediately upon ordering", tag: "Immediate" },
+    { time: "20 min", label: "Views Run #2", type: "views", desc: "~185 views delivered", tag: "Views" },
+    { time: "40 min", label: "Views Run #3", type: "views", desc: "~185 views delivered", tag: "Views" },
+    { time: "60 min", label: "Views Run #4", type: "views", desc: "Crossing 500-700 views (Protection Active)", tag: "Threshold" },
+    { time: "80 min", label: "Views Run #5", type: "views", desc: "~185 views delivered", tag: "Views" },
+    { time: "100 min", label: "Views Run #6", type: "views", desc: "~185 views delivered", tag: "Views" },
+    { time: "120 min", label: "Views Run #7 + Likes Wave #1", type: "both", desc: "~185 views + First 12–16 likes wave", tag: "First Likes" },
+    { time: "140 min - 180 min", label: "Views Runs #8 – #10", type: "views", desc: "Steady views pacing across 3 runs", tag: "Views" },
+    { time: "200 min", label: "Views Run #11 + Likes Wave #2", type: "both", desc: "~185 views + Second 12–16 likes wave", tag: "Likes Wave" },
+    { time: "220 min - 260 min", label: "Views Runs #12 – #14", type: "views", desc: "Views continuing steady growth", tag: "Views" },
+    { time: "280 min", label: "Views Run #15 + Likes Wave #3", type: "both", desc: "Final 12–16 likes batch. ALL LIKES 100% CLEARED!", tag: "All Likes Done" },
+    { time: "300 min", label: "Views Run #16 (Final Views Batch)", type: "views", desc: "Last ~185 views batch. Campaign 100% Complete!", tag: "Completed" },
+  ];
+
   return (
-    <div className="max-w-5xl mx-auto space-y-8 animate-fadeIn">
-      {/* Header & Balance Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-[#DEE0ED]">
-        <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-[#3A4EFB]/10 text-[#3A4EFB] mb-2 border border-[#3A4EFB]/20">
-            <Flame className="w-3.5 h-3.5 text-[#3A4EFB]" />
-            <span>Dedicated Automation Pipeline</span>
+    <div className="max-w-5xl mx-auto space-y-6 pb-20 animate-fadeIn">
+      {/* Top Banner: Provider Connection Status Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-white border border-[#DEE0ED] shadow-subtle">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center -space-x-1.5">
+            <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-black border-2 border-white ${
+              xmedia?.connected ? "bg-blue-600 text-white" : "bg-gray-300 text-gray-700"
+            }`}>
+              XM
+            </div>
+            <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-black border-2 border-white ${
+              zeofame?.connected ? "bg-rose-500 text-white" : "bg-gray-300 text-gray-700"
+            }`}>
+              ZF
+            </div>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#252943]">
-            TikTok Engagement Automation
-          </h1>
-          <p className="text-xs sm:text-sm text-[#252943]/70 mt-1 max-w-2xl leading-relaxed">
-            Coordinated dual-provider pacing: 16 Views runs via Xmedia and 3 Likes runs via Zeofame with smart Delayed Likes Protection to preserve organic growth ratios.
-          </p>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-[#252943]">
+                Upstream Engine: {isReady ? "Dual Providers Connected" : "API Setup Required"}
+              </span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                isReady ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+              }`}>
+                {isReady ? "Ready to Launch" : "Attention Required"}
+              </span>
+            </div>
+            <p className="text-[11px] text-[#252943]/60">
+              Xmedia (#10322 Views) & Zeofame (#1123 Likes)
+            </p>
+          </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="bg-white border border-[#DEE0ED] rounded-2xl px-4 py-2.5 shadow-subtle flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
-              <Wallet className="w-4 h-4" />
-            </div>
-            <div>
-              <span className="text-[10px] uppercase font-bold text-[#252943]/50 block">Website Balance</span>
-              <span className="text-base font-extrabold text-[#252943]">₹{walletBalance.toFixed(2)}</span>
-            </div>
-          </div>
+        <div className="flex items-center gap-2 self-end sm:self-auto">
+          <button
+            type="button"
+            onClick={() => setShowApiDetails(!showApiDetails)}
+            className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-[#3A4EFB] hover:bg-blue-50 transition-all flex items-center gap-1 cursor-pointer"
+          >
+            <span>{showApiDetails ? "Hide Details" : "Provider Details"}</span>
+            {showApiDetails ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          </button>
 
           <button
             type="button"
             onClick={() => fetchStatus(true)}
             disabled={refreshing}
-            className="p-3 rounded-2xl bg-white border border-[#DEE0ED] text-[#252943] hover:bg-[#F8F9FD] transition-all cursor-pointer shadow-subtle"
-            title="Refresh status"
+            className="p-1.5 rounded-xl text-[#252943]/70 hover:bg-[#F8F9FD] transition-all cursor-pointer"
+            title="Refresh API Balances"
           >
-            <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin text-[#3A4EFB]" : ""}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin text-[#3A4EFB]" : ""}`} />
           </button>
         </div>
       </div>
 
+      {/* Expandable Provider API Details */}
+      {showApiDetails && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] animate-fadeIn">
+          {/* Xmedia Card */}
+          <div className="bg-white p-4 rounded-xl border border-[#DEE0ED] shadow-subtle space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 font-bold text-xs flex items-center justify-center">
+                  XM
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-[#252943]">Xmedia (Views Provider)</h4>
+                  <span className="text-[10px] text-[#252943]/60">Service ID #10322</span>
+                </div>
+              </div>
+              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                xmedia?.connected ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+              }`}>
+                {xmedia?.connected ? "Active" : "Disconnected"}
+              </span>
+            </div>
+            <div className="text-[11px] text-[#252943]/70 flex justify-between pt-1 border-t border-[#DEE0ED]/60">
+              <span>Provider Balance:</span>
+              <span className="font-bold text-[#252943]">{xmedia?.balance != null ? `₹${xmedia.balance.toFixed(2)}` : "—"}</span>
+            </div>
+            {!xmedia?.connected && (
+              <Link href="/api-key" className="text-xs font-bold text-[#3A4EFB] hover:underline flex items-center gap-1 pt-1">
+                <span>Connect Xmedia API</span> <ExternalLink className="w-3 h-3" />
+              </Link>
+            )}
+          </div>
+
+          {/* Zeofame Card */}
+          <div className="bg-white p-4 rounded-xl border border-[#DEE0ED] shadow-subtle space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-rose-100 text-rose-700 font-bold text-xs flex items-center justify-center">
+                  ZF
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-[#252943]">Zeofame (Likes Provider)</h4>
+                  <span className="text-[10px] text-[#252943]/60">Service ID #1123</span>
+                </div>
+              </div>
+              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                zeofame?.connected ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+              }`}>
+                {zeofame?.connected ? "Active" : "Disconnected"}
+              </span>
+            </div>
+            <div className="text-[11px] text-[#252943]/70 flex justify-between pt-1 border-t border-[#DEE0ED]/60">
+              <span>Provider Balance:</span>
+              <span className="font-bold text-[#252943]">{zeofame?.balance != null ? `€${zeofame.balance.toFixed(4)}` : "—"}</span>
+            </div>
+            {!zeofame?.connected && (
+              <Link href="/api-key" className="text-xs font-bold text-[#3A4EFB] hover:underline flex items-center gap-1 pt-1">
+                <span>Connect Zeofame API</span> <ExternalLink className="w-3 h-3" />
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Success Receipt Banner */}
       {successReceipt && (
-        <div className="p-5 rounded-2xl bg-[#D4EDDA] border border-[#C3E6CB] text-[#155724] space-y-3 animate-fadeIn shadow-subtle">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 font-bold text-base text-[#155724]">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-              <span>Engagement Order #{successReceipt.orderRef} Successfully Placed!</span>
+        <div className="p-6 rounded-3xl bg-emerald-50 border-2 border-emerald-300 text-emerald-950 space-y-4 animate-fadeIn shadow-subtle">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shrink-0">
+                <Check className="w-6 h-6 stroke-[3]" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-base text-emerald-950">
+                  Engagement Campaign Launched Successfully!
+                </h3>
+                <p className="text-xs text-emerald-800">
+                  Order ID: <strong className="font-mono">#{successReceipt.orderRef}</strong> • Views Run #1 dispatched immediately.
+                </p>
+              </div>
             </div>
             <Link
               href={`/engagement/orders/${successReceipt.orderId}`}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#155724] text-white text-xs font-bold hover:bg-[#0f441c] transition-all"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-extrabold transition-all shadow-subtle"
             >
-              <span>Live Monitor Dashboard</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+              <span>Inspect Live Dashboard</span>
+              <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
-          <p className="text-xs leading-relaxed text-[#155724]/90">
-            {successReceipt.message} All 16 Views batches and 3 Likes batches have been queued in the deterministic scheduler.
-          </p>
-          <div className="flex flex-wrap gap-4 text-xs font-semibold pt-1 border-t border-[#C3E6CB]">
-            <span>Views: <strong>{successReceipt.totalPlannedViews?.toLocaleString()}</strong></span>
-            <span>Likes: <strong>{successReceipt.totalPlannedLikes?.toLocaleString()}</strong></span>
-            <span>Batches: <strong>{successReceipt.runsCount}</strong></span>
-            <span>Charged: <strong>₹{successReceipt.totalCost?.toFixed(2)}</strong></span>
-            <span>Remaining Balance: <strong>₹{successReceipt.remainingBalance?.toFixed(2)}</strong></span>
+
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-3 border-t border-emerald-200 text-xs">
+            <div>
+              <span className="text-emerald-700/80 text-[10px] uppercase font-bold block">Planned Views</span>
+              <span className="font-black text-sm text-emerald-950">~{successReceipt.totalPlannedViews?.toLocaleString()}</span>
+            </div>
+            <div>
+              <span className="text-emerald-700/80 text-[10px] uppercase font-bold block">Planned Likes</span>
+              <span className="font-black text-sm text-emerald-950">~{successReceipt.totalPlannedLikes?.toLocaleString()}</span>
+            </div>
+            <div>
+              <span className="text-emerald-700/80 text-[10px] uppercase font-bold block">Batches</span>
+              <span className="font-black text-sm text-emerald-950">{successReceipt.runsCount} Batches</span>
+            </div>
+            <div>
+              <span className="text-emerald-700/80 text-[10px] uppercase font-bold block">Total Deducted</span>
+              <span className="font-black text-sm text-[#3A4EFB]">₹{successReceipt.totalCost?.toFixed(2)}</span>
+            </div>
+            <div>
+              <span className="text-emerald-700/80 text-[10px] uppercase font-bold block">Wallet Left</span>
+              <span className="font-black text-sm text-emerald-950">₹{successReceipt.remainingBalance?.toFixed(2)}</span>
+            </div>
           </div>
         </div>
       )}
@@ -271,320 +404,165 @@ export default function EngagementPage() {
         </div>
       )}
 
-      {/* 1. API Integrations Connection Status (Requirement 2) */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-extrabold uppercase tracking-wider text-[#252943]/70">
-            Required Upstream Provider APIs
-          </h2>
-          <Link
-            href="/api-key"
-            className="text-xs font-bold text-[#3A4EFB] hover:underline flex items-center gap-1"
-          >
-            <span>Manage API Connections</span>
-            <ExternalLink className="w-3 h-3" />
-          </Link>
-        </div>
+      {/* HERO SECTION & PRODUCT EXPLAINER */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#1E2235] via-[#252943] to-[#121421] text-white p-6 sm:p-8 shadow-card">
+        {/* Decorative glow circles */}
+        <div className="absolute top-0 right-0 -mr-20 -mt-20 w-80 h-80 rounded-full bg-[#3A4EFB]/20 blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 right-1/4 -mb-20 w-60 h-60 rounded-full bg-rose-500/15 blur-3xl pointer-events-none" />
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Xmedia Connection Card (Views) */}
-          <div className={`p-5 rounded-2xl border transition-all ${
-            xmedia?.connected && xmedia?.hasService
-              ? "bg-white border-[#DEE0ED] shadow-subtle"
-              : "bg-amber-50/50 border-amber-300"
-          }`}>
-            <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]/60">
-              <div className="flex items-center gap-2.5">
-                <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs ${
-                  xmedia?.connected && xmedia?.hasService
-                    ? "bg-blue-100 text-blue-700"
-                    : "bg-amber-100 text-amber-800"
-                }`}>
-                  XM
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-sm text-[#252943]">
-                    Xmedia API <span className="font-normal text-xs text-[#252943]/60">(Views Provider)</span>
-                  </h3>
-                  <span className="text-[11px] font-medium text-[#252943]/60">
-                    Service #{config?.views.serviceId || "10322"}
-                  </span>
-                </div>
-              </div>
-
-              {xmedia?.connected && xmedia?.hasService ? (
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800">
-                  <Check className="w-3 h-3" /> Connected
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800">
-                  <AlertCircle className="w-3 h-3" /> Disconnected
-                </span>
-              )}
-            </div>
-
-            <div className="pt-3 space-y-2 text-xs">
-              <div className="flex items-center justify-between text-[#252943]/70">
-                <span>Account Balance:</span>
-                <span className="font-bold text-[#252943]">
-                  {xmedia?.balance != null ? `₹${xmedia.balance.toFixed(2)}` : "—"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-[#252943]/70">
-                <span>Target Service:</span>
-                <span className="font-semibold text-[#252943] truncate max-w-[200px]" title={xmedia?.service?.name}>
-                  {xmedia?.service?.name || `ID #${config?.views.serviceId}`}
-                </span>
-              </div>
-
-              {(!xmedia?.connected || !xmedia?.hasService) && (
-                <div className="pt-2">
-                  <p className="text-[11px] font-semibold text-amber-900 mb-2">
-                    {xmedia?.message || "Connect your Xmedia API to activate the TikTok Views service."}
-                  </p>
-                  <Link
-                    href="/api-key"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-800 hover:bg-amber-900 text-white text-xs font-bold transition-all"
-                  >
-                    <span>Connect Xmedia API</span>
-                    <ArrowRight className="w-3 h-3" />
-                  </Link>
-                </div>
-              )}
-            </div>
+        <div className="relative z-10 space-y-4 max-w-3xl">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-white/10 text-white backdrop-blur-md border border-white/15">
+            <Flame className="w-3.5 h-3.5 text-rose-400" />
+            <span>Algorithm-Safe Growth Technology</span>
           </div>
 
-          {/* Zeofame Connection Card (Likes) */}
-          <div className={`p-5 rounded-2xl border transition-all ${
-            zeofame?.connected && zeofame?.hasService
-              ? "bg-white border-[#DEE0ED] shadow-subtle"
-              : "bg-amber-50/50 border-amber-300"
-          }`}>
-            <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]/60">
-              <div className="flex items-center gap-2.5">
-                <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs ${
-                  zeofame?.connected && zeofame?.hasService
-                    ? "bg-purple-100 text-purple-700"
-                    : "bg-amber-100 text-amber-800"
-                }`}>
-                  ZF
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-sm text-[#252943]">
-                    Zeofame API <span className="font-normal text-xs text-[#252943]/60">(Likes Provider)</span>
-                  </h3>
-                  <span className="text-[11px] font-medium text-[#252943]/60">
-                    Service #{config?.likes.serviceId || "1123"}
-                  </span>
-                </div>
-              </div>
+          <h1 className="text-2xl sm:text-4xl font-black tracking-tight leading-tight">
+            TikTok Organic Viral Engagement Engine
+          </h1>
 
-              {zeofame?.connected && zeofame?.hasService ? (
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800">
-                  <Check className="w-3 h-3" /> Connected
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800">
-                  <AlertCircle className="w-3 h-3" /> Disconnected
-                </span>
-              )}
+          <p className="text-xs sm:text-sm text-white/80 leading-relaxed max-w-2xl">
+            Never send flat, bulk views that get flagged by TikTok. This automated pipeline mimics real viral audience retention across a calibrated <strong>5-hour window</strong> with <strong>16 micro-bursts of views</strong> and <strong>3 perfectly coordinated waves of likes</strong>.
+          </p>
+
+          {/* 3 Core Pillars */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3">
+            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm space-y-1">
+              <div className="flex items-center gap-2 text-xs font-bold text-blue-300">
+                <Zap className="w-4 h-4 text-blue-400" />
+                <span>Instant Launch</span>
+              </div>
+              <p className="text-[11px] text-white/70 leading-normal">
+                Batch #1 delivers within seconds of ordering to jumpstart your video.
+              </p>
             </div>
 
-            <div className="pt-3 space-y-2 text-xs">
-              <div className="flex items-center justify-between text-[#252943]/70">
-                <span>Account Balance:</span>
-                <span className="font-bold text-[#252943]">
-                  {zeofame?.balance != null ? `€${zeofame.balance.toFixed(4)}` : "—"}
-                </span>
+            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm space-y-1">
+              <div className="flex items-center gap-2 text-xs font-bold text-rose-300">
+                <ShieldCheck className="w-4 h-4 text-rose-400" />
+                <span>Zero Unorganic Likes</span>
               </div>
-              <div className="flex items-center justify-between text-[#252943]/70">
-                <span>Target Service:</span>
-                <span className="font-semibold text-[#252943] truncate max-w-[200px]" title={zeofame?.service?.name}>
-                  {zeofame?.service?.name || `ID #${config?.likes.serviceId}`}
-                </span>
-              </div>
+              <p className="text-[11px] text-white/70 leading-normal">
+                All likes finish before views end. No likes are ever sent to a dormant video.
+              </p>
+            </div>
 
-              {(!zeofame?.connected || !zeofame?.hasService) && (
-                <div className="pt-2">
-                  <p className="text-[11px] font-semibold text-amber-900 mb-2">
-                    {zeofame?.message || "Connect your Zeofame API to activate the TikTok Likes service."}
-                  </p>
-                  <Link
-                    href="/api-key"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-800 hover:bg-amber-900 text-white text-xs font-bold transition-all"
-                  >
-                    <span>Connect Zeofame API</span>
-                    <ArrowRight className="w-3 h-3" />
-                  </Link>
-                </div>
-              )}
+            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm space-y-1">
+              <div className="flex items-center gap-2 text-xs font-bold text-emerald-300">
+                <TrendingUp className="w-4 h-4 text-emerald-400" />
+                <span>Smart Sync Protection</span>
+              </div>
+              <p className="text-[11px] text-white/70 leading-normal">
+                Delayed Likes Protection automatically accelerates likes when views surge past 500.
+              </p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* 2. TikTok Organic Working Preset Card (Requirement 3 & 4) */}
-      <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 sm:p-8 shadow-subtle space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[#DEE0ED]">
-          <div>
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-extrabold bg-[#E3FF3B]/30 text-[#252943] border border-[#DEE0ED] mb-1.5">
-              <Zap className="w-3 h-3 text-[#3A4EFB]" />
-              <span>ACTIVE SYSTEM PRESET</span>
+      {/* MAIN TWO-COLUMN WORKSPACE: LEFT = ORDER FORM, RIGHT = DELIVERY VISUALIZER */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* LEFT COLUMN: ORDER CARD (5 Cols) */}
+        <div className="lg:col-span-5 bg-white rounded-3xl border border-[#DEE0ED] p-6 shadow-subtle space-y-6">
+          <div className="flex items-center justify-between pb-4 border-b border-[#DEE0ED]">
+            <div>
+              <h2 className="text-base font-extrabold text-[#252943]">Create Engagement Order</h2>
+              <p className="text-xs text-[#252943]/60">1-click automated TikTok organic preset</p>
             </div>
-            <h2 className="text-xl font-extrabold text-[#252943]">
-              {config?.presetName || "TikTok Organic Working Preset"}
-            </h2>
-          </div>
-
-          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs font-bold">
-            <ShieldCheck className="w-4 h-4 text-blue-600" />
-            <span>Delayed Likes Protection Active</span>
-          </div>
-        </div>
-
-        {/* Configuration Overview Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {/* Views Specification */}
-          <div className="p-4 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="font-extrabold text-sm text-[#252943] flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#3A4EFB]" />
-                Views Automation
-              </span>
-              <span className="text-xs font-bold text-[#3A4EFB]">Xmedia • ID #10322</span>
-            </div>
-
-            <div className="space-y-1.5 text-xs text-[#252943]/80">
-              <div className="flex justify-between">
-                <span>Runs Count:</span>
-                <span className="font-bold text-[#252943]">{config?.views.runsCount} Batches</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Batch Quantity:</span>
-                <span className="font-bold text-[#252943]">{config?.views.minQuantity} – {config?.views.maxQuantity} randomized / run</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Interval:</span>
-                <span className="font-bold text-[#252943]">Every {config?.views.intervalMinutes} minutes</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Estimated Total Views:</span>
-                <span className="font-extrabold text-emerald-700">~{pricing?.totalPlannedViews?.toLocaleString()} Views</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Likes Specification */}
-          <div className="p-4 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="font-extrabold text-sm text-[#252943] flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
-                Likes Automation
-              </span>
-              <span className="text-xs font-bold text-rose-600">Zeofame • ID #1123</span>
-            </div>
-
-            <div className="space-y-1.5 text-xs text-[#252943]/80">
-              <div className="flex justify-between">
-                <span>Runs Count:</span>
-                <span className="font-bold text-[#252943]">{config?.likes.runsCount} Batches (rounded from 2.65)</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Batch Quantity:</span>
-                <span className="font-bold text-[#252943]">{config?.likes.minQuantity} – {config?.likes.maxQuantity} randomized / run</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Pacing & Cleared:</span>
-                <span className="font-bold text-[#252943]">Runs at 120m, 200m, 280m (before last view batch)</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Estimated Total Likes:</span>
-                <span className="font-extrabold text-rose-700">~{pricing?.totalPlannedLikes?.toLocaleString()} Likes</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Smart Synchronization Explainer Box (Delayed Likes Protection) */}
-        <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-200 text-xs text-blue-950 space-y-1.5">
-          <div className="flex items-center gap-2 font-bold text-sm text-blue-900">
-            <ShieldCheck className="w-4 h-4 text-[#3A4EFB]" />
-            <span>Smart Synchronization: Organic Pacing Protection</span>
-          </div>
-          <p className="leading-relaxed">
-            Views start immediately upon ordering (Run #1 at 0m through Run #16 at 300m). Likes are dispatched at <strong>120m, 200m, and 280m</strong>, ensuring all likes batches are completed <strong>before the final view batch</strong> so no likes ever arrive without views. If views reach <strong>{config?.syncThreshold.minViews}–{config?.syncThreshold.maxViews} views</strong> early, Delayed Likes Protection accelerates likes immediately.
-          </p>
-        </div>
-
-        {/* Order Form */}
-        <form onSubmit={handleCreateOrder} className="space-y-6 pt-2">
-          <div>
-            <label className="block text-xs font-extrabold uppercase tracking-wider text-[#252943] mb-2">
-              TikTok Video URL
-            </label>
-            <div className="relative">
-              <input
-                type="url"
-                required
-                placeholder="https://www.tiktok.com/@username/video/7123456789012345678"
-                value={targetUrl}
-                onChange={(e) => setTargetUrl(e.target.value)}
-                className="w-full px-4 py-3.5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] text-sm font-semibold text-[#252943] placeholder-[#252943]/40 focus:outline-none focus:border-[#3A4EFB] focus:bg-white transition-all"
-              />
-            </div>
-            <span className="text-[11px] text-[#252943]/50 mt-1 block">
-              Direct public TikTok video link. Account must remain public during automated execution.
+            <span className="px-2.5 py-1 rounded-xl text-xs font-bold bg-[#3A4EFB]/10 text-[#3A4EFB]">
+              Standard Preset
             </span>
           </div>
 
-          {/* Pricing & Estimation Breakdown Card */}
-          <div className="p-5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] space-y-3">
-            <div className="flex items-center justify-between text-xs text-[#252943]/70 pb-2 border-b border-[#DEE0ED]/60">
-              <span>Estimated Duration:</span>
-              <span className="font-bold text-[#252943]">~5 Hours (300 minutes)</span>
-            </div>
-
-            <div className="flex items-center justify-between text-xs text-[#252943]/70">
-              <span>Views Cost (Xmedia • ~{pricing?.totalPlannedViews} units @ ₹{pricing?.viewsRate}/1k):</span>
-              <span className="font-bold text-[#252943]">₹{pricing?.viewsCost.toFixed(2)}</span>
-            </div>
-
-            <div className="flex items-center justify-between text-xs text-[#252943]/70">
-              <span>Likes Cost (Zeofame • ~{pricing?.totalPlannedLikes} units @ ₹{pricing?.likesRate}/1k):</span>
-              <span className="font-bold text-[#252943]">₹{pricing?.likesCost.toFixed(2)}</span>
-            </div>
-
-            <div className="pt-2 border-t border-[#DEE0ED] flex items-center justify-between">
-              <div>
-                <span className="text-xs uppercase font-extrabold text-[#252943]/60 block">Total Order Price</span>
-                <span className="text-2xl font-extrabold text-[#3A4EFB]">
-                  ₹{pricing?.totalEstimatedCost.toFixed(2)}
-                </span>
+          {/* Quick Metrics Grid */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="p-3.5 rounded-2xl bg-blue-50/60 border border-blue-100 space-y-1">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-blue-700">
+                <Eye className="w-3.5 h-3.5" />
+                <span>TikTok Views</span>
               </div>
-
-              <div>
-                {hasSufficientFunds ? (
-                  <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
-                    <Check className="w-3.5 h-3.5" /> Sufficient Balance (₹{walletBalance.toFixed(2)})
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold bg-rose-100 text-rose-800">
-                    <AlertCircle className="w-3.5 h-3.5" /> Insufficient Balance (Need ₹{((pricing?.totalEstimatedCost ?? 0) - walletBalance).toFixed(2)})
-                  </span>
-                )}
+              <div className="text-lg font-black text-[#252943] font-mono">
+                ~{pricing?.totalPlannedViews?.toLocaleString()}
               </div>
+              <span className="text-[10px] text-blue-900/60 font-semibold block">
+                16 runs • 150–220 each
+              </span>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-rose-50/60 border border-rose-100 space-y-1">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-rose-700">
+                <Heart className="w-3.5 h-3.5" />
+                <span>TikTok Likes</span>
+              </div>
+              <div className="text-lg font-black text-[#252943] font-mono">
+                ~{pricing?.totalPlannedLikes?.toLocaleString()}
+              </div>
+              <span className="text-[10px] text-rose-900/60 font-semibold block">
+                3 waves • 12–16 each
+              </span>
             </div>
           </div>
 
-          {/* Submit Button */}
-          <div>
+          {/* Order Input Form */}
+          <form onSubmit={handleCreateOrder} className="space-y-4">
+            <div>
+              <label className="block text-xs font-extrabold uppercase tracking-wider text-[#252943] mb-2 flex items-center justify-between">
+                <span>TikTok Video URL</span>
+                <span className="text-[10px] font-normal text-[#252943]/50">Public videos only</span>
+              </label>
+              <div className="relative">
+                <input
+                  type="url"
+                  required
+                  placeholder="https://www.tiktok.com/@username/video/..."
+                  value={targetUrl}
+                  onChange={(e) => setTargetUrl(e.target.value)}
+                  className="w-full px-4 py-3.5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] text-xs sm:text-sm font-semibold text-[#252943] placeholder-[#252943]/40 focus:outline-none focus:border-[#3A4EFB] focus:bg-white transition-all shadow-inner"
+                />
+              </div>
+            </div>
+
+            {/* Total Cost & Wallet Card */}
+            <div className="p-4 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] space-y-3">
+              <div className="flex items-center justify-between text-xs text-[#252943]/70">
+                <span>Estimated Duration:</span>
+                <span className="font-bold text-[#252943]">~5.0 Hours (300 mins)</span>
+              </div>
+
+              <div className="flex items-center justify-between text-xs text-[#252943]/70">
+                <span>Views Cost ({pricing?.totalPlannedViews} @ ₹{pricing?.viewsRate}/1k):</span>
+                <span className="font-mono font-semibold text-[#252943]">₹{pricing?.viewsCost.toFixed(2)}</span>
+              </div>
+
+              <div className="flex items-center justify-between text-xs text-[#252943]/70">
+                <span>Likes Cost ({pricing?.totalPlannedLikes} @ ₹{pricing?.likesRate}/1k):</span>
+                <span className="font-mono font-semibold text-[#252943]">₹{pricing?.likesCost.toFixed(2)}</span>
+              </div>
+
+              <div className="pt-2 border-t border-[#DEE0ED] flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-[#252943]/50 block">Total Order Price</span>
+                  <span className="text-xl font-black text-[#3A4EFB] font-mono">
+                    ₹{pricing?.totalEstimatedCost.toFixed(2)}
+                  </span>
+                </div>
+
+                <div className="text-right">
+                  <span className="text-[10px] uppercase font-bold text-[#252943]/50 block">Your Balance</span>
+                  <span className={`text-xs font-bold ${hasSufficientFunds ? "text-emerald-700" : "text-rose-600"}`}>
+                    ₹{walletBalance.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Order Action Button */}
             <button
               type="submit"
               disabled={submitting || !isReady || !hasSufficientFunds}
               className={`w-full py-4 rounded-2xl text-sm font-extrabold tracking-wide transition-all shadow-subtle flex items-center justify-center gap-2 cursor-pointer ${
                 submitting || !isReady || !hasSufficientFunds
                   ? "bg-gray-200 text-gray-500 cursor-not-allowed"
-                  : "bg-[#3A4EFB] hover:bg-[#2C3FE0] text-white active:scale-[0.99]"
+                  : "bg-[#3A4EFB] hover:bg-[#2C3FE0] text-white active:scale-[0.99] shadow-lg shadow-[#3A4EFB]/25"
               }`}
             >
               {submitting ? (
@@ -595,22 +573,191 @@ export default function EngagementPage() {
               ) : !isReady ? (
                 <>
                   <AlertCircle className="w-4 h-4 text-amber-600" />
-                  <span>Connect Both APIs Above to Order</span>
+                  <span>Connect Provider APIs Above First</span>
                 </>
               ) : !hasSufficientFunds ? (
                 <>
                   <Wallet className="w-4 h-4" />
-                  <span>Add Funds to Wallet to Order</span>
+                  <span>Top Up Wallet (Need ₹{((pricing?.totalEstimatedCost ?? 0) - walletBalance).toFixed(2)})</span>
                 </>
               ) : (
                 <>
                   <Play className="w-4 h-4 fill-white" />
-                  <span>Start TikTok Organic Engagement (16 Views + 3 Likes Batches)</span>
+                  <span>Launch TikTok Campaign (₹{pricing?.totalEstimatedCost.toFixed(2)})</span>
                 </>
               )}
             </button>
+          </form>
+        </div>
+
+        {/* RIGHT COLUMN: VISUAL PACING & TIMELINE (7 Cols) */}
+        <div className="lg:col-span-7 bg-white rounded-3xl border border-[#DEE0ED] p-6 shadow-subtle space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#DEE0ED]">
+            <div>
+              <h2 className="text-base font-extrabold text-[#252943]">
+                Pacing & Organic Delivery Blueprint
+              </h2>
+              <p className="text-xs text-[#252943]/60">
+                19 deterministic batches synchronized over 300 minutes
+              </p>
+            </div>
+
+            {/* View Mode Toggle */}
+            <div className="flex items-center gap-1 p-1 bg-[#F0F2FA] rounded-xl self-start sm:self-auto text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setSelectedTimelineTab("overview")}
+                className={`px-3 py-1.5 rounded-lg transition-all ${
+                  selectedTimelineTab === "overview"
+                    ? "bg-white text-[#3A4EFB] shadow-sm"
+                    : "text-[#252943]/60 hover:text-[#252943]"
+                }`}
+              >
+                Visual Flow
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedTimelineTab("timeline")}
+                className={`px-3 py-1.5 rounded-lg transition-all ${
+                  selectedTimelineTab === "timeline"
+                    ? "bg-white text-[#3A4EFB] shadow-sm"
+                    : "text-[#252943]/60 hover:text-[#252943]"
+                }`}
+              >
+                Detailed Runs
+              </button>
+            </div>
           </div>
-        </form>
+
+          {selectedTimelineTab === "overview" ? (
+            <div className="space-y-6">
+              {/* Visual 5-Hour Progress Stepper Bar */}
+              <div className="p-4 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] space-y-3">
+                <div className="flex items-center justify-between text-xs font-bold text-[#252943]">
+                  <span>Campaign Timeline (5 Hours)</span>
+                  <span className="text-[#3A4EFB] font-mono">0m → 300m</span>
+                </div>
+
+                {/* Multi-Segment Delivery Bar */}
+                <div className="relative w-full h-8 bg-gray-100 rounded-xl overflow-hidden flex items-center p-1 gap-1 border border-[#DEE0ED]">
+                  {/* Segment 1: 0m to 120m (Views only) */}
+                  <div className="h-full bg-blue-500 rounded-lg flex items-center justify-center text-[10px] font-bold text-white px-2" style={{ width: "40%" }} title="0m - 120m: Views Only (Building Momentum)">
+                    Views Phase (~1,100)
+                  </div>
+                  {/* Segment 2: 120m to 280m (Views + Synchronized Likes) */}
+                  <div className="h-full bg-gradient-to-r from-blue-600 via-purple-600 to-rose-500 rounded-lg flex items-center justify-center text-[10px] font-bold text-white px-2" style={{ width: "53%" }} title="120m - 280m: Views + 3 Waves of Likes">
+                    Views + Likes Waves
+                  </div>
+                  {/* Segment 3: 280m to 300m (Final View Batch wrap-up) */}
+                  <div className="h-full bg-emerald-500 rounded-lg flex items-center justify-center text-[10px] font-bold text-white px-1.5" style={{ width: "7%" }} title="280m - 300m: Views Final Run">
+                    Done
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] text-[#252943]/60 pt-1">
+                  <span className="flex items-center gap-1">
+                    <span className="w-2.5 h-2.5 rounded bg-blue-500" /> 0m: Launch
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-2.5 h-2.5 rounded bg-rose-500" /> 120m, 200m, 280m: Likes Waves
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-2.5 h-2.5 rounded bg-emerald-500" /> 300m: Complete
+                  </span>
+                </div>
+              </div>
+
+              {/* 3 Step Story Explainer */}
+              <div className="space-y-3">
+                {/* Step 1 */}
+                <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-white border border-[#DEE0ED] hover:border-blue-200 transition-all">
+                  <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-700 font-black text-xs flex items-center justify-center shrink-0">
+                    1
+                  </div>
+                  <div className="space-y-0.5">
+                    <h4 className="text-xs font-bold text-[#252943]">
+                      Hour 0 to 2: Initial Views Ramp (0m – 120m)
+                    </h4>
+                    <p className="text-[11px] text-[#252943]/70 leading-relaxed">
+                      Views Run #1 sends immediately upon ordering. Over the next 2 hours, 6 randomized batches of 150–220 views arrive every 20 minutes to show natural engagement before any likes are introduced.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Step 2 */}
+                <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-white border border-[#DEE0ED] hover:border-purple-200 transition-all">
+                  <div className="w-8 h-8 rounded-xl bg-rose-50 text-rose-700 font-black text-xs flex items-center justify-center shrink-0">
+                    2
+                  </div>
+                  <div className="space-y-0.5">
+                    <h4 className="text-xs font-bold text-[#252943]">
+                      Hour 2 to 4.6: Coordinated Likes Waves (120m, 200m, 280m)
+                    </h4>
+                    <p className="text-[11px] text-[#252943]/70 leading-relaxed">
+                      3 synchronized waves of 12–16 likes are dropped alongside ongoing view runs. If views surge over 500 views early, Delayed Likes Protection triggers the first likes wave ahead of time.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Step 3 */}
+                <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-white border border-[#DEE0ED] hover:border-emerald-200 transition-all">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 font-black text-xs flex items-center justify-center shrink-0">
+                    3
+                  </div>
+                  <div className="space-y-0.5">
+                    <h4 className="text-xs font-bold text-[#252943]">
+                      Hour 5: Final Wrap-up (280m – 300m)
+                    </h4>
+                    <p className="text-[11px] text-[#252943]/70 leading-relaxed">
+                      All 3 likes batches finish at 280m. The 16th and final view batch executes at 300m. <strong>Zero likes are ever sent after views end</strong>, keeping the video completely safe from algorithm penalties.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* Detailed Runs Timeline */
+            <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
+              {timelineSchedule.map((item, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-center justify-between p-2.5 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED]/70 text-xs hover:bg-white transition-all"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="font-mono font-bold text-[#3A4EFB] w-14 shrink-0 text-[11px]">
+                      {item.time}
+                    </span>
+                    <div>
+                      <span className="font-bold text-[#252943] block text-[11px]">{item.label}</span>
+                      <span className="text-[10px] text-[#252943]/60">{item.desc}</span>
+                    </div>
+                  </div>
+
+                  <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase shrink-0 ${
+                    item.type === "both"
+                      ? "bg-purple-100 text-purple-800"
+                      : item.type === "views"
+                      ? "bg-blue-100 text-blue-800"
+                      : "bg-rose-100 text-rose-800"
+                  }`}>
+                    {item.tag}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Delayed Likes Protection Alert */}
+          <div className="p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200 flex items-start gap-2.5 text-xs text-amber-950">
+            <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div className="space-y-0.5">
+              <span className="font-bold text-[11px]">Smart Delayed Likes Protection: Active</span>
+              <p className="text-[10px] text-amber-900/80 leading-relaxed">
+                If Xmedia confirms between {config?.syncThreshold.minViews || 500} and {config?.syncThreshold.maxViews || 700} views early, the system immediately pulls forward the next likes wave to keep the organic ratio in balance.
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
