@@ -26,7 +26,15 @@ export async function GET(
         runs: {
           include: {
             provider: { select: { id: true, name: true } },
-            service: { select: { id: true, name: true, externalId: true } },
+            service: {
+              select: {
+                id: true,
+                name: true,
+                externalId: true,
+                userProvider: { select: { id: true, name: true } },
+                provider: { select: { id: true, name: true } },
+              },
+            },
           },
           orderBy: [{ runNumber: "asc" }, { scheduledAt: "asc" }],
         },
@@ -111,7 +119,7 @@ export async function GET(
       id: r.id,
       runNumber: r.runNumber,
       engagementType: r.engagementType,
-      provider: r.provider?.name || "Default Provider",
+      provider: r.provider?.name || (r.service as any)?.userProvider?.name || (r.service as any)?.provider?.name || "Default Provider",
       providerId: r.providerId,
       providerServiceId: r.providerServiceId || r.service?.externalId || "—",
       scheduledAt: r.scheduledAt.toISOString(),

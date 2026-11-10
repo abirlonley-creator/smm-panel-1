@@ -20,7 +20,8 @@ import {
   ChevronDown,
   ChevronUp,
   ChevronRight,
-  Info
+  Info,
+  Zap,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -183,6 +184,24 @@ export default function EngagementOrdersPage() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 animate-fadeIn pb-16">
+      {/* Navigation Sub-Tabs */}
+      <div className="flex items-center gap-2 border-b border-[#DEE0ED] pb-3">
+        <Link
+          href="/engagement"
+          className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-white text-[#252943]/70 hover:text-[#252943] hover:bg-[#F8F9FD] border border-[#DEE0ED] shadow-xs transition-all press-scale"
+        >
+          <Zap className="w-3.5 h-3.5 text-[#3A4EFB]" />
+          <span>New Campaign</span>
+        </Link>
+        <Link
+          href="/engagement/orders"
+          className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-[#3A4EFB] text-white shadow-subtle transition-all press-scale"
+        >
+          <Layers className="w-3.5 h-3.5 text-[#E3FF3B]" />
+          <span>Campaign Orders</span>
+        </Link>
+      </div>
+
       {/* Top Reassurance Banner */}
       <div className="p-3.5 rounded-2xl bg-[#F0F3FF] border border-[#3A4EFB]/20 flex items-center gap-2 text-xs text-[#252943] shadow-subtle">
         <ShieldCheck className="w-4 h-4 text-[#3A4EFB] shrink-0" />

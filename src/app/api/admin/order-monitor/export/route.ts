@@ -19,6 +19,12 @@ export async function GET(request: Request) {
         include: {
           engagementOrder: { select: { orderRef: true, platform: true, targetUrl: true } },
           provider: { select: { name: true } },
+          service: {
+            select: {
+              userProvider: { select: { name: true } },
+              provider: { select: { name: true } },
+            },
+          },
         },
         orderBy: { scheduledAt: "desc" },
         take: 5000,
@@ -53,7 +59,7 @@ export async function GET(request: Request) {
             `"${r.engagementOrder?.platform || ""}"`,
             `"${r.engagementType}"`,
             r.runNumber || 1,
-            `"${r.provider?.name || "Provider"}"`,
+            `"${r.provider?.name || (r.service as any)?.userProvider?.name || (r.service as any)?.provider?.name || "Provider"}"`,
             `"${r.providerServiceId || ""}"`,
             `"${r.status}"`,
             `"${r.scheduledAt.toISOString()}"`,

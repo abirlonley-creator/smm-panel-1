@@ -25,6 +25,7 @@ import {
   Dices,
   Sparkles,
   Calendar,
+  Layers,
 } from "lucide-react";
 
 interface ApiStatusItem {
@@ -458,6 +459,24 @@ export default function EngagementPage() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-20 animate-fadeIn">
+      {/* Navigation Sub-Tabs */}
+      <div className="flex items-center gap-2 border-b border-[#DEE0ED] pb-3">
+        <Link
+          href="/engagement"
+          className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-[#3A4EFB] text-white shadow-subtle transition-all press-scale"
+        >
+          <Zap className="w-3.5 h-3.5 text-[#E3FF3B]" />
+          <span>New Campaign</span>
+        </Link>
+        <Link
+          href="/engagement/orders"
+          className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-white text-[#252943]/70 hover:text-[#252943] hover:bg-[#F8F9FD] border border-[#DEE0ED] shadow-xs transition-all press-scale"
+        >
+          <Layers className="w-3.5 h-3.5 text-[#3A4EFB]" />
+          <span>Campaign Orders</span>
+        </Link>
+      </div>
+
       {/* 1. Header & Engine Status Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-3xl bg-white border border-[#DEE0ED] shadow-subtle">
         <div className="space-y-1">

@@ -37,6 +37,7 @@ import {
   Compass,
   ExternalLink,
   Star,
+  Zap,
 } from "lucide-react";
 
 interface ServiceItem {
@@ -945,6 +946,13 @@ function NewOrderForm() {
             <Clock className="w-3.5 h-3.5 text-[#3A4EFB]" />
             <span>Schedule (BD Time 🇧🇩)</span>
           </button>
+          <Link
+            href="/engagement"
+            className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 text-[#252943]/70 hover:text-[#3A4EFB] hover:bg-white/80 cursor-pointer"
+          >
+            <Zap className="w-3.5 h-3.5 text-[#3A4EFB]" />
+            <span>Engagement (S-Curve)</span>
+          </Link>
         </div>
       </div>
 

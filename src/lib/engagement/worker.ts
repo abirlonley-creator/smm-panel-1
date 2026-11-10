@@ -443,7 +443,7 @@ export async function runEngagementTick(): Promise<EngagementTickResult> {
         where: { id: { in: dueRunIds } },
         include: {
           engagementOrder: { include: { user: true } },
-          service: true,
+          service: { include: { userProvider: true, provider: true } },
           provider: true,
         },
         orderBy: { scheduledAt: "asc" },
@@ -520,6 +520,9 @@ export async function runEngagementTick(): Promise<EngagementTickResult> {
     processedRuns++;
     const currentAttempt = run.attempts + 1;
 
+    const effectiveProviderId = run.providerId || run.service?.userProviderId || run.service?.providerId || null;
+    const effectiveProviderName = run.provider?.name || run.service?.userProvider?.name || run.service?.provider?.name || "Provider";
+
     // Lateness Alert if delayed > 120s
     if (latenessSeconds > 120) {
       await recordAdminAlert({
@@ -531,8 +534,8 @@ export async function runEngagementTick(): Promise<EngagementTickResult> {
         userId: order.userId,
         platform: order.platform,
         engagementType: run.engagementType,
-        providerId: run.providerId || null,
-        providerName: run.provider?.name || "Provider",
+        providerId: effectiveProviderId,
+        providerName: effectiveProviderName,
         reason: `Run #${run.runNumber} (${run.engagementType}) was sent ${latenessSeconds}s late.`,
         suggestedAction: "Monitor provider latency and queue processing health.",
       });
@@ -543,9 +546,9 @@ export async function runEngagementTick(): Promise<EngagementTickResult> {
       let adapter: SMMProviderAdapter;
       let targetServiceExtId: string = run.providerServiceId || "101";
 
-      if (run.providerId) {
+      if (effectiveProviderId) {
         try {
-          const resolved = await resolveProviderById(run.providerId);
+          const resolved = await resolveProviderById(effectiveProviderId);
           if (resolved.provider.active === false) {
             throw new Error(`Provider "${resolved.provider.name}" is currently paused.`);
           }
@@ -594,7 +597,7 @@ export async function runEngagementTick(): Promise<EngagementTickResult> {
           orderId: order.id,
           runId: run.id,
           eventType: "PROVIDER_CALL",
-          message: `Dispatched run #${run.runNumber} (${run.engagementType}) to ${run.provider?.name || "Provider"}`,
+          message: `Dispatched run #${run.runNumber} (${run.engagementType}) to ${effectiveProviderName}`,
           requestSummary: `POST /order service=${targetServiceExtId} qty=${run.quantity}`,
           responseCode: 200,
           rawResponse: providerRes,
@@ -802,7 +805,7 @@ export async function runEngagementTick(): Promise<EngagementTickResult> {
     },
     include: {
       provider: true,
-      service: true,
+      service: { include: { userProvider: true, provider: true } },
     },
     take: 20,
   });
@@ -812,9 +815,10 @@ export async function runEngagementTick(): Promise<EngagementTickResult> {
   for (const sRun of sentRuns) {
     try {
       let adapter: SMMProviderAdapter = new MockSMMProvider();
-      if (sRun.providerId) {
+      const effectiveProviderId = sRun.providerId || sRun.service?.userProviderId || sRun.service?.providerId;
+      if (effectiveProviderId) {
         try {
-          const res = await resolveProviderById(sRun.providerId);
+          const res = await resolveProviderById(effectiveProviderId);
           adapter = res.adapter;
         } catch {}
       } else if (sRun.serviceId) {

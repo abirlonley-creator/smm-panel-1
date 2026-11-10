@@ -84,6 +84,12 @@ export async function GET(request: Request) {
               id: true,
               providerId: true,
               provider: { select: { id: true, name: true } },
+              service: {
+                select: {
+                  userProvider: { select: { id: true, name: true } },
+                  provider: { select: { id: true, name: true } },
+                },
+              },
               status: true,
               latenessSeconds: true,
             },
@@ -226,7 +232,8 @@ export async function GET(request: Request) {
       // Unique providers
       const providerSet = new Set<string>();
       for (const r of ord.runs) {
-        if (r.provider?.name) providerSet.add(r.provider.name);
+        const provName = r.provider?.name || (r as any).service?.userProvider?.name || (r as any).service?.provider?.name;
+        if (provName) providerSet.add(provName);
       }
       const providers = Array.from(providerSet);
 

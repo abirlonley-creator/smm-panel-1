@@ -62,12 +62,15 @@ export async function runWatchdogCycle(): Promise<WatchdogResult> {
     },
     include: {
       engagementOrder: true,
+      service: { include: { userProvider: true, provider: true } },
       provider: true,
     },
     take: 20,
   });
 
   for (const run of stuckRuns) {
+    const effectiveProviderId = run.providerId || run.service?.userProviderId || run.service?.providerId || null;
+    const effectiveProviderName = run.provider?.name || run.service?.userProvider?.name || run.service?.provider?.name || null;
     if (run.providerOrderId) {
       // Order ID already exists: it was sent before interruption. Safely transition to 'sent'.
       await prisma.engagementRun.update({
@@ -102,8 +105,8 @@ export async function runWatchdogCycle(): Promise<WatchdogResult> {
         orderId: run.engagementOrderId,
         runId: run.id,
         runNumber: run.runNumber,
-        providerId: run.providerId || null,
-        providerName: run.provider?.name || null,
+        providerId: effectiveProviderId,
+        providerName: effectiveProviderName,
         reason: `Run #${run.runNumber} was stuck in "${run.status}" for > 2 minutes without order ID. Reset to delayed for safe retry.`,
         suggestedAction: "Watchdog has reset the run to delayed. Monitor provider connectivity.",
       });

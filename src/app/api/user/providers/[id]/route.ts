@@ -43,7 +43,10 @@ export async function GET(
     const [unsentRuns, unsentSteps] = await Promise.all([
       prisma.engagementRun.count({
         where: {
-          providerId: connection.id,
+          OR: [
+            { providerId: connection.id },
+            { service: { userProviderId: connection.id } },
+          ],
           status: { in: ["scheduled", "sending"] },
         },
       }),
@@ -107,7 +110,10 @@ export async function DELETE(
     const [unsentRuns, unsentSteps] = await Promise.all([
       prisma.engagementRun.count({
         where: {
-          providerId: connection.id,
+          OR: [
+            { providerId: connection.id },
+            { service: { userProviderId: connection.id } },
+          ],
           status: { in: ["scheduled", "sending"] },
         },
       }),

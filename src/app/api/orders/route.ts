@@ -701,16 +701,39 @@ export async function GET(request: Request) {
     if (!isAdmin) {
       where.userId = userId;
     }
-    if (status && status !== "ALL") {
-      where.status = status;
-    }
-    if (search) {
-      where.OR = [
-        { orderRef: { contains: search } },
-        { providerOrderId: { contains: search } },
-        { targetUrl: { contains: search } },
-        { service: { name: { contains: search } } },
+
+    if (status === "ENGAGEMENT") {
+      const engConditions = [
+        { scheduleMode: "TIKTOK_ENGAGEMENT" },
+        { orderRef: { startsWith: "ENG-" } },
       ];
+      if (search) {
+        where.AND = [
+          { OR: engConditions },
+          {
+            OR: [
+              { orderRef: { contains: search } },
+              { providerOrderId: { contains: search } },
+              { targetUrl: { contains: search } },
+              { service: { name: { contains: search } } },
+            ],
+          },
+        ];
+      } else {
+        where.OR = engConditions;
+      }
+    } else {
+      if (status && status !== "ALL") {
+        where.status = status;
+      }
+      if (search) {
+        where.OR = [
+          { orderRef: { contains: search } },
+          { providerOrderId: { contains: search } },
+          { targetUrl: { contains: search } },
+          { service: { name: { contains: search } } },
+        ];
+      }
     }
 
     const statusCountWhere: any = {};
@@ -772,7 +795,7 @@ export async function GET(request: Request) {
     } catch {}
 
     // Parallel query execution: runs data fetch, total count, and tab counts simultaneously
-    const [orders, totalCount, statusCounts] = await Promise.all([
+    const [orders, totalCount, statusCounts, engagementCount] = await Promise.all([
       prisma.order.findMany({
         where,
         include: {
@@ -818,9 +841,18 @@ export async function GET(request: Request) {
         where: statusCountWhere,
         _count: { id: true },
       }),
+      prisma.order.count({
+        where: {
+          ...statusCountWhere,
+          OR: [
+            { scheduleMode: "TIKTOK_ENGAGEMENT" },
+            { orderRef: { startsWith: "ENG-" } },
+          ],
+        },
+      }),
     ]);
 
-    const countMap: Record<string, number> = { ALL: totalCount };
+    const countMap: Record<string, number> = { ALL: totalCount, ENGAGEMENT: engagementCount };
     statusCounts.forEach((c) => {
       countMap[c.status] = c._count.id;
     });

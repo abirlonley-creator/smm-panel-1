@@ -63,6 +63,7 @@ interface OrderItem {
 
 const STATUS_TABS = [
   "ALL",
+  "ENGAGEMENT",
   "SCHEDULED",
   "PENDING",
   "PROCESSING",
@@ -215,7 +216,18 @@ export default function OrdersPage() {
                       : "bg-[#F8F9FD] text-[#252943]/70 hover:bg-[#DEE0ED]/50"
                   }`}
                 >
-                  <span>{tab === "ALL" ? "All Orders" : tab.replace("_", " ")}</span>
+                  <span>
+                    {tab === "ALL" ? (
+                      "All Orders"
+                    ) : tab === "ENGAGEMENT" ? (
+                      <span className="flex items-center gap-1">
+                        <Zap className={`w-3 h-3 ${activeTab === tab ? "text-[#E3FF3B]" : "text-[#3A4EFB]"}`} />
+                        <span>Engagement</span>
+                      </span>
+                    ) : (
+                      tab.replace("_", " ")
+                    )}
+                  </span>
                   {count > 0 && (
                     <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
                       activeTab === tab ? "bg-white/20 text-white" : "bg-[#DEE0ED] text-[#252943]"
