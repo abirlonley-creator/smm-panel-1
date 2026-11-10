@@ -742,14 +742,15 @@ export async function getActiveProvider(
     currency?: string;
   };
 }> {
-  if (userId) {
-    let connection: any = null;
+  let connection: any = null;
 
-    if (providerId) {
-      connection = await prisma.userProviderConnection.findFirst({
-        where: { id: providerId, userId },
-      });
-    }
+  if (providerId) {
+    connection = await prisma.userProviderConnection.findFirst({
+      where: { id: providerId },
+    });
+  }
+
+  if (userId && !connection) {
 
     if (!connection) {
       const pref = await prisma.userPreference.findUnique({

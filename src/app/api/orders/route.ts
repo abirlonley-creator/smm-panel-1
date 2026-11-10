@@ -718,6 +718,59 @@ export async function GET(request: Request) {
       statusCountWhere.userId = userId;
     }
 
+    // Auto-sync any orphaned ScheduledOrderJob rows so they immediately appear in Orders
+    try {
+      const unlinkedJobs = await prisma.scheduledOrderJob.findMany({
+        where: {
+          status: "SCHEDULED",
+          ...(isAdmin ? {} : { userId }),
+          orders: { none: {} },
+        },
+        take: 20,
+      });
+
+      for (const job of unlinkedJobs) {
+        try {
+          const payload = JSON.parse(job.payload);
+          if (job.jobType === "SINGLE" && payload.serviceId) {
+            const service = await prisma.service.findUnique({ where: { id: payload.serviceId } });
+            if (service) {
+              const requestedQuantity = Number(payload.requestedQuantity) || service.minQuantity;
+              const unitCost = service.ratePer1000 / 1000;
+              const totalCost = Number(((requestedQuantity / 1000) * service.ratePer1000).toFixed(4));
+              await prisma.order.create({
+                data: {
+                  orderRef: job.jobRef,
+                  serviceId: service.id,
+                  providerId: service.providerId || null,
+                  targetUrl: String(payload.targetUrl || ""),
+                  requestedQuantity,
+                  submittedQuantity: 0,
+                  deliveredQuantity: 0,
+                  remainingQuantity: requestedQuantity,
+                  failedQuantity: 0,
+                  unitCost,
+                  totalCost,
+                  isScheduled: true,
+                  scheduleMode: "SCHEDULED",
+                  status: "SCHEDULED",
+                  scheduledJobId: job.id,
+                  userId: job.userId || userId,
+                  notes: JSON.stringify({
+                    scheduledFor: job.scheduledFor.toISOString(),
+                    timezone: job.timezone,
+                    jobRef: job.jobRef,
+                    serviceName: service.name,
+                    platform: service.platform,
+                  }),
+                },
+              });
+            }
+          }
+        } catch {}
+      }
+    } catch {}
+
     // Parallel query execution: runs data fetch, total count, and tab counts simultaneously
     const [orders, totalCount, statusCounts] = await Promise.all([
       prisma.order.findMany({
@@ -727,6 +780,16 @@ export async function GET(request: Request) {
             include: {
               userProvider: { select: { id: true, name: true, apiUrl: true, currency: true } },
               provider: { select: { id: true, name: true, currency: true } },
+            },
+          },
+          scheduledJob: {
+            select: {
+              id: true,
+              jobRef: true,
+              jobType: true,
+              status: true,
+              scheduledFor: true,
+              timezone: true,
             },
           },
           dripFeedRuns: {

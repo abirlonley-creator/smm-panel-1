@@ -24,12 +24,103 @@ export async function GET(
       return NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 });
     }
 
-    const order = await prisma.order.findFirst({
+    let order = await prisma.order.findFirst({
       where: {
-        OR: [{ id: params.id }, { orderRef: params.id }],
+        OR: [
+          { id: params.id },
+          { orderRef: params.id },
+          { scheduledJobId: params.id },
+          { scheduledJob: { jobRef: params.id } },
+        ],
       },
-      include: orderDetailInclude,
+      include: {
+        ...orderDetailInclude,
+        scheduledJob: {
+          select: {
+            id: true,
+            jobRef: true,
+            jobType: true,
+            status: true,
+            scheduledFor: true,
+            timezone: true,
+            executedAt: true,
+            errorMessage: true,
+          },
+        },
+      },
     });
+
+    if (!order) {
+      // Check if this ID belongs to a ScheduledOrderJob
+      const scheduledJob = await prisma.scheduledOrderJob.findFirst({
+        where: {
+          OR: [{ id: params.id }, { jobRef: params.id }],
+        },
+      });
+
+      if (scheduledJob) {
+        if (session.role !== "ADMIN" && scheduledJob.userId && scheduledJob.userId !== session.user.id) {
+          return NextResponse.json({ success: false, error: "Order not found." }, { status: 404 });
+        }
+
+        // Auto-create the Order record for this scheduled job if missing
+        try {
+          const payload = JSON.parse(scheduledJob.payload);
+          if (scheduledJob.jobType === "SINGLE" && payload.serviceId) {
+            const service = await prisma.service.findUnique({ where: { id: payload.serviceId } });
+            if (service) {
+              const requestedQuantity = Number(payload.requestedQuantity) || service.minQuantity;
+              const unitCost = service.ratePer1000 / 1000;
+              const totalCost = Number(((requestedQuantity / 1000) * service.ratePer1000).toFixed(4));
+              order = await prisma.order.create({
+                data: {
+                  orderRef: scheduledJob.jobRef,
+                  serviceId: service.id,
+                  providerId: service.providerId || null,
+                  targetUrl: String(payload.targetUrl || ""),
+                  requestedQuantity,
+                  submittedQuantity: 0,
+                  deliveredQuantity: 0,
+                  remainingQuantity: requestedQuantity,
+                  failedQuantity: 0,
+                  unitCost,
+                  totalCost,
+                  isScheduled: true,
+                  scheduleMode: "SCHEDULED",
+                  status: scheduledJob.status === "SCHEDULED" ? "SCHEDULED" : "PROCESSING",
+                  scheduledJobId: scheduledJob.id,
+                  userId: scheduledJob.userId || session.user.id,
+                  notes: JSON.stringify({
+                    scheduledFor: scheduledJob.scheduledFor.toISOString(),
+                    timezone: scheduledJob.timezone,
+                    jobRef: scheduledJob.jobRef,
+                    serviceName: service.name,
+                    platform: service.platform,
+                  }),
+                },
+                include: {
+                  ...orderDetailInclude,
+                  scheduledJob: {
+                    select: {
+                      id: true,
+                      jobRef: true,
+                      jobType: true,
+                      status: true,
+                      scheduledFor: true,
+                      timezone: true,
+                      executedAt: true,
+                      errorMessage: true,
+                    },
+                  },
+                },
+              });
+            }
+          }
+        } catch (createErr) {
+          console.error("Failed to auto-create order for scheduled job:", createErr);
+        }
+      }
+    }
 
     if (!order) {
       // Check if this ID belongs to an EngagementOrder

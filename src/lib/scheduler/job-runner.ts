@@ -83,6 +83,49 @@ export async function scheduleOrderJob(params: ScheduleJobParams) {
     },
   });
 
+  // Seamlessly create the persistent Order row so it is visible in the Orders table immediately
+  if (jobType === "SINGLE") {
+    try {
+      const serviceId = String(payload.serviceId);
+      const targetUrl = String(payload.targetUrl);
+      const requestedQuantity = Number(payload.requestedQuantity);
+      const service = await prisma.service.findUnique({ where: { id: serviceId } });
+      if (service) {
+        const unitCost = service.ratePer1000 / 1000;
+        const totalCost = Number(((requestedQuantity / 1000) * service.ratePer1000).toFixed(4));
+        await prisma.order.create({
+          data: {
+            orderRef: jobRef,
+            serviceId: service.id,
+            providerId: service.providerId || null,
+            targetUrl,
+            requestedQuantity,
+            submittedQuantity: 0,
+            deliveredQuantity: 0,
+            remainingQuantity: requestedQuantity,
+            failedQuantity: 0,
+            unitCost,
+            totalCost,
+            isScheduled: true,
+            scheduleMode: "SCHEDULED",
+            status: "SCHEDULED",
+            scheduledJobId: job.id,
+            userId: userId || null,
+            notes: JSON.stringify({
+              scheduledFor: targetDate.toISOString(),
+              timezone,
+              jobRef,
+              serviceName: service.name,
+              platform: service.platform,
+            }),
+          },
+        });
+      }
+    } catch (orderErr) {
+      console.error("[scheduleOrderJob] Failed to pre-create Order row for scheduled job:", orderErr);
+    }
+  }
+
   await prisma.auditLog.create({
     data: {
       action: "JOB_SCHEDULED",
@@ -167,7 +210,6 @@ export async function runScheduledJobsTick(): Promise<ScheduledJobTickResult> {
 
         const targetProviderId = service.userProviderId || service.providerId;
         const { adapter } = await getActiveProvider(job.userId || undefined, targetProviderId || undefined);
-        const orderRef = `SMM-${Math.floor(100000 + Math.random() * 900000)}`;
         const unitCost = service.ratePer1000 / 1000;
         const totalCost = Number(((requestedQuantity / 1000) * service.ratePer1000).toFixed(4));
 
@@ -178,51 +220,89 @@ export async function runScheduledJobsTick(): Promise<ScheduledJobTickResult> {
           quantity: requestedQuantity,
         });
 
+        // Look for the pre-created Order record linked to this scheduled job
+        const existingOrder = await prisma.order.findFirst({
+          where: {
+            OR: [
+              { scheduledJobId: job.id },
+              { orderRef: job.jobRef },
+            ],
+          },
+        });
+
+        const orderRef = existingOrder?.orderRef || job.jobRef || `SMM-${Math.floor(100000 + Math.random() * 900000)}`;
+
         if (providerRes.success && providerRes.providerOrderId) {
           executionSuccess = true;
-          const order = await prisma.order.create({
-            data: {
-              orderRef,
-              serviceId: service.id,
-              targetUrl,
-              requestedQuantity,
-              submittedQuantity: requestedQuantity,
-              deliveredQuantity: 0,
-              remainingQuantity: requestedQuantity,
-              failedQuantity: 0,
-              unitCost,
-              totalCost,
-              isScheduled: true,
-              scheduleMode: "INSTANT",
-              status: "PROCESSING",
-              providerOrderId: providerRes.providerOrderId,
-              scheduledJobId: job.id,
-              userId: job.userId || null,
-            },
-          });
-          resultData = { orderId: order.id, orderRef, providerOrderId: providerRes.providerOrderId };
+          let order;
+          if (existingOrder) {
+            order = await prisma.order.update({
+              where: { id: existingOrder.id },
+              data: {
+                submittedQuantity: requestedQuantity,
+                status: "PROCESSING",
+                providerOrderId: String(providerRes.providerOrderId),
+                isScheduled: true,
+                scheduleMode: "SCHEDULED",
+                errorMessage: null,
+              },
+            });
+          } else {
+            order = await prisma.order.create({
+              data: {
+                orderRef,
+                serviceId: service.id,
+                targetUrl,
+                requestedQuantity,
+                submittedQuantity: requestedQuantity,
+                deliveredQuantity: 0,
+                remainingQuantity: requestedQuantity,
+                failedQuantity: 0,
+                unitCost,
+                totalCost,
+                isScheduled: true,
+                scheduleMode: "SCHEDULED",
+                status: "PROCESSING",
+                providerOrderId: String(providerRes.providerOrderId),
+                scheduledJobId: job.id,
+                userId: job.userId || null,
+              },
+            });
+          }
+          resultData = { orderId: order.id, orderRef: order.orderRef, providerOrderId: providerRes.providerOrderId };
         } else {
           const errMsg = providerRes.error || "Provider rejected order placement.";
-          await prisma.order.create({
-            data: {
-              orderRef,
-              serviceId: service.id,
-              targetUrl,
-              requestedQuantity,
-              submittedQuantity: 0,
-              deliveredQuantity: 0,
-              remainingQuantity: requestedQuantity,
-              failedQuantity: requestedQuantity,
-              unitCost,
-              totalCost,
-              isScheduled: true,
-              scheduleMode: "INSTANT",
-              status: "FAILED",
-              errorMessage: errMsg,
-              scheduledJobId: job.id,
-              userId: job.userId || null,
-            },
-          });
+          if (existingOrder) {
+            await prisma.order.update({
+              where: { id: existingOrder.id },
+              data: {
+                status: "FAILED",
+                errorMessage: errMsg,
+                failedQuantity: requestedQuantity,
+              },
+            });
+          } else {
+            await prisma.order.create({
+              data: {
+                orderRef,
+                serviceId: service.id,
+                targetUrl,
+                requestedQuantity,
+                submittedQuantity: 0,
+                deliveredQuantity: 0,
+                remainingQuantity: requestedQuantity,
+                failedQuantity: requestedQuantity,
+                unitCost,
+                totalCost,
+                isScheduled: true,
+                scheduleMode: "SCHEDULED",
+                status: "FAILED",
+                errorMessage: errMsg,
+                scheduledJobId: job.id,
+                userId: job.userId || null,
+              },
+            });
+          }
           throw new Error(errMsg);
         }
       } else if (job.jobType === "BULK") {

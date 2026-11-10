@@ -9,7 +9,8 @@ import {
   TrendingUp, 
   Loader2,
   RefreshCw,
-  Zap
+  Zap,
+  Clock
 } from "lucide-react";
 import { formatBdDateTime } from "@/lib/date-bd";
 
@@ -342,9 +343,21 @@ export default function OrdersPage() {
                               {order.service.userProvider?.name || order.service.provider?.name || "API"}: {order.dripFeedRuns.filter((r) => r.status === "COMPLETED").length}/{order.dripFeedRuns.length} runs sent
                             </span>
                           ) : order.isScheduled ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                              {order.service.userProvider?.name || order.service.provider?.name || "API"}: Scheduled
-                            </span>
+                            (() => {
+                              let schedTime: string | null = null;
+                              if (order.notes) {
+                                try {
+                                  const parsedNotes = JSON.parse(order.notes);
+                                  if (parsedNotes.scheduledFor) schedTime = formatBdDateTime(parsedNotes.scheduledFor);
+                                } catch {}
+                              }
+                              return (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                                  <Clock className="w-2.5 h-2.5 text-amber-600" />
+                                  {schedTime ? `Scheduled: ${schedTime} BD` : "Scheduled Order"}
+                                </span>
+                              );
+                            })()
                           ) : (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-gray-50 text-gray-500 border border-gray-200">
                               {order.service.userProvider?.name || order.service.provider?.name || "API"}
@@ -448,6 +461,11 @@ export default function OrdersPage() {
                           <div className="inline-flex items-center gap-1 text-[11px] font-extrabold text-purple-900 bg-purple-50 border border-purple-200 px-2.5 py-0.5 rounded-full">
                             <Zap className="w-3 h-3 text-[#3A4EFB]" />
                             <span>16 Views + 3 Likes Runs</span>
+                          </div>
+                        ) : order.scheduleMode === "SCHEDULED" ? (
+                          <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-full">
+                            <Clock className="w-3 h-3 text-amber-600" />
+                            <span>Scheduled Single Order</span>
                           </div>
                         ) : order.isScheduled ? (
                           <div className="inline-flex items-center gap-1 text-[11px] font-medium text-[#252943] bg-[#DEE0ED]/60 px-2 py-0.5 rounded-full">

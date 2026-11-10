@@ -690,6 +690,36 @@ export default function OrderDetailPage() {
           </>
         ) : (
           <>
+            {order.status === "SCHEDULED" && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 sm:p-5">
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center shrink-0 text-amber-700">
+                    <Clock className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-bold text-amber-950">Scheduled Execution Active</h2>
+                    <p className="mt-1 text-xs text-amber-900 leading-relaxed">
+                      This order is queued to dispatch autonomously to the upstream provider at{" "}
+                      <strong className="text-amber-950 font-bold">
+                        {(() => {
+                          if (order.notes) {
+                            try {
+                              const p = JSON.parse(order.notes);
+                              if (p.scheduledFor) return `${formatBdDateTime(p.scheduledFor)} (${formatBdTime(p.scheduledFor)} BD)`;
+                            } catch {}
+                          }
+                          return "the planned scheduled time";
+                        })()}
+                      </strong>.
+                    </p>
+                    <p className="mt-1 text-xs text-amber-800/80 leading-relaxed">
+                      Once the scheduled execution window arrives, our autonomous runner submits the order, confirms the provider order ID, and tracks real-time delivery until completed.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div>
               <div className="flex items-center justify-between text-xs mb-2">
                 <span className="font-semibold text-[#252943]">Delivery Completion</span>
