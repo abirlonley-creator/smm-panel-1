@@ -30,6 +30,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
+      pendingVerification: Boolean(result.pendingVerification),
+      alreadyCredited: Boolean(result.alreadyCredited),
       newBalance: result.newBalance,
       deposit: result.deposit,
       message: result.message,

@@ -175,8 +175,15 @@ export async function verifyAndCreditDeposit({
   }
 
   const cleanTxnId = txnId.trim();
-  if (!cleanTxnId || cleanTxnId.length < 6) {
-    throw new Error("Please enter a valid Binance Order ID (at least 6 characters).");
+  if (!cleanTxnId) {
+    throw new Error("Please enter your Binance Order ID.");
+  }
+
+  // Strict format check: Binance Order IDs are numeric digits (10-25 digits) found on the payment receipt
+  if (!/^\d{10,25}$/.test(cleanTxnId)) {
+    throw new Error(
+      "Invalid Binance Order ID format. A valid Binance Order ID contains only numbers (10-25 digits, e.g. 2198401928301928). You can find it on your Binance payment receipt."
+    );
   }
 
   // 1. Strict Unique Check: Prevent double-spending or reuse of the same Binance Order ID

@@ -179,17 +179,17 @@ export function BinanceAddFundsModal({
       } else {
         setIsPendingReview(false);
         setSuccessMessage(data.message || `₹${inrAmount.toFixed(2)} credited successfully!`);
+
+        // Only notify balance state if actually credited
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("balance-updated"));
+        }
+        if (onSuccess && typeof data.newBalance === "number") {
+          onSuccess(data.newBalance);
+        }
       }
 
       setStep("success");
-
-      // Notify global balance state
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent("balance-updated"));
-      }
-      if (onSuccess && typeof data.newBalance === "number") {
-        onSuccess(data.newBalance);
-      }
     } catch (err: any) {
       setErrorMessage(err.message || "Failed to verify transaction.");
     } finally {
@@ -239,18 +239,16 @@ export function BinanceAddFundsModal({
               className="flex flex-col items-center gap-1 group cursor-pointer"
             >
               <div
-                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
-                  step === "pay"
-                    ? "bg-[#2563EB] text-white shadow-sm ring-4 ring-[#2563EB]/15"
-                    : "bg-[#2563EB] text-white"
-                }`}
+                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${step === "pay"
+                  ? "bg-[#2563EB] text-white shadow-sm ring-4 ring-[#2563EB]/15"
+                  : "bg-[#2563EB] text-white"
+                  }`}
               >
                 1
               </div>
               <span
-                className={`text-xs font-semibold ${
-                  step === "pay" ? "text-gray-900" : "text-gray-600"
-                }`}
+                className={`text-xs font-semibold ${step === "pay" ? "text-gray-900" : "text-gray-600"
+                  }`}
               >
                 Make payment
               </span>
@@ -258,28 +256,25 @@ export function BinanceAddFundsModal({
 
             {/* Connecting Horizontal Line */}
             <div
-              className={`h-[2px] flex-1 mx-3 mb-5 transition-colors ${
-                step === "verify" || step === "success" ? "bg-[#2563EB]" : "bg-gray-200"
-              }`}
+              className={`h-[2px] flex-1 mx-3 mb-5 transition-colors ${step === "verify" || step === "success" ? "bg-[#2563EB]" : "bg-gray-200"
+                }`}
             />
 
             {/* Step 2 Node: Verify payment */}
             <div className="flex flex-col items-center gap-1">
               <div
-                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
-                  step === "verify"
-                    ? "bg-[#2563EB] text-white shadow-sm ring-4 ring-[#2563EB]/15"
-                    : step === "success"
+                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${step === "verify"
+                  ? "bg-[#2563EB] text-white shadow-sm ring-4 ring-[#2563EB]/15"
+                  : step === "success"
                     ? "bg-emerald-600 text-white"
                     : "bg-gray-200 text-gray-500"
-                }`}
+                  }`}
               >
                 2
               </div>
               <span
-                className={`text-xs font-semibold ${
-                  step === "verify" ? "text-gray-900" : "text-gray-400"
-                }`}
+                className={`text-xs font-semibold ${step === "verify" ? "text-gray-900" : "text-gray-400"
+                  }`}
               >
                 Verify payment
               </span>
@@ -328,11 +323,10 @@ export function BinanceAddFundsModal({
                         key={amt}
                         type="button"
                         onClick={() => setInrAmount(amt)}
-                        className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all ${
-                          inrAmount === amt
-                            ? "bg-[#2563EB] text-white shadow-xs"
-                            : "bg-white text-gray-700 border border-gray-200 hover:border-[#2563EB]"
-                        }`}
+                        className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all ${inrAmount === amt
+                          ? "bg-[#2563EB] text-white shadow-xs"
+                          : "bg-white text-gray-700 border border-gray-200 hover:border-[#2563EB]"
+                          }`}
                       >
                         ₹{amt}
                       </button>

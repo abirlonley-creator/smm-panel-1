@@ -42,7 +42,7 @@ export async function GET(request: Request) {
       success: true,
       wallet: {
         currency: "INR",
-        balance: user.walletBalance ?? 1000.0,
+        balance: user.walletBalance ?? 0.0,
       },
       transactions: transactions.map((t) => ({
         id: t.id,

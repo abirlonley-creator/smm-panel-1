@@ -146,7 +146,7 @@ model User {
   username           String                  @unique
   role               String                  @default("USER") // ADMIN | USER
   status             String                  @default("ACTIVE") // ACTIVE | DISABLED | REVOKED | EXPIRED
-  walletBalance      Float                   @default(1000.0) // INR wallet balance
+  walletBalance      Float                   @default(0.0) // INR wallet balance (starts at 0.0)
   passkeys           Passkey[]
   sessions           Session[]
   preferences        UserPreference?
