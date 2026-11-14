@@ -39,6 +39,7 @@ import {
   Star,
   Zap,
 } from "lucide-react";
+import { AdminOutOfBalanceBanner } from "@/components/AdminOutOfBalanceBanner";
 
 interface ServiceItem {
   id: string;
@@ -215,6 +216,10 @@ function NewOrderForm() {
   // Submission State
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [adminOutOfBalance, setAdminOutOfBalance] = useState<{
+    isOutOfBalance: boolean;
+    providerName: string;
+  } | null>(null);
   const [orderReceipt, setOrderReceipt] = useState<OrderReceipt | null>(null);
 
   // Initialize BD Time clock and default scheduled time (1 hour ahead in 12-hour format)
@@ -786,6 +791,7 @@ function NewOrderForm() {
 
     setSubmitting(true);
     setErrorMessage(null);
+    setAdminOutOfBalance(null);
     setOrderReceipt(null);
 
     try {
@@ -878,6 +884,14 @@ function NewOrderForm() {
 
       const data = await res.json();
       if (!res.ok || !data.success) {
+        if (data.isAdminOutOfBalance) {
+          setAdminOutOfBalance({
+            isOutOfBalance: true,
+            providerName: data.providerName || activeProvider?.name || "Admin Upstream Provider",
+          });
+          setErrorMessage(null);
+          return;
+        }
         throw new Error(data.error || "Failed to submit order.");
       }
 
@@ -1067,6 +1081,16 @@ function NewOrderForm() {
             )}
           </div>
         </div>
+      )}
+
+      {/* Admin Out Of Balance Banner */}
+      {adminOutOfBalance?.isOutOfBalance && (
+        <AdminOutOfBalanceBanner
+          providerName={adminOutOfBalance.providerName}
+          orderType="SMM Direct Order"
+          serviceName={activeService?.name}
+          onDismiss={() => setAdminOutOfBalance(null)}
+        />
       )}
 
       {/* 3. Error Banner */}

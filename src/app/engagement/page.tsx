@@ -30,6 +30,7 @@ import {
   Plus,
 } from "lucide-react";
 import { BinanceAddFundsModal } from "@/components/BinanceAddFundsModal";
+import { AdminOutOfBalanceBanner } from "@/components/AdminOutOfBalanceBanner";
 
 interface ApiStatusItem {
   connected: boolean;
@@ -219,6 +220,10 @@ export default function EngagementPage() {
   const [targetUrl, setTargetUrl] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [adminOutOfBalance, setAdminOutOfBalance] = useState<{
+    isOutOfBalance: boolean;
+    providerName: string;
+  } | null>(null);
   const [successReceipt, setSuccessReceipt] = useState<any | null>(null);
   const [showApiDetails, setShowApiDetails] = useState(false);
   const [showAddFundsModal, setShowAddFundsModal] = useState(false);
@@ -421,6 +426,7 @@ export default function EngagementPage() {
     }
 
     setSubmitting(true);
+    setAdminOutOfBalance(null);
     try {
       const res = await fetch("/api/engagement/order", {
         method: "POST",
@@ -439,6 +445,14 @@ export default function EngagementPage() {
 
       const data = await res.json();
       if (!res.ok || !data.success) {
+        if (data.isAdminOutOfBalance) {
+          setAdminOutOfBalance({
+            isOutOfBalance: true,
+            providerName: data.providerName || "Fulfillment Engine",
+          });
+          setErrorMsg(null);
+          return;
+        }
         throw new Error(data.error || "Failed to create engagement order");
       }
 
@@ -630,6 +644,16 @@ export default function EngagementPage() {
             </Link>
           </div>
         </div>
+      )}
+
+      {/* Admin Out Of Balance Banner */}
+      {adminOutOfBalance?.isOutOfBalance && (
+        <AdminOutOfBalanceBanner
+          providerName={adminOutOfBalance.providerName}
+          orderType="TikTok Engagement Campaign"
+          serviceName={currentPreset.name}
+          onDismiss={() => setAdminOutOfBalance(null)}
+        />
       )}
 
       {/* Error Message */}

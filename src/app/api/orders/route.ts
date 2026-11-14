@@ -5,6 +5,7 @@ import { getAuthSession } from "@/lib/auth/session";
 import { calculateGrowthPlan } from "@/lib/scheduler/calculator";
 import { ScheduleMode } from "@/lib/types";
 import { generateDripFeedSequence } from "@/lib/orders/drip-feed-randomizer";
+import { recordAdminAlert } from "@/lib/engagement/alert-service";
 import { z } from "zod";
 
 const createOrderSchema = z.object({
@@ -243,12 +244,27 @@ export async function POST(request: Request) {
 
       // Validate provider balance if known
       if (providerConnection && providerConnection.balance !== null && providerConnection.balance < totalCharge && !providerConnection.isMock) {
+        // Record High Priority Admin Alert (Lights up Red 1 in Admin Panel)
+        await recordAdminAlert({
+          severity: "high",
+          type: "insufficient_balance",
+          providerId: providerConnection.id,
+          providerName: providerConnection.name,
+          userId,
+          reason: `Admin provider "${providerConnection.name}" has run out of balance (${providerConnection.currency} ${providerConnection.balance.toFixed(2)}). User tried to place order for service "${service.name}".`,
+        }).catch(() => {});
+
         return NextResponse.json(
           {
             success: false,
-            error: `Insufficient balance on provider "${providerConnection.name}". Available: ${providerConnection.currency} ${providerConnection.balance.toFixed(2)}, Needed: ${totalCharge.toFixed(2)}. Please recharge your provider account.`,
+            error: "Admin has run out of balance in the upstream provider.",
+            isAdminOutOfBalance: true,
+            providerName: providerConnection.name,
+            canNotifyAdmin: true,
+            supportUrl: "https://t.me/Ghostfinds",
+            message: `Admin has run out of balance on provider "${providerConnection.name}". Your account balance was NOT charged. Please tap Notify Admin or contact Telegram support.`,
           },
-          { status: 400 }
+          { status: 503 }
         );
       }
 
@@ -463,12 +479,27 @@ export async function POST(request: Request) {
 
     // Validate provider balance if known
     if (providerConnection && providerConnection.balance !== null && providerConnection.balance < totalCost && !providerConnection.isMock) {
+      // Record High Priority Admin Alert (Lights up Red 1 in Admin Panel)
+      await recordAdminAlert({
+        severity: "high",
+        type: "insufficient_balance",
+        providerId: providerConnection.id,
+        providerName: providerConnection.name,
+        userId,
+        reason: `Admin provider "${providerConnection.name}" has run out of balance (${providerConnection.currency} ${providerConnection.balance.toFixed(2)}). User tried to place order for service "${service.name}".`,
+      }).catch(() => {});
+
       return NextResponse.json(
         {
           success: false,
-          error: `Insufficient balance on provider "${providerConnection.name}". Available: ${providerConnection.currency} ${providerConnection.balance.toFixed(2)}, Needed: ${totalCost.toFixed(2)}. Please recharge your provider account.`,
+          error: "Admin has run out of balance in the upstream provider.",
+          isAdminOutOfBalance: true,
+          providerName: providerConnection.name,
+          canNotifyAdmin: true,
+          supportUrl: "https://t.me/Ghostfinds",
+          message: `Admin has run out of balance on provider "${providerConnection.name}". Your account balance was NOT charged. Please tap Notify Admin or contact Telegram support.`,
         },
-        { status: 400 }
+        { status: 503 }
       );
     }
 

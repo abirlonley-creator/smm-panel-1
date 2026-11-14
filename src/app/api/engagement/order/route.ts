@@ -9,6 +9,7 @@ import {
 } from "@/lib/engagement/tiktok-preset-config";
 import { getAdminViewsProvider, getAdminEngagementProvider } from "@/lib/provider/admin-provider";
 import { logOrderEvent } from "@/lib/engagement/event-logger";
+import { recordAdminAlert } from "@/lib/engagement/alert-service";
 import { runEngagementTick } from "@/lib/engagement/worker";
 import { resolveTargetUrl } from "@/lib/urls/tiktok-resolver";
 import { z } from "zod";
@@ -323,7 +324,7 @@ export async function POST(request: Request) {
     const totalCost = Number((totalViewsCost + totalLikesCost + totalSavesCost + totalSharesCost).toFixed(2));
     const currentBalance = user.walletBalance ?? 0;
 
-    // 4. Wallet Balance Check
+    // 4. Wallet Balance Check (User balance check only)
     if (currentBalance < totalCost) {
       const needed = Number((totalCost - currentBalance).toFixed(2));
       return NextResponse.json(
@@ -333,8 +334,58 @@ export async function POST(request: Request) {
           required: totalCost,
           currentBalance,
           needed,
+          isAdminOutOfBalance: false,
         },
         { status: 402 }
+      );
+    }
+
+    // 4.5. Admin Upstream Provider Balance Check
+    // (Only triggers when user HAS sufficient wallet balance, but ADMIN provider has run out of balance)
+    const viewsWholesaleCost = Number(((totalPlannedViews / 1000) * (xmediaViewsService.ratePer1000 || 2.23)).toFixed(4));
+    const engWholesaleCost = Number((
+      (totalPlannedLikes / 1000) * (zeofameLikesService.ratePer1000 || 0.88) +
+      (totalPlannedSaves / 1000) * (zeofameSavesService?.ratePer1000 || 0.22) +
+      (totalPlannedShares / 1000) * (zeofameSharesService?.ratePer1000 || 0.22)
+    ).toFixed(4));
+
+    const viewsProviderBalance = typeof xmediaConn.balance === "number" ? xmediaConn.balance : null;
+    const engProviderBalance = typeof zeofameConn.balance === "number" ? zeofameConn.balance : null;
+
+    let adminOutOfBalanceProvider: string | null = null;
+    if (viewsProviderBalance !== null && viewsProviderBalance <= 0) {
+      adminOutOfBalanceProvider = xmediaConn.name || "Views Network";
+    } else if (engProviderBalance !== null && engProviderBalance <= 0) {
+      adminOutOfBalanceProvider = zeofameConn.name || "Engagement Network";
+    } else if (viewsProviderBalance !== null && viewsProviderBalance < viewsWholesaleCost && !xmediaConn.isMock) {
+      adminOutOfBalanceProvider = xmediaConn.name || "Views Network";
+    } else if (engProviderBalance !== null && engProviderBalance < engWholesaleCost && !zeofameConn.isMock) {
+      adminOutOfBalanceProvider = zeofameConn.name || "Engagement Network";
+    }
+
+    if (adminOutOfBalanceProvider) {
+      // Record High Priority Admin Alert (Immediately triggers red 1 badge in Admin Panel)
+      await recordAdminAlert({
+        severity: "high",
+        type: "insufficient_balance",
+        providerName: adminOutOfBalanceProvider,
+        providerId: xmediaConn.id,
+        userId: user.id,
+        platform: "TikTok",
+        reason: `Admin provider "${adminOutOfBalanceProvider}" has run out of balance. User @${session.user.username} tried to place order (${preset.name}) with sufficient user wallet balance (₹${currentBalance}), but the admin upstream provider balance is depleted.`,
+      }).catch((err) => console.warn("Could not log admin alert:", err));
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Admin has run out of balance in the upstream provider.",
+          isAdminOutOfBalance: true,
+          providerName: adminOutOfBalanceProvider,
+          canNotifyAdmin: true,
+          supportUrl: "https://t.me/Ghostfinds",
+          message: "Admin has run out of balance in the fulfillment provider. Your wallet balance has NOT been charged. Please tap 'Notify Admin' or contact Telegram support so the admin can refill the provider balance.",
+        },
+        { status: 503 }
       );
     }
 
