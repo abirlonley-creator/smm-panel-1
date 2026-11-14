@@ -162,8 +162,8 @@ export async function POST(request: Request) {
       providerConnection = userConnections[0];
     }
 
-    // Ownership check: service must belong to one of user's connected providers or mock
-    if (service.providerEndpoint && service.providerEndpoint !== "mock" && !service.isMock && userConnections.length > 0) {
+    // Ownership check: for admins with custom provider endpoints, ensure service matches connected provider
+    if (session.user.role === "ADMIN" && service.providerEndpoint && service.providerEndpoint !== "mock" && !service.isMock && userConnections.length > 0) {
       const allowedEndpoints = new Set(userConnections.map((c) => c.apiUrl.trim()));
       if (!allowedEndpoints.has(service.providerEndpoint.trim())) {
         return NextResponse.json(

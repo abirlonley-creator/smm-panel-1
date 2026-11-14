@@ -127,12 +127,22 @@ export async function resolveServiceRouting(serviceId: string, preferredProvider
     } catch {}
   }
 
-  if (!resolved) {
+  if (!resolved || resolved.provider.isMock) {
     const fallbackUserConn = await prisma.userProviderConnection.findFirst({
-      where: { active: true },
+      where: {
+        active: true,
+        isMock: false,
+        apiKeyEncrypted: { not: null },
+      },
+      orderBy: { updatedAt: "desc" },
     });
     if (fallbackUserConn) {
-      resolved = await resolveProviderById(fallbackUserConn.id);
+      try {
+        const liveResolved = await resolveProviderById(fallbackUserConn.id);
+        if (!liveResolved.provider.isMock) {
+          resolved = liveResolved;
+        }
+      } catch {}
     }
   }
 

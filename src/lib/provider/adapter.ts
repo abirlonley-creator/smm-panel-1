@@ -792,6 +792,24 @@ export async function getActiveProvider(
     }
   }
 
+  // Central Admin Provider Fallback:
+  // If the user has no personal provider connection or it is a mock connection,
+  // route through the Administrator's real active provider with an encrypted API key.
+  if (!connection || connection.isMock) {
+    const adminConn = await prisma.userProviderConnection.findFirst({
+      where: {
+        user: { role: "ADMIN" },
+        active: true,
+        isMock: false,
+        apiKeyEncrypted: { not: null },
+      },
+      orderBy: { updatedAt: "desc" },
+    });
+    if (adminConn) {
+      connection = adminConn;
+    }
+  }
+
   if (connection) {
     const decryptedKey = decryptApiKey(connection.apiKeyEncrypted);
     const isMockUrl = connection.isMock || !decryptedKey || connection.apiUrl.includes("mock") || connection.apiUrl.includes(".internal") || connection.apiUrl.includes(".test");

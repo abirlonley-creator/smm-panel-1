@@ -243,23 +243,50 @@ export async function executeWorkerCycle(): Promise<{
   const { adapter, config } = await getActiveProvider();
 
   // 1. Run due scheduler steps (job queue processing)
-  const schedulerRes = await runSchedulerTick();
+  let schedulerRes: any = { processedSteps: 0 };
+  try {
+    schedulerRes = await runSchedulerTick();
+  } catch (err) {
+    console.warn("[WORKER] Scheduler tick warning:", err);
+  }
 
   // 1b. Run due persistent future-scheduled orders (Single, Bulk, Combo)
-  const scheduledJobsRes = await runScheduledJobsTick();
+  let scheduledJobsRes: any = { processedJobs: 0 };
+  try {
+    scheduledJobsRes = await runScheduledJobsTick();
+  } catch (err) {
+    console.warn("[WORKER] Scheduled jobs warning:", err);
+  }
 
   // 1c. Run due Full Engagement organic runs (S-curve batches)
-  const engagementRes = await runEngagementTick();
+  try {
+    await runEngagementTick();
+  } catch (err) {
+    console.warn("[WORKER] Engagement tick warning:", err);
+  }
 
   // 1d. Run due Drip Feed random range runs (staggered batches)
-  await runDripFeedTick();
+  try {
+    await runDripFeedTick();
+  } catch (err) {
+    console.warn("[WORKER] Drip feed tick warning:", err);
+  }
 
   // 2. Sync active order statuses with provider
-  const ordersSynced = await syncActiveOrders(adapter);
+  let ordersSynced = 0;
+  try {
+    ordersSynced = await syncActiveOrders(adapter);
+  } catch (err) {
+    console.warn("[WORKER] Order sync warning:", err);
+  }
 
-  // 3. Run Likes Analyze monitoring loop: snapshots, comparisons,
-  //    persistent checkpoint scheduling, and adaptive delivery reassessment.
-  const monitorRes = await runMonitoringTick();
+  // 3. Run Likes Analyze monitoring loop
+  let monitorRes: any = { snapshotsTaken: 0, monitorsExpired: 0 };
+  try {
+    monitorRes = await runMonitoringTick();
+  } catch (err) {
+    console.warn("[WORKER] Monitoring tick warning:", err);
+  }
 
   // 4. Refresh provider balance on the same configurable interval as the API.
   let currentBal = stats.currentBalance;

@@ -18,20 +18,34 @@ export const maxDuration = 60;
  * 5. Drip Feed random range runs (staggered batches and auto-refunds)
  */
 async function executeTickCycle() {
-  const monitoringResult = await runMonitoringTick();
-  const result = await runSchedulerTick();
-  const scheduledJobsResult = await runScheduledJobsTick();
-  const engagementResult = await runEngagementTick();
-  const dripFeedResult = await runDripFeedTick();
+  const [monitoringRes, deliveryRes, jobsRes, engagementRes, dripFeedRes] = await Promise.allSettled([
+    runMonitoringTick(),
+    runSchedulerTick(),
+    runScheduledJobsTick(),
+    runEngagementTick(),
+    runDripFeedTick(),
+  ]);
+
+  const monitoringResult = monitoringRes.status === "fulfilled" ? monitoringRes.value : { error: monitoringRes.reason?.message || "Monitoring tick error" };
+  const deliveryResult = deliveryRes.status === "fulfilled" ? deliveryRes.value : { error: deliveryRes.reason?.message || "Delivery steps error" };
+  const scheduledJobsResult = jobsRes.status === "fulfilled" ? jobsRes.value : { error: jobsRes.reason?.message || "Scheduled jobs error" };
+  const engagementResult = engagementRes.status === "fulfilled" ? engagementRes.value : { error: engagementRes.reason?.message || "Engagement tick error" };
+  const dripFeedResult = dripFeedRes.status === "fulfilled" ? dripFeedRes.value : { error: dripFeedRes.reason?.message || "Drip feed error" };
+
+  if (monitoringRes.status === "rejected") console.warn("[SCHEDULER-TICK] Monitoring tick error:", monitoringRes.reason);
+  if (deliveryRes.status === "rejected") console.warn("[SCHEDULER-TICK] Delivery tick error:", deliveryRes.reason);
+  if (jobsRes.status === "rejected") console.warn("[SCHEDULER-TICK] Jobs tick error:", jobsRes.reason);
+  if (engagementRes.status === "rejected") console.warn("[SCHEDULER-TICK] Engagement tick error:", engagementRes.reason);
+  if (dripFeedRes.status === "rejected") console.warn("[SCHEDULER-TICK] Drip feed tick error:", dripFeedRes.reason);
+
   return {
     success: true,
     timestamp: new Date().toISOString(),
     monitoring: monitoringResult,
-    deliverySteps: result,
+    deliverySteps: deliveryResult,
     scheduledJobs: scheduledJobsResult,
     engagementRuns: engagementResult,
     dripFeedRuns: dripFeedResult,
-    ...result,
   };
 }
 

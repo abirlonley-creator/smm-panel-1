@@ -1,6 +1,7 @@
 import { prisma } from "../prisma";
 import { resolveServiceRouting, resolveProviderById } from "../provider/registry";
 import { MockSMMProvider, SMMProviderAdapter } from "../provider/adapter";
+import { getAdminViewsProvider, getAdminEngagementProvider } from "../provider/admin-provider";
 import { classifyProviderError } from "./error-classifier";
 import { logOrderEvent } from "./event-logger";
 import { recordAdminAlert } from "./alert-service";
@@ -561,29 +562,38 @@ export async function runEngagementTick(): Promise<EngagementTickResult> {
 
     try {
       // 5. Provider resolution with concurrency isolation
-      let adapter: SMMProviderAdapter;
+      let adapter: SMMProviderAdapter | null = null;
       let targetServiceExtId: string = run.providerServiceId || "101";
 
       if (effectiveProviderId) {
         try {
           const resolved = await resolveProviderById(effectiveProviderId);
-          if (resolved.provider.active === false) {
-            throw new Error(`Provider "${resolved.provider.name}" is currently paused.`);
+          if (resolved.provider.active !== false && !resolved.provider.isMock) {
+            adapter = resolved.adapter;
           }
-          adapter = resolved.adapter;
-        } catch (provErr: any) {
-          throw new Error(`Provider unavailable: ${provErr.message}`);
-        }
-      } else if (run.serviceId) {
+        } catch {}
+      }
+
+      if (!adapter && run.serviceId) {
         try {
           const routing = await resolveServiceRouting(run.serviceId);
-          adapter = routing.adapter;
-          targetServiceExtId = routing.providerServiceId || targetServiceExtId;
-        } catch {
+          if (!routing.provider.isMock) {
+            adapter = routing.adapter;
+            targetServiceExtId = routing.providerServiceId || targetServiceExtId;
+          }
+        } catch {}
+      }
+
+      // If not yet resolved to a live provider, route directly to Administrator's live provider
+      if (!adapter) {
+        const adminProv = run.engagementType === "views"
+          ? await getAdminViewsProvider()
+          : await getAdminEngagementProvider();
+        if (adminProv && !adminProv.isMock) {
+          adapter = adminProv.adapter;
+        } else {
           adapter = new MockSMMProvider();
         }
-      } else {
-        adapter = new MockSMMProvider();
       }
 
       // 6. Submit batch with duration tracking and idempotency
@@ -842,18 +852,33 @@ export async function runEngagementTick(): Promise<EngagementTickResult> {
 
   for (const sRun of sentRuns) {
     try {
-      let adapter: SMMProviderAdapter = new MockSMMProvider();
+      let adapter: SMMProviderAdapter | null = null;
       const effectiveProviderId = sRun.providerId || sRun.service?.userProviderId || sRun.service?.providerId;
       if (effectiveProviderId) {
         try {
           const res = await resolveProviderById(effectiveProviderId);
-          adapter = res.adapter;
+          if (!res.provider.isMock) {
+            adapter = res.adapter;
+          }
         } catch {}
-      } else if (sRun.serviceId) {
+      }
+      if (!adapter && sRun.serviceId) {
         try {
           const routing = await resolveServiceRouting(sRun.serviceId);
-          adapter = routing.adapter;
+          if (!routing.provider.isMock) {
+            adapter = routing.adapter;
+          }
         } catch {}
+      }
+      if (!adapter) {
+        const adminProv = sRun.engagementType === "views"
+          ? await getAdminViewsProvider()
+          : await getAdminEngagementProvider();
+        if (adminProv && !adminProv.isMock) {
+          adapter = adminProv.adapter;
+        } else {
+          adapter = new MockSMMProvider();
+        }
       }
 
       const statusRes = await adapter.getOrderStatus(sRun.providerOrderId!);

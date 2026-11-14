@@ -23,10 +23,13 @@ export async function getAdminProviderConnections(): Promise<ResolvedAdminProvid
       user: { role: "ADMIN" },
       active: true,
     },
-    orderBy: { createdAt: "asc" },
+    orderBy: [
+      { isMock: "asc" },
+      { updatedAt: "desc" },
+    ],
   });
 
-  return adminConns.map((c) => {
+  const list = adminConns.map((c) => {
     const rawKey = c.apiKeyEncrypted ? decryptApiKey(c.apiKeyEncrypted) : null;
     const isMock =
       c.isMock ||
@@ -49,6 +52,9 @@ export async function getAdminProviderConnections(): Promise<ResolvedAdminProvid
       connectionRecord: c,
     };
   });
+
+  // Prioritize active non-mock connections with real API keys
+  return list.sort((a, b) => (a.isMock === b.isMock ? 0 : a.isMock ? 1 : -1));
 }
 
 /**
@@ -56,13 +62,16 @@ export async function getAdminProviderConnections(): Promise<ResolvedAdminProvid
  */
 export async function getAdminViewsProvider(): Promise<ResolvedAdminProvider | null> {
   const all = await getAdminProviderConnections();
+  const realConns = all.filter((c) => !c.isMock && c.connectionRecord?.apiKeyEncrypted);
+  const pool = realConns.length > 0 ? realConns : all;
+
   return (
-    all.find((c) => {
+    pool.find((c) => {
       const name = c.name.toLowerCase();
       const url = c.apiUrl.toLowerCase();
       return name.includes("views") || name.includes("xmedia") || url.includes("xmedia");
     }) ||
-    all[0] ||
+    pool[0] ||
     null
   );
 }
@@ -72,8 +81,11 @@ export async function getAdminViewsProvider(): Promise<ResolvedAdminProvider | n
  */
 export async function getAdminEngagementProvider(): Promise<ResolvedAdminProvider | null> {
   const all = await getAdminProviderConnections();
+  const realConns = all.filter((c) => !c.isMock && c.connectionRecord?.apiKeyEncrypted);
+  const pool = realConns.length > 0 ? realConns : all;
+
   return (
-    all.find((c) => {
+    pool.find((c) => {
       const name = c.name.toLowerCase();
       const url = c.apiUrl.toLowerCase();
       return (
@@ -85,8 +97,9 @@ export async function getAdminEngagementProvider(): Promise<ResolvedAdminProvide
         url.includes("zefame")
       );
     }) ||
-    all[1] ||
-    all[0] ||
+    pool.find((c) => !c.name.toLowerCase().includes("views") && !c.apiUrl.toLowerCase().includes("xmedia")) ||
+    pool[1] ||
+    pool[0] ||
     null
   );
 }
