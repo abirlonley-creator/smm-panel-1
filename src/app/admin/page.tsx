@@ -46,6 +46,7 @@ import { OrderMonitorTab } from "@/components/admin/OrderMonitorTab";
 import { AlertsHealthTab } from "@/components/admin/AlertsHealthTab";
 import { BinanceDepositsTab } from "@/components/admin/BinanceDepositsTab";
 import { RevenueProfitTab } from "@/components/admin/RevenueProfitTab";
+import { UsersLiveActivityTab } from "@/components/admin/UsersLiveActivityTab";
 
 interface PasskeyData {
   id: string;
@@ -155,7 +156,7 @@ export default function AdminPage() {
   const [loggingIn, setLoggingIn] = useState(false);
 
   // Admin Data state
-  const [activeTab, setActiveTab] = useState<"revenue" | "keys" | "ordermonitor" | "monitoring" | "provider" | "audit" | "engagement" | "alerts" | "deposits">("keys");
+  const [activeTab, setActiveTab] = useState<"users" | "revenue" | "keys" | "ordermonitor" | "monitoring" | "provider" | "audit" | "engagement" | "alerts" | "deposits">("users");
   const [passkeys, setPasskeys] = useState<PasskeyData[]>([]);
   const [passkeySearchQuery, setPasskeySearchQuery] = useState("");
   const [diagnostics, setDiagnostics] = useState<DiagnosticsData | null>(null);
@@ -870,6 +871,21 @@ export default function AdminPage() {
       <div className="flex items-center gap-2 border-b border-[#DEE0ED] pb-px overflow-x-auto">
         <button
           type="button"
+          onClick={() => setActiveTab("users")}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${activeTab === "users"
+            ? "border-[#3A4EFB] text-[#3A4EFB] bg-[#3A4EFB]/5"
+            : "border-transparent text-[#252943]/60 hover:text-[#252943]"
+            }`}
+        >
+          <Users className="w-4 h-4 text-[#3A4EFB]" />
+          <span>Users & Live Activity</span>
+          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800">
+            Live
+          </span>
+        </button>
+
+        <button
+          type="button"
           onClick={() => setActiveTab("revenue")}
           className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${activeTab === "revenue"
             ? "border-emerald-600 text-emerald-800 bg-emerald-50/70"
@@ -987,6 +1003,13 @@ export default function AdminPage() {
           <span>Binance Deposits</span>
         </button>
       </div>
+
+      {/* =====================================================================
+          TAB: USERS & LIVE ACTIVITY (Inspection by Order ID / Username)
+      ====================================================================== */}
+      {activeTab === "users" && (
+        <UsersLiveActivityTab />
+      )}
 
       {/* =====================================================================
           TAB: REVENUE & PROFIT ANALYTICS

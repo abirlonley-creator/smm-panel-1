@@ -54,6 +54,38 @@ export function generateKeyString(): string {
 }
 
 /**
+ * Generates a clean, unique username derived from a user's real name.
+ * e.g. "Abir Ahmed" -> "abir_ahmed", or "abir_ahmed_2" if taken.
+ */
+export async function generateUniqueUsername(preferredOrName: string): Promise<string> {
+  let base = preferredOrName
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 25);
+
+  if (!base || base.length < 2) {
+    base = "user";
+  }
+
+  let candidate = base;
+  let counter = 1;
+
+  while (true) {
+    const existing = await prisma.user.findUnique({
+      where: { username: candidate },
+      select: { id: true },
+    });
+    if (!existing) {
+      return candidate;
+    }
+    counter++;
+    candidate = `${base}_${counter}`;
+  }
+}
+
+/**
  * Initializes the default administrator account with requested passkey `abir90`.
  * Idempotent: Only creates if no administrator passkey exists in the database.
  * Does not overwrite if changed or rotated.
@@ -488,7 +520,7 @@ export async function createPasskey(params: CreatePasskeyParams): Promise<{
   let user = userId ? await prisma.user.findUnique({ where: { id: userId } }) : null;
 
   if (!user) {
-    const uname = username?.trim() || `user_${Date.now().toString(36)}`;
+    const uname = await generateUniqueUsername(username?.trim() || label);
     user = await prisma.user.create({
       data: {
         username: uname,
