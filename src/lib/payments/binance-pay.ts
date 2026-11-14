@@ -45,6 +45,12 @@ export async function createBinanceDeposit({
   inrAmount: number;
   exchangeRate?: number;
 }) {
+  if (process.env.PAYMENTS_PAUSED === "true") {
+    throw new Error(
+      "We're currently fixing the payment issue. Please contact our 24/7 Support on Telegram: https://t.me/Ghostfinds"
+    );
+  }
+
   if (inrAmount < MIN_DEPOSIT_INR) {
     throw new Error(`Minimum deposit amount is ₹${MIN_DEPOSIT_INR}.`);
   }
@@ -86,10 +92,10 @@ async function queryBinanceApiPayTransaction(orderOrTxnId: string): Promise<{
   const apiSecret = process.env.BINANCE_API_SECRET || process.env.BINANCE_PAY_SECRET_KEY;
 
   if (!apiKey || !apiSecret) {
-    // API keys not configured in environment: return unverified for manual or fallback
+    // API keys not configured in environment: require manual administrator verification
     return {
-      verified: true, // fallback to format verification
-      statusText: "MANUAL_VERIFY_MODE",
+      verified: false,
+      statusText: "MANUAL_ADMIN_REVIEW_REQUIRED",
     };
   }
 
@@ -162,6 +168,12 @@ export async function verifyAndCreditDeposit({
   txnId: string;
   senderBinanceId?: string;
 }) {
+  if (process.env.PAYMENTS_PAUSED === "true") {
+    throw new Error(
+      "We're currently fixing the payment issue. Please contact our 24/7 Support on Telegram: https://t.me/Ghostfinds"
+    );
+  }
+
   const cleanTxnId = txnId.trim();
   if (!cleanTxnId || cleanTxnId.length < 6) {
     throw new Error("Please enter a valid Binance Order ID or Transaction ID (at least 6 characters).");
@@ -206,69 +218,90 @@ export async function verifyAndCreditDeposit({
   }
 
   // 3. Automated Binance Verification
-  const verificationResult = await queryBinanceApiPayTransaction(cleanTxnId);
+  const config = getBinanceConfig();
 
-  // If live API is configured and reports failure:
-  if (getBinanceConfig().isApiConfigured && !verificationResult.verified) {
-    throw new Error(
-      `Binance verification failed: ${verificationResult.statusText || "Payment could not be verified on Binance records. Please ensure the payment is completed and retry."}`
-    );
-  }
-
-  // 4. Atomically credit user balance and mark deposit VERIFIED
-  const result = await prisma.$transaction(async (tx) => {
-    // Re-verify uniqueness inside transaction lock
-    const concurrentCheck = await tx.paymentDeposit.findFirst({
-      where: { txnId: cleanTxnId, status: "VERIFIED" },
-    });
-    if (concurrentCheck) {
-      throw new Error("This Binance transaction ID has already been claimed.");
+  if (config.isApiConfigured) {
+    // Automated check against live Binance Pay records
+    const verificationResult = await queryBinanceApiPayTransaction(cleanTxnId);
+    if (!verificationResult.verified) {
+      throw new Error(
+        `Binance verification failed: ${verificationResult.statusText || "Payment could not be verified on Binance records. Please ensure the payment is completed on the Binance app and retry, or contact 24/7 Support."}`
+      );
     }
 
-    // A. Update deposit status
-    const updatedDeposit = await tx.paymentDeposit.update({
+    // 4. Atomically credit user balance and mark deposit VERIFIED
+    const result = await prisma.$transaction(async (tx) => {
+      // Re-verify uniqueness inside transaction lock
+      const concurrentCheck = await tx.paymentDeposit.findFirst({
+        where: { txnId: cleanTxnId, status: "VERIFIED" },
+      });
+      if (concurrentCheck) {
+        throw new Error("This Binance transaction ID has already been claimed.");
+      }
+
+      // A. Update deposit status
+      const updatedDeposit = await tx.paymentDeposit.update({
+        where: { id: deposit.id },
+        data: {
+          status: "VERIFIED",
+          txnId: cleanTxnId,
+          senderBinanceId: senderBinanceId?.trim() || null,
+          verifiedAt: new Date(),
+          rawVerification: JSON.stringify(verificationResult),
+        },
+      });
+
+      // B. Atomically increment user's walletBalance
+      const updatedUser = await tx.user.update({
+        where: { id: userId },
+        data: {
+          walletBalance: { increment: deposit.inrAmount },
+        },
+        select: { id: true, walletBalance: true },
+      });
+
+      // C. Create immutable WalletTransaction audit record
+      const auditRecord = await tx.walletTransaction.create({
+        data: {
+          userId,
+          type: "CREDIT",
+          amount: deposit.inrAmount,
+          balanceAfter: updatedUser.walletBalance,
+          referenceId: deposit.depositRef,
+          description: `Binance Pay Deposit (${deposit.usdtAmount} USDT @ ₹${deposit.exchangeRate}) - TxID: ${cleanTxnId}`,
+        },
+      });
+
+      return {
+        updatedDeposit,
+        newBalance: updatedUser.walletBalance,
+        auditRecord,
+      };
+    });
+
+    return {
+      success: true,
+      newBalance: result.newBalance,
+      deposit: result.updatedDeposit,
+      message: `Payment verified! ₹${deposit.inrAmount.toFixed(2)} has been added to your wallet.`,
+    };
+  } else {
+    // MANUAL / ADMIN VERIFICATION MODE (Never give free mock balance):
+    // Save the submitted transaction details and queue for administrator approval
+    const updatedDeposit = await prisma.paymentDeposit.update({
       where: { id: deposit.id },
       data: {
-        status: "VERIFIED",
         txnId: cleanTxnId,
         senderBinanceId: senderBinanceId?.trim() || null,
-        verifiedAt: new Date(),
-        rawVerification: JSON.stringify(verificationResult),
-      },
-    });
-
-    // B. Atomically increment user's walletBalance
-    const updatedUser = await tx.user.update({
-      where: { id: userId },
-      data: {
-        walletBalance: { increment: deposit.inrAmount },
-      },
-      select: { id: true, walletBalance: true },
-    });
-
-    // C. Create immutable WalletTransaction audit record
-    const auditRecord = await tx.walletTransaction.create({
-      data: {
-        userId,
-        type: "CREDIT",
-        amount: deposit.inrAmount,
-        balanceAfter: updatedUser.walletBalance,
-        referenceId: deposit.depositRef,
-        description: `Binance Pay Deposit (${deposit.usdtAmount} USDT @ ₹${deposit.exchangeRate}) - TxID: ${cleanTxnId}`,
+        status: "PENDING",
       },
     });
 
     return {
-      updatedDeposit,
-      newBalance: updatedUser.walletBalance,
-      auditRecord,
+      success: true,
+      pendingVerification: true,
+      deposit: updatedDeposit,
+      message: "Payment submitted! Our team is verifying your Binance transaction. Your balance will be credited upon confirmation. For instant updates, contact 24/7 Support.",
     };
-  });
-
-  return {
-    success: true,
-    newBalance: result.newBalance,
-    deposit: result.updatedDeposit,
-    message: `Payment verified! ₹${deposit.inrAmount.toFixed(2)} has been added to your wallet.`,
-  };
+  }
 }

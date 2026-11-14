@@ -266,24 +266,30 @@ export function Navigation() {
                 </span>
               </div>
 
-              {/* Telegram Support Link */}
-              <div className="pt-2 border-t border-[#323758]/60 text-[11px] text-[#DEE0ED]/75 leading-relaxed">
-                <div className="flex items-center gap-1.5 text-white font-bold mb-1">
-                  <Send className="w-3.5 h-3.5 text-[#3A4EFB]" />
-                  <span>Telegram Support</span>
+              {/* 24/7 Live Support Section */}
+              <div className="pt-2.5 border-t border-[#323758]/60 text-[11px] text-[#DEE0ED]/80 leading-relaxed space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-white font-bold">
+                    <Send className="w-3.5 h-3.5 text-[#3A4EFB]" />
+                    <span>24/7 Live Support</span>
+                  </div>
+                  <span className="flex items-center gap-1 text-[9px] font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-1.5 py-0.5 rounded-full">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    Online
+                  </span>
                 </div>
-                <p>
-                  Need access or have questions? Message{" "}
-                  <a
-                    href="https://t.me/Ghostfinds"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-[#3A4EFB] font-bold underline hover:text-blue-300"
-                  >
-                    @Ghostfinds
-                  </a>{" "}
-                  on Telegram.
+                <p className="text-[11px] text-[#DEE0ED]/70 leading-normal">
+                  Questions, deposit assistance or custom orders? Our team is available 24/7.
                 </p>
+                <a
+                  href="https://t.me/Ghostfinds"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-full mt-1 py-1.5 px-2.5 rounded-xl bg-[#0088cc]/20 hover:bg-[#0088cc]/30 border border-[#0088cc]/40 text-[#54c0eb] hover:text-white text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all"
+                >
+                  <Send className="w-3 h-3 text-[#54c0eb]" />
+                  <span>Message @Ghostfinds (24/7)</span>
+                </a>
               </div>
             </div>
           </div>
@@ -393,24 +399,30 @@ export function Navigation() {
             </span>
           </div>
 
-          {/* Telegram Support */}
-          <div className="pt-2 border-t border-[#323758]/60 text-[11px] text-[#DEE0ED]/75 leading-relaxed">
-            <div className="flex items-center gap-1.5 text-white font-bold mb-1">
-              <Send className="w-3.5 h-3.5 text-[#3A4EFB]" />
-              <span>Telegram Support</span>
+          {/* 24/7 Live Support Section */}
+          <div className="pt-2.5 border-t border-[#323758]/60 text-[11px] text-[#DEE0ED]/80 leading-relaxed space-y-1.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-white font-bold">
+                <Send className="w-3.5 h-3.5 text-[#3A4EFB]" />
+                <span>24/7 Live Support</span>
+              </div>
+              <span className="flex items-center gap-1 text-[9px] font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-1.5 py-0.5 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                Online
+              </span>
             </div>
-            <p>
-              Need access or have questions? Message{" "}
-              <a
-                href="https://t.me/Ghostfinds"
-                target="_blank"
-                rel="noreferrer"
-                className="text-[#3A4EFB] font-bold underline hover:text-blue-300"
-              >
-                @Ghostfinds
-              </a>{" "}
-              on Telegram.
+            <p className="text-[11px] text-[#DEE0ED]/70 leading-normal">
+              Questions, deposit assistance or custom orders? Our team is available 24/7.
             </p>
+            <a
+              href="https://t.me/Ghostfinds"
+              target="_blank"
+              rel="noreferrer"
+              className="w-full mt-1 py-1.5 px-2.5 rounded-xl bg-[#0088cc]/20 hover:bg-[#0088cc]/30 border border-[#0088cc]/40 text-[#54c0eb] hover:text-white text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all"
+            >
+              <Send className="w-3 h-3 text-[#54c0eb]" />
+              <span>Message @Ghostfinds (24/7)</span>
+            </a>
           </div>
         </div>
       </aside>

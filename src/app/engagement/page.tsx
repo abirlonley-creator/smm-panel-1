@@ -26,7 +26,10 @@ import {
   Sparkles,
   Calendar,
   Layers,
+  Send,
+  Plus,
 } from "lucide-react";
+import { BinanceAddFundsModal } from "@/components/BinanceAddFundsModal";
 
 interface ApiStatusItem {
   connected: boolean;
@@ -218,6 +221,7 @@ export default function EngagementPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successReceipt, setSuccessReceipt] = useState<any | null>(null);
   const [showApiDetails, setShowApiDetails] = useState(false);
+  const [showAddFundsModal, setShowAddFundsModal] = useState(false);
 
   const currentPreset = PRESET_OPTIONS[selectedPresetId] || PRESET_OPTIONS.tiktok_2k;
 
@@ -245,8 +249,11 @@ export default function EngagementPage() {
 
   async function fetchStatus(isManual = false) {
     if (isManual) setRefreshing(true);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 7000);
     try {
-      const res = await fetch("/api/engagement/status");
+      const res = await fetch("/api/engagement/status", { signal: controller.signal });
+      clearTimeout(timeoutId);
       const data = await res.json();
       if (data.success) {
         setStatusData(data);
@@ -254,7 +261,12 @@ export default function EngagementPage() {
         setErrorMsg(data.error || "Failed to load engagement status");
       }
     } catch (err: any) {
-      setErrorMsg(err.message || "Failed to connect to engagement backend");
+      clearTimeout(timeoutId);
+      if (err.name === "AbortError") {
+        setErrorMsg("Connection timed out while reaching engagement engines. Please retry.");
+      } else {
+        setErrorMsg(err.message || "Failed to connect to engagement backend");
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -490,23 +502,35 @@ export default function EngagementPage() {
         </div>
 
         <div className="flex items-center gap-3 self-start sm:self-auto shrink-0">
-          {/* Wallet Balance Badge */}
-          <div className="px-3.5 py-2 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] flex items-center gap-2">
-            <Wallet className="w-4 h-4 text-[#3A4EFB]" />
-            <div>
-              <span className="text-[10px] uppercase font-bold text-[#252943]/50 block leading-tight">Balance</span>
-              <span className="text-xs font-black text-[#252943] font-mono leading-tight">
-                ₹{walletBalance.toFixed(2)}
-              </span>
+          <div className="flex items-center gap-2">
+            {/* Wallet Balance Badge */}
+            <div className="px-3.5 py-2 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] flex items-center gap-2">
+              <Wallet className="w-4 h-4 text-[#3A4EFB]" />
+              <div>
+                <span className="text-[10px] uppercase font-bold text-[#252943]/50 block leading-tight">Balance</span>
+                <span className="text-xs font-black text-[#252943] font-mono leading-tight">
+                  ₹{walletBalance.toFixed(2)}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => fetchStatus(true)}
+                disabled={refreshing}
+                className="p-1 text-[#252943]/60 hover:text-[#3A4EFB] transition-colors"
+                title="Refresh Balance"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin text-[#3A4EFB]" : ""}`} />
+              </button>
             </div>
+
+            {/* Quick Add Funds Action */}
             <button
               type="button"
-              onClick={() => fetchStatus(true)}
-              disabled={refreshing}
-              className="p-1 text-[#252943]/60 hover:text-[#3A4EFB] transition-colors"
-              title="Refresh Balance"
+              onClick={() => setShowAddFundsModal(true)}
+              className="px-3 py-2 rounded-2xl bg-gradient-to-r from-[#F0B90B] to-[#e0a800] hover:brightness-105 text-[#1E2329] text-xs font-black shadow-subtle flex items-center gap-1.5 transition-all press-scale"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin text-[#3A4EFB]" : ""}`} />
+              <Zap className="w-3.5 h-3.5 fill-[#1E2329]" />
+              <span className="hidden xs:inline">Add Funds</span>
             </button>
           </div>
 
@@ -903,40 +927,85 @@ export default function EngagementPage() {
             </div>
           </div>
 
-          {/* Launch Button */}
-          <button
-            type="submit"
-            disabled={submitting || !isReady || !hasSufficientFunds}
-            className={`w-full py-4 rounded-2xl text-sm font-extrabold tracking-wide transition-all shadow-subtle flex items-center justify-center gap-2 cursor-pointer ${
-              submitting || !isReady || !hasSufficientFunds
-                ? "bg-gray-200 text-gray-500 cursor-not-allowed"
-                : "bg-[#3A4EFB] hover:bg-[#2C3FE0] text-white active:scale-[0.99] shadow-lg shadow-[#3A4EFB]/25"
-            }`}
-          >
-            {submitting ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin text-white" />
-                <span>Scheduling Campaign Batches...</span>
-              </>
-            ) : !isReady ? (
-              <>
-                <AlertCircle className="w-4 h-4 text-amber-600" />
-                <span>Connect Provider APIs Above First</span>
-              </>
-            ) : !hasSufficientFunds ? (
-              <>
-                <Wallet className="w-4 h-4" />
-                <span>Top Up Wallet (Need ₹{(exactTotalCost - walletBalance).toFixed(2)})</span>
-              </>
-            ) : (
-              <>
-                <Play className="w-4 h-4 fill-white" />
-                <span>Launch {currentPreset.name} (₹{exactTotalCost.toFixed(2)})</span>
-              </>
-            )}
-          </button>
+          {/* Launch or Top Up Button */}
+          {hasSufficientFunds ? (
+            <button
+              type="submit"
+              disabled={submitting || !isReady}
+              className={`w-full py-4 rounded-2xl text-sm font-extrabold tracking-wide transition-all shadow-subtle flex items-center justify-center gap-2 cursor-pointer ${
+                submitting || !isReady
+                  ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+                  : "bg-[#3A4EFB] hover:bg-[#2C3FE0] text-white active:scale-[0.99] shadow-lg shadow-[#3A4EFB]/25"
+              }`}
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  <span>Scheduling Campaign Batches...</span>
+                </>
+              ) : !isReady ? (
+                <>
+                  <AlertCircle className="w-4 h-4 text-amber-600" />
+                  <span>Connect Provider APIs Above First</span>
+                </>
+              ) : (
+                <>
+                  <Play className="w-4 h-4 fill-white" />
+                  <span>Launch {currentPreset.name} (₹{exactTotalCost.toFixed(2)})</span>
+                </>
+              )}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowAddFundsModal(true)}
+              className="w-full py-4 rounded-2xl text-sm font-black tracking-wide bg-gradient-to-r from-[#F0B90B] to-[#e0a800] hover:brightness-105 text-[#1E2329] shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 transition-all press-scale cursor-pointer"
+            >
+              <Zap className="w-4 h-4 fill-[#1E2329]" />
+              <span>Add Funds via Binance Pay (Need ₹{(exactTotalCost - walletBalance).toFixed(2)})</span>
+            </button>
+          )}
         </div>
       </form>
+
+      {/* 24/7 Live Support Banner */}
+      <div className="p-4 rounded-3xl bg-[#F8F9FD] border border-[#DEE0ED] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-xs">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-2xl bg-[#0088cc]/10 border border-[#0088cc]/20 flex items-center justify-center text-[#0088cc] shrink-0">
+            <Send className="w-4 h-4" />
+          </div>
+          <div>
+            <h4 className="font-bold text-[#252943] flex items-center gap-2">
+              <span>24/7 Dedicated Telegram Support</span>
+              <span className="flex items-center gap-1 text-[9px] font-bold text-emerald-600 bg-emerald-100/80 px-2 py-0.5 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Live 24/7
+              </span>
+            </h4>
+            <p className="text-[11px] text-[#252943]/60">
+              Need instant deposit confirmation, custom engagement presets, or technical help?
+            </p>
+          </div>
+        </div>
+
+        <a
+          href="https://t.me/Ghostfinds"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="px-4 py-2 rounded-xl bg-[#0088cc] hover:bg-[#0077b5] text-white text-xs font-bold transition-all shadow-subtle flex items-center justify-center gap-1.5 press-scale self-start sm:self-auto shrink-0"
+        >
+          <Send className="w-3.5 h-3.5" />
+          <span>Message @Ghostfinds</span>
+        </a>
+      </div>
+
+      {/* Binance Pay Add Funds Modal */}
+      <BinanceAddFundsModal
+        isOpen={showAddFundsModal}
+        onClose={() => setShowAddFundsModal(false)}
+        currentBalance={walletBalance}
+        onSuccess={() => fetchStatus(true)}
+      />
     </div>
   );
 }

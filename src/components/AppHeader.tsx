@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   User,
   AlertTriangle,
+  Send,
 } from "lucide-react";
 import { formatProviderBalance } from "@/lib/currency";
 import { ProviderBalanceSwitcher } from "@/components/ProviderBalanceSwitcher";
@@ -137,6 +138,19 @@ export function AppHeader() {
 
       {/* Right Persistent Account Area: Balance, Settings, Logout */}
       <div className="flex items-center gap-2 sm:gap-3">
+        {/* 24/7 Live Support Pill */}
+        <a
+          href="https://t.me/Ghostfinds"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="24/7 Live Telegram Support"
+          className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#0088cc]/10 hover:bg-[#0088cc]/20 border border-[#0088cc]/30 text-[#0088cc] text-xs font-bold transition-all shadow-subtle press-scale"
+        >
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          <Send className="w-3.5 h-3.5 text-[#0088cc]" />
+          <span>24/7 Support</span>
+        </a>
+
         {/* Provider Balance Pill / Switcher */}
         <ProviderBalanceSwitcher variant="header" />
 

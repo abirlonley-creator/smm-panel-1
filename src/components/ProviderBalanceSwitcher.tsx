@@ -12,6 +12,7 @@ import {
   ExternalLink,
   Plus,
   X,
+  Zap,
 } from "lucide-react";
 import { formatProviderBalance } from "@/lib/currency";
 import { BinanceAddFundsModal } from "@/components/BinanceAddFundsModal";
@@ -57,7 +58,7 @@ function getSafeEngineLabel(name: string | null | undefined, index: number = 0):
 export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceSwitcherProps) {
   const [isAdmin, setIsAdmin] = useState<boolean>(() => {
     if (sharedBalanceCache?.isAdmin !== undefined) return sharedBalanceCache.isAdmin;
-    return true; // default until loaded
+    return false; // safe default for regular users
   });
 
   const [walletBalance, setWalletBalance] = useState<number>(() => {
@@ -268,9 +269,9 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
             <button
               type="button"
               onClick={() => setShowAddFundsModal(true)}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#3A4EFB] hover:bg-[#2F40DB] text-white text-xs font-bold transition-all shadow-subtle press-scale"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-[#F0B90B] to-[#e0a800] hover:brightness-105 text-[#1E2329] text-xs font-black transition-all shadow-subtle press-scale"
             >
-              <Plus className="w-3.5 h-3.5" />
+              <Zap className="w-3.5 h-3.5 fill-[#1E2329]" />
               <span>Add Funds</span>
             </button>
           </div>
@@ -292,7 +293,7 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
                 <span className="text-[10px] uppercase tracking-wider text-[#DEE0ED]/60 font-semibold block leading-none mb-1">
                   Account Balance
                 </span>
-                <span className="text-sm font-bold text-white tracking-tight">
+                <span className="text-sm font-black text-white tracking-tight">
                   ₹{walletBalance.toFixed(2)}
                 </span>
               </div>
@@ -313,10 +314,10 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
           <button
             type="button"
             onClick={() => setShowAddFundsModal(true)}
-            className="w-full py-2 px-3 rounded-xl bg-[#3A4EFB] hover:bg-[#2F40DB] text-white text-xs font-bold text-center transition-all press-scale flex items-center justify-center gap-1.5 shadow-subtle"
+            className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-[#F0B90B] to-[#e0a800] hover:brightness-105 text-[#1E2329] text-xs font-black text-center transition-all press-scale flex items-center justify-center gap-1.5 shadow-subtle"
           >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Add Funds</span>
+            <Zap className="w-3.5 h-3.5 fill-[#1E2329]" />
+            <span>Add Funds · Binance Pay</span>
           </button>
         </div>
         {renderAddFundsModal()}

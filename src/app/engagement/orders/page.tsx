@@ -22,6 +22,7 @@ import {
   ChevronRight,
   Info,
   Zap,
+  Send,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -503,6 +504,37 @@ export default function EngagementOrdersPage() {
           })}
         </div>
       )}
+
+      {/* 24/7 Live Support Banner */}
+      <div className="p-4 rounded-3xl bg-white border border-[#DEE0ED] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-subtle mt-6">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-2xl bg-[#0088cc]/10 border border-[#0088cc]/20 flex items-center justify-center text-[#0088cc] shrink-0">
+            <Send className="w-4 h-4" />
+          </div>
+          <div>
+            <h4 className="font-bold text-[#252943] flex items-center gap-2">
+              <span>Need Help with an Order?</span>
+              <span className="flex items-center gap-1 text-[9px] font-bold text-emerald-600 bg-emerald-100/80 px-2 py-0.5 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                24/7 Live Support
+              </span>
+            </h4>
+            <p className="text-[11px] text-[#252943]/60">
+              For batch speed adjustments, order questions, or cancellations, message our 24/7 support.
+            </p>
+          </div>
+        </div>
+
+        <a
+          href="https://t.me/Ghostfinds"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="px-4 py-2 rounded-xl bg-[#0088cc] hover:bg-[#0077b5] text-white text-xs font-bold transition-all shadow-subtle flex items-center justify-center gap-1.5 press-scale self-start sm:self-auto shrink-0"
+        >
+          <Send className="w-3.5 h-3.5" />
+          <span>Message @Ghostfinds (24/7)</span>
+        </a>
+      </div>
     </div>
   );
 }
