@@ -935,7 +935,11 @@ function NewOrderForm() {
       window.dispatchEvent(new CustomEvent("balance-updated"));
     } catch (err: any) {
       const rawMsg = err.message || "Failed to place order.";
-      setErrorMessage(rawMsg);
+      let friendly = rawMsg;
+      if (rawMsg.includes("Failed to fetch") || rawMsg.includes("NetworkError")) {
+        friendly = "Unable to connect to server. Please check your internet connection and retry.";
+      }
+      setErrorMessage(friendly);
     } finally {
       setSubmitting(false);
     }

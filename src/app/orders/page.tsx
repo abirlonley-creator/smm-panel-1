@@ -225,8 +225,14 @@ export default function OrdersPage() {
                         <Zap className={`w-3 h-3 ${activeTab === tab ? "text-[#E3FF3B]" : "text-[#3A4EFB]"}`} />
                         <span>Engagement</span>
                       </span>
+                    ) : tab === "REQUIRES_RECONCILIATION" ? (
+                      "Needs Review"
+                    ) : tab === "PARTIAL" ? (
+                      "Partially Delivered"
+                    ) : tab === "PROCESSING" ? (
+                      "In Progress"
                     ) : (
-                      tab.replace("_", " ")
+                      tab.charAt(0) + tab.slice(1).toLowerCase()
                     )}
                   </span>
                   {count > 0 && (

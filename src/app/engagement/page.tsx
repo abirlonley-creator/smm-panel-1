@@ -87,9 +87,9 @@ interface PresetOption {
 const PRESET_OPTIONS: Record<string, PresetOption> = {
   tiktok_2k: {
     id: "tiktok_2k",
-    name: "TikTok 1st Working 2K",
-    tagline: "Calibrated 5-Hour Organic Pacing for Starter Posts",
-    badge: "5.0 Hours",
+    name: "2K Starter",
+    tagline: "5-hour organic pacing for new posts",
+    badge: "5h",
     durationLabel: "5.0 Hours",
     durationHours: 5.0,
     views: { count: 16, min: 150, max: 220, interval: 20 },
@@ -98,9 +98,9 @@ const PRESET_OPTIONS: Record<string, PresetOption> = {
   },
   tiktok_5k: {
     id: "tiktok_5k",
-    name: "TikTok Organic Velocity 5K",
-    tagline: "1-Day FYP Momentum with Smooth Co-Delivered Views, Likes, Saves & Reposts",
-    badge: "1 Day (16h)",
+    name: "5K Velocity",
+    tagline: "16-hour FYP push with likes & reposts",
+    badge: "16h",
     durationLabel: "16.0 Hours (1 Day)",
     durationHours: 16.0,
     views: { count: 20, min: 230, max: 280, interval: 45 },
@@ -116,9 +116,9 @@ const PRESET_OPTIONS: Record<string, PresetOption> = {
   },
   tiktok_10k: {
     id: "tiktok_10k",
-    name: "TikTok FYP Breakthrough 10K",
-    tagline: "Full 24-Hour Virality with High-Retention Saves & Reposts",
-    badge: "1 Day (22h)",
+    name: "10K Breakthrough",
+    tagline: "22-hour algorithm breakout with high saves",
+    badge: "22h",
     durationLabel: "22.0 Hours (1 Day)",
     durationHours: 22.0,
     views: { count: 26, min: 380, max: 430, interval: 48 },
@@ -136,9 +136,9 @@ const PRESET_OPTIONS: Record<string, PresetOption> = {
   },
   tiktok_50k: {
     id: "tiktok_50k",
-    name: "TikTok Viral Mega 50K",
-    tagline: "2-Day (48-Hour) Full Viral Simulation across International Timezones",
-    badge: "2 Days (48h)",
+    name: "50K Mega Viral",
+    tagline: "48-hour multi-day viral simulation",
+    badge: "48h",
     durationLabel: "48.0 Hours (2 Days)",
     durationHours: 48.0,
     views: { count: 44, min: 1050, max: 1250, interval: 62 },
@@ -227,6 +227,7 @@ export default function EngagementPage() {
   const [successReceipt, setSuccessReceipt] = useState<any | null>(null);
   const [showApiDetails, setShowApiDetails] = useState(false);
   const [showAddFundsModal, setShowAddFundsModal] = useState(false);
+  const [showAllBatches, setShowAllBatches] = useState(false);
 
   const currentPreset = PRESET_OPTIONS[selectedPresetId] || PRESET_OPTIONS.tiktok_2k;
 
@@ -242,6 +243,7 @@ export default function EngagementPage() {
   // Re-generate plan when preset changes
   function switchPreset(presetId: string) {
     setSelectedPresetId(presetId);
+    setShowAllBatches(false);
     const p = PRESET_OPTIONS[presetId] || PRESET_OPTIONS.tiktok_2k;
     setPlannedSchedule(generatePlanForPreset(p));
     setPlanTimestamp(new Date());
@@ -416,12 +418,13 @@ export default function EngagementPage() {
     }
 
     if (!isReady) {
-      setErrorMsg("Both Views and Engagement delivery engines must be connected and verified before ordering.");
+      setErrorMsg("Fulfillment engines are temporarily synchronizing. Please wait a moment or contact 24/7 Telegram support.");
       return;
     }
 
     if (!hasSufficientFunds) {
-      setErrorMsg("Insufficient wallet balance. Please top up your wallet to continue.");
+      const needed = Number((exactTotalCost - walletBalance).toFixed(2));
+      setErrorMsg(`Insufficient wallet balance: ₹${needed} more needed. Tap 'Add Funds' below to top up.`);
       return;
     }
 
@@ -463,7 +466,14 @@ export default function EngagementPage() {
         window.scrollTo({ top: 0, behavior: "smooth" });
       }
     } catch (err: any) {
-      setErrorMsg(err.message || "Failed to submit engagement order");
+      const raw = err.message || "";
+      let friendly = raw || "Failed to submit engagement order";
+      if (raw.includes("Failed to fetch") || raw.includes("NetworkError")) {
+        friendly = "Unable to connect to server. Please check your internet connection and retry.";
+      } else if (raw.toLowerCase().includes("resolve") || raw.toLowerCase().includes("tiktok") || raw.toLowerCase().includes("url")) {
+        friendly = "Could not resolve TikTok video. Please verify the post is public and the link is active.";
+      }
+      setErrorMsg(friendly);
     } finally {
       setSubmitting(false);
     }
@@ -499,128 +509,59 @@ export default function EngagementPage() {
         </Link>
       </div>
 
-      {/* 1. Header & Engine Status Bar */}
+      {/* 1. Sleek Modern Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-3xl bg-white border border-[#DEE0ED] shadow-subtle">
         <div className="space-y-1">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <h1 className="text-xl sm:text-2xl font-black text-[#252943] tracking-tight">
-              TikTok Engagement Automation
+              TikTok Engagement
             </h1>
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-50 text-[#3A4EFB] border border-blue-200">
-              1-Day & 2-Day Calibrated Virality
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Algorithmic FYP Pacing
             </span>
           </div>
-          <p className="text-xs text-[#252943]/70">
-            Coordinated high-retention Views with naturally scheduled Likes, Saves, and Reposts.
+          <p className="text-xs text-[#252943]/60 font-normal">
+            Coordinated views, likes, saves & reposts paced for maximum retention.
           </p>
         </div>
 
-        <div className="flex items-center gap-3 self-start sm:self-auto shrink-0">
-          <div className="flex items-center gap-2">
-            {/* Wallet Balance Badge */}
-            <div className="px-3.5 py-2 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] flex items-center gap-2">
-              <Wallet className="w-4 h-4 text-[#3A4EFB]" />
-              <div>
-                <span className="text-[10px] uppercase font-bold text-[#252943]/50 block leading-tight">Balance</span>
-                <span className="text-xs font-black text-[#252943] font-mono leading-tight">
-                  ₹{walletBalance.toFixed(2)}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => fetchStatus(true)}
-                disabled={refreshing}
-                className="p-1 text-[#252943]/60 hover:text-[#3A4EFB] transition-colors"
-                title="Refresh Balance"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin text-[#3A4EFB]" : ""}`} />
-              </button>
+        <div className="flex items-center gap-2.5 self-start sm:self-auto shrink-0">
+          {/* Wallet Balance Pill */}
+          <div className="px-3.5 py-2 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] flex items-center gap-2.5">
+            <Wallet className="w-4 h-4 text-[#3A4EFB]" />
+            <div>
+              <span className="text-[9px] uppercase font-bold text-[#252943]/40 block leading-tight">Wallet</span>
+              <span className="text-xs font-black text-[#252943] font-mono leading-tight">
+                ₹{walletBalance.toFixed(2)}
+              </span>
             </div>
-
-            {/* Quick Add Funds Action */}
             <button
               type="button"
-              onClick={() => setShowAddFundsModal(true)}
-              className="px-3 py-2 rounded-2xl bg-gradient-to-r from-[#F0B90B] to-[#e0a800] hover:brightness-105 text-[#1E2329] text-xs font-black shadow-subtle flex items-center gap-1.5 transition-all press-scale"
+              onClick={() => fetchStatus(true)}
+              disabled={refreshing}
+              className="p-1 text-[#252943]/40 hover:text-[#3A4EFB] transition-colors"
+              title="Refresh Balance"
             >
-              <Zap className="w-3.5 h-3.5 fill-[#1E2329]" />
-              <span className="hidden xs:inline">Add Funds</span>
+              <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin text-[#3A4EFB]" : ""}`} />
             </button>
           </div>
 
-          {/* Engine Status Indicator */}
+          {/* Quick Add Funds Action */}
           <button
             type="button"
-            onClick={() => setShowApiDetails(!showApiDetails)}
-            className={`px-3 py-2 rounded-2xl text-xs font-bold border transition-all flex items-center gap-1.5 cursor-pointer ${
-              isReady
-                ? "bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100"
-                : "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100"
-            }`}
+            onClick={() => setShowAddFundsModal(true)}
+            className="px-3.5 py-2.5 rounded-2xl bg-[#F0B90B] hover:bg-[#e0a800] text-[#1E2329] text-xs font-black shadow-subtle flex items-center gap-1.5 transition-all press-scale"
           >
-            <span className={`w-2 h-2 rounded-full ${isReady ? "bg-emerald-500" : "bg-amber-500 animate-pulse"}`} />
-            <span>{isReady ? "Delivery Engines Ready" : "Setup Required"}</span>
-            {showApiDetails ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            <Zap className="w-3.5 h-3.5 fill-[#1E2329]" />
+            <span>Add Funds</span>
           </button>
         </div>
       </div>
 
-      {/* Expandable Engine Details */}
-      {showApiDetails && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-3xl bg-[#F8F9FD] border border-[#DEE0ED] animate-fadeIn">
-          {/* Views Engine Card */}
-          <div className="bg-white p-4 rounded-2xl border border-[#DEE0ED] shadow-subtle space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 font-black text-xs flex items-center justify-center">
-                  VW
-                </div>
-                <div>
-                  <h4 className="text-xs font-bold text-[#252943]">Views Delivery Engine</h4>
-                  <span className="text-[10px] text-[#252943]/60">High-Retention Network</span>
-                </div>
-              </div>
-              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                xmedia?.connected ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
-              }`}>
-                {xmedia?.connected ? "Connected" : "Disconnected"}
-              </span>
-            </div>
-            <div className="text-[11px] text-[#252943]/70 flex justify-between pt-1 border-t border-[#DEE0ED]/60">
-              <span>Engine Status:</span>
-              <span className="font-bold text-[#252943]">{xmedia?.connected ? "Ready & Active" : "Setup Required"}</span>
-            </div>
-          </div>
-
-          {/* Engagement Engine Card */}
-          <div className="bg-white p-4 rounded-2xl border border-[#DEE0ED] shadow-subtle space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-rose-100 text-rose-700 font-black text-xs flex items-center justify-center">
-                  EG
-                </div>
-                <div>
-                  <h4 className="text-xs font-bold text-[#252943]">Engagement Delivery Engine</h4>
-                  <span className="text-[10px] text-[#252943]/60">Organic Likes, Saves & Reposts</span>
-                </div>
-              </div>
-              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                zeofame?.connected ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
-              }`}>
-                {zeofame?.connected ? "Connected" : "Disconnected"}
-              </span>
-            </div>
-            <div className="text-[11px] text-[#252943]/70 flex justify-between pt-1 border-t border-[#DEE0ED]/60">
-              <span>Engine Status:</span>
-              <span className="font-bold text-[#252943]">{zeofame?.connected ? "Ready & Active" : "Setup Required"}</span>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Success Notification */}
       {successReceipt && (
-        <div className="p-5 rounded-3xl bg-emerald-50 border-2 border-emerald-300 text-emerald-950 space-y-3 animate-fadeIn shadow-subtle">
+        <div className="p-4 sm:p-5 rounded-3xl bg-emerald-50 border-2 border-emerald-300 text-emerald-950 space-y-3 animate-fadeIn shadow-subtle">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0">
@@ -628,7 +569,7 @@ export default function EngagementPage() {
               </div>
               <div>
                 <h3 className="font-extrabold text-sm text-emerald-950">
-                  Engagement Campaign Launched Successfully!
+                  Engagement Campaign Launched!
                 </h3>
                 <p className="text-xs text-emerald-800">
                   Order ID: <strong className="font-mono">#{successReceipt.orderRef}</strong> • Preset: <strong>{successReceipt.presetName}</strong> ({successReceipt.durationHours}h).
@@ -637,7 +578,7 @@ export default function EngagementPage() {
             </div>
             <Link
               href={`/engagement/orders/${successReceipt.orderId}`}
-              className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-extrabold transition-all shadow-subtle"
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition-all shadow-subtle"
             >
               <span>Inspect Live Dashboard</span>
               <ArrowRight className="w-3.5 h-3.5" />
@@ -658,24 +599,22 @@ export default function EngagementPage() {
 
       {/* Error Message */}
       {errorMsg && (
-        <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 flex items-center gap-3 text-xs font-semibold animate-fadeIn">
+        <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 flex items-center gap-3 text-xs font-semibold animate-fadeIn">
           <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
           <span className="flex-1">{errorMsg}</span>
         </div>
       )}
 
-      {/* 2. PRESET TIER SELECTOR: 2K, 5K, 10K, 50K */}
-      <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 shadow-subtle space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#DEE0ED]">
-          <div>
-            <h2 className="text-sm font-extrabold text-[#252943] flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-[#3A4EFB]" />
-              <span>Select Organic Virality Tier</span>
+      {/* 2. PRESET TIER SELECTOR */}
+      <div className="bg-white rounded-3xl border border-[#DEE0ED] p-5 sm:p-6 shadow-subtle space-y-3.5">
+        <div className="flex items-center justify-between pb-2 border-b border-[#DEE0ED]/80">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-[#3A4EFB]" />
+            <h2 className="text-sm font-bold text-[#252943]">
+              Choose Growth Tier
             </h2>
-            <p className="text-[11px] text-[#252943]/60">
-              Calibrated pacing ensures traffic looks 100% human to TikTok algorithms (1 Day for normal orders, 2 Days for 50K).
-            </p>
           </div>
+          <span className="text-[11px] text-[#252943]/50 font-medium">Safe algorithmic pacing</span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -686,37 +625,34 @@ export default function EngagementPage() {
                 key={preset.id}
                 type="button"
                 onClick={() => switchPreset(preset.id)}
-                className={`p-4 rounded-2xl border text-left transition-all relative flex flex-col justify-between cursor-pointer ${
+                className={`p-4 rounded-2xl border text-left transition-all relative flex flex-col justify-between cursor-pointer press-scale ${
                   isSelected
                     ? "bg-[#3A4EFB]/5 border-[#3A4EFB] shadow-sm ring-1 ring-[#3A4EFB]"
-                    : "bg-[#F8F9FD] border-[#DEE0ED] hover:bg-white hover:border-[#3A4EFB]/50"
+                    : "bg-[#F8F9FD] border-[#DEE0ED] hover:bg-white hover:border-[#3A4EFB]/40"
                 }`}
               >
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between gap-1">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-[#252943]">
+                      {preset.name}
+                    </span>
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                      isSelected ? "bg-[#3A4EFB] text-white" : "bg-gray-200 text-gray-700"
+                      isSelected ? "bg-[#3A4EFB] text-white" : "bg-gray-200/80 text-gray-700"
                     }`}>
                       {preset.badge}
                     </span>
-                    {isSelected && <Check className="w-4 h-4 text-[#3A4EFB] stroke-[3]" />}
                   </div>
 
-                  <div>
-                    <h3 className="font-extrabold text-xs text-[#252943]">
-                      {preset.name}
-                    </h3>
-                    <p className="text-[10px] text-[#252943]/60 mt-0.5 line-clamp-2">
-                      {preset.tagline}
-                    </p>
-                  </div>
+                  <p className="text-[11px] text-[#252943]/60 leading-snug">
+                    {preset.tagline}
+                  </p>
                 </div>
 
-                <div className="pt-3 mt-3 border-t border-[#DEE0ED]/60 flex items-center justify-between text-[11px]">
+                <div className="pt-2.5 mt-2.5 border-t border-[#DEE0ED]/60 flex items-center justify-between text-[11px]">
                   <span className="font-bold text-blue-700 font-mono">
-                    {preset.id === "tiktok_2k" ? "~3k Views" : preset.id === "tiktok_5k" ? "~5k Views" : preset.id === "tiktok_10k" ? "~10k Views" : "~50k Views"}
+                    {preset.id === "tiktok_2k" ? "~2,000 Views" : preset.id === "tiktok_5k" ? "~5,000 Views" : preset.id === "tiktok_10k" ? "~10,000 Views" : "~50,000 Views"}
                   </span>
-                  <span className="text-[10px] text-[#252943]/50">
+                  <span className="text-[10px] text-[#252943]/50 font-medium">
                     {preset.views.count} Batches
                   </span>
                 </div>
@@ -726,20 +662,20 @@ export default function EngagementPage() {
         </div>
       </div>
 
-      {/* 3. THREE-STEP WORKSPACE: Clear, uncluttered, intuitive */}
-      <form onSubmit={handleCreateOrder} className="space-y-6">
+      {/* 3. THREE-STEP WORKSPACE */}
+      <form onSubmit={handleCreateOrder} className="space-y-5">
         {/* STEP 1: VIDEO LINK */}
-        <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 shadow-subtle space-y-3">
+        <div className="bg-white rounded-3xl border border-[#DEE0ED] p-5 sm:p-6 shadow-subtle space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="w-6 h-6 rounded-lg bg-[#3A4EFB] text-white text-xs font-black flex items-center justify-center">
                 1
               </span>
-              <h2 className="text-sm font-extrabold text-[#252943]">
-                Enter TikTok Video URL
+              <h2 className="text-sm font-bold text-[#252943]">
+                TikTok Video URL
               </h2>
             </div>
-            <span className="text-[11px] text-[#252943]/50">Public TikTok videos only</span>
+            <span className="text-[11px] text-[#252943]/50">Public post link</span>
           </div>
 
           <div className="relative">
@@ -749,233 +685,217 @@ export default function EngagementPage() {
               placeholder="https://www.tiktok.com/@username/video/..."
               value={targetUrl}
               onChange={(e) => setTargetUrl(e.target.value)}
-              className="w-full px-4 py-3.5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] text-xs sm:text-sm font-semibold text-[#252943] placeholder-[#252943]/40 focus:outline-none focus:border-[#3A4EFB] focus:bg-white transition-all shadow-inner"
+              className="w-full px-4 py-3 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] text-xs sm:text-sm font-medium text-[#252943] placeholder-[#252943]/40 focus:outline-none focus:border-[#3A4EFB] focus:bg-white transition-all shadow-inner font-mono"
             />
           </div>
         </div>
 
-        {/* STEP 2: EXACT DELIVERY SCHEDULE */}
-        <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 shadow-subtle space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#DEE0ED]">
+        {/* STEP 2: DELIVERY BREAKDOWN */}
+        <div className="bg-white rounded-3xl border border-[#DEE0ED] p-5 sm:p-6 shadow-subtle space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
             <div className="flex items-center gap-2">
               <span className="w-6 h-6 rounded-lg bg-[#3A4EFB] text-white text-xs font-black flex items-center justify-center">
                 2
               </span>
               <div>
-                <h2 className="text-sm font-extrabold text-[#252943]">
-                  Exact Delivery Schedule & Quantities ({currentPreset.name})
+                <h2 className="text-sm font-bold text-[#252943]">
+                  Schedule & Delivery Breakdown ({currentPreset.name})
                 </h2>
-                <p className="text-[11px] text-[#252943]/60">
-                  Every batch is randomized within safe algorithmic limits. What you see below is exactly what will be sent!
+                <p className="text-[11px] text-[#252943]/50">
+                  Organic randomized pacing across {currentPreset.durationLabel}
                 </p>
               </div>
             </div>
 
-            {/* Re-roll Button */}
             <button
               type="button"
               onClick={rerollPlan}
-              className="px-3 py-1.5 rounded-xl bg-[#F8F9FD] hover:bg-[#EEF1FB] border border-[#DEE0ED] text-xs font-bold text-[#3A4EFB] transition-all flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
-              title="Shuffle randomized quantities within bounds"
+              className="px-3 py-1.5 rounded-xl bg-[#F8F9FD] hover:bg-[#EEF1FB] border border-[#DEE0ED] text-xs font-bold text-[#3A4EFB] transition-all flex items-center gap-1.5 cursor-pointer press-scale"
+              title="Shuffle randomized quantities"
             >
               <Dices className="w-3.5 h-3.5 text-[#3A4EFB]" />
               <span>Shuffle Plan</span>
             </button>
           </div>
 
-          {/* Quick Metrics Bar */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 p-3.5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED]">
-            <div>
-              <span className="text-[10px] uppercase font-bold text-[#252943]/50 block">Exact Views</span>
+          {/* Clean 5-Metric Strip */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 p-3 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED]/80">
+            <div className="p-2">
+              <span className="text-[10px] uppercase font-bold text-[#252943]/40 block leading-tight">Views</span>
               <span className="text-base font-black text-blue-700 font-mono">
                 {totalViews.toLocaleString()}
               </span>
-              <span className="text-[10px] text-[#252943]/50 block">{currentPreset.views.count} batches</span>
+              <span className="text-[10px] text-[#252943]/50 block font-medium">{currentPreset.views.count} batches</span>
             </div>
 
-            <div>
-              <span className="text-[10px] uppercase font-bold text-[#252943]/50 block">Exact Likes</span>
+            <div className="p-2">
+              <span className="text-[10px] uppercase font-bold text-[#252943]/40 block leading-tight">Likes</span>
               <span className="text-base font-black text-rose-600 font-mono">
                 {totalLikes}
               </span>
-              <span className="text-[10px] text-[#252943]/50 block">{currentPreset.likes.count} waves</span>
+              <span className="text-[10px] text-[#252943]/50 block font-medium">{currentPreset.likes.count} waves</span>
             </div>
 
-            <div>
-              <span className="text-[10px] uppercase font-bold text-[#252943]/50 block">Saves</span>
+            <div className="p-2">
+              <span className="text-[10px] uppercase font-bold text-[#252943]/40 block leading-tight">Saves</span>
               <span className="text-base font-black text-amber-700 font-mono">
                 {totalSaves > 0 ? totalSaves : "—"}
               </span>
-              <span className="text-[10px] text-[#252943]/50 block">
-                {currentPreset.saves ? `${currentPreset.saves.count} waves` : "Not in tier"}
+              <span className="text-[10px] text-[#252943]/50 block font-medium">
+                {currentPreset.saves ? `${currentPreset.saves.count} waves` : "None"}
               </span>
             </div>
 
-            <div>
-              <span className="text-[10px] uppercase font-bold text-[#252943]/50 block">Reposts</span>
+            <div className="p-2">
+              <span className="text-[10px] uppercase font-bold text-[#252943]/40 block leading-tight">Reposts</span>
               <span className="text-base font-black text-purple-700 font-mono">
                 {totalShares > 0 ? totalShares : "—"}
               </span>
-              <span className="text-[10px] text-[#252943]/50 block">
-                {currentPreset.shares ? `${currentPreset.shares.count} waves` : "Not in tier"}
+              <span className="text-[10px] text-[#252943]/50 block font-medium">
+                {currentPreset.shares ? `${currentPreset.shares.count} waves` : "None"}
               </span>
             </div>
 
-            <div>
-              <span className="text-[10px] uppercase font-bold text-[#252943]/50 block">Duration</span>
+            <div className="p-2 col-span-2 sm:col-span-1">
+              <span className="text-[10px] uppercase font-bold text-[#252943]/40 block leading-tight">Duration</span>
               <span className="text-base font-black text-emerald-700 font-mono">
                 {currentPreset.durationLabel}
               </span>
-              <span className="text-[10px] text-emerald-800/70 font-semibold block">Natural Decay Pacing</span>
+              <span className="text-[10px] text-emerald-800/70 font-medium block">Human Pacing</span>
             </div>
           </div>
 
-          {/* Clear, Scrollable Batches Table */}
-          <div className="border border-[#DEE0ED] rounded-2xl overflow-hidden">
-            <div className="max-h-[380px] overflow-y-auto divide-y divide-[#DEE0ED]/70">
-              {scheduleRows.map((row) => (
+          {/* Batches Table with Smart Expand */}
+          <div className="border border-[#DEE0ED] rounded-2xl overflow-hidden bg-white">
+            <div className={`divide-y divide-[#DEE0ED]/60 overflow-y-auto ${showAllBatches ? "max-h-[420px]" : "max-h-[260px]"}`}>
+              {(showAllBatches ? scheduleRows : scheduleRows.slice(0, 5)).map((row) => (
                 <div
                   key={row.runNumber}
-                  className={`p-3 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 transition-colors ${
-                    row.likeQty ? "bg-rose-50/40 hover:bg-rose-50/70" : "hover:bg-[#F8F9FD]"
+                  className={`p-2.5 sm:px-3 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 transition-colors ${
+                    row.likeQty ? "bg-rose-50/30 hover:bg-rose-50/60" : "hover:bg-[#F8F9FD]"
                   }`}
                 >
-                  {/* Left: Timing & Batch # */}
-                  <div className="flex items-center gap-3">
-                    <span className="w-7 h-7 rounded-lg bg-gray-100 text-[#252943] font-black text-[11px] flex items-center justify-center shrink-0">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-6 h-6 rounded-md bg-gray-100 text-[#252943] font-bold text-[10px] flex items-center justify-center shrink-0">
                       #{row.runNumber}
                     </span>
-
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-[#252943]">
-                          +{row.minuteOffset} min
-                        </span>
-                        <span className="text-[10px] text-[#252943]/60 font-mono">
-                          ({row.clockTime})
-                        </span>
-                      </div>
-                      {row.note && (
-                        <p className="text-[10px] text-[#252943]/60">
-                          {row.note}
-                        </p>
-                      )}
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-[#252943]">+{row.minuteOffset}m</span>
+                      <span className="text-[10px] text-[#252943]/50 font-mono">({row.clockTime})</span>
                     </div>
                   </div>
 
-                  {/* Right: Exact Delivery Amounts */}
-                  <div className="flex items-center flex-wrap gap-2 self-end sm:self-auto shrink-0">
-                    {/* Views Amount */}
-                    <span className="px-2.5 py-1 rounded-lg text-xs font-black font-mono bg-blue-100/70 text-blue-800 border border-blue-200">
-                      {row.viewQty} Views
+                  <div className="flex items-center flex-wrap gap-1.5 self-end sm:self-auto shrink-0">
+                    <span className="px-2 py-0.5 rounded-md text-[11px] font-bold font-mono bg-blue-50 text-blue-700 border border-blue-200/60">
+                      {row.viewQty} views
                     </span>
-
-                    {/* Likes Amount */}
                     {row.likeQty && (
-                      <span className="px-2.5 py-1 rounded-lg text-xs font-black font-mono bg-rose-100 text-rose-800 border border-rose-200 flex items-center gap-1 animate-pulse">
-                        <Heart className="w-3 h-3 fill-rose-500 text-rose-500" />
-                        <span>+{row.likeQty} Likes (Wave #{row.likeWave})</span>
+                      <span className="px-2 py-0.5 rounded-md text-[11px] font-bold font-mono bg-rose-50 text-rose-700 border border-rose-200/60 flex items-center gap-1">
+                        <Heart className="w-2.5 h-2.5 fill-rose-500 text-rose-500" />
+                        <span>+{row.likeQty} likes</span>
                       </span>
                     )}
-
-                    {/* Saves Amount */}
                     {row.saveQty && (
-                      <span className="px-2.5 py-1 rounded-lg text-xs font-black font-mono bg-amber-100 text-amber-800 border border-amber-200 flex items-center gap-1">
-                        <Bookmark className="w-3 h-3 fill-amber-500 text-amber-500" />
-                        <span>+{row.saveQty} Saves</span>
+                      <span className="px-2 py-0.5 rounded-md text-[11px] font-bold font-mono bg-amber-50 text-amber-700 border border-amber-200/60 flex items-center gap-1">
+                        <Bookmark className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
+                        <span>+{row.saveQty} saves</span>
                       </span>
                     )}
-
-                    {/* Reposts Amount */}
                     {row.shareQty && (
-                      <span className="px-2.5 py-1 rounded-lg text-xs font-black font-mono bg-purple-100 text-purple-800 border border-purple-200 flex items-center gap-1">
-                        <Share2 className="w-3 h-3 text-purple-600" />
-                        <span>+{row.shareQty} Reposts</span>
+                      <span className="px-2 py-0.5 rounded-md text-[11px] font-bold font-mono bg-purple-50 text-purple-700 border border-purple-200/60 flex items-center gap-1">
+                        <Share2 className="w-2.5 h-2.5 text-purple-600" />
+                        <span>+{row.shareQty} shares</span>
                       </span>
                     )}
                   </div>
                 </div>
               ))}
             </div>
-          </div>
 
-          {/* Organic Timetable Explainer */}
-          <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 flex items-start gap-2.5 text-xs text-blue-950">
-            <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-            <p className="text-[11px] text-blue-900/90 leading-relaxed">
-              <strong>Natural Timetable Enforcement:</strong> All views, likes, saves, and shares follow their exact planned schedule without artificial early acceleration, ensuring perfectly balanced delivery from start to finish.
-            </p>
+            {/* Toggle Expand Button */}
+            {scheduleRows.length > 5 && (
+              <div className="p-2 bg-[#F8F9FD] border-t border-[#DEE0ED] text-center">
+                <button
+                  type="button"
+                  onClick={() => setShowAllBatches(!showAllBatches)}
+                  className="text-xs font-bold text-[#3A4EFB] hover:underline flex items-center justify-center gap-1 mx-auto cursor-pointer"
+                >
+                  {showAllBatches ? (
+                    <>
+                      <ChevronUp className="w-3.5 h-3.5" />
+                      <span>Show Less</span>
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="w-3.5 h-3.5" />
+                      <span>View All {scheduleRows.length} Scheduled Batches</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* STEP 3: PRICE BREAKDOWN & LAUNCH */}
-        <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 shadow-subtle space-y-4">
+        {/* STEP 3: PRICE & LAUNCH */}
+        <div className="bg-white rounded-3xl border border-[#DEE0ED] p-5 sm:p-6 shadow-subtle space-y-4">
           <div className="flex items-center gap-2 pb-2 border-b border-[#DEE0ED]">
             <span className="w-6 h-6 rounded-lg bg-[#3A4EFB] text-white text-xs font-black flex items-center justify-center">
               3
             </span>
-            <h2 className="text-sm font-extrabold text-[#252943]">
-              Confirm & Launch ({currentPreset.name})
+            <h2 className="text-sm font-bold text-[#252943]">
+              Confirm & Launch
             </h2>
           </div>
 
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED]">
-            <div className="space-y-1">
-              <span className="text-[10px] uppercase font-bold text-[#252943]/50 block">Total Campaign Price</span>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED]">
+            <div className="space-y-0.5">
+              <span className="text-[10px] uppercase font-bold text-[#252943]/40 block">Campaign Price</span>
               <div className="flex items-baseline gap-2">
                 <span className="text-2xl font-black text-[#3A4EFB] font-mono">
                   ₹{exactTotalCost.toFixed(2)}
                 </span>
-                <span className="text-[11px] text-[#252943]/60">
-                  (Views: ₹{exactViewsCost.toFixed(2)} • Likes: ₹{exactLikesCost.toFixed(2)}{exactSavesCost > 0 ? ` • Saves: ₹${exactSavesCost.toFixed(2)}` : ""}{exactSharesCost > 0 ? ` • Reposts: ₹${exactSharesCost.toFixed(2)}` : ""})
+                <span className="text-[11px] text-[#252943]/50">
+                  (₹{exactViewsCost.toFixed(2)} views • ₹{exactLikesCost.toFixed(2)} likes{exactSavesCost > 0 ? ` • ₹${exactSavesCost.toFixed(2)} saves` : ""}{exactSharesCost > 0 ? ` • ₹${exactSharesCost.toFixed(2)} reposts` : ""})
                 </span>
               </div>
             </div>
 
             <div className="text-left sm:text-right space-y-0.5">
-              <span className="text-[10px] uppercase font-bold text-[#252943]/50 block">Your Wallet Balance</span>
+              <span className="text-[10px] uppercase font-bold text-[#252943]/40 block">Your Wallet</span>
               <div className="flex items-center sm:justify-end gap-1.5">
                 <span className={`text-sm font-black font-mono ${hasSufficientFunds ? "text-emerald-700" : "text-rose-600"}`}>
                   ₹{walletBalance.toFixed(2)}
                 </span>
-                {hasSufficientFunds ? (
-                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                    Sufficient
-                  </span>
-                ) : (
-                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800">
-                    Top Up Required
-                  </span>
-                )}
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                  hasSufficientFunds ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"
+                }`}>
+                  {hasSufficientFunds ? "Sufficient" : "Add Funds"}
+                </span>
               </div>
             </div>
           </div>
 
-          {/* Launch or Top Up Button */}
+          {/* Primary Action Button */}
           {hasSufficientFunds ? (
             <button
               type="submit"
-              disabled={submitting || !isReady}
-              className={`w-full py-4 rounded-2xl text-sm font-extrabold tracking-wide transition-all shadow-subtle flex items-center justify-center gap-2 cursor-pointer ${
-                submitting || !isReady
+              disabled={submitting}
+              className={`w-full py-3.5 rounded-2xl text-sm font-bold tracking-wide transition-all shadow-subtle flex items-center justify-center gap-2 cursor-pointer press-scale ${
+                submitting
                   ? "bg-gray-200 text-gray-500 cursor-not-allowed"
-                  : "bg-[#3A4EFB] hover:bg-[#2C3FE0] text-white active:scale-[0.99] shadow-lg shadow-[#3A4EFB]/25"
+                  : "bg-[#3A4EFB] hover:bg-[#2C3FE0] text-white shadow-md shadow-[#3A4EFB]/20"
               }`}
             >
               {submitting ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin text-white" />
-                  <span>Scheduling Campaign Batches...</span>
-                </>
-              ) : !isReady ? (
-                <>
-                  <AlertCircle className="w-4 h-4 text-amber-600" />
-                  <span>Connect Provider APIs Above First</span>
+                  <span>Launching Campaign...</span>
                 </>
               ) : (
                 <>
                   <Play className="w-4 h-4 fill-white" />
-                  <span>Launch {currentPreset.name} (₹{exactTotalCost.toFixed(2)})</span>
+                  <span>Launch Campaign • ₹{exactTotalCost.toFixed(2)}</span>
                 </>
               )}
             </button>
@@ -983,32 +903,24 @@ export default function EngagementPage() {
             <button
               type="button"
               onClick={() => setShowAddFundsModal(true)}
-              className="w-full py-4 rounded-2xl text-sm font-black tracking-wide bg-gradient-to-r from-[#F0B90B] to-[#e0a800] hover:brightness-105 text-[#1E2329] shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 transition-all press-scale cursor-pointer"
+              className="w-full py-3.5 rounded-2xl text-sm font-bold tracking-wide bg-[#F0B90B] hover:bg-[#e0a800] text-[#1E2329] shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 transition-all press-scale cursor-pointer"
             >
               <Zap className="w-4 h-4 fill-[#1E2329]" />
-              <span>Add Funds via Binance Pay (Need ₹{(exactTotalCost - walletBalance).toFixed(2)})</span>
+              <span>Add Funds (Need ₹{(exactTotalCost - walletBalance).toFixed(2)})</span>
             </button>
           )}
         </div>
       </form>
 
       {/* 24/7 Live Support Banner */}
-      <div className="p-4 rounded-3xl bg-[#F8F9FD] border border-[#DEE0ED] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-xs">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-2xl bg-[#0088cc]/10 border border-[#0088cc]/20 flex items-center justify-center text-[#0088cc] shrink-0">
+      <div className="p-3.5 rounded-2xl bg-white border border-[#DEE0ED] flex items-center justify-between gap-3 text-xs shadow-xs">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-[#0088cc]/10 text-[#0088cc] flex items-center justify-center shrink-0">
             <Send className="w-4 h-4" />
           </div>
           <div>
-            <h4 className="font-bold text-[#252943] flex items-center gap-2">
-              <span>24/7 Dedicated Telegram Support</span>
-              <span className="flex items-center gap-1 text-[9px] font-bold text-emerald-600 bg-emerald-100/80 px-2 py-0.5 rounded-full">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Live 24/7
-              </span>
-            </h4>
-            <p className="text-[11px] text-[#252943]/60">
-              Need instant deposit confirmation, custom engagement presets, or technical help?
-            </p>
+            <span className="font-bold text-[#252943] block">Need Assistance or Instant Approval?</span>
+            <span className="text-[11px] text-[#252943]/60 font-normal">Our team is active 24/7 on Telegram.</span>
           </div>
         </div>
 
@@ -1016,10 +928,10 @@ export default function EngagementPage() {
           href="https://t.me/Ghostfinds"
           target="_blank"
           rel="noopener noreferrer"
-          className="px-4 py-2 rounded-xl bg-[#0088cc] hover:bg-[#0077b5] text-white text-xs font-bold transition-all shadow-subtle flex items-center justify-center gap-1.5 press-scale self-start sm:self-auto shrink-0"
+          className="px-3.5 py-1.5 rounded-xl bg-[#0088cc] hover:bg-[#0077b5] text-white text-xs font-bold transition-all shadow-subtle flex items-center gap-1.5 press-scale shrink-0"
         >
           <Send className="w-3.5 h-3.5" />
-          <span>Message @Ghostfinds</span>
+          <span>Telegram @Ghostfinds</span>
         </a>
       </div>
 

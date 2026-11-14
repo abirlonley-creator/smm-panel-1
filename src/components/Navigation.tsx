@@ -222,75 +222,39 @@ export function Navigation() {
             })}
           </div>
 
-          {/* Mobile Whop Section */}
+          {/* Mobile Whop Membership & Support */}
           <div className="mt-8 pt-4 border-t border-[#323758]">
-            <div className="p-4 rounded-2xl bg-[#1A1D31] border border-[#323758] space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="inline-flex items-center bg-white px-2.5 py-1.5 rounded-lg shadow-sm">
-                  <img
-                    src="/whop-logo.png"
-                    alt="Whop Logo"
-                    className="h-4 w-auto object-contain"
-                  />
+            <div className="p-3.5 rounded-2xl bg-[#1A1D31] border border-[#323758] space-y-2.5">
+              <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="font-semibold text-white">Whop Access</span>
                 </div>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#E3FF3B]/15 text-[#E3FF3B] border border-[#E3FF3B]/30">
-                  Botters Access
-                </span>
-              </div>
-
-              <div>
-                <h3 className="text-sm font-extrabold text-white tracking-tight">
-                  Made for Whop Botters
-                </h3>
-                <p className="text-[#DEE0ED]/75 text-xs leading-relaxed mt-1 font-normal">
-                  Manage your orders and automated growth tools from one panel. Your access is active based on your membership.
-                </p>
-              </div>
-
-              {/* Access Info */}
-              <div className="p-2.5 rounded-xl bg-[#252943] border border-[#323758] text-[11px] text-[#DEE0ED] flex items-center justify-between font-semibold">
-                <span className="flex items-center gap-1.5 text-[#DEE0ED]/70">
-                  <Clock className="w-3.5 h-3.5 text-[#E3FF3B]" />
-                  Access Status:
-                </span>
-                <span className="text-[#E3FF3B] font-bold">
+                <span className="text-[11px] font-mono font-bold text-[#E3FF3B]">
                   {remainingDays !== null && remainingDays !== undefined ? (
                     remainingDays > 0 ? (
-                      `${remainingDays} days remaining`
+                      `${remainingDays}d left`
                     ) : (
-                      `${remainingHours || 0} hours remaining`
+                      `${remainingHours || 0}h left`
                     )
                   ) : (
-                    "Unlimited / Permanent"
+                    "Active"
                   )}
                 </span>
               </div>
 
-              {/* 24/7 Live Support Section */}
-              <div className="pt-2.5 border-t border-[#323758]/60 text-[11px] text-[#DEE0ED]/80 leading-relaxed space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-white font-bold">
-                    <Send className="w-3.5 h-3.5 text-[#3A4EFB]" />
-                    <span>24/7 Live Support</span>
-                  </div>
-                  <span className="flex items-center gap-1 text-[9px] font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-1.5 py-0.5 rounded-full">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    Online
-                  </span>
+              <a
+                href="https://t.me/Ghostfinds"
+                target="_blank"
+                rel="noreferrer"
+                className="w-full py-2.5 px-3 rounded-xl bg-[#0088cc]/20 hover:bg-[#0088cc]/30 border border-[#0088cc]/40 text-[#54c0eb] hover:text-white text-xs font-semibold flex items-center justify-between transition-all"
+              >
+                <div className="flex items-center gap-2">
+                  <Send className="w-3.5 h-3.5 text-[#54c0eb]" />
+                  <span>24/7 Telegram Support</span>
                 </div>
-                <p className="text-[11px] text-[#DEE0ED]/70 leading-normal">
-                  Questions, deposit assistance or custom orders? Our team is available 24/7.
-                </p>
-                <a
-                  href="https://t.me/Ghostfinds"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="w-full mt-1 py-1.5 px-2.5 rounded-xl bg-[#0088cc]/20 hover:bg-[#0088cc]/30 border border-[#0088cc]/40 text-[#54c0eb] hover:text-white text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all"
-                >
-                  <Send className="w-3 h-3 text-[#54c0eb]" />
-                  <span>Message @Ghostfinds (24/7)</span>
-                </a>
-              </div>
+                <span className="text-[10px] text-emerald-400 font-bold">@Ghostfinds</span>
+              </a>
             </div>
           </div>
         </div>
@@ -353,77 +317,40 @@ export function Navigation() {
           })}
         </nav>
 
-        {/* Whop Branding Section */}
-        <div className="p-4 mx-3 mb-4 rounded-2xl bg-[#1A1D31] border border-[#323758] shadow-subtle space-y-3">
-          {/* Whop Logo */}
-          <div className="flex items-center justify-between">
-            <div className="inline-flex items-center bg-white px-2.5 py-1.5 rounded-lg shadow-sm">
-              <img
-                src="/whop-logo.png"
-                alt="Whop Logo"
-                className="h-4 w-auto object-contain"
-              />
+        {/* Whop Membership & 24/7 Telegram Support Card */}
+        <div className="p-3.5 mx-3 mb-4 rounded-2xl bg-[#1A1D31] border border-[#323758] shadow-sm space-y-2.5">
+          {/* Whop Botter Status Pill */}
+          <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="font-semibold text-white text-[12px] tracking-tight">Whop Access</span>
             </div>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#E3FF3B]/15 text-[#E3FF3B] border border-[#E3FF3B]/30">
-              Botters Access
-            </span>
-          </div>
-
-          {/* Heading */}
-          <div>
-            <h3 className="text-sm font-extrabold text-white tracking-tight">
-              Made for Whop Botters
-            </h3>
-            {/* Description */}
-            <p className="text-[#DEE0ED]/75 text-xs leading-relaxed mt-1 font-normal">
-              Manage your orders and automated growth tools from one panel. Your access is active based on your membership.
-            </p>
-          </div>
-
-          {/* Access Expiration Display */}
-          <div className="p-2 rounded-xl bg-[#252943] border border-[#323758] text-[11px] text-[#DEE0ED] flex items-center justify-between font-semibold">
-            <span className="flex items-center gap-1.5 text-[#DEE0ED]/70">
-              <Clock className="w-3.5 h-3.5 text-[#E3FF3B]" />
-              Access Left:
-            </span>
-            <span className="text-[#E3FF3B] font-bold">
+            <span className="text-[11px] font-mono font-bold text-[#E3FF3B]">
               {remainingDays !== null && remainingDays !== undefined ? (
                 remainingDays > 0 ? (
-                  `${remainingDays} days remaining`
+                  `${remainingDays}d left`
                 ) : (
-                  `${remainingHours || 0} hours remaining`
+                  `${remainingHours || 0}h left`
                 )
               ) : (
-                "Unlimited"
+                "Active"
               )}
             </span>
           </div>
 
-          {/* 24/7 Live Support Section */}
-          <div className="pt-2.5 border-t border-[#323758]/60 text-[11px] text-[#DEE0ED]/80 leading-relaxed space-y-1.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-white font-bold">
-                <Send className="w-3.5 h-3.5 text-[#3A4EFB]" />
-                <span>24/7 Live Support</span>
-              </div>
-              <span className="flex items-center gap-1 text-[9px] font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-1.5 py-0.5 rounded-full">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                Online
-              </span>
+          {/* Clean 1-Tap 24/7 Telegram Button */}
+          <a
+            href="https://t.me/Ghostfinds"
+            target="_blank"
+            rel="noreferrer"
+            className="w-full py-2 px-3 rounded-xl bg-[#0088cc]/15 hover:bg-[#0088cc]/25 border border-[#0088cc]/30 text-[#54c0eb] hover:text-white text-xs font-semibold flex items-center justify-between transition-all press-scale"
+          >
+            <div className="flex items-center gap-1.5">
+              <Send className="w-3.5 h-3.5 text-[#54c0eb]" />
+              <span>24/7 Telegram Support</span>
             </div>
-            <p className="text-[11px] text-[#DEE0ED]/70 leading-normal">
-              Questions, deposit assistance or custom orders? Our team is available 24/7.
-            </p>
-            <a
-              href="https://t.me/Ghostfinds"
-              target="_blank"
-              rel="noreferrer"
-              className="w-full mt-1 py-1.5 px-2.5 rounded-xl bg-[#0088cc]/20 hover:bg-[#0088cc]/30 border border-[#0088cc]/40 text-[#54c0eb] hover:text-white text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all"
-            >
-              <Send className="w-3 h-3 text-[#54c0eb]" />
-              <span>Message @Ghostfinds (24/7)</span>
-            </a>
-          </div>
+            <span className="text-[10px] text-emerald-400 font-bold">@Ghostfinds</span>
+          </a>
         </div>
       </aside>
     </>

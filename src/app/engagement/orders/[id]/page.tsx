@@ -256,7 +256,7 @@ export default function EngagementOrderDetailPage() {
     return (
       <div className="max-w-6xl mx-auto py-20 text-center space-y-3">
         <Loader2 className="w-8 h-8 text-[#3A4EFB] animate-spin mx-auto" />
-        <p className="text-xs font-bold text-[#252943]/60">Loading live engagement telemetry...</p>
+        <p className="text-xs font-bold text-[#252943]/60">Loading campaign details...</p>
       </div>
     );
   }
@@ -372,7 +372,15 @@ export default function EngagementOrderDetailPage() {
               </span>
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E3FF3B]/30 border border-[#252943]/20 text-[#252943] text-xs font-bold">
                 <Sparkles className="w-3.5 h-3.5 text-[#3A4EFB]" />
-                {order.presetKey}
+                {order.presetKey === "tiktok_2k"
+                  ? "2K Starter"
+                  : order.presetKey === "tiktok_5k"
+                  ? "5K Velocity"
+                  : order.presetKey === "tiktok_10k"
+                  ? "10K Breakthrough"
+                  : order.presetKey === "tiktok_50k"
+                  ? "50K Mega Viral"
+                  : order.presetKey}
               </span>
             </div>
 
