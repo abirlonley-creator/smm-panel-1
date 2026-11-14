@@ -2,18 +2,18 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { 
-  ShieldCheck, 
-  Key, 
-  Server, 
-  RefreshCw, 
-  Play, 
-  AlertCircle, 
-  CheckCircle2, 
-  Trash2, 
-  Copy, 
-  Lock, 
-  Loader2, 
+import {
+  ShieldCheck,
+  Key,
+  Server,
+  RefreshCw,
+  Play,
+  AlertCircle,
+  CheckCircle2,
+  Trash2,
+  Copy,
+  Lock,
+  Loader2,
   Activity,
   Users,
   Clock,
@@ -45,6 +45,7 @@ import { formatProviderBalance } from "@/lib/currency";
 import { OrderMonitorTab } from "@/components/admin/OrderMonitorTab";
 import { AlertsHealthTab } from "@/components/admin/AlertsHealthTab";
 import { BinanceDepositsTab } from "@/components/admin/BinanceDepositsTab";
+import { RevenueProfitTab } from "@/components/admin/RevenueProfitTab";
 
 interface PasskeyData {
   id: string;
@@ -154,7 +155,7 @@ export default function AdminPage() {
   const [loggingIn, setLoggingIn] = useState(false);
 
   // Admin Data state
-  const [activeTab, setActiveTab] = useState<"keys" | "ordermonitor" | "monitoring" | "provider" | "audit" | "engagement" | "alerts" | "deposits">("keys");
+  const [activeTab, setActiveTab] = useState<"revenue" | "keys" | "ordermonitor" | "monitoring" | "provider" | "audit" | "engagement" | "alerts" | "deposits">("keys");
   const [passkeys, setPasskeys] = useState<PasskeyData[]>([]);
   const [passkeySearchQuery, setPasskeySearchQuery] = useState("");
   const [diagnostics, setDiagnostics] = useState<DiagnosticsData | null>(null);
@@ -259,7 +260,7 @@ export default function AdminPage() {
         .then((data) => {
           if (data.success) setDiagnostics(data);
         })
-        .catch(() => {});
+        .catch(() => { });
       loadAlerts();
     }, 15000);
     return () => clearInterval(interval);
@@ -469,10 +470,10 @@ export default function AdminPage() {
     setActionMsg(null);
 
     try {
-      const days = newKeyDuration === "permanent" 
-        ? null 
-        : newKeyDuration === "custom" 
-          ? parseInt(customDaysInput, 10) 
+      const days = newKeyDuration === "permanent"
+        ? null
+        : newKeyDuration === "custom"
+          ? parseInt(customDaysInput, 10)
           : newKeyDuration;
       const res = await fetch("/api/admin/keys", {
         method: "POST",
@@ -759,6 +760,15 @@ export default function AdminPage() {
         <div className="flex items-center gap-2.5">
           <button
             type="button"
+            onClick={() => setActiveTab("revenue")}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-800 hover:bg-emerald-100/70 transition-all shadow-subtle press-scale"
+          >
+            <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Revenue & Profit</span>
+          </button>
+
+          <button
+            type="button"
             onClick={loadAllAdminData}
             disabled={loadingData}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-[#DEE0ED] text-xs font-bold text-[#252943] hover:border-[#3A4EFB] shadow-subtle transition-all press-scale"
@@ -781,11 +791,10 @@ export default function AdminPage() {
 
       {actionMsg && (
         <div
-          className={`p-4 rounded-2xl flex items-center justify-between text-xs font-semibold animate-fadeIn ${
-            actionMsg.type === "success"
-              ? "bg-emerald-50 text-emerald-900 border border-emerald-200"
-              : "bg-red-50 text-red-900 border border-red-200"
-          }`}
+          className={`p-4 rounded-2xl flex items-center justify-between text-xs font-semibold animate-fadeIn ${actionMsg.type === "success"
+            ? "bg-emerald-50 text-emerald-900 border border-emerald-200"
+            : "bg-red-50 text-red-900 border border-red-200"
+            }`}
         >
           <div className="flex items-center gap-2">
             {actionMsg.type === "success" ? (
@@ -805,12 +814,27 @@ export default function AdminPage() {
       <div className="flex items-center gap-2 border-b border-[#DEE0ED] pb-px overflow-x-auto">
         <button
           type="button"
-          onClick={() => setActiveTab("keys")}
+          onClick={() => setActiveTab("revenue")}
           className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${
-            activeTab === "keys"
-              ? "border-[#3A4EFB] text-[#3A4EFB] bg-[#3A4EFB]/5"
+            activeTab === "revenue"
+              ? "border-emerald-600 text-emerald-800 bg-emerald-50/70"
               : "border-transparent text-[#252943]/60 hover:text-[#252943]"
           }`}
+        >
+          <TrendingUp className="w-4 h-4 text-emerald-600" />
+          <span>Revenue & Profit</span>
+          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+            Profit
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("keys")}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${activeTab === "keys"
+            ? "border-[#3A4EFB] text-[#3A4EFB] bg-[#3A4EFB]/5"
+            : "border-transparent text-[#252943]/60 hover:text-[#252943]"
+            }`}
         >
           <Key className="w-4 h-4" />
           <span>Passkeys & Users ({passkeys.length})</span>
@@ -819,11 +843,10 @@ export default function AdminPage() {
         <button
           type="button"
           onClick={() => setActiveTab("ordermonitor")}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${
-            activeTab === "ordermonitor"
-              ? "border-[#3A4EFB] text-[#3A4EFB] bg-[#3A4EFB]/5"
-              : "border-transparent text-[#252943]/60 hover:text-[#252943]"
-          }`}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${activeTab === "ordermonitor"
+            ? "border-[#3A4EFB] text-[#3A4EFB] bg-[#3A4EFB]/5"
+            : "border-transparent text-[#252943]/60 hover:text-[#252943]"
+            }`}
         >
           <Layers className="w-4 h-4" />
           <span>Order Monitor</span>
@@ -832,11 +855,10 @@ export default function AdminPage() {
         <button
           type="button"
           onClick={() => setActiveTab("monitoring")}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${
-            activeTab === "monitoring"
-              ? "border-[#3A4EFB] text-[#3A4EFB] bg-[#3A4EFB]/5"
-              : "border-transparent text-[#252943]/60 hover:text-[#252943]"
-          }`}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${activeTab === "monitoring"
+            ? "border-[#3A4EFB] text-[#3A4EFB] bg-[#3A4EFB]/5"
+            : "border-transparent text-[#252943]/60 hover:text-[#252943]"
+            }`}
         >
           <Activity className="w-4 h-4" />
           <span>Live Backend Monitoring</span>
@@ -845,11 +867,10 @@ export default function AdminPage() {
         <button
           type="button"
           onClick={() => setActiveTab("provider")}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${
-            activeTab === "provider"
-              ? "border-[#3A4EFB] text-[#3A4EFB] bg-[#3A4EFB]/5"
-              : "border-transparent text-[#252943]/60 hover:text-[#252943]"
-          }`}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${activeTab === "provider"
+            ? "border-[#3A4EFB] text-[#3A4EFB] bg-[#3A4EFB]/5"
+            : "border-transparent text-[#252943]/60 hover:text-[#252943]"
+            }`}
         >
           <Server className="w-4 h-4" />
           <span>Fallback System Provider</span>
@@ -858,11 +879,10 @@ export default function AdminPage() {
         <button
           type="button"
           onClick={() => setActiveTab("audit")}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${
-            activeTab === "audit"
-              ? "border-[#3A4EFB] text-[#3A4EFB] bg-[#3A4EFB]/5"
-              : "border-transparent text-[#252943]/60 hover:text-[#252943]"
-          }`}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${activeTab === "audit"
+            ? "border-[#3A4EFB] text-[#3A4EFB] bg-[#3A4EFB]/5"
+            : "border-transparent text-[#252943]/60 hover:text-[#252943]"
+            }`}
         >
           <FileText className="w-4 h-4" />
           <span>Audit Log</span>
@@ -871,11 +891,10 @@ export default function AdminPage() {
         <button
           type="button"
           onClick={() => setActiveTab("engagement")}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${
-            activeTab === "engagement"
-              ? "border-[#3A4EFB] text-[#3A4EFB] bg-[#3A4EFB]/5"
-              : "border-transparent text-[#252943]/60 hover:text-[#252943]"
-          }`}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${activeTab === "engagement"
+            ? "border-[#3A4EFB] text-[#3A4EFB] bg-[#3A4EFB]/5"
+            : "border-transparent text-[#252943]/60 hover:text-[#252943]"
+            }`}
         >
           <Sliders className="w-4 h-4" />
           <span>Full Engagement Profiles</span>
@@ -887,11 +906,10 @@ export default function AdminPage() {
             setActiveTab("alerts");
             loadAlerts();
           }}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${
-            activeTab === "alerts"
-              ? "border-[#3A4EFB] text-[#3A4EFB] bg-[#3A4EFB]/5"
-              : "border-transparent text-[#252943]/60 hover:text-[#252943]"
-          }`}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${activeTab === "alerts"
+            ? "border-[#3A4EFB] text-[#3A4EFB] bg-[#3A4EFB]/5"
+            : "border-transparent text-[#252943]/60 hover:text-[#252943]"
+            }`}
         >
           <AlertTriangle className="w-4 h-4" />
           <span>Alerts & Delivery Health</span>
@@ -905,16 +923,22 @@ export default function AdminPage() {
         <button
           type="button"
           onClick={() => setActiveTab("deposits")}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${
-            activeTab === "deposits"
-              ? "border-[#3A4EFB] text-[#3A4EFB] bg-[#3A4EFB]/5"
-              : "border-transparent text-[#252943]/60 hover:text-[#252943]"
-          }`}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${activeTab === "deposits"
+            ? "border-[#3A4EFB] text-[#3A4EFB] bg-[#3A4EFB]/5"
+            : "border-transparent text-[#252943]/60 hover:text-[#252943]"
+            }`}
         >
           <CreditCard className="w-4 h-4" />
           <span>Binance Deposits</span>
         </button>
       </div>
+
+      {/* =====================================================================
+          TAB: REVENUE & PROFIT ANALYTICS
+      ====================================================================== */}
+      {activeTab === "revenue" && (
+        <RevenueProfitTab />
+      )}
 
       {/* =====================================================================
           TAB 0: ORDER MONITOR (Change H)
@@ -1020,26 +1044,24 @@ export default function AdminPage() {
                         </td>
                         <td className="px-4 py-3">
                           <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-black tracking-wide ${
-                              pk.role === "ADMIN"
-                                ? "bg-[#252943] text-[#E3FF3B]"
-                                : "bg-[#3A4EFB]/10 text-[#3A4EFB]"
-                            }`}
+                            className={`px-2 py-0.5 rounded text-[10px] font-black tracking-wide ${pk.role === "ADMIN"
+                              ? "bg-[#252943] text-[#E3FF3B]"
+                              : "bg-[#3A4EFB]/10 text-[#3A4EFB]"
+                              }`}
                           >
                             {pk.role}
                           </span>
                         </td>
                         <td className="px-4 py-3">
                           <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                              isExp
-                                ? "bg-amber-100 text-amber-800"
-                                : pk.status === "ACTIVE"
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${isExp
+                              ? "bg-amber-100 text-amber-800"
+                              : pk.status === "ACTIVE"
                                 ? "bg-emerald-100 text-emerald-800"
                                 : pk.status === "REVOKED"
-                                ? "bg-red-100 text-red-800"
-                                : "bg-gray-100 text-gray-700"
-                            }`}
+                                  ? "bg-red-100 text-red-800"
+                                  : "bg-gray-100 text-gray-700"
+                              }`}
                           >
                             {isExp ? "EXPIRED" : pk.status}
                           </span>
@@ -2079,9 +2101,8 @@ export default function AdminPage() {
                           </div>
 
                           {/* Profit feedback */}
-                          <div className={`p-2 rounded-xl text-[11px] flex items-center justify-between font-bold ${
-                            profit >= 0 ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-rose-50 text-rose-800 border border-rose-200"
-                          }`}>
+                          <div className={`p-2 rounded-xl text-[11px] flex items-center justify-between font-bold ${profit >= 0 ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-rose-50 text-rose-800 border border-rose-200"
+                            }`}>
                             <span>Profit: {profit >= 0 ? `+₹${profit.toFixed(2)}` : `-₹${Math.abs(profit).toFixed(2)}`}/1k</span>
                             <span>{profit >= 0 ? `+${marginPct}% Margin` : "Loss"}</span>
                           </div>
@@ -2159,9 +2180,8 @@ export default function AdminPage() {
                           </div>
 
                           {/* Profit feedback */}
-                          <div className={`p-2 rounded-xl text-[11px] flex items-center justify-between font-bold ${
-                            profit >= 0 ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-rose-50 text-rose-800 border border-rose-200"
-                          }`}>
+                          <div className={`p-2 rounded-xl text-[11px] flex items-center justify-between font-bold ${profit >= 0 ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-rose-50 text-rose-800 border border-rose-200"
+                            }`}>
                             <span>Profit: {profit >= 0 ? `+₹${profit.toFixed(2)}` : `-₹${Math.abs(profit).toFixed(2)}`}/1k</span>
                             <span>{profit >= 0 ? `+${marginPct}% Margin` : "Loss"}</span>
                           </div>
@@ -2239,9 +2259,8 @@ export default function AdminPage() {
                           </div>
 
                           {/* Profit feedback */}
-                          <div className={`p-2 rounded-xl text-[11px] flex items-center justify-between font-bold ${
-                            profit >= 0 ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-rose-50 text-rose-800 border border-rose-200"
-                          }`}>
+                          <div className={`p-2 rounded-xl text-[11px] flex items-center justify-between font-bold ${profit >= 0 ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-rose-50 text-rose-800 border border-rose-200"
+                            }`}>
                             <span>Profit: {profit >= 0 ? `+₹${profit.toFixed(2)}` : `-₹${Math.abs(profit).toFixed(2)}`}/1k</span>
                             <span>{profit >= 0 ? `+${marginPct}% Margin` : "Loss"}</span>
                           </div>
@@ -2319,9 +2338,8 @@ export default function AdminPage() {
                           </div>
 
                           {/* Profit feedback */}
-                          <div className={`p-2 rounded-xl text-[11px] flex items-center justify-between font-bold ${
-                            profit >= 0 ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-rose-50 text-rose-800 border border-rose-200"
-                          }`}>
+                          <div className={`p-2 rounded-xl text-[11px] flex items-center justify-between font-bold ${profit >= 0 ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-rose-50 text-rose-800 border border-rose-200"
+                            }`}>
                             <span>Profit: {profit >= 0 ? `+₹${profit.toFixed(2)}` : `-₹${Math.abs(profit).toFixed(2)}`}/1k</span>
                             <span>{profit >= 0 ? `+${marginPct}% Margin` : "Loss"}</span>
                           </div>
@@ -2399,9 +2417,8 @@ export default function AdminPage() {
                           </div>
 
                           {/* Profit feedback */}
-                          <div className={`p-2 rounded-xl text-[11px] flex items-center justify-between font-bold ${
-                            profit >= 0 ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-rose-50 text-rose-800 border border-rose-200"
-                          }`}>
+                          <div className={`p-2 rounded-xl text-[11px] flex items-center justify-between font-bold ${profit >= 0 ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-rose-50 text-rose-800 border border-rose-200"
+                            }`}>
                             <span>Profit: {profit >= 0 ? `+₹${profit.toFixed(2)}` : `-₹${Math.abs(profit).toFixed(2)}`}/1k</span>
                             <span>{profit >= 0 ? `+${marginPct}% Margin` : "Loss"}</span>
                           </div>
@@ -2820,11 +2837,10 @@ export default function AdminPage() {
               )}
               {!lookupLoading && lookupStatus && (
                 <div
-                  className={`p-2.5 rounded-xl border flex items-center gap-2 text-xs font-semibold ${
-                    lookupStatus.exists
-                      ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-                      : "bg-rose-50 border-rose-200 text-rose-800"
-                  }`}
+                  className={`p-2.5 rounded-xl border flex items-center gap-2 text-xs font-semibold ${lookupStatus.exists
+                    ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                    : "bg-rose-50 border-rose-200 text-rose-800"
+                    }`}
                 >
                   {lookupStatus.exists ? (
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -2935,22 +2951,20 @@ export default function AdminPage() {
                       <button
                         type="button"
                         onClick={() => setNewKeyRole("USER")}
-                        className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
-                          newKeyRole === "USER"
-                            ? "bg-[#3A4EFB] text-white border-[#3A4EFB]"
-                            : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED]"
-                        }`}
+                        className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${newKeyRole === "USER"
+                          ? "bg-[#3A4EFB] text-white border-[#3A4EFB]"
+                          : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED]"
+                          }`}
                       >
                         USER (Standard Panel)
                       </button>
                       <button
                         type="button"
                         onClick={() => setNewKeyRole("ADMIN")}
-                        className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
-                          newKeyRole === "ADMIN"
-                            ? "bg-[#252943] text-[#E3FF3B] border-[#252943]"
-                            : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED]"
-                        }`}
+                        className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${newKeyRole === "ADMIN"
+                          ? "bg-[#252943] text-[#E3FF3B] border-[#252943]"
+                          : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED]"
+                          }`}
                       >
                         ADMIN (Full Access)
                       </button>
@@ -2974,11 +2988,10 @@ export default function AdminPage() {
                           key={item.val}
                           type="button"
                           onClick={() => setNewKeyDuration(item.val)}
-                          className={`py-1.5 rounded-xl text-[11px] font-bold border transition-all ${
-                            newKeyDuration === item.val
-                              ? "bg-[#3A4EFB] text-white border-[#3A4EFB] shadow-sm"
-                              : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED] hover:bg-white"
-                          }`}
+                          className={`py-1.5 rounded-xl text-[11px] font-bold border transition-all ${newKeyDuration === item.val
+                            ? "bg-[#3A4EFB] text-white border-[#3A4EFB] shadow-sm"
+                            : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED] hover:bg-white"
+                            }`}
                         >
                           {item.label}
                         </button>
@@ -2988,22 +3001,20 @@ export default function AdminPage() {
                       <button
                         type="button"
                         onClick={() => setNewKeyDuration("permanent")}
-                        className={`py-1.5 px-3 rounded-xl text-xs font-bold border transition-all ${
-                          newKeyDuration === "permanent"
-                            ? "bg-[#252943] text-[#E3FF3B] border-[#252943] shadow-sm"
-                            : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED] hover:bg-white"
-                        }`}
+                        className={`py-1.5 px-3 rounded-xl text-xs font-bold border transition-all ${newKeyDuration === "permanent"
+                          ? "bg-[#252943] text-[#E3FF3B] border-[#252943] shadow-sm"
+                          : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED] hover:bg-white"
+                          }`}
                       >
                         Permanent / Unlimited
                       </button>
                       <button
                         type="button"
                         onClick={() => setNewKeyDuration("custom")}
-                        className={`py-1.5 px-3 rounded-xl text-xs font-bold border transition-all ${
-                          newKeyDuration === "custom"
-                            ? "bg-[#3A4EFB] text-white border-[#3A4EFB]"
-                            : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED] hover:bg-white"
-                        }`}
+                        className={`py-1.5 px-3 rounded-xl text-xs font-bold border transition-all ${newKeyDuration === "custom"
+                          ? "bg-[#3A4EFB] text-white border-[#3A4EFB]"
+                          : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED] hover:bg-white"
+                          }`}
                       >
                         Custom Days:
                       </button>
@@ -3199,22 +3210,20 @@ export default function AdminPage() {
                       <button
                         type="button"
                         onClick={() => setEditRole("USER")}
-                        className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
-                          editRole === "USER"
-                            ? "bg-[#3A4EFB] text-white border-[#3A4EFB]"
-                            : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED]"
-                        }`}
+                        className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${editRole === "USER"
+                          ? "bg-[#3A4EFB] text-white border-[#3A4EFB]"
+                          : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED]"
+                          }`}
                       >
                         USER (Standard Panel)
                       </button>
                       <button
                         type="button"
                         onClick={() => setEditRole("ADMIN")}
-                        className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
-                          editRole === "ADMIN"
-                            ? "bg-[#252943] text-[#E3FF3B] border-[#252943]"
-                            : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED]"
-                        }`}
+                        className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${editRole === "ADMIN"
+                          ? "bg-[#252943] text-[#E3FF3B] border-[#252943]"
+                          : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED]"
+                          }`}
                       >
                         ADMIN (Full Access)
                       </button>
@@ -3232,15 +3241,14 @@ export default function AdminPage() {
                           key={st}
                           type="button"
                           onClick={() => setEditStatus(st)}
-                          className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all ${
-                            editStatus === st
-                              ? st === "ACTIVE"
-                                ? "bg-emerald-600 text-white border-emerald-600"
-                                : st === "DISABLED"
+                          className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all ${editStatus === st
+                            ? st === "ACTIVE"
+                              ? "bg-emerald-600 text-white border-emerald-600"
+                              : st === "DISABLED"
                                 ? "bg-gray-600 text-white border-gray-600"
                                 : "bg-red-600 text-white border-red-600"
-                              : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED]"
-                          }`}
+                            : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED]"
+                            }`}
                         >
                           {st}
                         </button>
@@ -3263,44 +3271,40 @@ export default function AdminPage() {
                       <button
                         type="button"
                         onClick={() => setEditDurationType("keep")}
-                        className={`py-1.5 rounded-xl text-[11px] font-bold border transition-all ${
-                          editDurationType === "keep"
-                            ? "bg-[#3A4EFB] text-white border-[#3A4EFB]"
-                            : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED]"
-                        }`}
+                        className={`py-1.5 rounded-xl text-[11px] font-bold border transition-all ${editDurationType === "keep"
+                          ? "bg-[#3A4EFB] text-white border-[#3A4EFB]"
+                          : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED]"
+                          }`}
                       >
                         Keep Current
                       </button>
                       <button
                         type="button"
                         onClick={() => setEditDurationType("permanent")}
-                        className={`py-1.5 rounded-xl text-[11px] font-bold border transition-all ${
-                          editDurationType === "permanent"
-                            ? "bg-[#252943] text-[#E3FF3B] border-[#252943]"
-                            : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED]"
-                        }`}
+                        className={`py-1.5 rounded-xl text-[11px] font-bold border transition-all ${editDurationType === "permanent"
+                          ? "bg-[#252943] text-[#E3FF3B] border-[#252943]"
+                          : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED]"
+                          }`}
                       >
                         Permanent
                       </button>
                       <button
                         type="button"
                         onClick={() => setEditDurationType("preset")}
-                        className={`py-1.5 rounded-xl text-[11px] font-bold border transition-all ${
-                          editDurationType === "preset"
-                            ? "bg-[#3A4EFB] text-white border-[#3A4EFB]"
-                            : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED]"
-                        }`}
+                        className={`py-1.5 rounded-xl text-[11px] font-bold border transition-all ${editDurationType === "preset"
+                          ? "bg-[#3A4EFB] text-white border-[#3A4EFB]"
+                          : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED]"
+                          }`}
                       >
                         Preset Days
                       </button>
                       <button
                         type="button"
                         onClick={() => setEditDurationType("customDate")}
-                        className={`py-1.5 rounded-xl text-[11px] font-bold border transition-all ${
-                          editDurationType === "customDate"
-                            ? "bg-[#3A4EFB] text-white border-[#3A4EFB]"
-                            : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED]"
-                        }`}
+                        className={`py-1.5 rounded-xl text-[11px] font-bold border transition-all ${editDurationType === "customDate"
+                          ? "bg-[#3A4EFB] text-white border-[#3A4EFB]"
+                          : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED]"
+                          }`}
                       >
                         Specific Date
                       </button>
@@ -3320,11 +3324,10 @@ export default function AdminPage() {
                             key={item.val}
                             type="button"
                             onClick={() => setEditPresetDays(item.val)}
-                            className={`py-1.5 rounded-xl text-[11px] font-bold border transition-all ${
-                              editPresetDays === item.val
-                                ? "bg-[#3A4EFB] text-white border-[#3A4EFB]"
-                                : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED]"
-                            }`}
+                            className={`py-1.5 rounded-xl text-[11px] font-bold border transition-all ${editPresetDays === item.val
+                              ? "bg-[#3A4EFB] text-white border-[#3A4EFB]"
+                              : "bg-[#F8F9FD] text-[#252943]/70 border-[#DEE0ED]"
+                              }`}
                           >
                             +{item.label}
                           </button>
