@@ -445,13 +445,9 @@ export default function EngagementPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
+      <div className="flex items-center justify-center min-h-[50vh]">
         <div className="w-12 h-12 rounded-2xl bg-[#3A4EFB]/10 flex items-center justify-center text-[#3A4EFB]">
           <Loader2 className="w-6 h-6 animate-spin" />
-        </div>
-        <div className="text-center">
-          <p className="text-sm font-bold text-[#252943]">Loading TikTok Engagement Engine</p>
-          <p className="text-xs text-[#252943]/60 mt-0.5">Initializing Views & Engagement Delivery Engines...</p>
         </div>
       </div>
     );

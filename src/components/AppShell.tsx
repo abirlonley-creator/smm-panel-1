@@ -26,9 +26,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <span className="w-2 h-2 rounded-full bg-[#3A4EFB]"></span>
             <span>AuraSMM Minimalist Panel & Growth Planner</span>
           </div>
-          <div className="flex items-center gap-4 text-xs text-[#252943]/60 font-medium">
-            <span>Color Palette: #3A4EFB / #E3FF3B / #252943</span>
-            <span>Deterministic Scheduler</span>
+          <div className="flex items-center gap-4 text-xs text-[#252943]/40">
+            <span>All systems operational</span>
           </div>
         </footer>
       </div>

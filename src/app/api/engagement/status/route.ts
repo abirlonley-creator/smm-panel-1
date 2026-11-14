@@ -73,10 +73,22 @@ export async function GET(request: Request) {
         : new StandardSMMv2Provider(zeofameConn.apiUrl, rawKey);
 
       try {
-        const balRes = await adapter.getBalance();
+        let bal = zeofameConn.balance;
+        const isFresh = zeofameConn.lastSyncAt && (Date.now() - zeofameConn.lastSyncAt.getTime() < 30000);
+        if (!isFresh) {
+          try {
+            const balRes = await Promise.race([
+              adapter.getBalance(),
+              new Promise<any>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3500)),
+            ]);
+            if (typeof balRes.balance === "number") bal = balRes.balance;
+          } catch {
+            // Fall back to stored balance without blocking
+          }
+        }
         zeofameStatus.valid = true;
         zeofameStatus.connected = true;
-        zeofameStatus.balance = typeof balRes.balance === "number" ? balRes.balance : zeofameConn.balance;
+        zeofameStatus.balance = bal;
 
         // Check or import Likes service 1123
         let likesSrv = await prisma.service.findFirst({
@@ -237,10 +249,22 @@ export async function GET(request: Request) {
         : new StandardSMMv2Provider(xmediaConn.apiUrl, rawKey);
 
       try {
-        const balRes = await adapter.getBalance();
+        let bal = xmediaConn.balance;
+        const isFresh = xmediaConn.lastSyncAt && (Date.now() - xmediaConn.lastSyncAt.getTime() < 30000);
+        if (!isFresh) {
+          try {
+            const balRes = await Promise.race([
+              adapter.getBalance(),
+              new Promise<any>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3500)),
+            ]);
+            if (typeof balRes.balance === "number") bal = balRes.balance;
+          } catch {
+            // Fall back to stored balance without blocking
+          }
+        }
         xmediaStatus.valid = true;
         xmediaStatus.connected = true;
-        xmediaStatus.balance = typeof balRes.balance === "number" ? balRes.balance : xmediaConn.balance;
+        xmediaStatus.balance = bal;
 
         // Check if service 10322 is in DB for this connection
         let srv = await prisma.service.findFirst({
