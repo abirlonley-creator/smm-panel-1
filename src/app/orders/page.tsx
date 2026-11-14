@@ -248,7 +248,7 @@ export default function OrdersPage() {
           </div>
 
           {/* Search Form */}
-          <form onSubmit={handleSearchSubmit} className="relative min-w-[240px]">
+          <form onSubmit={handleSearchSubmit} className="relative w-full sm:w-auto sm:min-w-[240px]">
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#252943]/40" />
             <input
               type="text"
@@ -311,7 +311,7 @@ export default function OrdersPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="w-full text-left text-xs min-w-[760px]">
               <thead className="bg-[#F8F9FD] border-b border-[#DEE0ED] text-[#252943]/60 font-medium">
                 <tr>
                   <th className="py-3 px-4">Order Ref</th>

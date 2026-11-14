@@ -225,7 +225,7 @@ export function BinanceDepositsTab() {
       {/* Deposits Table */}
       <div className="bg-white rounded-3xl border border-[#DEE0ED] shadow-subtle overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="w-full text-left text-xs min-w-[700px]">
             <thead className="bg-[#F8F9FD] text-[#252943]/60 uppercase text-[10px] font-bold border-b border-[#DEE0ED]">
               <tr>
                 <th className="px-5 py-3.5">Reference / User</th>

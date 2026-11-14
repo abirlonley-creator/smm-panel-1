@@ -374,21 +374,26 @@ export default function EngagementOrdersPage() {
                 </div>
 
                 {/* Per-Type Progress Grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3 pt-2">
                   {[
                     { type: "views", label: "Views", icon: Eye, color: "text-blue-600" },
                     { type: "likes", label: "Likes", icon: Heart, color: "text-rose-600" },
                     { type: "shares", label: "Shares", icon: Share2, color: "text-indigo-600" },
                     { type: "saves", label: "Saves", icon: Bookmark, color: "text-amber-600" },
                     { type: "comments", label: "Comments", icon: MessageSquare, color: "text-emerald-600" },
-                  ].map((m) => {
+                  ].map((m, idx) => {
                     const data = (order.breakdown as any)[m.type] as OrderBreakdownItem;
                     const Icon = m.icon;
                     const pct = data && data.planned > 0 ? Math.round((data.delivered / data.planned) * 100) : 0;
                     const isCustom = order.sources && (order.sources as any)[m.type] === "custom";
 
                     return (
-                      <div key={m.type} className="p-3 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED] space-y-1">
+                      <div
+                        key={m.type}
+                        className={`p-3 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED] space-y-1 ${
+                          idx === 4 ? "col-span-2 sm:col-span-1" : ""
+                        }`}
+                      >
                         <div className="flex items-center justify-between">
                           <span className="text-[11px] font-bold text-[#252943] flex items-center gap-1">
                             <Icon className={`w-3 h-3 ${m.color}`} />

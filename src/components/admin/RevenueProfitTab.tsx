@@ -419,7 +419,7 @@ export function RevenueProfitTab() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="w-full text-left text-xs min-w-[800px]">
               <thead className="bg-[#F8F9FD] border-b border-[#DEE0ED] text-[#252943]/60 font-semibold">
                 <tr>
                   <th className="py-2.5 px-3">Order Ref</th>

@@ -972,11 +972,11 @@ function NewOrderForm() {
         </div>
 
         {/* Deliver Now vs Schedule in BD Time Tabs */}
-        <div className="flex items-center p-1 rounded-xl bg-[#F0F2FA] border border-[#DEE0ED] self-start sm:self-center">
+        <div className="flex items-center p-1 rounded-xl bg-[#F0F2FA] border border-[#DEE0ED] w-full sm:w-auto overflow-x-auto flex-nowrap scrollbar-none">
           <button
             type="button"
             onClick={() => setOrderMode("NOW")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 cursor-pointer ${
               orderMode === "NOW"
                 ? "bg-white text-[#3A4EFB] shadow-sm"
                 : "text-[#252943]/70 hover:text-[#252943]"
@@ -987,7 +987,7 @@ function NewOrderForm() {
           <button
             type="button"
             onClick={() => setOrderMode("SCHEDULED")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
               orderMode === "SCHEDULED"
                 ? "bg-white text-[#3A4EFB] shadow-sm"
                 : "text-[#252943]/70 hover:text-[#252943]"
@@ -998,7 +998,7 @@ function NewOrderForm() {
           </button>
           <Link
             href="/engagement"
-            className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 text-[#252943]/70 hover:text-[#3A4EFB] hover:bg-white/80 cursor-pointer"
+            className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 text-[#252943]/70 hover:text-[#3A4EFB] hover:bg-white/80 shrink-0 cursor-pointer"
           >
             <Zap className="w-3.5 h-3.5 text-[#3A4EFB]" />
             <span>Engagement (S-Curve)</span>

@@ -913,7 +913,7 @@ export default function EngagementPage() {
       </form>
 
       {/* 24/7 Live Support Banner */}
-      <div className="p-3.5 rounded-2xl bg-white border border-[#DEE0ED] flex items-center justify-between gap-3 text-xs shadow-xs">
+      <div className="p-3.5 rounded-2xl bg-white border border-[#DEE0ED] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 text-xs shadow-xs">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl bg-[#0088cc]/10 text-[#0088cc] flex items-center justify-center shrink-0">
             <Send className="w-4 h-4" />
@@ -928,7 +928,7 @@ export default function EngagementPage() {
           href="https://t.me/Ghostfinds"
           target="_blank"
           rel="noopener noreferrer"
-          className="px-3.5 py-1.5 rounded-xl bg-[#0088cc] hover:bg-[#0077b5] text-white text-xs font-bold transition-all shadow-subtle flex items-center gap-1.5 press-scale shrink-0"
+          className="px-3.5 py-2 sm:py-1.5 rounded-xl bg-[#0088cc] hover:bg-[#0077b5] text-white text-xs font-bold transition-all shadow-subtle flex items-center justify-center gap-1.5 press-scale shrink-0 text-center"
         >
           <Send className="w-3.5 h-3.5" />
           <span>Telegram @Ghostfinds</span>

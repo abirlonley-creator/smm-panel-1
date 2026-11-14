@@ -593,7 +593,7 @@ export function OrderMonitorTab() {
           {/* Orders Table (Server-side paginated) */}
           <div className="bg-white rounded-3xl border border-[#DEE0ED] shadow-subtle overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
+              <table className="w-full text-left text-xs min-w-[850px]">
                 <thead className="bg-[#F8F9FD] text-[#252943]/70 font-bold border-b border-[#DEE0ED]">
                   <tr>
                     <th className="py-3 px-3.5">Order ID</th>

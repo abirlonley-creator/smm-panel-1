@@ -69,12 +69,12 @@ export function AdminOutOfBalanceBanner({
         </div>
       </div>
 
-      <div className="pt-2 border-t border-amber-200/80 flex flex-wrap items-center gap-2.5">
+      <div className="pt-2 border-t border-amber-200/80 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2.5">
         <button
           type="button"
           onClick={handleNotifyAdmin}
           disabled={notifying || notified}
-          className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all shadow-subtle flex items-center gap-1.5 press-scale ${
+          className={`w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-black transition-all shadow-subtle flex items-center justify-center gap-1.5 press-scale ${
             notified
               ? "bg-emerald-600 text-white cursor-default"
               : "bg-amber-600 hover:bg-amber-700 text-white"
@@ -87,24 +87,24 @@ export function AdminOutOfBalanceBanner({
           ) : (
             <Bell className="w-4 h-4" />
           )}
-          <span>{notified ? "Admin Notified! (Alert sent to admin panel)" : "Notify Admin"}</span>
+          <span>{notified ? "Admin Notified! (Alert sent)" : "Notify Admin"}</span>
         </button>
 
         <a
           href={`https://t.me/Ghostfinds?text=${telegramMsg}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="px-4 py-2.5 rounded-xl bg-[#0088cc] hover:bg-[#0077b5] text-white text-xs font-black transition-all shadow-subtle flex items-center gap-1.5 press-scale"
+          className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-[#0088cc] hover:bg-[#0077b5] text-white text-xs font-black transition-all shadow-subtle flex items-center justify-center gap-1.5 press-scale"
         >
           <Send className="w-4 h-4" />
-          <span>Send Admin a Message (Telegram)</span>
+          <span>Send Admin a Message</span>
         </a>
 
         {onDismiss && (
           <button
             type="button"
             onClick={onDismiss}
-            className="px-3 py-2 rounded-xl text-xs font-bold text-amber-900/60 hover:text-amber-900 hover:bg-amber-200/50 transition-colors ml-auto"
+            className="w-full sm:w-auto px-3 py-2 rounded-xl text-xs font-bold text-amber-900/60 hover:text-amber-900 hover:bg-amber-200/50 transition-colors sm:ml-auto text-center"
           >
             Dismiss
           </button>

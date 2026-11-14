@@ -95,7 +95,7 @@ export function AppHeader() {
   const remainingHours = session.remainingHours;
 
   return (
-    <header className="w-full bg-white/80 backdrop-blur-md border-b border-[#DEE0ED] sticky top-0 z-40 px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-4">
+    <header className="hidden lg:flex w-full bg-white/80 backdrop-blur-md border-b border-[#DEE0ED] sticky top-0 z-40 px-4 sm:px-6 lg:px-8 py-3 items-center justify-between gap-4">
       {/* Left: Quick User Indicator */}
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2">

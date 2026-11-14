@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { 
-  PlusCircle, 
-  Layers, 
+import {
+  PlusCircle,
+  Layers,
   KeyRound,
-  Menu, 
+  Menu,
   X,
   Wallet,
   RefreshCw,
@@ -16,6 +16,7 @@ import {
   ListTree,
   ShieldCheck,
   Zap,
+  LogOut,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { DEFAULT_PROVIDER_BALANCE_REFRESH_INTERVAL_MS } from "@/lib/provider/balance";
@@ -136,27 +137,36 @@ export function Navigation() {
   const remainingDays = session?.remainingDays;
   const remainingHours = session?.remainingHours;
 
+  async function handleLogout() {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {
+      // ignore
+    }
+    window.location.href = "/login";
+  }
+
   return (
     <>
       {/* Mobile Header Bar */}
-      <header className="lg:hidden flex items-center justify-between px-5 py-3.5 bg-[#252943] text-white sticky top-0 z-[60] border-b border-[#323758]">
-        <Link href="/" className="flex items-center gap-2.5 font-semibold tracking-tight text-white">
-          <div className="w-8 h-8 rounded-lg bg-[#3A4EFB] flex items-center justify-center text-white font-bold text-sm shadow-subtle">
+      <header className="lg:hidden flex items-center justify-between px-3.5 sm:px-5 py-3 bg-[#252943] text-white sticky top-0 z-[60] border-b border-[#323758]">
+        <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight text-white shrink-0">
+          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#3A4EFB] flex items-center justify-center text-white font-bold text-sm shadow-subtle shrink-0">
             A
           </div>
-          <span className="text-base tracking-tight font-medium">AuraSMM</span>
+          <span className="text-sm sm:text-base tracking-tight font-medium">AuraSMM</span>
           {isAdmin ? (
-            <span className="text-[10px] font-black px-2 py-0.5 rounded bg-[#E3FF3B] text-[#252943] ml-1">
+            <span className="text-[9px] sm:text-[10px] font-black px-1.5 sm:px-2 py-0.5 rounded bg-[#E3FF3B] text-[#252943] ml-0.5 sm:ml-1">
               ADMIN
             </span>
           ) : (
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#3A4EFB] text-white ml-1">
+            <span className="text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded bg-[#3A4EFB] text-white ml-0.5 sm:ml-1">
               USER
             </span>
           )}
         </Link>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           {/* Mobile Balance Pill */}
           <button
             type="button"
@@ -164,22 +174,21 @@ export function Navigation() {
             title={balanceWarning || "Refresh provider balance"}
             aria-label="Refresh provider balance"
             disabled={refreshingBalance}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#1A1D31] border border-[#323758] text-xs font-semibold text-white press-scale"
+            className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 rounded-lg bg-[#1A1D31] border border-[#323758] text-[11px] sm:text-xs font-semibold text-white press-scale"
           >
-            <Wallet className="w-3 h-3 text-[#E3FF3B]" />
-            <span>{loadingBalance ? "..." : formatProviderBalance(balance, currency)}</span>
-            <RefreshCw className={`w-2.5 h-2.5 text-[#DEE0ED]/60 ${refreshingBalance ? "animate-spin" : ""}`} />
+            <Wallet className="w-3 h-3 text-[#E3FF3B] shrink-0" />
+            <span className="truncate max-w-[80px] sm:max-w-none">{loadingBalance ? "..." : formatProviderBalance(balance, currency)}</span>
+            <RefreshCw className={`w-2.5 h-2.5 text-[#DEE0ED]/60 shrink-0 ${refreshingBalance ? "animate-spin" : ""}`} />
             {balanceStale && (
-              <span className="inline-flex items-center gap-1 text-[9px] text-amber-300">
-                <AlertTriangle className="w-3 h-3" aria-hidden="true" />
-                {balance === null ? "Unavailable" : "Stale"}
+              <span className="hidden xs:inline-flex items-center gap-1 text-[9px] text-amber-300">
+                <AlertTriangle className="w-2.5 h-2.5" aria-hidden="true" />
               </span>
             )}
           </button>
 
           <button
             onClick={() => setMobileOpen(!mobileOpen)}
-            className="p-2 rounded-lg text-[#DEE0ED] hover:bg-[#323758] transition-colors"
+            className="p-1.5 sm:p-2 rounded-lg text-[#DEE0ED] hover:bg-[#323758] transition-colors"
             aria-label="Toggle navigation"
           >
             {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -189,15 +198,16 @@ export function Navigation() {
 
       {/* Mobile Drawer */}
       {mobileOpen && (
-        <div className="lg:hidden fixed inset-0 z-[70] bg-[#252943]/95 backdrop-blur-md flex flex-col pt-16 px-6 pb-8 animate-fadeIn overflow-y-auto">
-          <button 
+        <div className="lg:hidden fixed inset-0 z-[70] bg-[#252943]/95 backdrop-blur-md flex flex-col pt-16 px-4 sm:px-6 pb-8 animate-fadeIn overflow-y-auto">
+          <button
             onClick={() => setMobileOpen(false)}
-            className="absolute top-4 right-5 p-2 rounded-lg text-white hover:bg-[#323758]"
+            className="absolute top-4 right-4 sm:right-5 p-2 rounded-lg text-white hover:bg-[#323758]"
+            aria-label="Close menu"
           >
             <X className="w-6 h-6" />
           </button>
-          
-          <div className="space-y-1.5 mt-4">
+
+          <div className="space-y-1.5 mt-2">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive =
@@ -209,11 +219,10 @@ export function Navigation() {
                   key={item.href}
                   href={item.href}
                   onClick={() => setMobileOpen(false)}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                    isActive
-                      ? "bg-[#3A4EFB] text-white shadow-subtle font-semibold"
-                      : "text-[#DEE0ED] hover:bg-[#323758] hover:text-white"
-                  }`}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${isActive
+                    ? "bg-[#3A4EFB] text-white shadow-subtle font-semibold"
+                    : "text-[#DEE0ED] hover:bg-[#323758] hover:text-white"
+                    }`}
                 >
                   <Icon className="w-5 h-5" />
                   {item.label}
@@ -222,8 +231,8 @@ export function Navigation() {
             })}
           </div>
 
-          {/* Mobile Whop Membership & Support */}
-          <div className="mt-8 pt-4 border-t border-[#323758]">
+          {/* Mobile Whop Membership, Support & Logout */}
+          <div className="mt-6 pt-4 border-t border-[#323758] space-y-3">
             <div className="p-3.5 rounded-2xl bg-[#1A1D31] border border-[#323758] space-y-2.5">
               <div className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2">
@@ -256,6 +265,15 @@ export function Navigation() {
                 <span className="text-[10px] text-emerald-400 font-bold">@Ghostfinds</span>
               </a>
             </div>
+
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="w-full py-2.5 px-4 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-300 text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Sign Out</span>
+            </button>
           </div>
         </div>
       )}
@@ -304,11 +322,10 @@ export function Navigation() {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-3 px-3.5 py-2 rounded-xl text-sm transition-all press-scale ${
-                  isActive
-                    ? "bg-[#3A4EFB] text-white font-medium shadow-subtle"
-                    : "text-[#DEE0ED] hover:bg-[#323758]/70 hover:text-white font-normal"
-                }`}
+                className={`flex items-center gap-3 px-3.5 py-2 rounded-xl text-sm transition-all press-scale ${isActive
+                  ? "bg-[#3A4EFB] text-white font-medium shadow-subtle"
+                  : "text-[#DEE0ED] hover:bg-[#323758]/70 hover:text-white font-normal"
+                  }`}
               >
                 <Icon className={`w-4 h-4 ${isActive ? "text-[#E3FF3B]" : "text-[#DEE0ED]/80"}`} />
                 <span>{item.label}</span>

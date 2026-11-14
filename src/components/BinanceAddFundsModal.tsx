@@ -206,15 +206,15 @@ export function BinanceAddFundsModal({
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm overflow-y-auto p-3 sm:p-4 flex justify-center items-start sm:items-center min-h-full animate-fadeIn"
+      className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm overflow-y-auto p-2 sm:p-4 flex justify-center items-center min-h-full animate-fadeIn"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative bg-white rounded-3xl border border-[#DEE0ED] max-w-[460px] w-full shadow-2xl my-auto flex flex-col max-h-[calc(100vh-2rem)] sm:max-h-[min(90vh,760px)] overflow-hidden animate-scaleUp shrink-0"
+        className="relative bg-white rounded-2xl sm:rounded-3xl border border-[#DEE0ED] max-w-[460px] w-full shadow-2xl my-auto flex flex-col max-h-[92vh] overflow-hidden animate-scaleUp shrink-0"
       >
         {/* Header - White Minimalist matching screenshot */}
-        <div className="shrink-0 bg-white px-5 sm:px-6 py-4 flex items-center justify-between border-b border-gray-100">
-          <h3 className="text-base font-bold text-gray-900 tracking-tight">
+        <div className="shrink-0 bg-white px-4 sm:px-6 py-3.5 sm:py-4 flex items-center justify-between border-b border-gray-100">
+          <h3 className="text-sm sm:text-base font-bold text-gray-900 tracking-tight">
             Binance internal transfer
           </h3>
           <button
@@ -228,7 +228,7 @@ export function BinanceAddFundsModal({
         </div>
 
         {/* Stepper matching Screenshot 1 & 2 */}
-        <div className="shrink-0 bg-white pt-4 pb-3 px-6 border-b border-gray-100">
+        <div className="shrink-0 bg-white pt-3.5 sm:pt-4 pb-2.5 sm:pb-3 px-4 sm:px-6 border-b border-gray-100">
           <div className="flex items-center justify-center max-w-[280px] mx-auto">
             {/* Step 1 Node: Make payment */}
             <button
@@ -239,16 +239,18 @@ export function BinanceAddFundsModal({
               className="flex flex-col items-center gap-1 group cursor-pointer"
             >
               <div
-                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${step === "pay"
-                  ? "bg-[#2563EB] text-white shadow-sm ring-4 ring-[#2563EB]/15"
-                  : "bg-[#2563EB] text-white"
-                  }`}
+                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                  step === "pay"
+                    ? "bg-[#2563EB] text-white shadow-sm ring-4 ring-[#2563EB]/15"
+                    : "bg-[#2563EB] text-white"
+                }`}
               >
                 1
               </div>
               <span
-                className={`text-xs font-semibold ${step === "pay" ? "text-gray-900" : "text-gray-600"
-                  }`}
+                className={`text-xs font-semibold ${
+                  step === "pay" ? "text-gray-900" : "text-gray-600"
+                }`}
               >
                 Make payment
               </span>
@@ -256,25 +258,28 @@ export function BinanceAddFundsModal({
 
             {/* Connecting Horizontal Line */}
             <div
-              className={`h-[2px] flex-1 mx-3 mb-5 transition-colors ${step === "verify" || step === "success" ? "bg-[#2563EB]" : "bg-gray-200"
-                }`}
+              className={`h-[2px] flex-1 mx-3 mb-5 transition-colors ${
+                step === "verify" || step === "success" ? "bg-[#2563EB]" : "bg-gray-200"
+              }`}
             />
 
             {/* Step 2 Node: Verify payment */}
             <div className="flex flex-col items-center gap-1">
               <div
-                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${step === "verify"
-                  ? "bg-[#2563EB] text-white shadow-sm ring-4 ring-[#2563EB]/15"
-                  : step === "success"
+                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                  step === "verify"
+                    ? "bg-[#2563EB] text-white shadow-sm ring-4 ring-[#2563EB]/15"
+                    : step === "success"
                     ? "bg-emerald-600 text-white"
                     : "bg-gray-200 text-gray-500"
-                  }`}
+                }`}
               >
                 2
               </div>
               <span
-                className={`text-xs font-semibold ${step === "verify" ? "text-gray-900" : "text-gray-400"
-                  }`}
+                className={`text-xs font-semibold ${
+                  step === "verify" ? "text-gray-900" : "text-gray-400"
+                }`}
               >
                 Verify payment
               </span>
@@ -283,7 +288,7 @@ export function BinanceAddFundsModal({
         </div>
 
         {/* Modal Scrollable Body */}
-        <div className="p-5 sm:p-6 overflow-y-auto flex-1 overscroll-contain">
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1 overscroll-contain">
           {/* ============================================================== */}
           {/* STEP 1: MAKE PAYMENT (Screenshot 2 Replica)                    */}
           {/* ============================================================== */}
