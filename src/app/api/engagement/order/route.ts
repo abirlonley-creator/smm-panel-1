@@ -195,12 +195,12 @@ export async function POST(request: Request) {
       });
     }
 
-    // 3. Build Batch Runs
+    // 3. Build Batch Runs - Calculated with Admin Configured Selling Rates
     const now = Date.now();
-    const viewsRate = xmediaViewsService.ratePer1000;
-    const likesRate = zeofameLikesService.ratePer1000;
-    const savesRate = zeofameSavesService?.ratePer1000 ?? 0.22;
-    const sharesRate = zeofameSharesService?.ratePer1000 ?? 0.22;
+    const viewsRate = config.pricing?.viewsUserRate ?? (xmediaViewsService.ratePer1000 * 1.5);
+    const likesRate = config.pricing?.likesUserRate ?? (zeofameLikesService.ratePer1000 * 2.0);
+    const savesRate = config.pricing?.savesUserRate ?? ((zeofameSavesService?.ratePer1000 ?? 0.22) * 2.5);
+    const sharesRate = config.pricing?.sharesUserRate ?? ((zeofameSharesService?.ratePer1000 ?? 0.22) * 2.5);
 
     // A. Views Runs
     const viewsRuns: Array<{ runNumber: number; scheduledAt: Date; quantity: number; cost: number }> = [];

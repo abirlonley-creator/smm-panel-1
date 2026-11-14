@@ -36,6 +36,10 @@ import {
   Bookmark,
   Share2,
   CreditCard,
+  Percent,
+  Coins,
+  MessageSquare,
+  TrendingUp,
 } from "lucide-react";
 import { formatProviderBalance } from "@/lib/currency";
 import { OrderMonitorTab } from "@/components/admin/OrderMonitorTab";
@@ -212,6 +216,19 @@ export default function AdminPage() {
   // TikTok Engagement Preset Config state
   const [tiktokConfig, setTiktokConfig] = useState<any>(null);
   const [savingTiktokConfig, setSavingTiktokConfig] = useState(false);
+  const [originalRates, setOriginalRates] = useState<{
+    views: number;
+    likes: number;
+    saves: number;
+    shares: number;
+    comments: number;
+  }>({
+    views: 2.23,
+    likes: 0.88,
+    saves: 0.22,
+    shares: 0.22,
+    comments: 5.00,
+  });
 
   // Check auth on load
   async function checkAuth() {
@@ -341,7 +358,10 @@ export default function AdminPage() {
       if (diagRes.success) setDiagnostics(diagRes);
       if (engRes.success && engRes.profiles) setEngagementProfiles(engRes.profiles);
       if (engOrdersRes.success && Array.isArray(engOrdersRes.orders)) setEngagementOrders(engOrdersRes.orders);
-      if (tiktokRes.success && tiktokRes.config) setTiktokConfig(tiktokRes.config);
+      if (tiktokRes.success) {
+        if (tiktokRes.config) setTiktokConfig(tiktokRes.config);
+        if (tiktokRes.originalRates) setOriginalRates(tiktokRes.originalRates);
+      }
       if (alertsRes.success) {
         setAlerts(alertsRes.alerts || []);
         setAlertsMetrics(alertsRes.metrics || null);
@@ -1964,7 +1984,476 @@ export default function AdminPage() {
                   </div>
                 </div>
 
-                {/* Section 4: Delayed Likes Protection Synchronization Threshold */}
+                {/* Section 4: Engagement Retail Pricing & Profit Margin Manager */}
+                <div className="p-6 rounded-3xl border-2 border-emerald-300 bg-gradient-to-br from-emerald-50/40 via-white to-emerald-50/20 space-y-6 shadow-subtle">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-emerald-200">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-black shadow-subtle shrink-0">
+                        <Coins className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-base font-black text-[#252943]">
+                            Engagement Retail Pricing & Profit Margin Manager
+                          </h3>
+                          <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase tracking-wider border border-emerald-300">
+                            Profit & Margins
+                          </span>
+                        </div>
+                        <p className="text-xs text-[#252943]/70">
+                          Set the exact retail rate charged to users per 1,000 for Views, Likes, Comments, Saves, and Reposts. Pick your profit range and control your margins.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 5-Metric Pricing Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {/* 1. VIEWS PRICING */}
+                    {(() => {
+                      const origCost = originalRates?.views ?? 2.23;
+                      const userRate = Number(tiktokConfig.pricing?.viewsUserRate ?? 4.50);
+                      const profit = Number((userRate - origCost).toFixed(2));
+                      const marginPct = origCost > 0 ? Math.round(((userRate - origCost) / origCost) * 100) : 0;
+                      return (
+                        <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED] shadow-subtle space-y-3">
+                          <div className="flex items-center justify-between pb-2 border-b border-[#DEE0ED]/60">
+                            <div className="flex items-center gap-2">
+                              <Eye className="w-4 h-4 text-[#3A4EFB]" />
+                              <span className="font-bold text-xs text-[#252943]">TikTok Views</span>
+                            </div>
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-50 text-blue-800 font-bold border border-blue-200">
+                              Wholesale: ₹{origCost.toFixed(2)}/1k
+                            </span>
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-bold text-[#252943]/80 mb-1">
+                              User Selling Rate (₹ / 1,000)
+                            </label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#252943]/50">₹</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0.1"
+                                value={userRate}
+                                onChange={(e) =>
+                                  setTiktokConfig({
+                                    ...tiktokConfig,
+                                    pricing: {
+                                      ...(tiktokConfig.pricing || {}),
+                                      viewsUserRate: Number(e.target.value),
+                                    },
+                                  })
+                                }
+                                className="w-full pl-7 pr-3 py-2 rounded-xl border-2 border-[#DEE0ED] focus:border-emerald-500 bg-white text-xs font-black font-mono text-[#252943] outline-none"
+                                required
+                              />
+                            </div>
+                          </div>
+
+                          {/* Quick Margin Multipliers */}
+                          <div className="space-y-1">
+                            <span className="text-[10px] text-[#252943]/60 font-semibold block">Quick Profit Range:</span>
+                            <div className="flex items-center flex-wrap gap-1">
+                              {[25, 50, 100, 150, 200].map((pct) => (
+                                <button
+                                  key={pct}
+                                  type="button"
+                                  onClick={() =>
+                                    setTiktokConfig({
+                                      ...tiktokConfig,
+                                      pricing: {
+                                        ...(tiktokConfig.pricing || {}),
+                                        viewsUserRate: Number((origCost * (1 + pct / 100)).toFixed(2)),
+                                      },
+                                    })
+                                  }
+                                  className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-[#F8F9FD] hover:bg-emerald-100 hover:text-emerald-900 text-[#252943]/70 border border-[#DEE0ED] transition-colors"
+                                >
+                                  +{pct}%
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Profit feedback */}
+                          <div className={`p-2 rounded-xl text-[11px] flex items-center justify-between font-bold ${
+                            profit >= 0 ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-rose-50 text-rose-800 border border-rose-200"
+                          }`}>
+                            <span>Profit: {profit >= 0 ? `+₹${profit.toFixed(2)}` : `-₹${Math.abs(profit).toFixed(2)}`}/1k</span>
+                            <span>{profit >= 0 ? `+${marginPct}% Margin` : "Loss"}</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* 2. LIKES PRICING */}
+                    {(() => {
+                      const origCost = originalRates?.likes ?? 0.88;
+                      const userRate = Number(tiktokConfig.pricing?.likesUserRate ?? 2.00);
+                      const profit = Number((userRate - origCost).toFixed(2));
+                      const marginPct = origCost > 0 ? Math.round(((userRate - origCost) / origCost) * 100) : 0;
+                      return (
+                        <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED] shadow-subtle space-y-3">
+                          <div className="flex items-center justify-between pb-2 border-b border-[#DEE0ED]/60">
+                            <div className="flex items-center gap-2">
+                              <Heart className="w-4 h-4 text-rose-600" />
+                              <span className="font-bold text-xs text-[#252943]">TikTok Likes</span>
+                            </div>
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-rose-50 text-rose-800 font-bold border border-rose-200">
+                              Wholesale: ₹{origCost.toFixed(2)}/1k
+                            </span>
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-bold text-[#252943]/80 mb-1">
+                              User Selling Rate (₹ / 1,000)
+                            </label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#252943]/50">₹</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0.1"
+                                value={userRate}
+                                onChange={(e) =>
+                                  setTiktokConfig({
+                                    ...tiktokConfig,
+                                    pricing: {
+                                      ...(tiktokConfig.pricing || {}),
+                                      likesUserRate: Number(e.target.value),
+                                    },
+                                  })
+                                }
+                                className="w-full pl-7 pr-3 py-2 rounded-xl border-2 border-[#DEE0ED] focus:border-emerald-500 bg-white text-xs font-black font-mono text-[#252943] outline-none"
+                                required
+                              />
+                            </div>
+                          </div>
+
+                          {/* Quick Margin Multipliers */}
+                          <div className="space-y-1">
+                            <span className="text-[10px] text-[#252943]/60 font-semibold block">Quick Profit Range:</span>
+                            <div className="flex items-center flex-wrap gap-1">
+                              {[50, 100, 150, 200, 300].map((pct) => (
+                                <button
+                                  key={pct}
+                                  type="button"
+                                  onClick={() =>
+                                    setTiktokConfig({
+                                      ...tiktokConfig,
+                                      pricing: {
+                                        ...(tiktokConfig.pricing || {}),
+                                        likesUserRate: Number((origCost * (1 + pct / 100)).toFixed(2)),
+                                      },
+                                    })
+                                  }
+                                  className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-[#F8F9FD] hover:bg-emerald-100 hover:text-emerald-900 text-[#252943]/70 border border-[#DEE0ED] transition-colors"
+                                >
+                                  +{pct}%
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Profit feedback */}
+                          <div className={`p-2 rounded-xl text-[11px] flex items-center justify-between font-bold ${
+                            profit >= 0 ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-rose-50 text-rose-800 border border-rose-200"
+                          }`}>
+                            <span>Profit: {profit >= 0 ? `+₹${profit.toFixed(2)}` : `-₹${Math.abs(profit).toFixed(2)}`}/1k</span>
+                            <span>{profit >= 0 ? `+${marginPct}% Margin` : "Loss"}</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* 3. SAVES PRICING */}
+                    {(() => {
+                      const origCost = originalRates?.saves ?? 0.22;
+                      const userRate = Number(tiktokConfig.pricing?.savesUserRate ?? 0.80);
+                      const profit = Number((userRate - origCost).toFixed(2));
+                      const marginPct = origCost > 0 ? Math.round(((userRate - origCost) / origCost) * 100) : 0;
+                      return (
+                        <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED] shadow-subtle space-y-3">
+                          <div className="flex items-center justify-between pb-2 border-b border-[#DEE0ED]/60">
+                            <div className="flex items-center gap-2">
+                              <Bookmark className="w-4 h-4 text-amber-600" />
+                              <span className="font-bold text-xs text-[#252943]">TikTok Saves</span>
+                            </div>
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-50 text-amber-800 font-bold border border-amber-200">
+                              Wholesale: ₹{origCost.toFixed(2)}/1k
+                            </span>
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-bold text-[#252943]/80 mb-1">
+                              User Selling Rate (₹ / 1,000)
+                            </label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#252943]/50">₹</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0.1"
+                                value={userRate}
+                                onChange={(e) =>
+                                  setTiktokConfig({
+                                    ...tiktokConfig,
+                                    pricing: {
+                                      ...(tiktokConfig.pricing || {}),
+                                      savesUserRate: Number(e.target.value),
+                                    },
+                                  })
+                                }
+                                className="w-full pl-7 pr-3 py-2 rounded-xl border-2 border-[#DEE0ED] focus:border-emerald-500 bg-white text-xs font-black font-mono text-[#252943] outline-none"
+                                required
+                              />
+                            </div>
+                          </div>
+
+                          {/* Quick Margin Multipliers */}
+                          <div className="space-y-1">
+                            <span className="text-[10px] text-[#252943]/60 font-semibold block">Quick Profit Range:</span>
+                            <div className="flex items-center flex-wrap gap-1">
+                              {[50, 100, 200, 300, 400].map((pct) => (
+                                <button
+                                  key={pct}
+                                  type="button"
+                                  onClick={() =>
+                                    setTiktokConfig({
+                                      ...tiktokConfig,
+                                      pricing: {
+                                        ...(tiktokConfig.pricing || {}),
+                                        savesUserRate: Number((origCost * (1 + pct / 100)).toFixed(2)),
+                                      },
+                                    })
+                                  }
+                                  className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-[#F8F9FD] hover:bg-emerald-100 hover:text-emerald-900 text-[#252943]/70 border border-[#DEE0ED] transition-colors"
+                                >
+                                  +{pct}%
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Profit feedback */}
+                          <div className={`p-2 rounded-xl text-[11px] flex items-center justify-between font-bold ${
+                            profit >= 0 ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-rose-50 text-rose-800 border border-rose-200"
+                          }`}>
+                            <span>Profit: {profit >= 0 ? `+₹${profit.toFixed(2)}` : `-₹${Math.abs(profit).toFixed(2)}`}/1k</span>
+                            <span>{profit >= 0 ? `+${marginPct}% Margin` : "Loss"}</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* 4. SHARES / REPOSTS PRICING */}
+                    {(() => {
+                      const origCost = originalRates?.shares ?? 0.22;
+                      const userRate = Number(tiktokConfig.pricing?.sharesUserRate ?? 0.80);
+                      const profit = Number((userRate - origCost).toFixed(2));
+                      const marginPct = origCost > 0 ? Math.round(((userRate - origCost) / origCost) * 100) : 0;
+                      return (
+                        <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED] shadow-subtle space-y-3">
+                          <div className="flex items-center justify-between pb-2 border-b border-[#DEE0ED]/60">
+                            <div className="flex items-center gap-2">
+                              <Share2 className="w-4 h-4 text-purple-600" />
+                              <span className="font-bold text-xs text-[#252943]">TikTok Reposts</span>
+                            </div>
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-purple-50 text-purple-800 font-bold border border-purple-200">
+                              Wholesale: ₹{origCost.toFixed(2)}/1k
+                            </span>
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-bold text-[#252943]/80 mb-1">
+                              User Selling Rate (₹ / 1,000)
+                            </label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#252943]/50">₹</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0.1"
+                                value={userRate}
+                                onChange={(e) =>
+                                  setTiktokConfig({
+                                    ...tiktokConfig,
+                                    pricing: {
+                                      ...(tiktokConfig.pricing || {}),
+                                      sharesUserRate: Number(e.target.value),
+                                    },
+                                  })
+                                }
+                                className="w-full pl-7 pr-3 py-2 rounded-xl border-2 border-[#DEE0ED] focus:border-emerald-500 bg-white text-xs font-black font-mono text-[#252943] outline-none"
+                                required
+                              />
+                            </div>
+                          </div>
+
+                          {/* Quick Margin Multipliers */}
+                          <div className="space-y-1">
+                            <span className="text-[10px] text-[#252943]/60 font-semibold block">Quick Profit Range:</span>
+                            <div className="flex items-center flex-wrap gap-1">
+                              {[50, 100, 200, 300, 400].map((pct) => (
+                                <button
+                                  key={pct}
+                                  type="button"
+                                  onClick={() =>
+                                    setTiktokConfig({
+                                      ...tiktokConfig,
+                                      pricing: {
+                                        ...(tiktokConfig.pricing || {}),
+                                        sharesUserRate: Number((origCost * (1 + pct / 100)).toFixed(2)),
+                                      },
+                                    })
+                                  }
+                                  className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-[#F8F9FD] hover:bg-emerald-100 hover:text-emerald-900 text-[#252943]/70 border border-[#DEE0ED] transition-colors"
+                                >
+                                  +{pct}%
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Profit feedback */}
+                          <div className={`p-2 rounded-xl text-[11px] flex items-center justify-between font-bold ${
+                            profit >= 0 ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-rose-50 text-rose-800 border border-rose-200"
+                          }`}>
+                            <span>Profit: {profit >= 0 ? `+₹${profit.toFixed(2)}` : `-₹${Math.abs(profit).toFixed(2)}`}/1k</span>
+                            <span>{profit >= 0 ? `+${marginPct}% Margin` : "Loss"}</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* 5. COMMENTS PRICING */}
+                    {(() => {
+                      const origCost = originalRates?.comments ?? 5.00;
+                      const userRate = Number(tiktokConfig.pricing?.commentsUserRate ?? 15.00);
+                      const profit = Number((userRate - origCost).toFixed(2));
+                      const marginPct = origCost > 0 ? Math.round(((userRate - origCost) / origCost) * 100) : 0;
+                      return (
+                        <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED] shadow-subtle space-y-3">
+                          <div className="flex items-center justify-between pb-2 border-b border-[#DEE0ED]/60">
+                            <div className="flex items-center gap-2">
+                              <MessageSquare className="w-4 h-4 text-cyan-600" />
+                              <span className="font-bold text-xs text-[#252943]">TikTok Comments</span>
+                            </div>
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-50 text-cyan-800 font-bold border border-cyan-200">
+                              Wholesale: ₹{origCost.toFixed(2)}/1k
+                            </span>
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-bold text-[#252943]/80 mb-1">
+                              User Selling Rate (₹ / 1,000)
+                            </label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#252943]/50">₹</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0.1"
+                                value={userRate}
+                                onChange={(e) =>
+                                  setTiktokConfig({
+                                    ...tiktokConfig,
+                                    pricing: {
+                                      ...(tiktokConfig.pricing || {}),
+                                      commentsUserRate: Number(e.target.value),
+                                    },
+                                  })
+                                }
+                                className="w-full pl-7 pr-3 py-2 rounded-xl border-2 border-[#DEE0ED] focus:border-emerald-500 bg-white text-xs font-black font-mono text-[#252943] outline-none"
+                                required
+                              />
+                            </div>
+                          </div>
+
+                          {/* Quick Margin Multipliers */}
+                          <div className="space-y-1">
+                            <span className="text-[10px] text-[#252943]/60 font-semibold block">Quick Profit Range:</span>
+                            <div className="flex items-center flex-wrap gap-1">
+                              {[50, 100, 150, 200, 300].map((pct) => (
+                                <button
+                                  key={pct}
+                                  type="button"
+                                  onClick={() =>
+                                    setTiktokConfig({
+                                      ...tiktokConfig,
+                                      pricing: {
+                                        ...(tiktokConfig.pricing || {}),
+                                        commentsUserRate: Number((origCost * (1 + pct / 100)).toFixed(2)),
+                                      },
+                                    })
+                                  }
+                                  className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-[#F8F9FD] hover:bg-emerald-100 hover:text-emerald-900 text-[#252943]/70 border border-[#DEE0ED] transition-colors"
+                                >
+                                  +{pct}%
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Profit feedback */}
+                          <div className={`p-2 rounded-xl text-[11px] flex items-center justify-between font-bold ${
+                            profit >= 0 ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-rose-50 text-rose-800 border border-rose-200"
+                          }`}>
+                            <span>Profit: {profit >= 0 ? `+₹${profit.toFixed(2)}` : `-₹${Math.abs(profit).toFixed(2)}`}/1k</span>
+                            <span>{profit >= 0 ? `+${marginPct}% Margin` : "Loss"}</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Profit Projection Simulator for Standard Campaigns */}
+                  {(() => {
+                    const vOrig = originalRates?.views ?? 2.23;
+                    const lOrig = originalRates?.likes ?? 0.88;
+                    const vUser = Number(tiktokConfig.pricing?.viewsUserRate ?? 4.50);
+                    const lUser = Number(tiktokConfig.pricing?.likesUserRate ?? 2.00);
+
+                    // 2K Starter (2960 views + 42 likes)
+                    const cost2kUser = Number(((2960 / 1000) * vUser + (42 / 1000) * lUser).toFixed(2));
+                    const cost2kWholesale = Number(((2960 / 1000) * vOrig + (42 / 1000) * lOrig).toFixed(2));
+                    const profit2k = Number((cost2kUser - cost2kWholesale).toFixed(2));
+                    const margin2k = cost2kWholesale > 0 ? Math.round((profit2k / cost2kWholesale) * 100) : 0;
+
+                    return (
+                      <div className="p-4 rounded-2xl bg-white border border-emerald-200 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-[#252943] flex items-center gap-1.5">
+                            <TrendingUp className="w-4 h-4 text-emerald-600" />
+                            <span>Live Profit Simulator: Standard 2K Campaign (~2,960 Views + 42 Likes)</span>
+                          </span>
+                          <span className="text-xs font-mono font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                            +{margin2k}% Overall Return
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                          <div className="p-3 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED]">
+                            <span className="text-[10px] text-[#252943]/60 font-semibold block">Customer Pays</span>
+                            <span className="text-base font-black text-[#3A4EFB] font-mono">₹{cost2kUser.toFixed(2)}</span>
+                          </div>
+                          <div className="p-3 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED]">
+                            <span className="text-[10px] text-[#252943]/60 font-semibold block">Wholesale API Cost</span>
+                            <span className="text-base font-black text-[#252943]/80 font-mono">₹{cost2kWholesale.toFixed(2)}</span>
+                          </div>
+                          <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200">
+                            <span className="text-[10px] text-emerald-900 font-semibold block">Your Net Profit</span>
+                            <span className="text-base font-black text-emerald-700 font-mono">+₹{profit2k.toFixed(2)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* Section 5: Delayed Likes Protection Synchronization Threshold */}
                 <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-300 space-y-3">
                   <div className="flex items-center gap-2">
                     <ShieldCheck className="w-4 h-4 text-amber-700" />

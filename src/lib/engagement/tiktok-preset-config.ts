@@ -268,6 +268,14 @@ export interface MetricConfigItem {
   intervalMinutes: number;
 }
 
+export interface EngagementPricingConfig {
+  viewsUserRate: number;     // Rate charged to users per 1k views (INR ₹)
+  likesUserRate: number;     // Rate charged to users per 1k likes (INR ₹)
+  savesUserRate: number;     // Rate charged to users per 1k saves (INR ₹)
+  sharesUserRate: number;    // Rate charged to users per 1k shares/reposts (INR ₹)
+  commentsUserRate: number;  // Rate charged to users per 1k comments (INR ₹)
+}
+
 export interface TikTokEngagementPresetConfig {
   enabled: boolean;
   presetName: string;
@@ -275,6 +283,7 @@ export interface TikTokEngagementPresetConfig {
   likes: MetricConfigItem;
   saves: MetricConfigItem;
   shares: MetricConfigItem;
+  pricing: EngagementPricingConfig;
   syncThreshold: {
     minViews: number;
     maxViews: number;
@@ -320,6 +329,13 @@ export const DEFAULT_TIKTOK_ENGAGEMENT_CONFIG: TikTokEngagementPresetConfig = {
     runsCount: 3,
     intervalMinutes: 120,
   },
+  pricing: {
+    viewsUserRate: 4.50,
+    likesUserRate: 2.00,
+    savesUserRate: 0.80,
+    sharesUserRate: 0.80,
+    commentsUserRate: 15.00,
+  },
   syncThreshold: {
     minViews: 500,
     maxViews: 700,
@@ -349,6 +365,7 @@ export function getTikTokEngagementConfig(): TikTokEngagementPresetConfig {
         likes: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.likes, ...(parsed.likes || {}) },
         saves: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.saves, ...(parsed.saves || {}) },
         shares: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.shares, ...(parsed.shares || {}) },
+        pricing: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.pricing, ...(parsed.pricing || {}) },
         syncThreshold: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.syncThreshold, ...(parsed.syncThreshold || {}) },
       };
       return cachedConfig!;
@@ -370,6 +387,7 @@ export function saveTikTokEngagementConfig(newConfig: Partial<TikTokEngagementPr
     likes: { ...current.likes, ...(newConfig.likes || {}) },
     saves: { ...current.saves, ...(newConfig.saves || {}) },
     shares: { ...current.shares, ...(newConfig.shares || {}) },
+    pricing: { ...current.pricing, ...(newConfig.pricing || {}) },
     syncThreshold: { ...current.syncThreshold, ...(newConfig.syncThreshold || {}) },
   };
 

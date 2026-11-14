@@ -242,13 +242,21 @@ export async function GET(request: Request) {
     }
   }
 
-  // Base Rates
-  const viewsRate = xmediaStatus.service?.ratePer1000 ?? 2.23;
-  const likesRate = zeofameStatus.service?.ratePer1000 ?? 0.88;
-  const savesRate = zeofameStatus.savesService?.ratePer1000 ?? 0.22;
-  const sharesRate = zeofameStatus.sharesService?.ratePer1000 ?? 0.22;
+  // 1. Original Provider Wholesale Rates
+  const originalViewsRate = xmediaStatus.service?.ratePer1000 ?? 2.23;
+  const originalLikesRate = zeofameStatus.service?.ratePer1000 ?? 0.88;
+  const originalSavesRate = zeofameStatus.savesService?.ratePer1000 ?? 0.22;
+  const originalSharesRate = zeofameStatus.sharesService?.ratePer1000 ?? 0.22;
+  const originalCommentsRate = 5.00;
 
-  // Calculate costs for all presets
+  // 2. Selling Rates Charged to Users (Admin Configured with Profit Margin)
+  const viewsRate = config.pricing?.viewsUserRate ?? 4.50;
+  const likesRate = config.pricing?.likesUserRate ?? 2.00;
+  const savesRate = config.pricing?.savesUserRate ?? 0.80;
+  const sharesRate = config.pricing?.sharesUserRate ?? 0.80;
+  const commentsRate = config.pricing?.commentsUserRate ?? 15.00;
+
+  // Calculate costs for all presets based on user retail rates
   const presetsList = getAllTikTokPresets().map((preset) => {
     const vCost = Number(((preset.targetViews / 1000) * viewsRate).toFixed(4));
     const lCost = Number(((preset.targetLikes / 1000) * likesRate).toFixed(4));
@@ -283,7 +291,17 @@ export async function GET(request: Request) {
       likesRate,
       savesRate,
       sharesRate,
+      commentsRate,
     },
+    originalRates: isAdmin
+      ? {
+          views: originalViewsRate,
+          likes: originalLikesRate,
+          saves: originalSavesRate,
+          shares: originalSharesRate,
+          comments: originalCommentsRate,
+        }
+      : undefined,
     presets: presetsList,
     config,
     pricing: {
@@ -292,6 +310,9 @@ export async function GET(request: Request) {
       likesCost: defaultPreset.pricing.likesCost,
       viewsRate,
       likesRate,
+      savesRate,
+      sharesRate,
+      commentsRate,
       totalPlannedViews: defaultPreset.targetViews,
       totalPlannedLikes: defaultPreset.targetLikes,
       viewsRuns: defaultPreset.views.runsCount,

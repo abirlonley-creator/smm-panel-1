@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   Wallet,
   X,
@@ -33,6 +34,8 @@ export function BinanceAddFundsModal({
   currentBalance = 0,
   onSuccess,
 }: BinanceAddFundsModalProps) {
+  const [mounted, setMounted] = useState(false);
+
   // Step 1: "amount" -> Step 2: "pay" -> Step 3: "success"
   const [step, setStep] = useState<"amount" | "pay" | "success">("amount");
 
@@ -58,6 +61,11 @@ export function BinanceAddFundsModal({
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const usdtAmount = Number((inrAmount / exchangeRate).toFixed(2));
+
+  // Set mounted on client
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Load config on mount & handle Escape key
   useEffect(() => {
@@ -193,16 +201,21 @@ export function BinanceAddFundsModal({
     }
   }
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted) return null;
 
-  return (
+  return createPortal(
     <div
+      role="dialog"
+      aria-modal="true"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm overflow-y-auto p-3 sm:p-4 flex items-center justify-center py-6 sm:py-8 animate-fadeIn"
+      className="fixed inset-0 z-[99999] bg-black/70 backdrop-blur-sm overflow-y-auto p-3 sm:p-6 flex justify-center items-start sm:items-center min-h-full animate-fadeIn"
     >
-      <div className="relative bg-white rounded-3xl border border-[#DEE0ED] max-w-lg w-full shadow-2xl my-auto flex flex-col max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-3.5rem)] overflow-hidden animate-scaleUp">
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative bg-white rounded-3xl border border-[#DEE0ED] max-w-lg w-full shadow-2xl my-auto flex flex-col max-h-[calc(100vh-2rem)] sm:max-h-[min(88vh,720px)] overflow-hidden animate-scaleUp shrink-0"
+      >
         {/* Header - Always Fixed & Pinned */}
         <div className="shrink-0 bg-[#1A1D31] text-white px-5 sm:px-6 py-4 sm:py-5 flex items-center justify-between border-b border-[#323758]">
           <div className="flex items-center gap-3">
@@ -607,6 +620,7 @@ export function BinanceAddFundsModal({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
