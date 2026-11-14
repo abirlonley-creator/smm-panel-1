@@ -69,6 +69,17 @@ export async function runWatchdogCycle(): Promise<WatchdogResult> {
   });
 
   for (const run of stuckRuns) {
+    if (run.engagementOrder?.status === "CANCELLED" || run.engagementOrder?.status === "FAILED") {
+      await prisma.engagementRun.update({
+        where: { id: run.id },
+        data: {
+          status: "cancelled",
+          errorMessage: "Parent order was cancelled.",
+        },
+      });
+      continue;
+    }
+
     const effectiveProviderId = run.providerId || run.service?.userProviderId || run.service?.providerId || null;
     const effectiveProviderName = run.provider?.name || run.service?.userProvider?.name || run.service?.provider?.name || null;
     if (run.providerOrderId) {
@@ -128,6 +139,9 @@ export async function runWatchdogCycle(): Promise<WatchdogResult> {
       status: "scheduled",
       scheduledAt: { lte: missedCutoff },
       claimedAt: null,
+      engagementOrder: {
+        status: { notIn: ["CANCELLED", "FAILED"] },
+      },
     },
     include: {
       engagementOrder: true,

@@ -460,6 +460,11 @@ export async function DELETE(
         providerOrderId: true,
         userId: true,
         isScheduled: true,
+        scheduleMode: true,
+        requestedQuantity: true,
+        deliveredQuantity: true,
+        remainingQuantity: true,
+        totalCost: true,
         _count: { select: { steps: true } },
       },
     });
@@ -490,34 +495,140 @@ export async function DELETE(
       );
     }
 
+    // ── Check if this is an Engagement Order ──────────────────────────────────
+    const engOrder = await prisma.engagementOrder.findFirst({
+      where: { orderRef: order.orderRef },
+      include: { runs: true },
+    });
+
+    if (engOrder) {
+      const unsentRuns = engOrder.runs.filter(
+        (r) => !r.providerOrderId && ["scheduled", "delayed", "claimed", "sending", "PENDING"].includes(r.status)
+      );
+
+      const directSumCost = unsentRuns.reduce((sum, r) => sum + (r.cost || 0), 0);
+      let refundAmount = 0;
+      if (directSumCost > 0) {
+        refundAmount = Number(directSumCost.toFixed(2));
+      } else if (engOrder.runs.length > 0) {
+        refundAmount = Number(((unsentRuns.length / engOrder.runs.length) * engOrder.totalCost).toFixed(2));
+      }
+      const maxRefundable = Math.max(0, Number((engOrder.totalCost - (engOrder.refundedAmount || 0)).toFixed(2)));
+      refundAmount = Math.min(refundAmount, maxRefundable);
+
+      await prisma.$transaction(async (tx) => {
+        for (const run of unsentRuns) {
+          await tx.engagementRun.update({
+            where: { id: run.id },
+            data: { status: "cancelled", errorMessage: "Cancelled by user request." },
+          });
+        }
+
+        if (order.userId && refundAmount > 0) {
+          const updatedUser = await tx.user.update({
+            where: { id: order.userId },
+            data: { walletBalance: { increment: refundAmount } },
+            select: { walletBalance: true },
+          });
+
+          await tx.walletTransaction.create({
+            data: {
+              userId: order.userId,
+              type: "REFUND",
+              amount: refundAmount,
+              balanceAfter: updatedUser.walletBalance,
+              referenceId: order.orderRef,
+              description: `Refund for ${unsentRuns.length} remaining unsent batch(es) on ${order.orderRef}`,
+            },
+          });
+        }
+
+        await tx.engagementOrder.update({
+          where: { id: engOrder.id },
+          data: {
+            status: "CANCELLED",
+            refundedAmount: { increment: refundAmount },
+          },
+        });
+
+        await tx.order.update({
+          where: { id: order.id },
+          data: { status: "CANCELLED", remainingQuantity: 0 },
+        });
+
+        await tx.auditLog.create({
+          data: {
+            action: "CANCEL_ORDER",
+            actor: "User",
+            details: `Engagement campaign ${order.orderRef} cancelled. Cancelled ${unsentRuns.length} future batches. Refunded ₹${refundAmount.toFixed(2)} to wallet.`,
+          },
+        });
+      });
+
+      const detail = await findOrderDetailById(order.id);
+      return NextResponse.json({
+        success: true,
+        order: detail,
+        message: `Order cancelled. Refunded ₹${refundAmount.toFixed(2)} for ${unsentRuns.length} remaining batch(es) to your wallet.`,
+        refundAmount,
+      });
+    }
+
     // ── Scheduled (Growth Planner) orders ──────────────────────────────────────
-    // These orders have multiple delivery steps, each submitted to the provider
-    // separately. The parent order's providerOrderId refers to the first submitted
-    // batch which may already be delivered. We must NOT call the provider cancel API
-    // on that reference — it would return "cancel unavailable". Instead, we cancel
-    // all future unsubmitted steps locally and mark the order as CANCELLED.
     const isScheduledOrder = order.isScheduled || order._count.steps > 0;
 
     if (isScheduledOrder) {
-      const cancelled = await prisma.scheduledDeliveryStep.updateMany({
+      const unsubmittedSteps = await prisma.scheduledDeliveryStep.findMany({
         where: {
           orderId: order.id,
           status: { in: ["PENDING", "PROCESSING", "PAUSED"] },
         },
-        data: { status: "CANCELLED" },
       });
 
-      await prisma.order.update({
-        where: { id: order.id },
-        data: { status: "CANCELLED" },
-      });
+      const unsentQty = unsubmittedSteps.reduce((sum, s) => sum + s.quantity, 0);
+      const totalReq = order.requestedQuantity || 1;
+      const refundAmount = Number(((unsentQty / totalReq) * (order.totalCost || 0)).toFixed(2));
 
-      await prisma.auditLog.create({
-        data: {
-          action: "CANCEL_ORDER",
-          actor: "User",
-          details: `Scheduled order ${order.orderRef} cancelled. ${cancelled.count} future batch(es) cancelled; previously submitted batches preserved as history.`,
-        },
+      await prisma.$transaction(async (tx) => {
+        await tx.scheduledDeliveryStep.updateMany({
+          where: {
+            orderId: order.id,
+            status: { in: ["PENDING", "PROCESSING", "PAUSED"] },
+          },
+          data: { status: "CANCELLED" },
+        });
+
+        await tx.order.update({
+          where: { id: order.id },
+          data: { status: "CANCELLED", remainingQuantity: 0 },
+        });
+
+        if (order.userId && refundAmount > 0) {
+          const updatedUser = await tx.user.update({
+            where: { id: order.userId },
+            data: { walletBalance: { increment: refundAmount } },
+            select: { walletBalance: true },
+          });
+
+          await tx.walletTransaction.create({
+            data: {
+              userId: order.userId,
+              type: "REFUND",
+              amount: refundAmount,
+              balanceAfter: updatedUser.walletBalance,
+              referenceId: order.orderRef,
+              description: `Refund for ${unsubmittedSteps.length} unsent scheduled step(s) on ${order.orderRef}`,
+            },
+          });
+        }
+
+        await tx.auditLog.create({
+          data: {
+            action: "CANCEL_ORDER",
+            actor: "User",
+            details: `Scheduled order ${order.orderRef} cancelled. ${unsubmittedSteps.length} future batch(es) cancelled. Refunded ₹${refundAmount.toFixed(2)}.`,
+          },
+        });
       });
 
       const detail = await findOrderDetailById(order.id);
@@ -525,14 +636,17 @@ export async function DELETE(
         success: true,
         order: detail,
         message:
-          cancelled.count > 0
-            ? `Order cancelled. ${cancelled.count} future scheduled batch(es) were cancelled. Already-delivered batches are preserved.`
+          unsubmittedSteps.length > 0
+            ? `Order cancelled. Cancelled ${unsubmittedSteps.length} remaining batch(es) and refunded ₹${refundAmount.toFixed(2)} to your wallet.`
             : "Order cancelled. All scheduled batches had already been submitted.",
+        refundAmount,
       });
     }
 
     // ── Instant orders ─────────────────────────────────────────────────────────
-    // Use the standard provider cancel flow (provider must acknowledge cancellation).
+    const remQty = order.remainingQuantity ?? Math.max(0, order.requestedQuantity - (order.deliveredQuantity || 0));
+    const refundAmount = Number(((remQty / (order.requestedQuantity || 1)) * (order.totalCost || 0)).toFixed(2));
+
     const result = await cancelOrder(params.id, {
       findOrder: async () => order,
       getOrderDetail: findOrderDetailById,
@@ -541,7 +655,31 @@ export async function DELETE(
         return adapter.cancelOrder(providerOrderId);
       },
       persistCancellation: async (orderId) => {
-        await prisma.order.update({ where: { id: orderId }, data: { status: "CANCELLED" } });
+        await prisma.$transaction(async (tx) => {
+          await tx.order.update({
+            where: { id: orderId },
+            data: { status: "CANCELLED", remainingQuantity: 0 },
+          });
+
+          if (order.userId && refundAmount > 0) {
+            const updatedUser = await tx.user.update({
+              where: { id: order.userId },
+              data: { walletBalance: { increment: refundAmount } },
+              select: { walletBalance: true },
+            });
+
+            await tx.walletTransaction.create({
+              data: {
+                userId: order.userId,
+                type: "REFUND",
+                amount: refundAmount,
+                balanceAfter: updatedUser.walletBalance,
+                referenceId: order.orderRef,
+                description: `Refund for remaining ${remQty} items on cancelled order ${order.orderRef}`,
+              },
+            });
+          }
+        });
       },
       writeAudit: (o) =>
         prisma.auditLog
@@ -549,7 +687,7 @@ export async function DELETE(
             data: {
               action: "CANCEL_ORDER",
               actor: "User",
-              details: `Order ${o.orderRef} was cancelled.`,
+              details: `Order ${o.orderRef} was cancelled. Refunded ₹${refundAmount.toFixed(2)} for remaining items.`,
             },
           })
           .then(() => undefined),

@@ -66,6 +66,8 @@ interface EngagementOrderDetail {
   calmStatusText: string;
   totalCost: number;
   refundedAmount: number;
+  remainingRefundableCost?: number;
+  cancellableRunsCount?: number;
   createdAt: string;
   updatedAt: string;
   replanCount: number;
@@ -217,7 +219,12 @@ export default function EngagementOrderDetailPage() {
   }
 
   async function handleCancelOrder() {
-    if (!confirm("Are you sure you want to cancel the remaining batches of this engagement order? Undelivered runs will be refunded to your wallet.")) {
+    const refundable = order?.remainingRefundableCost ?? 0;
+    const prompt = refundable > 0
+      ? `Are you sure you want to cancel the remaining batches of this engagement order? ₹${refundable.toFixed(2)} will be immediately refunded to your wallet.`
+      : "Are you sure you want to cancel the remaining batches of this engagement order? Undelivered runs will be refunded to your wallet.";
+
+    if (!confirm(prompt)) {
       return;
     }
     setCancelling(true);
@@ -233,6 +240,7 @@ export default function EngagementOrderDetailPage() {
           type: "success",
         });
         await fetchOrderDetail();
+        window.dispatchEvent(new CustomEvent("balance-updated"));
       } else {
         setActionMsg({ text: data.error || "Failed to cancel order.", type: "error" });
       }
@@ -402,7 +410,12 @@ export default function EngagementOrderDetailPage() {
                 title="Cancel pending runs and refund undelivered balance"
               >
                 {cancelling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
-                <span>Cancel Order</span>
+                <span>
+                  Cancel Order
+                  {typeof (order as any).remainingRefundableCost === "number" && (order as any).remainingRefundableCost > 0
+                    ? ` (Refund ₹${(order as any).remainingRefundableCost.toFixed(2)})`
+                    : ""}
+                </span>
               </button>
             )}
           </div>

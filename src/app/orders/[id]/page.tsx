@@ -167,6 +167,7 @@ export default function OrderDetailPage() {
       if (data.success) {
         setOrderFromResponse(data.order);
         setActionMsg({ text: data.message || "Order was cancelled successfully.", type: "success" });
+        window.dispatchEvent(new CustomEvent("balance-updated"));
       } else {
         setActionMsg({ text: data.error || "Failed to cancel order", type: "error" });
       }

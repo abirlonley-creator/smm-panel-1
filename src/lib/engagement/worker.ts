@@ -417,12 +417,14 @@ export async function runEngagementTick(): Promise<EngagementTickResult> {
   let dueRunIds: string[] = [];
   try {
     const rawRows: { id: string }[] = await prisma.$queryRawUnsafe(`
-      SELECT id FROM runs
-      WHERE status IN ('scheduled', 'delayed')
-        AND "scheduledAt" <= NOW()
-      ORDER BY "scheduledAt" ASC
+      SELECT r.id FROM "EngagementRun" r
+      JOIN "EngagementOrder" eo ON r."engagementOrderId" = eo.id
+      WHERE r.status IN ('scheduled', 'delayed')
+        AND r."scheduledAt" <= NOW()
+        AND eo.status NOT IN ('CANCELLED', 'FAILED')
+      ORDER BY r."scheduledAt" ASC
       LIMIT 20
-      FOR UPDATE SKIP LOCKED
+      FOR UPDATE OF r SKIP LOCKED
     `);
     dueRunIds = rawRows.map((r) => r.id);
   } catch {
@@ -431,6 +433,9 @@ export async function runEngagementTick(): Promise<EngagementTickResult> {
       where: {
         status: { in: ["scheduled", "delayed"] },
         scheduledAt: { lte: now },
+        engagementOrder: {
+          status: { notIn: ["CANCELLED", "FAILED"] },
+        },
       },
       select: { id: true },
       take: 20,
@@ -484,6 +489,18 @@ export async function runEngagementTick(): Promise<EngagementTickResult> {
     }
 
     const order = run.engagementOrder;
+
+    // IMMEDIATE CANCELLATION GUARD: If the parent order is cancelled or failed, abort immediately
+    if (!order || order.status === "CANCELLED" || order.status === "FAILED") {
+      await prisma.engagementRun.update({
+        where: { id: run.id },
+        data: {
+          status: "cancelled",
+          errorMessage: "Parent order was cancelled or terminated.",
+        },
+      });
+      continue;
+    }
 
     // CRITICAL CONCURRENCY GUARD: Check if there is already an active run in-flight for this order and metric!
     // Delivery networks reject concurrent orders for the same URL:

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
+import { logOrderEvent } from "@/lib/engagement/event-logger";
 
 export async function POST(
   request: Request,
@@ -12,69 +13,135 @@ export async function POST(
   }
 
   try {
-    const order = await prisma.engagementOrder.findUnique({
-      where: { id: params.id },
+    const rawId = params.id;
+
+    // Support lookup by cuid id OR orderRef
+    let order = await prisma.engagementOrder.findFirst({
+      where: {
+        OR: [{ id: rawId }, { orderRef: rawId }],
+        ...(session.role === "ADMIN" ? {} : { userId: session.user.id }),
+      },
       include: {
-        runs: true,
+        runs: {
+          include: {
+            service: true,
+          },
+        },
       },
     });
 
+    // If not found directly, check main Order table
     if (!order) {
-      return NextResponse.json({ success: false, error: "Order not found" }, { status: 404 });
+      const mainOrder = await prisma.order.findFirst({
+        where: {
+          OR: [{ id: rawId }, { orderRef: rawId }],
+          ...(session.role === "ADMIN" ? {} : { userId: session.user.id }),
+        },
+      });
+      if (mainOrder) {
+        order = await prisma.engagementOrder.findFirst({
+          where: {
+            orderRef: mainOrder.orderRef,
+            ...(session.role === "ADMIN" ? {} : { userId: session.user.id }),
+          },
+          include: {
+            runs: {
+              include: {
+                service: true,
+              },
+            },
+          },
+        });
+      }
+    }
+
+    if (!order) {
+      return NextResponse.json({ success: false, error: "Engagement order not found" }, { status: 404 });
     }
 
     if (session.role !== "ADMIN" && order.userId !== session.user.id) {
-      return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });
+      return NextResponse.json({ success: false, error: "Forbidden: You do not own this order." }, { status: 403 });
     }
 
-    if (order.status === "COMPLETED" || order.status === "CANCELLED") {
+    if (order.status === "CANCELLED") {
+      return NextResponse.json({
+        success: true,
+        alreadyCancelled: true,
+        message: "Order has already been cancelled.",
+        refundAmount: order.refundedAmount || 0,
+      });
+    }
+
+    if (order.status === "COMPLETED") {
       return NextResponse.json(
-        { success: false, error: `Order is already ${order.status.toLowerCase()}` },
+        { success: false, error: "This campaign is already completed and cannot be cancelled." },
         { status: 400 }
       );
     }
 
-    // Identify runs eligible to cancel (not yet sent to upstream provider)
-    const pendingRuns = order.runs.filter(
-      (r) => r.status === "PENDING" || r.status === "scheduled" || r.status === "delayed"
+    // Identify unsent runs: anything not yet sent upstream (providerOrderId is null)
+    // and currently in scheduled, delayed, claimed, sending, or pending state.
+    const unsentRuns = order.runs.filter(
+      (r) =>
+        !r.providerOrderId &&
+        ["scheduled", "delayed", "claimed", "sending", "PENDING"].includes(r.status)
     );
-    if (pendingRuns.length === 0) {
+
+    if (unsentRuns.length === 0) {
       await prisma.engagementOrder.update({
         where: { id: order.id },
         data: { status: "COMPLETED" },
       });
       return NextResponse.json({
-        success: true,
-        message: "All batches have already been submitted or completed.",
+        success: false,
+        error: "All scheduled batches have already been dispatched upstream to delivery networks and cannot be cancelled.",
         refundAmount: 0,
       });
     }
 
-    // Calculate undelivered refundable amount
-    const refundAmount = Number(
-      pendingRuns.reduce((sum, r) => sum + r.cost, 0).toFixed(2)
-    );
+    // Calculate proportional refund for what is left to send
+    const directSumCost = unsentRuns.reduce((sum, r) => sum + (r.cost || 0), 0);
+    let refundAmount = 0;
+
+    if (directSumCost > 0) {
+      refundAmount = Number(directSumCost.toFixed(2));
+    } else {
+      // Proportional calculation if individual run costs were not stored
+      const totalRunsCount = order.runs.length;
+      if (totalRunsCount > 0) {
+        refundAmount = Number(((unsentRuns.length / totalRunsCount) * order.totalCost).toFixed(2));
+      }
+    }
+
+    // Safety cap: cannot refund more than totalCost - alreadyRefunded
+    const maxRefundable = Math.max(0, Number((order.totalCost - (order.refundedAmount || 0)).toFixed(2)));
+    refundAmount = Math.min(refundAmount, maxRefundable);
 
     const user = order.userId
       ? await prisma.user.findUnique({ where: { id: order.userId }, select: { id: true, walletBalance: true } })
       : null;
 
-    await prisma.$transaction(async (tx) => {
-      // 1. Mark undelivered runs as CANCELLED
-      for (const run of pendingRuns) {
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Mark all unsent runs as CANCELLED so backend worker never sends them
+      for (const run of unsentRuns) {
         await tx.engagementRun.update({
           where: { id: run.id },
-          data: { status: "cancelled" },
+          data: {
+            status: "cancelled",
+            errorMessage: "Cancelled by user request.",
+          },
         });
       }
 
-      // 2. Refund wallet if user exists and refund > 0
+      // 2. Atomically refund wallet if user exists and refund > 0
+      let updatedUser = user;
       if (user && refundAmount > 0) {
-        const newBalance = Number(((user.walletBalance ?? 0) + refundAmount).toFixed(2));
-
-        await tx.user.update({
+        updatedUser = await tx.user.update({
           where: { id: user.id },
-          data: { walletBalance: newBalance },
+          data: {
+            walletBalance: { increment: refundAmount },
+          },
+          select: { id: true, walletBalance: true },
         });
 
         await tx.walletTransaction.create({
@@ -82,36 +149,58 @@ export async function POST(
             userId: user.id,
             type: "REFUND",
             amount: refundAmount,
-            balanceAfter: newBalance,
+            balanceAfter: updatedUser.walletBalance,
             referenceId: order.orderRef,
-            description: `Refund for ${pendingRuns.length} cancelled run(s) on ${order.orderRef}`,
+            description: `Refund for ${unsentRuns.length} remaining unsent batch(es) on ${order.orderRef}`,
           },
         });
       }
 
-      // 3. Update order status
-      await tx.engagementOrder.update({
+      // 3. Mark EngagementOrder as CANCELLED with updated refundedAmount
+      const updatedOrder = await tx.engagementOrder.update({
         where: { id: order.id },
         data: {
           status: "CANCELLED",
-          refundedAmount: Number(((order.refundedAmount || 0) + refundAmount).toFixed(2)),
+          refundedAmount: { increment: refundAmount },
         },
       });
 
-      // Synchronize cancelled status with the main Order record
+      // 4. Synchronize main parent Order entry
       await tx.order.updateMany({
         where: { orderRef: order.orderRef },
-        data: { status: "CANCELLED" },
+        data: {
+          status: "CANCELLED",
+          remainingQuantity: 0,
+        },
       });
+
+      return {
+        updatedOrder,
+        newBalance: updatedUser?.walletBalance ?? 0,
+      };
     });
+
+    // 5. Log Order Event
+    await logOrderEvent({
+      orderId: order.id,
+      eventType: "STATE_CHANGE",
+      message: `User cancelled campaign ${order.orderRef}. ${unsentRuns.length} remaining batch(es) cancelled in backend. Refunded ₹${refundAmount.toFixed(2)} to wallet.`,
+      metadata: {
+        cancelledRuns: unsentRuns.length,
+        refundAmount,
+        newBalance: result.newBalance,
+      },
+    }).catch(() => {});
 
     return NextResponse.json({
       success: true,
-      message: `Order ${order.orderRef} cancelled successfully. Refunded ₹${refundAmount.toFixed(2)} for ${pendingRuns.length} undelivered batch(es).`,
-      cancelledRuns: pendingRuns.length,
+      message: `Order ${order.orderRef} cancelled. Cancelled ${unsentRuns.length} remaining batch(es) in backend and refunded ₹${refundAmount.toFixed(2)} to your wallet.`,
+      cancelledRuns: unsentRuns.length,
       refundAmount,
+      newBalance: result.newBalance,
     });
   } catch (error: any) {
+    console.error("[CANCEL_ENGAGEMENT_ORDER] Error:", error);
     return NextResponse.json(
       { success: false, error: error.message || "Failed to cancel order" },
       { status: 500 }

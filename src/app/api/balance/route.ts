@@ -14,6 +14,24 @@ interface BalanceCacheEntry {
 const BALANCE_CACHE = new Map<string, BalanceCacheEntry>();
 const BALANCE_TTL_MS = 15 * 1000; // 15s memory cache for 0ms header/sidebar speed
 
+function sanitizeEngineName(rawName: string | null | undefined, idx: number): string {
+  if (!rawName) return idx === 0 ? "Main Engine" : `Engine #${idx + 1}`;
+  const lower = rawName.toLowerCase();
+  if (
+    lower.includes("xmedia") ||
+    lower.includes("zeofame") ||
+    lower.includes("smm") ||
+    lower.includes("panel") ||
+    lower.includes(".com") ||
+    lower.includes(".net") ||
+    lower.includes("http") ||
+    lower.includes("api")
+  ) {
+    return idx === 0 ? "Main Engine" : `Engine #${idx + 1}`;
+  }
+  return rawName;
+}
+
 /**
  * GET /api/balance
  * Returns the balance for the authenticated user's active provider and all connected providers.
@@ -118,12 +136,13 @@ export async function GET(request: Request) {
         });
       }
 
-      const providerList = targetConns.map((c) => {
+      // Map providers with sanitized names
+      const providerList = targetConns.map((c, idx) => {
         const balanceAgeMs = c.lastSyncAt ? Date.now() - c.lastSyncAt.getTime() : null;
         const stale = c.isMock ? false : c.balance === null || balanceAgeMs === null || balanceAgeMs > 60000;
         return {
           id: c.id,
-          name: c.name,
+          name: sanitizeEngineName(c.name, idx),
           balance: c.balance,
           currency: c.currency || "USD",
           isMock: c.isMock,

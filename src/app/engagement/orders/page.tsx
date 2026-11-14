@@ -131,6 +131,7 @@ export default function EngagementOrdersPage() {
       setActionSuccess(data.message || `Order ${orderRef} cancelled. Refunded to wallet.`);
       setTimeout(() => setActionSuccess(null), 4000);
       await loadOrders();
+      window.dispatchEvent(new CustomEvent("balance-updated"));
     } catch (err: any) {
       setActionError(err.message || "Failed to cancel order");
     } finally {

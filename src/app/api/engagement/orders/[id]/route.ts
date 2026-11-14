@@ -154,6 +154,22 @@ export async function GET(
       shares: `Reposts: ${sharesDelivered.toLocaleString()} / ${sharesPlanned.toLocaleString()} (${sharesRemaining.toLocaleString()} remaining)`,
     };
 
+    const cancellableRuns = order.runs.filter(
+      (r) => !r.providerOrderId && ["PENDING", "scheduled", "delayed", "claimed", "sending"].includes(r.status)
+    );
+    let remainingRefundableCost = Number(
+      cancellableRuns.reduce((sum, r) => sum + (r.cost || 0), 0).toFixed(2)
+    );
+    if (remainingRefundableCost <= 0 && cancellableRuns.length > 0 && totalRuns > 0) {
+      remainingRefundableCost = Number(
+        ((cancellableRuns.length / totalRuns) * (order.totalCost || 0)).toFixed(2)
+      );
+    }
+    remainingRefundableCost = Math.min(
+      remainingRefundableCost,
+      Math.max(0, (order.totalCost || 0) - (order.refundedAmount || 0))
+    );
+
     return NextResponse.json({
       success: true,
       order: {
@@ -172,6 +188,8 @@ export async function GET(
         plainDeviationTexts,
         totalCost: order.totalCost,
         refundedAmount: order.refundedAmount,
+        remainingRefundableCost,
+        cancellableRunsCount: cancellableRuns.length,
         createdAt: order.createdAt.toISOString(),
         updatedAt: order.updatedAt.toISOString(),
         replanCount: order.replanCount,

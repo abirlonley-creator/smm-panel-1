@@ -44,10 +44,19 @@ export async function GET(request: Request) {
       const progressPercent = totalRuns > 0 ? Math.round((completedRuns / totalRuns) * 100) : 0;
       
       const cancellableRuns = o.runs.filter(
-        (r) => r.status === "PENDING" || r.status === "scheduled" || r.status === "delayed"
+        (r) => !r.providerOrderId && ["PENDING", "scheduled", "delayed", "claimed", "sending"].includes(r.status)
       );
-      const remainingRefundableCost = Number(
-        cancellableRuns.reduce((sum, r) => sum + r.cost, 0).toFixed(2)
+      let remainingRefundableCost = Number(
+        cancellableRuns.reduce((sum, r) => sum + (r.cost || 0), 0).toFixed(2)
+      );
+      if (remainingRefundableCost <= 0 && cancellableRuns.length > 0 && totalRuns > 0) {
+        remainingRefundableCost = Number(
+          ((cancellableRuns.length / totalRuns) * (o.totalCost || 0)).toFixed(2)
+        );
+      }
+      remainingRefundableCost = Math.min(
+        remainingRefundableCost,
+        Math.max(0, (o.totalCost || 0) - (o.refundedAmount || 0))
       );
 
       const estimatedFinishTime = new Date(

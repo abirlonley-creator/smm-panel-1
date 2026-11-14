@@ -36,6 +36,24 @@ interface ProviderBalanceSwitcherProps {
 let sharedBalanceCache: { providers: ProviderItem[]; activeProviderId: string | null; isAdmin?: boolean; walletBalance?: number } | null = null;
 let sharedBalancePromise: Promise<any> | null = null;
 
+function getSafeEngineLabel(name: string | null | undefined, index: number = 0): string {
+  if (!name) return index === 0 ? "Main Engine" : `Engine #${index + 1}`;
+  const lower = name.toLowerCase();
+  if (
+    lower.includes("xmedia") ||
+    lower.includes("zeofame") ||
+    lower.includes("smm") ||
+    lower.includes("panel") ||
+    lower.includes(".com") ||
+    lower.includes(".net") ||
+    lower.includes("http") ||
+    lower.includes("api")
+  ) {
+    return index === 0 ? "Main Engine" : `Engine #${index + 1}`;
+  }
+  return name;
+}
+
 export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceSwitcherProps) {
   const [isAdmin, setIsAdmin] = useState<boolean>(() => {
     if (sharedBalanceCache?.isAdmin !== undefined) return sharedBalanceCache.isAdmin;
@@ -408,7 +426,7 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
                   >
                     <div className="flex flex-col min-w-0 pr-2">
                       <div className="flex items-center gap-1.5">
-                        <span className="truncate">{p.name || `Balance #${idx + 1}`}</span>
+                        <span className="truncate">{getSafeEngineLabel(p.name, idx)}</span>
                         {isSelected && <Check className="w-3.5 h-3.5 text-[#3A4EFB] shrink-0" />}
                       </div>
                       <span className="text-[11px] font-bold text-[#252943]/70">
@@ -491,7 +509,7 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
               <span className="text-[10px] uppercase tracking-wider text-[#DEE0ED]/60 font-semibold block leading-none truncate max-w-[120px]">
-                {activeProvider.name || "Provider Balance"}
+                {getSafeEngineLabel(activeProvider.name, providers.findIndex((p) => p.id === activeProvider.id))}
               </span>
               {hasMultiple && (
                 <button

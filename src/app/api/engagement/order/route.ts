@@ -411,6 +411,7 @@ export async function POST(request: Request) {
             quantity: vr.quantity,
             plannedCumulative: 0,
             status: "scheduled",
+            cost: vr.cost,
           },
         });
       }
@@ -429,6 +430,7 @@ export async function POST(request: Request) {
             quantity: lr.quantity,
             plannedCumulative: 0,
             status: "scheduled",
+            cost: lr.cost,
           },
         });
       }
@@ -447,6 +449,7 @@ export async function POST(request: Request) {
             quantity: sr.quantity,
             plannedCumulative: 0,
             status: "scheduled",
+            cost: sr.cost,
           },
         });
       }
@@ -465,6 +468,7 @@ export async function POST(request: Request) {
             quantity: shr.quantity,
             plannedCumulative: 0,
             status: "scheduled",
+            cost: shr.cost,
           },
         });
       }
