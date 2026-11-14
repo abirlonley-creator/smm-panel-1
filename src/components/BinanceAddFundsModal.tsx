@@ -59,7 +59,7 @@ export function BinanceAddFundsModal({
 
   const usdtAmount = Number((inrAmount / exchangeRate).toFixed(2));
 
-  // Load config on mount
+  // Load config on mount & handle Escape key
   useEffect(() => {
     if (!isOpen) {
       // Reset form when closed
@@ -71,6 +71,13 @@ export function BinanceAddFundsModal({
       setSuccessMessage(null);
       return;
     }
+
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
 
     async function loadConfig() {
       try {
@@ -85,7 +92,11 @@ export function BinanceAddFundsModal({
       }
     }
     loadConfig();
-  }, [isOpen]);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen, onClose]);
 
   function copyText(text: string, type: "uid" | "amount" | "ref") {
     if (typeof navigator !== "undefined" && navigator.clipboard) {
@@ -185,12 +196,17 @@ export function BinanceAddFundsModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
-      <div className="bg-white rounded-3xl border border-[#DEE0ED] max-w-lg w-full shadow-2xl overflow-hidden animate-scaleUp">
-        {/* Header */}
-        <div className="bg-[#1A1D31] text-white px-6 py-5 flex items-center justify-between border-b border-[#323758]">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm overflow-y-auto p-3 sm:p-4 flex items-center justify-center py-6 sm:py-8 animate-fadeIn"
+    >
+      <div className="relative bg-white rounded-3xl border border-[#DEE0ED] max-w-lg w-full shadow-2xl my-auto flex flex-col max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-3.5rem)] overflow-hidden animate-scaleUp">
+        {/* Header - Always Fixed & Pinned */}
+        <div className="shrink-0 bg-[#1A1D31] text-white px-5 sm:px-6 py-4 sm:py-5 flex items-center justify-between border-b border-[#323758]">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-[#F0B90B]/10 border border-[#F0B90B]/30 flex items-center justify-center text-[#F0B90B] font-black text-sm">
+            <div className="w-10 h-10 rounded-2xl bg-[#F0B90B]/10 border border-[#F0B90B]/30 flex items-center justify-center text-[#F0B90B] font-black text-sm shrink-0">
               <span className="tracking-tighter">B</span>
             </div>
             <div>
@@ -208,14 +224,15 @@ export function BinanceAddFundsModal({
           <button
             type="button"
             onClick={onClose}
+            aria-label="Close Add Funds Modal"
             className="text-[#DEE0ED]/60 hover:text-white p-1 rounded-xl hover:bg-white/10 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Modal Body */}
-        <div className="p-6">
+        {/* Modal Body - Scrollable Container */}
+        <div className="p-5 sm:p-6 overflow-y-auto flex-1 overscroll-contain">
           {/* STEP 1: SELECT AMOUNT */}
           {step === "amount" && (
             <form onSubmit={handleProceedToPay} className="space-y-5">

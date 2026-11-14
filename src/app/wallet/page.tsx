@@ -705,8 +705,8 @@ export default function WalletPage() {
 
       {/* Add Provider Modal with Test Connection & Instant Import Feedback */}
       {showConnectModal && (
-        <div className="fixed inset-0 z-50 bg-[#252943]/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-scaleUp">
+        <div className="fixed inset-0 z-50 bg-[#252943]/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 my-auto max-h-[calc(100vh-2rem)] overflow-y-auto animate-scaleUp">
             <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
               <h3 className="text-sm font-bold text-[#252943] flex items-center gap-2">
                 <Server className="w-4 h-4 text-[#3A4EFB]" />
@@ -878,8 +878,8 @@ export default function WalletPage() {
 
       {/* Delete Confirmation Warning Modal (Change 10 requirement) */}
       {deleteWarningData && (
-        <div className="fixed inset-0 z-50 bg-[#252943]/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-scaleUp">
+        <div className="fixed inset-0 z-50 bg-[#252943]/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 my-auto max-h-[calc(100vh-2rem)] overflow-y-auto animate-scaleUp">
             <div className="flex items-center gap-2.5 text-rose-600 pb-2 border-b border-rose-100">
               <AlertTriangle className="w-5 h-5 shrink-0" />
               <h3 className="text-sm font-bold text-[#252943]">Scheduled Batches Warning</h3>
@@ -917,8 +917,8 @@ export default function WalletPage() {
 
       {/* Update Key Modal */}
       {showEditModal && selectedConnection && (
-        <div className="fixed inset-0 z-50 bg-[#252943]/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-scaleUp">
+        <div className="fixed inset-0 z-50 bg-[#252943]/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 my-auto max-h-[calc(100vh-2rem)] overflow-y-auto animate-scaleUp">
             <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
               <h3 className="text-sm font-bold text-[#252943] flex items-center gap-2">
                 <Edit3 className="w-4 h-4 text-[#3A4EFB]" />

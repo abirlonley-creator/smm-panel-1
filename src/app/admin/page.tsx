@@ -2239,8 +2239,8 @@ export default function AdminPage() {
 
       {/* Remap Service Modal */}
       {editingMapping && (
-        <div className="fixed inset-0 z-50 bg-[#252943]/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl border border-[#DEE0ED] max-w-md w-full p-6 shadow-2xl space-y-4 animate-scaleUp">
+        <div className="fixed inset-0 z-50 bg-[#252943]/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl border border-[#DEE0ED] max-w-md w-full p-6 shadow-2xl space-y-4 my-auto max-h-[calc(100vh-2rem)] overflow-y-auto animate-scaleUp">
             <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
               <div className="flex items-center gap-2">
                 <Sliders className="w-5 h-5 text-[#3A4EFB]" />
@@ -2406,8 +2406,8 @@ export default function AdminPage() {
           CREATE PASSKEY MODAL
       ====================================================================== */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 bg-[#252943]/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl border border-[#DEE0ED] max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-5 animate-scaleUp">
+        <div className="fixed inset-0 z-50 bg-[#252943]/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl border border-[#DEE0ED] max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-5 my-auto max-h-[calc(100vh-2rem)] overflow-y-auto animate-scaleUp">
             {!createdSecret ? (
               <>
                 <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
@@ -2620,8 +2620,8 @@ export default function AdminPage() {
           EDIT PASSKEY MODAL
       ====================================================================== */}
       {editingPasskey && (
-        <div className="fixed inset-0 z-50 bg-[#252943]/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl border border-[#DEE0ED] max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-5 animate-scaleUp">
+        <div className="fixed inset-0 z-50 bg-[#252943]/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl border border-[#DEE0ED] max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-5 my-auto max-h-[calc(100vh-2rem)] overflow-y-auto animate-scaleUp">
             {editResultSecret ? (
               /* Success View if Secret Passkey was Changed */
               <div className="space-y-4">
