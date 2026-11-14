@@ -46,7 +46,10 @@ export async function GET(
 
       if (mainOrder) {
         order = await prisma.engagementOrder.findFirst({
-          where: { orderRef: mainOrder.orderRef },
+          where: {
+            orderRef: mainOrder.orderRef,
+            ...(session.role === "ADMIN" ? {} : { userId: session.user.id }),
+          },
           include: {
             runs: {
               orderBy: { scheduledAt: "asc" },

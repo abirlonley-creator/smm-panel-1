@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   KeyRound,
   CheckCircle2,
@@ -34,6 +35,7 @@ interface ProviderConnection {
 }
 
 export default function ApiKeyPage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [connections, setConnections] = useState<ProviderConnection[]>([]);
@@ -72,6 +74,7 @@ export default function ApiKeyPage() {
       if (!sess.authenticated || sess.role !== "ADMIN") {
         setIsAdmin(false);
         setLoading(false);
+        router.replace("/engagement");
         return;
       }
       setIsAdmin(true);

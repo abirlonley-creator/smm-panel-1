@@ -258,27 +258,23 @@ export function getAllTikTokPresets(): TikTokTierPreset[] {
 }
 
 // Backwards-compatible configuration interface
+export interface MetricConfigItem {
+  enabled: boolean;
+  providerName: string;
+  serviceId: string;
+  minQuantity: number;
+  maxQuantity: number;
+  runsCount: number;
+  intervalMinutes: number;
+}
+
 export interface TikTokEngagementPresetConfig {
   enabled: boolean;
   presetName: string;
-  views: {
-    enabled: boolean;
-    providerName: string;
-    serviceId: string;
-    minQuantity: number;
-    maxQuantity: number;
-    runsCount: number;
-    intervalMinutes: number;
-  };
-  likes: {
-    enabled: boolean;
-    providerName: string;
-    serviceId: string;
-    minQuantity: number;
-    maxQuantity: number;
-    runsCount: number;
-    intervalMinutes: number;
-  };
+  views: MetricConfigItem;
+  likes: MetricConfigItem;
+  saves: MetricConfigItem;
+  shares: MetricConfigItem;
   syncThreshold: {
     minViews: number;
     maxViews: number;
@@ -303,6 +299,24 @@ export const DEFAULT_TIKTOK_ENGAGEMENT_CONFIG: TikTokEngagementPresetConfig = {
     serviceId: "1123",
     minQuantity: 12,
     maxQuantity: 16,
+    runsCount: 3,
+    intervalMinutes: 120,
+  },
+  saves: {
+    enabled: true,
+    providerName: "Engagement Engine",
+    serviceId: "807",
+    minQuantity: 5,
+    maxQuantity: 10,
+    runsCount: 4,
+    intervalMinutes: 120,
+  },
+  shares: {
+    enabled: true,
+    providerName: "Engagement Engine",
+    serviceId: "718",
+    minQuantity: 3,
+    maxQuantity: 8,
     runsCount: 3,
     intervalMinutes: 120,
   },
@@ -333,6 +347,8 @@ export function getTikTokEngagementConfig(): TikTokEngagementPresetConfig {
         ...parsed,
         views: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.views, ...(parsed.views || {}) },
         likes: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.likes, ...(parsed.likes || {}) },
+        saves: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.saves, ...(parsed.saves || {}) },
+        shares: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.shares, ...(parsed.shares || {}) },
         syncThreshold: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.syncThreshold, ...(parsed.syncThreshold || {}) },
       };
       return cachedConfig!;
@@ -352,6 +368,8 @@ export function saveTikTokEngagementConfig(newConfig: Partial<TikTokEngagementPr
     ...newConfig,
     views: { ...current.views, ...(newConfig.views || {}) },
     likes: { ...current.likes, ...(newConfig.likes || {}) },
+    saves: { ...current.saves, ...(newConfig.saves || {}) },
+    shares: { ...current.shares, ...(newConfig.shares || {}) },
     syncThreshold: { ...current.syncThreshold, ...(newConfig.syncThreshold || {}) },
   };
 

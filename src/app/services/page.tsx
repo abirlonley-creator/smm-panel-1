@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { 
   ListTree, 
   Search, 
@@ -81,6 +82,32 @@ function formatCurrency(amount: number, currency = "INR"): string {
 }
 
 export default function ServicesPage() {
+  const router = useRouter();
+  const [authChecking, setAuthChecking] = useState(true);
+
+  useEffect(() => {
+    async function verifyAdmin() {
+      try {
+        const res = await fetch("/api/auth/session");
+        const data = await res.json();
+        if (!data.authenticated) {
+          router.replace("/login");
+          return;
+        }
+        if (data.role !== "ADMIN") {
+          router.replace("/engagement");
+          return;
+        }
+      } catch {
+        router.replace("/engagement");
+        return;
+      } finally {
+        setAuthChecking(false);
+      }
+    }
+    verifyAdmin();
+  }, [router]);
+
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [totalServices, setTotalServices] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -239,6 +266,14 @@ export default function ServicesPage() {
   const totalPages = Math.max(1, Math.ceil(totalServices / PAGE_SIZE));
   const firstResult = totalServices === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
   const lastResult = Math.min(currentPage * PAGE_SIZE, totalServices);
+
+  if (authChecking) {
+    return (
+      <div className="flex items-center justify-center py-24 text-[#252943]/60">
+        <Loader2 className="w-6 h-6 animate-spin text-[#3A4EFB]" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fadeIn max-w-6xl mx-auto pb-16">

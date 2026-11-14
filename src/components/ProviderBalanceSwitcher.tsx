@@ -10,6 +10,8 @@ import {
   AlertTriangle,
   Server,
   ExternalLink,
+  Plus,
+  X,
 } from "lucide-react";
 import { formatProviderBalance } from "@/lib/currency";
 
@@ -30,10 +32,20 @@ interface ProviderBalanceSwitcherProps {
   variant?: "header" | "sidebar";
 }
 
-let sharedBalanceCache: { providers: ProviderItem[]; activeProviderId: string | null } | null = null;
+let sharedBalanceCache: { providers: ProviderItem[]; activeProviderId: string | null; isAdmin?: boolean; walletBalance?: number } | null = null;
 let sharedBalancePromise: Promise<any> | null = null;
 
 export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceSwitcherProps) {
+  const [isAdmin, setIsAdmin] = useState<boolean>(() => {
+    if (sharedBalanceCache?.isAdmin !== undefined) return sharedBalanceCache.isAdmin;
+    return true; // default until loaded
+  });
+
+  const [walletBalance, setWalletBalance] = useState<number>(() => {
+    if (sharedBalanceCache?.walletBalance !== undefined) return sharedBalanceCache.walletBalance;
+    return 0;
+  });
+
   const [providers, setProviders] = useState<ProviderItem[]>(() => {
     if (sharedBalanceCache) return sharedBalanceCache.providers;
     if (typeof window !== "undefined") {
@@ -63,13 +75,13 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
   });
 
   const [loading, setLoading] = useState<boolean>(() => {
-    if (sharedBalanceCache && sharedBalanceCache.providers.length > 0) return false;
+    if (sharedBalanceCache) return false;
     if (typeof window !== "undefined") {
       try {
         const local = localStorage.getItem("aurasmm_cached_balance");
         if (local) {
           const p = JSON.parse(local);
-          if (p && Array.isArray(p.providers) && p.providers.length > 0) return false;
+          if (p && (Array.isArray(p.providers) || typeof p.walletBalance === "number")) return false;
         }
       } catch (e) {}
     }
@@ -79,6 +91,7 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
   const [refreshing, setRefreshing] = useState(false);
   const [switching, setSwitching] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [showAddFundsModal, setShowAddFundsModal] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   async function loadBalanceData(forceRefresh = false) {
@@ -86,9 +99,14 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
     try {
       if (!forceRefresh && sharedBalancePromise) {
         const data = await sharedBalancePromise;
-        if (data?.success && Array.isArray(data.providers)) {
-          setProviders(data.providers);
-          setActiveProviderId(data.activeProviderId || (data.providers[0]?.id ?? null));
+        if (data?.success) {
+          const isAdm = data.isAdmin !== false && data.role !== "USER";
+          setIsAdmin(isAdm);
+          if (typeof data.walletBalance === "number") setWalletBalance(data.walletBalance);
+          if (Array.isArray(data.providers)) {
+            setProviders(data.providers);
+            setActiveProviderId(data.activeProviderId || (data.providers[0]?.id ?? null));
+          }
         }
         return;
       }
@@ -98,10 +116,24 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
       }).then((res) => res.json());
 
       const data = await sharedBalancePromise;
-      if (data?.success && Array.isArray(data.providers)) {
-        sharedBalanceCache = { providers: data.providers, activeProviderId: data.activeProviderId };
-        setProviders(data.providers);
-        setActiveProviderId(data.activeProviderId || (data.providers[0]?.id ?? null));
+      if (data?.success) {
+        const isAdm = data.isAdmin !== false && data.role !== "USER";
+        setIsAdmin(isAdm);
+        const wBal = typeof data.walletBalance === "number" ? data.walletBalance : 0;
+        setWalletBalance(wBal);
+
+        sharedBalanceCache = {
+          providers: data.providers || [],
+          activeProviderId: data.activeProviderId,
+          isAdmin: isAdm,
+          walletBalance: wBal,
+        };
+
+        if (Array.isArray(data.providers)) {
+          setProviders(data.providers);
+          setActiveProviderId(data.activeProviderId || (data.providers[0]?.id ?? null));
+        }
+
         if (typeof window !== "undefined") {
           try {
             localStorage.setItem("aurasmm_cached_balance", JSON.stringify(data));
@@ -124,9 +156,17 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
         const local = localStorage.getItem("aurasmm_cached_balance");
         if (local) {
           const p = JSON.parse(local);
-          if (p && Array.isArray(p.providers) && p.providers.length > 0) {
-            setProviders(p.providers);
-            if (p.activeProviderId) setActiveProviderId(p.activeProviderId);
+          if (p) {
+            if (p.isAdmin !== undefined || p.role !== undefined) {
+              setIsAdmin(p.isAdmin !== false && p.role !== "USER");
+            }
+            if (typeof p.walletBalance === "number") {
+              setWalletBalance(p.walletBalance);
+            }
+            if (Array.isArray(p.providers) && p.providers.length > 0) {
+              setProviders(p.providers);
+              if (p.activeProviderId) setActiveProviderId(p.activeProviderId);
+            }
             setLoading(false);
           }
         }
@@ -181,7 +221,124 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
   const activeProvider = providers.find((p) => p.id === activeProviderId) || providers[0];
   const hasMultiple = providers.length > 1;
 
-  // Render for header chip
+  // Add Funds Modal (Blank / Placeholder as requested)
+  const renderAddFundsModal = () => {
+    if (!showAddFundsModal) return null;
+    return (
+      <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
+        <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 max-w-md w-full shadow-2xl space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-[#3A4EFB]/10 text-[#3A4EFB] flex items-center justify-center">
+                <Wallet className="w-4 h-4" />
+              </div>
+              <h3 className="text-base font-bold text-[#252943]">Add Funds</h3>
+            </div>
+            <button
+              onClick={() => setShowAddFundsModal(false)}
+              className="text-[#252943]/40 hover:text-[#252943] text-sm p-1 rounded-lg"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] text-xs text-[#252943]/70 space-y-2">
+            <p className="font-bold text-[#252943] text-sm">
+              Current Balance: ₹{walletBalance.toFixed(2)}
+            </p>
+            <p className="leading-relaxed">
+              Automated payment methods are being configured. To top up your wallet balance, please contact an administrator or message us directly on Telegram @Ghostfinds.
+            </p>
+          </div>
+
+          <div className="flex justify-end pt-2">
+            <button
+              type="button"
+              onClick={() => setShowAddFundsModal(false)}
+              className="px-4 py-2 rounded-xl bg-[#252943] text-white text-xs font-bold hover:bg-[#1a1d31] transition-all shadow-subtle press-scale"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // -------------------------------------------------------------
+  // NON-ADMIN VIEW (Regular Users)
+  // -------------------------------------------------------------
+  if (!isAdmin) {
+    if (variant === "header") {
+      return (
+        <>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED] text-xs font-bold text-[#252943] shadow-subtle">
+              <Wallet className="w-3.5 h-3.5 text-[#3A4EFB]" />
+              <span>Balance: ₹{walletBalance.toFixed(2)}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowAddFundsModal(true)}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#3A4EFB] hover:bg-[#2F40DB] text-white text-xs font-bold transition-all shadow-subtle press-scale"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Funds</span>
+            </button>
+          </div>
+          {renderAddFundsModal()}
+        </>
+      );
+    }
+
+    // Non-Admin Sidebar Card
+    return (
+      <>
+        <div className="mx-3.5 mt-4 p-3.5 rounded-2xl bg-[#1A1D31] border border-[#323758] flex flex-col gap-2.5 shadow-subtle">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-[#3A4EFB]/20 border border-[#3A4EFB]/30 text-[#E3FF3B] flex items-center justify-center shrink-0">
+                <Wallet className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="text-[10px] uppercase tracking-wider text-[#DEE0ED]/60 font-semibold block leading-none mb-1">
+                  Account Balance
+                </span>
+                <span className="text-sm font-bold text-white tracking-tight">
+                  ₹{walletBalance.toFixed(2)}
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => loadBalanceData(true)}
+              disabled={refreshing}
+              title="Refresh wallet balance"
+              className="p-1.5 rounded-lg text-[#DEE0ED]/70 hover:text-white hover:bg-[#323758] transition-colors press-scale"
+            >
+              <RefreshCw
+                className={`w-3.5 h-3.5 text-[#E3FF3B] ${refreshing ? "animate-spin" : ""}`}
+              />
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowAddFundsModal(true)}
+            className="w-full py-2 px-3 rounded-xl bg-[#3A4EFB] hover:bg-[#2F40DB] text-white text-xs font-bold text-center transition-all press-scale flex items-center justify-center gap-1.5 shadow-subtle"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Add Funds</span>
+          </button>
+        </div>
+        {renderAddFundsModal()}
+      </>
+    );
+  }
+
+  // -------------------------------------------------------------
+  // ADMIN VIEW: Upstream Providers Switcher
+  // -------------------------------------------------------------
   if (variant === "header") {
     if (loading) {
       return (
@@ -281,7 +438,7 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
                   >
                     <div className="flex flex-col min-w-0 pr-2">
                       <div className="flex items-center gap-1.5">
-                        <span className="truncate">Balance #{idx + 1}</span>
+                        <span className="truncate">{p.name || `Balance #${idx + 1}`}</span>
                         {isSelected && <Check className="w-3.5 h-3.5 text-[#3A4EFB] shrink-0" />}
                       </div>
                       <span className="text-[11px] font-bold text-[#252943]/70">
@@ -302,11 +459,11 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
             </div>
             <div className="pt-2 mt-1 border-t border-[#DEE0ED]/60 px-1">
               <Link
-                href="/wallet"
+                href="/admin"
                 onClick={() => setDropdownOpen(false)}
                 className="text-[11px] text-[#3A4EFB] hover:underline font-semibold flex items-center justify-between"
               >
-                <span>Wallet & Balance</span>
+                <span>Admin Provider Settings</span>
                 <ExternalLink className="w-3 h-3" />
               </Link>
             </div>
@@ -316,7 +473,7 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
     );
   }
 
-  // Render for Sidebar Card (variant === "sidebar")
+  // Admin Sidebar Card
   if (loading && !activeProvider) {
     return (
       <div className="mx-3.5 mt-4 p-3.5 rounded-2xl bg-[#1A1D31] border border-[#323758] animate-pulse flex items-center justify-between">
@@ -341,10 +498,10 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
               Account Balance
             </span>
             <Link
-              href="/wallet"
+              href="/admin"
               className="text-xs font-bold text-[#E3FF3B] hover:underline flex items-center gap-1"
             >
-              View Wallet →
+              Configure Providers →
             </Link>
           </div>
         </div>
@@ -364,7 +521,7 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
               <span className="text-[10px] uppercase tracking-wider text-[#DEE0ED]/60 font-semibold block leading-none truncate max-w-[120px]">
-                Account Balance
+                {activeProvider.name || "Provider Balance"}
               </span>
               {hasMultiple && (
                 <button
@@ -437,7 +594,7 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
                   }`}
                 >
                   <div className="flex flex-col min-w-0 pr-1">
-                    <span className="truncate">Account #{idx + 1}</span>
+                    <span className="truncate">{p.name || `Account #${idx + 1}`}</span>
                     <span className="text-[10px] text-[#DEE0ED]/70 font-semibold">
                       {pUnavailable
                         ? "Unavailable"
@@ -451,11 +608,11 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
           </div>
           <div className="pt-2 mt-1 border-t border-[#323758] px-1 text-center">
             <Link
-              href="/wallet"
+              href="/admin"
               onClick={() => setDropdownOpen(false)}
               className="text-[10px] text-[#E3FF3B] hover:underline font-semibold"
             >
-              View Wallet & Balance →
+              Configure Providers →
             </Link>
           </div>
         </div>

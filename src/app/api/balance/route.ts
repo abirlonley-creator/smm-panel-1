@@ -29,6 +29,33 @@ export async function GET(request: Request) {
 
     if (session.authenticated && session.user) {
       const userId = session.user.id;
+      const isAdmin = session.user.role === "ADMIN";
+
+      // Non-admin regular users only have their personal wallet balance.
+      // Upstream provider APIs, balances and credentials are strictly hidden.
+      if (!isAdmin) {
+        const user = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { walletBalance: true },
+        });
+
+        const walletBal = user?.walletBalance ?? 0;
+        return NextResponse.json({
+          success: true,
+          role: "USER",
+          isAdmin: false,
+          walletBalance: walletBal,
+          balance: walletBal,
+          currency: "INR",
+          count: 0,
+          providers: [],
+          activeProviderId: null,
+          activeProvider: null,
+          isMock: false,
+          hasApiKey: false,
+        });
+      }
+
       const cacheKey = `${userId}:${requestedProviderId || "active"}`;
 
       if (!forceRefresh) {
@@ -167,6 +194,10 @@ export async function POST(request: Request) {
     const session = await getAuthSession(request);
     if (!session.authenticated || !session.user) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (session.user.role !== "ADMIN") {
+      return NextResponse.json({ success: false, error: "Forbidden: Only administrators can configure providers." }, { status: 403 });
     }
 
     const body = await request.json();

@@ -33,6 +33,8 @@ import {
   Sparkles,
   Eye,
   Heart,
+  Bookmark,
+  Share2,
 } from "lucide-react";
 import { formatProviderBalance } from "@/lib/currency";
 import { OrderMonitorTab } from "@/components/admin/OrderMonitorTab";
@@ -1714,6 +1716,228 @@ export default function AdminPage() {
                             setTiktokConfig({
                               ...tiktokConfig,
                               likes: { ...tiktokConfig.likes, intervalMinutes: Number(e.target.value) },
+                            })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
+                          min={1}
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* SAVES CONFIGURATION */}
+                  <div className="p-5 rounded-2xl border border-[#DEE0ED] bg-[#F8F9FD]/50 space-y-4">
+                    <div className="flex items-center justify-between pb-2 border-b border-[#DEE0ED]">
+                      <div className="flex items-center gap-2">
+                        <Bookmark className="w-4 h-4 text-amber-600" />
+                        <span className="font-bold text-sm text-[#252943]">TikTok Saves Configuration</span>
+                      </div>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-bold">
+                        {tiktokConfig.saves?.providerName || "Engagement Engine"}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-bold text-[#252943]/70 mb-1">Provider Name</label>
+                        <input
+                          type="text"
+                          value={tiktokConfig.saves?.providerName || "Engagement Engine"}
+                          onChange={(e) =>
+                            setTiktokConfig({
+                              ...tiktokConfig,
+                              saves: { ...(tiktokConfig.saves || {}), providerName: e.target.value },
+                            })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-medium"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-[#252943]/70 mb-1">Service ID</label>
+                        <input
+                          type="text"
+                          value={tiktokConfig.saves?.serviceId || "807"}
+                          onChange={(e) =>
+                            setTiktokConfig({
+                              ...tiktokConfig,
+                              saves: { ...(tiktokConfig.saves || {}), serviceId: e.target.value },
+                            })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-mono font-bold text-[#3A4EFB]"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-[#252943]/70 mb-1">Min Batch Quantity</label>
+                        <input
+                          type="number"
+                          value={tiktokConfig.saves?.minQuantity ?? 5}
+                          onChange={(e) =>
+                            setTiktokConfig({
+                              ...tiktokConfig,
+                              saves: { ...(tiktokConfig.saves || {}), minQuantity: Number(e.target.value) },
+                            })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
+                          min={1}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-[#252943]/70 mb-1">Max Batch Quantity</label>
+                        <input
+                          type="number"
+                          value={tiktokConfig.saves?.maxQuantity ?? 10}
+                          onChange={(e) =>
+                            setTiktokConfig({
+                              ...tiktokConfig,
+                              saves: { ...(tiktokConfig.saves || {}), maxQuantity: Number(e.target.value) },
+                            })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
+                          min={1}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-[#252943]/70 mb-1">Number of Runs</label>
+                        <input
+                          type="number"
+                          value={tiktokConfig.saves?.runsCount ?? 4}
+                          onChange={(e) =>
+                            setTiktokConfig({
+                              ...tiktokConfig,
+                              saves: { ...(tiktokConfig.saves || {}), runsCount: Number(e.target.value) },
+                            })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
+                          min={1}
+                          max={50}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-[#252943]/70 mb-1">Interval (Minutes)</label>
+                        <input
+                          type="number"
+                          value={tiktokConfig.saves?.intervalMinutes ?? 120}
+                          onChange={(e) =>
+                            setTiktokConfig({
+                              ...tiktokConfig,
+                              saves: { ...(tiktokConfig.saves || {}), intervalMinutes: Number(e.target.value) },
+                            })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
+                          min={1}
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* SHARES / REPOSTS CONFIGURATION */}
+                  <div className="p-5 rounded-2xl border border-[#DEE0ED] bg-[#F8F9FD]/50 space-y-4">
+                    <div className="flex items-center justify-between pb-2 border-b border-[#DEE0ED]">
+                      <div className="flex items-center gap-2">
+                        <Share2 className="w-4 h-4 text-purple-600" />
+                        <span className="font-bold text-sm text-[#252943]">TikTok Reposts / Shares Configuration</span>
+                      </div>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-purple-100 text-purple-800 font-bold">
+                        {tiktokConfig.shares?.providerName || "Engagement Engine"}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-bold text-[#252943]/70 mb-1">Provider Name</label>
+                        <input
+                          type="text"
+                          value={tiktokConfig.shares?.providerName || "Engagement Engine"}
+                          onChange={(e) =>
+                            setTiktokConfig({
+                              ...tiktokConfig,
+                              shares: { ...(tiktokConfig.shares || {}), providerName: e.target.value },
+                            })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-medium"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-[#252943]/70 mb-1">Service ID</label>
+                        <input
+                          type="text"
+                          value={tiktokConfig.shares?.serviceId || "718"}
+                          onChange={(e) =>
+                            setTiktokConfig({
+                              ...tiktokConfig,
+                              shares: { ...(tiktokConfig.shares || {}), serviceId: e.target.value },
+                            })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-mono font-bold text-[#3A4EFB]"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-[#252943]/70 mb-1">Min Batch Quantity</label>
+                        <input
+                          type="number"
+                          value={tiktokConfig.shares?.minQuantity ?? 3}
+                          onChange={(e) =>
+                            setTiktokConfig({
+                              ...tiktokConfig,
+                              shares: { ...(tiktokConfig.shares || {}), minQuantity: Number(e.target.value) },
+                            })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
+                          min={1}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-[#252943]/70 mb-1">Max Batch Quantity</label>
+                        <input
+                          type="number"
+                          value={tiktokConfig.shares?.maxQuantity ?? 8}
+                          onChange={(e) =>
+                            setTiktokConfig({
+                              ...tiktokConfig,
+                              shares: { ...(tiktokConfig.shares || {}), maxQuantity: Number(e.target.value) },
+                            })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
+                          min={1}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-[#252943]/70 mb-1">Number of Runs</label>
+                        <input
+                          type="number"
+                          value={tiktokConfig.shares?.runsCount ?? 3}
+                          onChange={(e) =>
+                            setTiktokConfig({
+                              ...tiktokConfig,
+                              shares: { ...(tiktokConfig.shares || {}), runsCount: Number(e.target.value) },
+                            })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
+                          min={1}
+                          max={50}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-[#252943]/70 mb-1">Interval (Minutes)</label>
+                        <input
+                          type="number"
+                          value={tiktokConfig.shares?.intervalMinutes ?? 120}
+                          onChange={(e) =>
+                            setTiktokConfig({
+                              ...tiktokConfig,
+                              shares: { ...(tiktokConfig.shares || {}), intervalMinutes: Number(e.target.value) },
                             })
                           }
                           className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"

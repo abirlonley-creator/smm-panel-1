@@ -23,9 +23,9 @@ import { formatProviderBalance } from "@/lib/currency";
 import { ProviderBalanceSwitcher } from "@/components/ProviderBalanceSwitcher";
 
 const ALL_NAV_ITEMS = [
-  { href: "/order", label: "New Order", icon: PlusCircle, adminOnly: false },
+  { href: "/order", label: "New Order", icon: PlusCircle, adminOnly: true },
   { href: "/engagement", label: "Engagement", icon: Zap, adminOnly: false },
-  { href: "/services", label: "Services", icon: ListTree, adminOnly: false },
+  { href: "/services", label: "Services", icon: ListTree, adminOnly: true },
   { href: "/orders", label: "Orders", icon: Layers, adminOnly: false },
   { href: "/api-key", label: "API Key", icon: KeyRound, adminOnly: true },
   { href: "/admin", label: "Admin Panel", icon: ShieldCheck, adminOnly: true },

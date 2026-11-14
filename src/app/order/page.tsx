@@ -140,6 +140,32 @@ function NewOrderForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  // Route protection: New Order is restricted to Administrators
+  const [authChecking, setAuthChecking] = useState(true);
+
+  useEffect(() => {
+    async function verifyAdmin() {
+      try {
+        const res = await fetch("/api/auth/session");
+        const data = await res.json();
+        if (!data.authenticated) {
+          router.replace("/login");
+          return;
+        }
+        if (data.role !== "ADMIN") {
+          router.replace("/engagement");
+          return;
+        }
+      } catch {
+        router.replace("/engagement");
+        return;
+      } finally {
+        setAuthChecking(false);
+      }
+    }
+    verifyAdmin();
+  }, [router]);
+
   // Mode: "NOW" (Instant / Drip) or "SCHEDULED" (BD Time Scheduler)
   const [orderMode, setOrderMode] = useState<"NOW" | "SCHEDULED">("NOW");
 
@@ -909,6 +935,14 @@ function NewOrderForm() {
   const fallbackProvider = useMemo(() => {
     return providers.find((p) => p.id !== activeProvider?.id && (providerCounts[p.id] || 0) > 0) || null;
   }, [providers, activeProvider, providerCounts]);
+
+  if (authChecking) {
+    return (
+      <div className="flex items-center justify-center py-24 text-[#252943]/60">
+        <Loader2 className="w-6 h-6 animate-spin text-[#3A4EFB]" />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-2xl mx-auto space-y-5 animate-fadeIn pb-16">

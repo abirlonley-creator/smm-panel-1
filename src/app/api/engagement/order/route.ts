@@ -7,6 +7,7 @@ import {
   getTikTokEngagementConfig,
   getTikTokPresetById,
 } from "@/lib/engagement/tiktok-preset-config";
+import { getAdminViewsProvider, getAdminEngagementProvider } from "@/lib/provider/admin-provider";
 import { logOrderEvent } from "@/lib/engagement/event-logger";
 import { runEngagementTick } from "@/lib/engagement/worker";
 import { resolveTargetUrl } from "@/lib/urls/tiktok-resolver";
@@ -129,87 +130,42 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: "User account not found" }, { status: 404 });
     }
 
-    // 1. Verify User's API Connections (Independently Managed per user)
-    const userConnections = await prisma.userProviderConnection.findMany({
-      where: { userId },
-    });
+    // 1. Resolve System Upstream Execution Providers (Managed exclusively by Admin)
+    const [adminViews, adminEng] = await Promise.all([
+      getAdminViewsProvider(),
+      getAdminEngagementProvider(),
+    ]);
 
-    // A. Engagement Connection
-    const zeofameConn = userConnections.find((c) => {
-      const name = (c.name || "").toLowerCase();
-      const url = (c.apiUrl || "").toLowerCase();
-      return name.includes("zeofame") || name.includes("zefame") || name.includes("engagement") || url.includes("zeofame") || url.includes("zefame");
-    });
-
-    if (!zeofameConn || !zeofameConn.active) {
+    if (!adminViews || !adminEng) {
       return NextResponse.json(
         {
           success: false,
-          error: "API Connection Required: Connect your Engagement API to activate TikTok Likes, Saves & Reposts.",
-          missingProvider: "Engagement Provider",
+          error: "System delivery engines are not yet configured by administrator. Please contact support.",
         },
-        { status: 400 }
+        { status: 503 }
       );
     }
 
-    const rawZeofameKey = zeofameConn.apiKeyEncrypted ? decryptApiKey(zeofameConn.apiKeyEncrypted) : null;
-    const zeofameAdapter = (zeofameConn.isMock || !rawZeofameKey)
-      ? new MockSMMProvider()
-      : new StandardSMMv2Provider(zeofameConn.apiUrl, rawZeofameKey);
+    const xmediaConn = adminViews.connectionRecord;
+    const zeofameConn = adminEng.connectionRecord;
+    const xmediaAdapter = adminViews.adapter;
+    const zeofameAdapter = adminEng.adapter;
 
-    try {
-      await zeofameAdapter.getBalance();
-    } catch (e: any) {
-      return NextResponse.json(
-        { success: false, error: `Engagement API connection invalid: ${e.message}. Please check your credentials in API Key settings.` },
-        { status: 400 }
-      );
-    }
+    // 2. Resolve Required Services linked to Admin's Provider Connections using Admin Preset configuration
+    const viewsServiceId = config.views?.serviceId || preset.views.serviceId || "897";
+    const likesServiceId = config.likes?.serviceId || preset.likes.serviceId || "1123";
+    const savesServiceId = config.saves?.serviceId || preset.saves?.serviceId || "807";
+    const sharesServiceId = config.shares?.serviceId || preset.shares?.serviceId || "718";
 
-    // B. Views Connection
-    const xmediaConn = userConnections.find((c) => {
-      const name = (c.name || "").toLowerCase();
-      const url = (c.apiUrl || "").toLowerCase();
-      return name.includes("xmedia") || name.includes("views") || url.includes("xmedia");
-    });
-
-    if (!xmediaConn || !xmediaConn.active) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "API Connection Required: Connect your Views API to activate the TikTok Views service.",
-          missingProvider: "Views Provider",
-        },
-        { status: 400 }
-      );
-    }
-
-    const rawXmediaKey = xmediaConn.apiKeyEncrypted ? decryptApiKey(xmediaConn.apiKeyEncrypted) : null;
-    const xmediaAdapter = (xmediaConn.isMock || !rawXmediaKey)
-      ? new MockSMMProvider()
-      : new StandardSMMv2Provider(xmediaConn.apiUrl, rawXmediaKey);
-
-    try {
-      await xmediaAdapter.getBalance();
-    } catch (e: any) {
-      return NextResponse.json(
-        { success: false, error: `Views API connection invalid: ${e.message}. Please check your credentials in API Key settings.` },
-        { status: 400 }
-      );
-    }
-
-
-
-    // 2. Resolve Required Services
-    const xmediaViewsService = await resolveService(xmediaConn.id, preset.views.serviceId, xmediaAdapter, {
+    const xmediaViewsService = await resolveService(xmediaConn.id, viewsServiceId, xmediaAdapter, {
       name: "TikTok Video Views [Medium Fast]",
       category: "TikTok Views",
-      ratePer1000: 2.21,
+      ratePer1000: 2.23,
       minQuantity: 100,
       maxQuantity: 100000000,
     });
 
-    const zeofameLikesService = await resolveService(zeofameConn.id, preset.likes.serviceId, zeofameAdapter, {
+    const zeofameLikesService = await resolveService(zeofameConn.id, likesServiceId, zeofameAdapter, {
       name: "TikTok Likes [Fast]",
       category: "TikTok Likes",
       ratePer1000: 0.88,
@@ -219,7 +175,7 @@ export async function POST(request: Request) {
 
     let zeofameSavesService: any = null;
     if (preset.saves?.enabled) {
-      zeofameSavesService = await resolveService(zeofameConn.id, preset.saves.serviceId, zeofameAdapter, {
+      zeofameSavesService = await resolveService(zeofameConn.id, savesServiceId, zeofameAdapter, {
         name: "TikTok Video Save",
         category: "TikTok Saves",
         ratePer1000: 0.22,
@@ -230,7 +186,7 @@ export async function POST(request: Request) {
 
     let zeofameSharesService: any = null;
     if (preset.shares?.enabled) {
-      zeofameSharesService = await resolveService(zeofameConn.id, preset.shares.serviceId, zeofameAdapter, {
+      zeofameSharesService = await resolveService(zeofameConn.id, sharesServiceId, zeofameAdapter, {
         name: "TikTok Shares / Reposts",
         category: "TikTok Shares",
         ratePer1000: 0.22,
