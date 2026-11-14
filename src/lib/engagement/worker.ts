@@ -6,6 +6,7 @@ import { logOrderEvent } from "./event-logger";
 import { recordAdminAlert } from "./alert-service";
 import { runWatchdogCycle } from "./watchdog";
 import { getTikTokEngagementConfig } from "./tiktok-preset-config";
+import { resolveTargetUrl } from "../urls/tiktok-resolver";
 
 export interface EngagementTickResult {
   processedRuns: number;
@@ -106,8 +107,8 @@ export async function syncOrderDeliveryAndDeviation(orderId: string, now: Date) 
     const typeRuns = order.runs.filter((r) => r.engagementType === t);
     let runCum = 0;
     for (const r of typeRuns) {
-      const isSettledDelivered = r.status === "completed" || r.status === "sent";
-      const qtyDelivered = isSettledDelivered ? (r.deliveredQuantity ?? (r.status === "completed" ? r.quantity : 0)) : 0;
+      const isSettledDelivered = r.status === "completed" || r.status === "confirmed" || r.status === "sent";
+      const qtyDelivered = isSettledDelivered ? (r.deliveredQuantity ?? (r.status === "completed" || r.status === "confirmed" ? r.quantity : 0)) : 0;
       runCum += qtyDelivered;
       if (r.deliveredCumulative !== runCum) {
         await prisma.engagementRun.update({
@@ -289,7 +290,7 @@ export async function syncOrderDeliveryAndDeviation(orderId: string, now: Date) 
                   engagementOrderId: order.id,
                   engagementType: t,
                   serviceId: lastRun.serviceId,
-                  providerId: null,
+                  providerId: lastRun.providerId ?? null,
                   providerServiceId: lastRun.providerServiceId,
                   runNumber: (lastRun.runNumber ?? remainingRuns.length) + e + 1,
                   scheduledAt: new Date(nextRunTime),
@@ -569,10 +570,20 @@ export async function runEngagementTick(): Promise<EngagementTickResult> {
       }
 
       // 6. Submit batch with duration tracking and idempotency
+      let finalTargetUrl = order.targetUrl;
+      if (finalTargetUrl.includes("vt.tiktok.com") || finalTargetUrl.includes("vm.tiktok.com")) {
+        try {
+          const resolvedUrl = await resolveTargetUrl(finalTargetUrl);
+          if (resolvedUrl?.normalizedUrl) {
+            finalTargetUrl = resolvedUrl.normalizedUrl;
+          }
+        } catch {}
+      }
+
       const callStart = Date.now();
       const providerRes = await adapter.createOrder({
         serviceExternalId: targetServiceExtId,
-        targetUrl: order.targetUrl,
+        targetUrl: finalTargetUrl,
         quantity: run.quantity,
       });
       const durationMs = Date.now() - callStart;

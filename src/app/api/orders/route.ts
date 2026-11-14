@@ -65,7 +65,6 @@ export async function POST(request: Request) {
 
     const {
       serviceId,
-      targetUrl,
       requestedQuantity,
       scheduleMode,
       timingMode,
@@ -75,6 +74,19 @@ export async function POST(request: Request) {
       customStepQuantities,
       customIntervals,
     } = parsed.data;
+
+    let targetUrl = parsed.data.targetUrl.trim();
+    if (targetUrl.includes("vt.tiktok.com") || targetUrl.includes("vm.tiktok.com")) {
+      try {
+        const { resolveTargetUrl } = await import("@/lib/urls/tiktok-resolver");
+        const resolved = await resolveTargetUrl(targetUrl);
+        if (resolved?.normalizedUrl) {
+          targetUrl = resolved.normalizedUrl;
+        }
+      } catch (err: any) {
+        console.warn("[ORDERS] URL resolution warning:", err?.message);
+      }
+    }
 
     // Fetch verified service
     const service = await prisma.service.findUnique({

@@ -48,7 +48,7 @@ export const TIKTOK_TIER_PRESETS: Record<string, TikTokTierPreset> = {
     views: {
       enabled: true,
       providerName: "Xmedia",
-      serviceId: "10322",
+      serviceId: "897",
       minQuantity: 150,
       maxQuantity: 220,
       runsCount: 16,
@@ -83,7 +83,7 @@ export const TIKTOK_TIER_PRESETS: Record<string, TikTokTierPreset> = {
     views: {
       enabled: true,
       providerName: "Xmedia",
-      serviceId: "10322",
+      serviceId: "897",
       minQuantity: 230,
       maxQuantity: 280,
       runsCount: 20,
@@ -136,7 +136,7 @@ export const TIKTOK_TIER_PRESETS: Record<string, TikTokTierPreset> = {
     views: {
       enabled: true,
       providerName: "Xmedia",
-      serviceId: "10322",
+      serviceId: "897",
       minQuantity: 380,
       maxQuantity: 430,
       runsCount: 26,
@@ -191,7 +191,7 @@ export const TIKTOK_TIER_PRESETS: Record<string, TikTokTierPreset> = {
     views: {
       enabled: true,
       providerName: "Xmedia",
-      serviceId: "10322",
+      serviceId: "897",
       minQuantity: 1050,
       maxQuantity: 1250,
       runsCount: 44,
@@ -291,7 +291,7 @@ export const DEFAULT_TIKTOK_ENGAGEMENT_CONFIG: TikTokEngagementPresetConfig = {
   views: {
     enabled: true,
     providerName: "Xmedia",
-    serviceId: "10322",
+    serviceId: "897",
     minQuantity: 150,
     maxQuantity: 220,
     runsCount: 16,

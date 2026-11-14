@@ -88,9 +88,20 @@ export async function runDripFeedTick(): Promise<DripFeedTickResult> {
       const { adapter } = await getActiveProvider(run.order.userId || undefined, targetProviderId);
       const targetServiceId = run.order.service.providerServiceId || run.order.service.externalId;
 
+      let orderTargetUrl = run.order.targetUrl;
+      if (orderTargetUrl.includes("vt.tiktok.com") || orderTargetUrl.includes("vm.tiktok.com")) {
+        try {
+          const { resolveTargetUrl } = await import("../urls/tiktok-resolver");
+          const resolved = await resolveTargetUrl(orderTargetUrl);
+          if (resolved?.normalizedUrl) {
+            orderTargetUrl = resolved.normalizedUrl;
+          }
+        } catch {}
+      }
+
       const submission = await adapter.createOrder({
         serviceExternalId: targetServiceId,
-        targetUrl: run.order.targetUrl,
+        targetUrl: orderTargetUrl,
         quantity: run.quantity,
       });
 

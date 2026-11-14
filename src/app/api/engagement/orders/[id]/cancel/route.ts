@@ -97,6 +97,12 @@ export async function POST(
           refundedAmount: Number(((order.refundedAmount || 0) + refundAmount).toFixed(2)),
         },
       });
+
+      // Synchronize cancelled status with the main Order record
+      await tx.order.updateMany({
+        where: { orderRef: order.orderRef },
+        data: { status: "CANCELLED" },
+      });
     });
 
     return NextResponse.json({

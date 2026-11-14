@@ -9,6 +9,7 @@ import {
 } from "@/lib/engagement/tiktok-preset-config";
 import { logOrderEvent } from "@/lib/engagement/event-logger";
 import { runEngagementTick } from "@/lib/engagement/worker";
+import { resolveTargetUrl } from "@/lib/urls/tiktok-resolver";
 import { z } from "zod";
 
 const createEngagementOrderSchema = z.object({
@@ -88,13 +89,24 @@ export async function POST(request: Request) {
     const body = await request.json();
     const parsed = createEngagementOrderSchema.parse(body);
 
-    const targetUrl = parsed.targetUrl.trim();
+    let targetUrl = parsed.targetUrl.trim();
     const lowerUrl = targetUrl.toLowerCase();
     if (!lowerUrl.includes("tiktok.com")) {
       return NextResponse.json(
         { success: false, error: "Please enter a valid TikTok video URL (e.g. https://www.tiktok.com/@username/video/...)" },
         { status: 400 }
       );
+    }
+
+    if (lowerUrl.includes("vt.tiktok.com") || lowerUrl.includes("vm.tiktok.com")) {
+      try {
+        const resolved = await resolveTargetUrl(targetUrl);
+        if (resolved?.normalizedUrl) {
+          targetUrl = resolved.normalizedUrl;
+        }
+      } catch (err: any) {
+        console.warn("[ENGAGEMENT] URL resolution warning:", err?.message);
+      }
     }
 
     const config = getTikTokEngagementConfig();
@@ -190,11 +202,11 @@ export async function POST(request: Request) {
 
     // 2. Resolve Required Services
     const xmediaViewsService = await resolveService(xmediaConn.id, preset.views.serviceId, xmediaAdapter, {
-      name: "TikTok Views [Stable]",
+      name: "TikTok Video Views [Medium Fast]",
       category: "TikTok Views",
-      ratePer1000: 5.7,
+      ratePer1000: 2.21,
       minQuantity: 100,
-      maxQuantity: 10000000,
+      maxQuantity: 100000000,
     });
 
     const zeofameLikesService = await resolveService(zeofameConn.id, preset.likes.serviceId, zeofameAdapter, {

@@ -748,19 +748,33 @@ export async function getActiveProvider(
     connection = await prisma.userProviderConnection.findFirst({
       where: { id: providerId },
     });
+    if (!connection) {
+      const legProv = await prisma.provider.findFirst({
+        where: { id: providerId },
+      });
+      if (legProv) {
+        connection = {
+          id: legProv.id,
+          name: legProv.name,
+          apiUrl: legProv.apiUrl,
+          apiKeyEncrypted: legProv.apiKeyEncrypted,
+          isMock: legProv.isMock,
+          currency: legProv.currency,
+          userId: undefined,
+          lastSyncAt: legProv.lastSyncAt,
+        };
+      }
+    }
   }
 
   if (userId && !connection) {
-
-    if (!connection) {
-      const pref = await prisma.userPreference.findUnique({
-        where: { userId },
+    const pref = await prisma.userPreference.findUnique({
+      where: { userId },
+    });
+    if (pref?.activeProviderId) {
+      connection = await prisma.userProviderConnection.findFirst({
+        where: { id: pref.activeProviderId, userId },
       });
-      if (pref?.activeProviderId) {
-        connection = await prisma.userProviderConnection.findFirst({
-          where: { id: pref.activeProviderId, userId },
-        });
-      }
     }
 
     if (!connection) {
@@ -776,31 +790,18 @@ export async function getActiveProvider(
         orderBy: { createdAt: "asc" },
       });
     }
+  }
 
-    if (connection) {
-      const decryptedKey = decryptApiKey(connection.apiKeyEncrypted);
-      const isMockUrl = connection.isMock || !decryptedKey || connection.apiUrl.includes("mock") || connection.apiUrl.includes(".internal") || connection.apiUrl.includes(".test");
-      if (isMockUrl) {
-        return {
-          adapter: new MockSMMProvider(),
-          config: {
-            id: connection.id,
-            name: connection.name,
-            isMock: true,
-            apiUrl: connection.apiUrl,
-            userId: connection.userId,
-            lastSyncAt: connection.lastSyncAt,
-            currency: connection.currency,
-          },
-        };
-      }
-
+  if (connection) {
+    const decryptedKey = decryptApiKey(connection.apiKeyEncrypted);
+    const isMockUrl = connection.isMock || !decryptedKey || connection.apiUrl.includes("mock") || connection.apiUrl.includes(".internal") || connection.apiUrl.includes(".test");
+    if (isMockUrl) {
       return {
-        adapter: new StandardSMMv2Provider(connection.apiUrl, decryptedKey),
+        adapter: new MockSMMProvider(),
         config: {
           id: connection.id,
           name: connection.name,
-          isMock: false,
+          isMock: true,
           apiUrl: connection.apiUrl,
           userId: connection.userId,
           lastSyncAt: connection.lastSyncAt,
@@ -809,29 +810,29 @@ export async function getActiveProvider(
       };
     }
 
-    // Default mock if user has no connection
     return {
-      adapter: new MockSMMProvider(),
+      adapter: new StandardSMMv2Provider(connection.apiUrl, decryptedKey),
       config: {
-        id: `mock-${userId}`,
-        name: "Standard SMM Mock Adapter",
-        isMock: true,
-        apiUrl: "https://mock-provider.smm.internal/v2",
-        userId,
-        lastSyncAt: null,
-        currency: "INR",
+        id: connection.id,
+        name: connection.name,
+        isMock: false,
+        apiUrl: connection.apiUrl,
+        userId: connection.userId,
+        lastSyncAt: connection.lastSyncAt,
+        currency: connection.currency,
       },
     };
   }
 
-  // Fallback if no userId: return standard MockSMMProvider
+  // Default mock if user has no connection
   return {
     adapter: new MockSMMProvider(),
     config: {
-      id: "mock-system",
+      id: userId ? `mock-${userId}` : "mock-system",
       name: "Standard SMM Mock Adapter",
       isMock: true,
       apiUrl: "https://mock-provider.smm.internal/v2",
+      userId,
       lastSyncAt: null,
       currency: "INR",
     },
