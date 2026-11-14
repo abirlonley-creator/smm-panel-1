@@ -18,6 +18,8 @@ import {
   Sparkles,
   Eye,
   Heart,
+  Bookmark,
+  Share2,
   ChevronRight,
   ShieldAlert,
   XCircle,
@@ -84,6 +86,22 @@ interface EngagementOrderDetail {
     completedRuns: number;
     percent: number;
   };
+  savesSummary?: {
+    planned: number;
+    delivered: number;
+    remaining: number;
+    totalRuns: number;
+    completedRuns: number;
+    percent: number;
+  };
+  sharesSummary?: {
+    planned: number;
+    delivered: number;
+    remaining: number;
+    totalRuns: number;
+    completedRuns: number;
+    percent: number;
+  };
   completedRuns: number;
   totalRuns: number;
   progressPercent: number;
@@ -101,7 +119,7 @@ export default function EngagementOrderDetailPage() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [actionMsg, setActionMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
-  const [activeTab, setActiveTab] = useState<"overview" | "views" | "likes" | "timeline">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "views" | "likes" | "saves" | "shares" | "timeline">("overview");
   const [retryingRunId, setRetryingRunId] = useState<string | null>(null);
   const [retryingAll, setRetryingAll] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -255,6 +273,8 @@ export default function EngagementOrderDetailPage() {
   const allRuns = Array.isArray(order?.runs) ? order.runs : [];
   const viewsRuns = allRuns.filter((r) => r.engagementType === "views");
   const likesRuns = allRuns.filter((r) => r.engagementType === "likes");
+  const savesRuns = allRuns.filter((r) => r.engagementType === "saves");
+  const sharesRuns = allRuns.filter((r) => r.engagementType === "shares");
 
   const viewsSummary = order.viewsSummary || {
     planned: viewsRuns.reduce((sum, r) => sum + (r.quantity || 0), 0),
@@ -271,6 +291,24 @@ export default function EngagementOrderDetailPage() {
     remaining: Math.max(0, likesRuns.reduce((sum, r) => sum + (r.quantity || 0), 0) - likesRuns.reduce((sum, r) => sum + (r.deliveredQuantity || 0), 0)),
     totalRuns: likesRuns.length,
     completedRuns: likesRuns.filter((r) => r.status === "completed" || r.status === "confirmed").length,
+    percent: 0,
+  };
+
+  const savesSummary = order.savesSummary || {
+    planned: savesRuns.reduce((sum, r) => sum + (r.quantity || 0), 0),
+    delivered: savesRuns.reduce((sum, r) => sum + (r.deliveredQuantity || 0), 0),
+    remaining: Math.max(0, savesRuns.reduce((sum, r) => sum + (r.quantity || 0), 0) - savesRuns.reduce((sum, r) => sum + (r.deliveredQuantity || 0), 0)),
+    totalRuns: savesRuns.length,
+    completedRuns: savesRuns.filter((r) => r.status === "completed" || r.status === "confirmed").length,
+    percent: 0,
+  };
+
+  const sharesSummary = order.sharesSummary || {
+    planned: sharesRuns.reduce((sum, r) => sum + (r.quantity || 0), 0),
+    delivered: sharesRuns.reduce((sum, r) => sum + (r.deliveredQuantity || 0), 0),
+    remaining: Math.max(0, sharesRuns.reduce((sum, r) => sum + (r.quantity || 0), 0) - sharesRuns.reduce((sum, r) => sum + (r.deliveredQuantity || 0), 0)),
+    totalRuns: sharesRuns.length,
+    completedRuns: sharesRuns.filter((r) => r.status === "completed" || r.status === "confirmed").length,
     percent: 0,
   };
 
@@ -431,7 +469,7 @@ export default function EngagementOrderDetailPage() {
         )}
 
         {/* Section 7.D: Live Statistics Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 pt-2">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 pt-2">
           {/* 1. Views Progress */}
           <div className="p-3.5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] space-y-1">
             <div className="flex items-center justify-between text-[11px] font-bold text-[#252943]/60">
@@ -477,6 +515,56 @@ export default function EngagementOrderDetailPage() {
               {likesSummary.remaining.toLocaleString()} likes remaining
             </span>
           </div>
+
+          {/* Saves Progress (if present) */}
+          {savesRuns.length > 0 && (
+            <div className="p-3.5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] space-y-1">
+              <div className="flex items-center justify-between text-[11px] font-bold text-[#252943]/60">
+                <span className="flex items-center gap-1">
+                  <Bookmark className="w-3.5 h-3.5 text-amber-500" /> Saves
+                </span>
+                <span className="font-mono text-amber-600">{savesSummary.percent}%</span>
+              </div>
+              <div className="text-base font-black text-[#252943] font-mono tracking-tight">
+                {savesSummary.delivered.toLocaleString()}{" "}
+                <span className="text-xs font-normal text-[#252943]/50">/ {savesSummary.planned.toLocaleString()}</span>
+              </div>
+              <div className="w-full bg-[#DEE0ED] h-1.5 rounded-full overflow-hidden">
+                <div
+                  className="bg-amber-500 h-full rounded-full transition-all duration-500"
+                  style={{ width: `${savesSummary.percent}%` }}
+                />
+              </div>
+              <span className="text-[10px] text-[#252943]/50 block">
+                {savesSummary.remaining.toLocaleString()} saves remaining
+              </span>
+            </div>
+          )}
+
+          {/* Reposts Progress (if present) */}
+          {sharesRuns.length > 0 && (
+            <div className="p-3.5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] space-y-1">
+              <div className="flex items-center justify-between text-[11px] font-bold text-[#252943]/60">
+                <span className="flex items-center gap-1">
+                  <Share2 className="w-3.5 h-3.5 text-emerald-500" /> Reposts
+                </span>
+                <span className="font-mono text-emerald-600">{sharesSummary.percent}%</span>
+              </div>
+              <div className="text-base font-black text-[#252943] font-mono tracking-tight">
+                {sharesSummary.delivered.toLocaleString()}{" "}
+                <span className="text-xs font-normal text-[#252943]/50">/ {sharesSummary.planned.toLocaleString()}</span>
+              </div>
+              <div className="w-full bg-[#DEE0ED] h-1.5 rounded-full overflow-hidden">
+                <div
+                  className="bg-emerald-500 h-full rounded-full transition-all duration-500"
+                  style={{ width: `${sharesSummary.percent}%` }}
+                />
+              </div>
+              <span className="text-[10px] text-[#252943]/50 block">
+                {sharesSummary.remaining.toLocaleString()} reposts remaining
+              </span>
+            </div>
+          )}
 
           {/* 3. Overall Delivery % */}
           <div className="p-3.5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] space-y-1">
@@ -538,11 +626,11 @@ export default function EngagementOrderDetailPage() {
       </div>
 
       {/* Tabs Navigation */}
-      <div className="flex items-center gap-2 border-b border-[#DEE0ED] pb-2">
+      <div className="flex items-center gap-2 border-b border-[#DEE0ED] pb-2 overflow-x-auto">
         <button
           type="button"
           onClick={() => setActiveTab("overview")}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 ${
             activeTab === "overview"
               ? "bg-[#252943] text-white shadow-subtle"
               : "bg-white text-[#252943]/70 hover:bg-[#F8F9FD] border border-[#DEE0ED]"
@@ -553,7 +641,7 @@ export default function EngagementOrderDetailPage() {
         <button
           type="button"
           onClick={() => setActiveTab("views")}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${
             activeTab === "views"
               ? "bg-[#3A4EFB] text-white shadow-subtle"
               : "bg-white text-[#252943]/70 hover:bg-[#F8F9FD] border border-[#DEE0ED]"
@@ -565,7 +653,7 @@ export default function EngagementOrderDetailPage() {
         <button
           type="button"
           onClick={() => setActiveTab("likes")}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${
             activeTab === "likes"
               ? "bg-rose-600 text-white shadow-subtle"
               : "bg-white text-[#252943]/70 hover:bg-[#F8F9FD] border border-[#DEE0ED]"
@@ -574,10 +662,38 @@ export default function EngagementOrderDetailPage() {
           <Heart className="w-3.5 h-3.5" />
           <span>Likes Progress ({likesRuns.length} runs)</span>
         </button>
+        {savesRuns.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setActiveTab("saves")}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${
+              activeTab === "saves"
+                ? "bg-amber-600 text-white shadow-subtle"
+                : "bg-white text-[#252943]/70 hover:bg-[#F8F9FD] border border-[#DEE0ED]"
+            }`}
+          >
+            <Bookmark className="w-3.5 h-3.5" />
+            <span>Saves Progress ({savesRuns.length} runs)</span>
+          </button>
+        )}
+        {sharesRuns.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setActiveTab("shares")}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${
+              activeTab === "shares"
+                ? "bg-emerald-600 text-white shadow-subtle"
+                : "bg-white text-[#252943]/70 hover:bg-[#F8F9FD] border border-[#DEE0ED]"
+            }`}
+          >
+            <Share2 className="w-3.5 h-3.5" />
+            <span>Reposts Progress ({sharesRuns.length} runs)</span>
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setActiveTab("timeline")}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${
             activeTab === "timeline"
               ? "bg-[#252943] text-white shadow-subtle"
               : "bg-white text-[#252943]/70 hover:bg-[#F8F9FD] border border-[#DEE0ED]"
@@ -590,140 +706,293 @@ export default function EngagementOrderDetailPage() {
 
       {/* TAB 1: COMBINED OVERVIEW */}
       {activeTab === "overview" && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Section 7.A: Views Summary Card */}
-          <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 shadow-subtle space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-blue-50 text-[#3A4EFB] flex items-center justify-center font-bold">
-                  <Eye className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-[#252943]">TikTok Views (Xmedia)</h3>
-                  <p className="text-[11px] text-[#252943]/60">Provider Service ID #10322 • 16 batches</p>
-                </div>
-              </div>
-              <span className="text-xs font-mono font-bold text-[#3A4EFB]">
-                {viewsSummary.delivered.toLocaleString()} / {viewsSummary.planned.toLocaleString()}
-              </span>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex justify-between text-xs font-semibold">
-                <span className="text-[#252943]/70">Views Delivered:</span>
-                <span className="font-mono text-[#252943]">{viewsSummary.delivered.toLocaleString()} ({viewsSummary.percent}%)</span>
-              </div>
-              <div className="w-full bg-[#F0F2FA] h-2.5 rounded-full overflow-hidden">
-                <div
-                  className="bg-[#3A4EFB] h-full rounded-full transition-all duration-500"
-                  style={{ width: `${viewsSummary.percent}%` }}
-                />
-              </div>
-              <div className="flex justify-between text-[11px] text-[#252943]/50">
-                <span>Completed: {viewsSummary.completedRuns} of 16 runs</span>
-                <span>Remaining: {viewsSummary.remaining.toLocaleString()} views</span>
-              </div>
-            </div>
-
-            {/* Next 3 upcoming views runs */}
-            <div className="space-y-2 pt-2">
-              <span className="text-[11px] font-bold uppercase text-[#252943]/60 block">Recent / Upcoming Views Runs</span>
-              <div className="space-y-1.5">
-                {viewsRuns.slice(0, 4).map((r) => (
-                  <div key={r.id} className="flex items-center justify-between p-2 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED]/60 text-xs">
-                    <span className="font-mono font-bold text-[#252943]">Run #{r.runNumber}</span>
-                    <span className="text-[#252943]/70">{formatBdTime(r.scheduledAt)} BD</span>
-                    <span className="font-mono font-semibold text-[#3A4EFB]">{r.quantity} views</span>
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                      r.status === "completed" || r.status === "confirmed"
-                        ? "bg-emerald-100 text-emerald-800"
-                        : r.status === "sent"
-                        ? "bg-blue-100 text-blue-800"
-                        : "bg-slate-100 text-slate-700"
-                    }`}>
-                      {r.status}
-                    </span>
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Section 7.A: Views Summary Card */}
+            <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 shadow-subtle space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-blue-50 text-[#3A4EFB] flex items-center justify-center font-bold">
+                    <Eye className="w-4 h-4" />
                   </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Section 7.B: Likes Summary Card */}
-          <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 shadow-subtle space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold">
-                  <Heart className="w-4 h-4" />
+                  <div>
+                    <h3 className="text-sm font-bold text-[#252943]">{viewsRuns[0]?.serviceName || "TikTok Views"}</h3>
+                    <p className="text-[11px] text-[#252943]/60">
+                      Provider Service ID #{viewsRuns[0]?.providerServiceId || "—"} • {viewsRuns.length} batches
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-sm font-bold text-[#252943]">TikTok Likes (Zeofame)</h3>
-                  <p className="text-[11px] text-[#252943]/60">Provider Service ID #1123 • 3 batches</p>
+                <span className="text-xs font-mono font-bold text-[#3A4EFB]">
+                  {viewsSummary.delivered.toLocaleString()} / {viewsSummary.planned.toLocaleString()}
+                </span>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex justify-between text-xs font-semibold">
+                  <span className="text-[#252943]/70">Views Delivered:</span>
+                  <span className="font-mono text-[#252943]">{viewsSummary.delivered.toLocaleString()} ({viewsSummary.percent}%)</span>
+                </div>
+                <div className="w-full bg-[#F0F2FA] h-2.5 rounded-full overflow-hidden">
+                  <div
+                    className="bg-[#3A4EFB] h-full rounded-full transition-all duration-500"
+                    style={{ width: `${viewsSummary.percent}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-[11px] text-[#252943]/50">
+                  <span>Completed: {viewsSummary.completedRuns} of {viewsRuns.length} runs</span>
+                  <span>Remaining: {viewsSummary.remaining.toLocaleString()} views</span>
                 </div>
               </div>
-              <span className="text-xs font-mono font-bold text-rose-600">
-                {likesSummary.delivered.toLocaleString()} / {likesSummary.planned.toLocaleString()}
-              </span>
-            </div>
 
-            <div className="space-y-2">
-              <div className="flex justify-between text-xs font-semibold">
-                <span className="text-[#252943]/70">Likes Delivered:</span>
-                <span className="font-mono text-[#252943]">{likesSummary.delivered.toLocaleString()} ({likesSummary.percent}%)</span>
-              </div>
-              <div className="w-full bg-[#F0F2FA] h-2.5 rounded-full overflow-hidden">
-                <div
-                  className="bg-rose-500 h-full rounded-full transition-all duration-500"
-                  style={{ width: `${likesSummary.percent}%` }}
-                />
-              </div>
-              <div className="flex justify-between text-[11px] text-[#252943]/50">
-                <span>Completed: {likesSummary.completedRuns} of 3 runs</span>
-                <span>Remaining: {likesSummary.remaining.toLocaleString()} likes</span>
-              </div>
-            </div>
-
-            {/* All 3 likes runs */}
-            <div className="space-y-2 pt-2">
-              <span className="text-[11px] font-bold uppercase text-[#252943]/60 block">Likes Delivery Batches</span>
-              <div className="space-y-1.5">
-                {likesRuns.map((r) => (
-                  <div key={r.id} className="flex items-center justify-between p-2 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED]/60 text-xs">
-                    <div className="flex items-center gap-1.5">
+              {/* All views runs */}
+              <div className="space-y-2 pt-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase text-[#252943]/60 block">Views Delivery Batches ({viewsRuns.length} total)</span>
+                  <span className="text-[10px] text-[#252943]/50">Scroll to view all</span>
+                </div>
+                <div className="space-y-1.5 max-h-[380px] overflow-y-auto pr-1">
+                  {viewsRuns.map((r) => (
+                    <div key={r.id} className="flex items-center justify-between p-2 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED]/60 text-xs">
                       <span className="font-mono font-bold text-[#252943]">Run #{r.runNumber}</span>
-                      {r.isReplan && (
-                        <span className="px-1.5 py-0.2 rounded text-[9px] bg-amber-100 text-amber-800 font-bold" title="Accelerated by Delayed Likes Protection">
-                          Accelerated
-                        </span>
-                      )}
+                      <span className="text-[#252943]/70">{formatBdTime(r.scheduledAt)} BD</span>
+                      <span className="font-mono font-semibold text-[#3A4EFB]">{r.quantity.toLocaleString()} views</span>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                        r.status === "completed" || r.status === "confirmed"
+                          ? "bg-emerald-100 text-emerald-800"
+                          : r.status === "sent"
+                          ? "bg-blue-100 text-blue-800"
+                          : r.status === "failed"
+                          ? "bg-rose-100 text-rose-800"
+                          : "bg-slate-100 text-slate-700"
+                      }`}>
+                        {r.status}
+                      </span>
                     </div>
-                    <span className="text-[#252943]/70">{formatBdTime(r.scheduledAt)} BD</span>
-                    <span className="font-mono font-semibold text-rose-600">{r.quantity} likes</span>
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                      r.status === "completed" || r.status === "confirmed"
-                        ? "bg-emerald-100 text-emerald-800"
-                        : r.status === "sent"
-                        ? "bg-blue-100 text-blue-800"
-                        : "bg-slate-100 text-slate-700"
-                    }`}>
-                      {r.status}
-                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Section 7.B: Likes Summary Card */}
+            <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 shadow-subtle space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold">
+                    <Heart className="w-4 h-4" />
                   </div>
-                ))}
+                  <div>
+                    <h3 className="text-sm font-bold text-[#252943]">{likesRuns[0]?.serviceName || "TikTok Likes"}</h3>
+                    <p className="text-[11px] text-[#252943]/60">
+                      Provider Service ID #{likesRuns[0]?.providerServiceId || "—"} • {likesRuns.length} batches
+                    </p>
+                  </div>
+                </div>
+                <span className="text-xs font-mono font-bold text-rose-600">
+                  {likesSummary.delivered.toLocaleString()} / {likesSummary.planned.toLocaleString()}
+                </span>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex justify-between text-xs font-semibold">
+                  <span className="text-[#252943]/70">Likes Delivered:</span>
+                  <span className="font-mono text-[#252943]">{likesSummary.delivered.toLocaleString()} ({likesSummary.percent}%)</span>
+                </div>
+                <div className="w-full bg-[#F0F2FA] h-2.5 rounded-full overflow-hidden">
+                  <div
+                    className="bg-rose-500 h-full rounded-full transition-all duration-500"
+                    style={{ width: `${likesSummary.percent}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-[11px] text-[#252943]/50">
+                  <span>Completed: {likesSummary.completedRuns} of {likesRuns.length} runs</span>
+                  <span>Remaining: {likesSummary.remaining.toLocaleString()} likes</span>
+                </div>
+              </div>
+
+              {/* All likes runs */}
+              <div className="space-y-2 pt-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase text-[#252943]/60 block">Likes Delivery Batches ({likesRuns.length} total)</span>
+                  <span className="text-[10px] text-[#252943]/50">Scroll to view all</span>
+                </div>
+                <div className="space-y-1.5 max-h-[380px] overflow-y-auto pr-1">
+                  {likesRuns.map((r) => (
+                    <div key={r.id} className="flex items-center justify-between p-2 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED]/60 text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono font-bold text-[#252943]">Run #{r.runNumber}</span>
+                        {r.isReplan && (
+                          <span className="px-1.5 py-0.2 rounded text-[9px] bg-amber-100 text-amber-800 font-bold" title="Accelerated by Delayed Likes Protection">
+                            Accelerated
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[#252943]/70">{formatBdTime(r.scheduledAt)} BD</span>
+                      <span className="font-mono font-semibold text-rose-600">{r.quantity.toLocaleString()} likes</span>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                        r.status === "completed" || r.status === "confirmed"
+                          ? "bg-emerald-100 text-emerald-800"
+                          : r.status === "sent"
+                          ? "bg-blue-100 text-blue-800"
+                          : r.status === "failed"
+                          ? "bg-rose-100 text-rose-800"
+                          : "bg-slate-100 text-slate-700"
+                      }`}>
+                        {r.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
+
+          {/* Saves & Reposts Row (if order has saves or shares) */}
+          {(savesRuns.length > 0 || sharesRuns.length > 0) && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {savesRuns.length > 0 && (
+                <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 shadow-subtle space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+                        <Bookmark className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-[#252943]">{savesRuns[0]?.serviceName || "TikTok Saves"}</h3>
+                        <p className="text-[11px] text-[#252943]/60">
+                          Provider Service ID #{savesRuns[0]?.providerServiceId || "—"} • {savesRuns.length} batches
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-xs font-mono font-bold text-amber-600">
+                      {savesSummary.delivered.toLocaleString()} / {savesSummary.planned.toLocaleString()}
+                    </span>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-xs font-semibold">
+                      <span className="text-[#252943]/70">Saves Delivered:</span>
+                      <span className="font-mono text-[#252943]">{savesSummary.delivered.toLocaleString()} ({savesSummary.percent}%)</span>
+                    </div>
+                    <div className="w-full bg-[#F0F2FA] h-2.5 rounded-full overflow-hidden">
+                      <div
+                        className="bg-amber-500 h-full rounded-full transition-all duration-500"
+                        style={{ width: `${savesSummary.percent}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-[11px] text-[#252943]/50">
+                      <span>Completed: {savesSummary.completedRuns} of {savesRuns.length} runs</span>
+                      <span>Remaining: {savesSummary.remaining.toLocaleString()} saves</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 pt-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold uppercase text-[#252943]/60 block">Saves Delivery Batches ({savesRuns.length} total)</span>
+                      <span className="text-[10px] text-[#252943]/50">Scroll to view all</span>
+                    </div>
+                    <div className="space-y-1.5 max-h-[380px] overflow-y-auto pr-1">
+                      {savesRuns.map((r) => (
+                        <div key={r.id} className="flex items-center justify-between p-2 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED]/60 text-xs">
+                          <span className="font-mono font-bold text-[#252943]">Run #{r.runNumber}</span>
+                          <span className="text-[#252943]/70">{formatBdTime(r.scheduledAt)} BD</span>
+                          <span className="font-mono font-semibold text-amber-600">{r.quantity.toLocaleString()} saves</span>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                            r.status === "completed" || r.status === "confirmed"
+                              ? "bg-emerald-100 text-emerald-800"
+                              : r.status === "sent"
+                              ? "bg-blue-100 text-blue-800"
+                              : r.status === "failed"
+                              ? "bg-rose-100 text-rose-800"
+                              : "bg-slate-100 text-slate-700"
+                          }`}>
+                            {r.status}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {sharesRuns.length > 0 && (
+                <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 shadow-subtle space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+                        <Share2 className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-[#252943]">{sharesRuns[0]?.serviceName || "TikTok Reposts"}</h3>
+                        <p className="text-[11px] text-[#252943]/60">
+                          Provider Service ID #{sharesRuns[0]?.providerServiceId || "—"} • {sharesRuns.length} batches
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-xs font-mono font-bold text-emerald-600">
+                      {sharesSummary.delivered.toLocaleString()} / {sharesSummary.planned.toLocaleString()}
+                    </span>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-xs font-semibold">
+                      <span className="text-[#252943]/70">Reposts Delivered:</span>
+                      <span className="font-mono text-[#252943]">{sharesSummary.delivered.toLocaleString()} ({sharesSummary.percent}%)</span>
+                    </div>
+                    <div className="w-full bg-[#F0F2FA] h-2.5 rounded-full overflow-hidden">
+                      <div
+                        className="bg-emerald-500 h-full rounded-full transition-all duration-500"
+                        style={{ width: `${sharesSummary.percent}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-[11px] text-[#252943]/50">
+                      <span>Completed: {sharesSummary.completedRuns} of {sharesRuns.length} runs</span>
+                      <span>Remaining: {sharesSummary.remaining.toLocaleString()} reposts</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 pt-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold uppercase text-[#252943]/60 block">Reposts Delivery Batches ({sharesRuns.length} total)</span>
+                      <span className="text-[10px] text-[#252943]/50">Scroll to view all</span>
+                    </div>
+                    <div className="space-y-1.5 max-h-[380px] overflow-y-auto pr-1">
+                      {sharesRuns.map((r) => (
+                        <div key={r.id} className="flex items-center justify-between p-2 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED]/60 text-xs">
+                          <span className="font-mono font-bold text-[#252943]">Run #{r.runNumber}</span>
+                          <span className="text-[#252943]/70">{formatBdTime(r.scheduledAt)} BD</span>
+                          <span className="font-mono font-semibold text-emerald-600">{r.quantity.toLocaleString()} reposts</span>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                            r.status === "completed" || r.status === "confirmed"
+                              ? "bg-emerald-100 text-emerald-800"
+                              : r.status === "sent"
+                              ? "bg-blue-100 text-blue-800"
+                              : r.status === "failed"
+                              ? "bg-rose-100 text-rose-800"
+                              : "bg-slate-100 text-slate-700"
+                          }`}>
+                            {r.status}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
-      {/* TAB 2: VIEWS PROGRESS GRAPH & RUNS (Section 7.A) */}
+      {/* TAB 2: VIEWS PROGRESS GRAPH & RUNS */}
       {activeTab === "views" && (
         <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 shadow-subtle space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#DEE0ED]">
             <div>
-              <h2 className="text-base font-bold text-[#252943]">TikTok Views Delivery Progress (Xmedia #10322)</h2>
+              <h2 className="text-base font-bold text-[#252943]">
+                {viewsRuns[0]?.serviceName || "TikTok Views"} ({viewsRuns[0]?.providerServiceId ? `#${viewsRuns[0]?.providerServiceId}` : ""})
+              </h2>
               <p className="text-xs text-[#252943]/60">
-                16 randomized delivery runs (150–220 views/run) scheduled at 20-minute intervals.
+                {viewsRuns.length} randomized delivery runs scheduled across {order.durationHours} hours.
               </p>
             </div>
             <div className="flex items-center gap-3 text-xs font-mono">
@@ -763,15 +1032,15 @@ export default function EngagementOrderDetailPage() {
               })}
             </div>
             <div className="flex items-center justify-between text-[11px] text-[#252943]/60 pt-2 border-t border-[#DEE0ED]">
-              <span>Axis: Run #1 (0m) to Run #16 (300m)</span>
+              <span>Axis: Run #1 (0m) to Run #{viewsRuns.length} ({order.durationHours * 60}m)</span>
               <div className="flex items-center gap-3">
                 <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-[#3A4EFB]/20 rounded" /> Planned Target</span>
-                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-[#3A4EFB] rounded" /> Confivered Delivery</span>
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-[#3A4EFB] rounded" /> Confirmed Delivery</span>
               </div>
             </div>
           </div>
 
-          {/* 16 Views Runs Table */}
+          {/* Views Runs Table */}
           <div className="overflow-x-auto rounded-2xl border border-[#DEE0ED]">
             <table className="w-full text-left text-xs">
               <thead className="bg-[#F8F9FD] text-[#252943]/70 font-bold border-b border-[#DEE0ED]">
@@ -836,14 +1105,16 @@ export default function EngagementOrderDetailPage() {
         </div>
       )}
 
-      {/* TAB 3: LIKES PROGRESS GRAPH & RUNS (Section 7.B) */}
+      {/* TAB 3: LIKES PROGRESS & RUNS */}
       {activeTab === "likes" && (
         <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 shadow-subtle space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#DEE0ED]">
             <div>
-              <h2 className="text-base font-bold text-[#252943]">TikTok Likes Delivery Progress (Zeofame #1123)</h2>
+              <h2 className="text-base font-bold text-[#252943]">
+                {likesRuns[0]?.serviceName || "TikTok Likes"} ({likesRuns[0]?.providerServiceId ? `#${likesRuns[0]?.providerServiceId}` : ""})
+              </h2>
               <p className="text-xs text-[#252943]/60">
-                Natural delivery runs scheduled at steady intervals across the campaign.
+                {likesRuns.length} natural delivery runs scheduled across {order.durationHours} hours.
               </p>
             </div>
             <div className="flex items-center gap-3 text-xs font-mono">
@@ -853,7 +1124,7 @@ export default function EngagementOrderDetailPage() {
             </div>
           </div>
 
-          {/* 3 Likes Runs Table */}
+          {/* Likes Runs Table */}
           <div className="overflow-x-auto rounded-2xl border border-[#DEE0ED]">
             <table className="w-full text-left text-xs">
               <thead className="bg-[#F8F9FD] text-[#252943]/70 font-bold border-b border-[#DEE0ED]">
@@ -923,7 +1194,173 @@ export default function EngagementOrderDetailPage() {
         </div>
       )}
 
-      {/* TAB 4: COMBINED TIMELINE (Section 7.C) */}
+      {/* TAB: SAVES PROGRESS & RUNS */}
+      {activeTab === "saves" && (
+        <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 shadow-subtle space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#DEE0ED]">
+            <div>
+              <h2 className="text-base font-bold text-[#252943]">
+                {savesRuns[0]?.serviceName || "TikTok Saves"} ({savesRuns[0]?.providerServiceId ? `#${savesRuns[0]?.providerServiceId}` : ""})
+              </h2>
+              <p className="text-xs text-[#252943]/60">
+                {savesRuns.length} delivery runs scheduled across {order.durationHours} hours.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 text-xs font-mono">
+              <span className="px-3 py-1 rounded-xl bg-amber-50 text-amber-700 font-bold">
+                Delivered: {savesSummary.delivered.toLocaleString()} / {savesSummary.planned.toLocaleString()}
+              </span>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto rounded-2xl border border-[#DEE0ED]">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-[#F8F9FD] text-[#252943]/70 font-bold border-b border-[#DEE0ED]">
+                <tr>
+                  <th className="py-2.5 px-3">Run #</th>
+                  <th className="py-2.5 px-3">Scheduled (BD Time)</th>
+                  <th className="py-2.5 px-3">Quantity</th>
+                  <th className="py-2.5 px-3">Upstream Order ID</th>
+                  <th className="py-2.5 px-3">Delivered</th>
+                  <th className="py-2.5 px-3">Status</th>
+                  <th className="py-2.5 px-3 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#DEE0ED]">
+                {savesRuns.map((r) => (
+                  <tr key={r.id} className="hover:bg-[#F8F9FD]/60">
+                    <td className="py-2.5 px-3 font-mono font-bold text-[#252943]">
+                      #{r.runNumber}
+                    </td>
+                    <td className="py-2.5 px-3 font-mono text-[11px] text-[#252943]/70">
+                      {formatBdDateTime(r.scheduledAt)} ({formatBdTime(r.scheduledAt)} BD)
+                    </td>
+                    <td className="py-2.5 px-3 font-mono font-bold text-amber-600">
+                      {r.quantity}
+                    </td>
+                    <td className="py-2.5 px-3 font-mono text-[11px] text-[#3A4EFB]">
+                      {r.providerOrderId ? `#${r.providerOrderId}` : "—"}
+                    </td>
+                    <td className="py-2.5 px-3 font-mono font-bold text-emerald-600">
+                      {r.deliveredQuantity ?? (r.status === "completed" ? r.quantity : 0)}
+                    </td>
+                    <td className="py-2.5 px-3">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                        r.status === "completed" || r.status === "confirmed"
+                          ? "bg-emerald-100 text-emerald-800"
+                          : r.status === "sent"
+                          ? "bg-blue-100 text-blue-800"
+                          : r.status === "failed"
+                          ? "bg-rose-100 text-rose-800"
+                          : "bg-slate-100 text-slate-700"
+                      }`}>
+                        {r.status}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3 text-right">
+                      {["failed", "delayed"].includes(r.status) && (
+                        <button
+                          type="button"
+                          onClick={() => handleRetryRun(r.id)}
+                          disabled={retryingRunId === r.id}
+                          className="px-2 py-1 rounded bg-[#3A4EFB] text-white text-[10px] font-bold hover:bg-[#252943]"
+                        >
+                          {retryingRunId === r.id ? "Retrying..." : "Retry"}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* TAB: REPOSTS/SHARES PROGRESS & RUNS */}
+      {activeTab === "shares" && (
+        <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 shadow-subtle space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#DEE0ED]">
+            <div>
+              <h2 className="text-base font-bold text-[#252943]">
+                {sharesRuns[0]?.serviceName || "TikTok Reposts"} ({sharesRuns[0]?.providerServiceId ? `#${sharesRuns[0]?.providerServiceId}` : ""})
+              </h2>
+              <p className="text-xs text-[#252943]/60">
+                {sharesRuns.length} delivery runs scheduled across {order.durationHours} hours.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 text-xs font-mono">
+              <span className="px-3 py-1 rounded-xl bg-emerald-50 text-emerald-700 font-bold">
+                Delivered: {sharesSummary.delivered.toLocaleString()} / {sharesSummary.planned.toLocaleString()}
+              </span>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto rounded-2xl border border-[#DEE0ED]">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-[#F8F9FD] text-[#252943]/70 font-bold border-b border-[#DEE0ED]">
+                <tr>
+                  <th className="py-2.5 px-3">Run #</th>
+                  <th className="py-2.5 px-3">Scheduled (BD Time)</th>
+                  <th className="py-2.5 px-3">Quantity</th>
+                  <th className="py-2.5 px-3">Upstream Order ID</th>
+                  <th className="py-2.5 px-3">Delivered</th>
+                  <th className="py-2.5 px-3">Status</th>
+                  <th className="py-2.5 px-3 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#DEE0ED]">
+                {sharesRuns.map((r) => (
+                  <tr key={r.id} className="hover:bg-[#F8F9FD]/60">
+                    <td className="py-2.5 px-3 font-mono font-bold text-[#252943]">
+                      #{r.runNumber}
+                    </td>
+                    <td className="py-2.5 px-3 font-mono text-[11px] text-[#252943]/70">
+                      {formatBdDateTime(r.scheduledAt)} ({formatBdTime(r.scheduledAt)} BD)
+                    </td>
+                    <td className="py-2.5 px-3 font-mono font-bold text-emerald-600">
+                      {r.quantity}
+                    </td>
+                    <td className="py-2.5 px-3 font-mono text-[11px] text-[#3A4EFB]">
+                      {r.providerOrderId ? `#${r.providerOrderId}` : "—"}
+                    </td>
+                    <td className="py-2.5 px-3 font-mono font-bold text-emerald-600">
+                      {r.deliveredQuantity ?? (r.status === "completed" ? r.quantity : 0)}
+                    </td>
+                    <td className="py-2.5 px-3">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                        r.status === "completed" || r.status === "confirmed"
+                          ? "bg-emerald-100 text-emerald-800"
+                          : r.status === "sent"
+                          ? "bg-blue-100 text-blue-800"
+                          : r.status === "failed"
+                          ? "bg-rose-100 text-rose-800"
+                          : "bg-slate-100 text-slate-700"
+                      }`}>
+                        {r.status}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3 text-right">
+                      {["failed", "delayed"].includes(r.status) && (
+                        <button
+                          type="button"
+                          onClick={() => handleRetryRun(r.id)}
+                          disabled={retryingRunId === r.id}
+                          className="px-2 py-1 rounded bg-[#3A4EFB] text-white text-[10px] font-bold hover:bg-[#252943]"
+                        >
+                          {retryingRunId === r.id ? "Retrying..." : "Retry"}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: COMBINED TIMELINE */}
       {activeTab === "timeline" && (
         <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 shadow-subtle space-y-6">
           <div className="pb-3 border-b border-[#DEE0ED]">
@@ -945,7 +1382,7 @@ export default function EngagementOrderDetailPage() {
                 {formatBdDateTime(order.createdAt)} ({formatBdTime(order.createdAt)} BD)
               </span>
               <p className="text-xs text-[#252943]/70">
-                16 Views batches (Xmedia #10322, Run #1 immediate through Run #16 at 300m) and 3 Likes batches (Zeofame #1123, cleared at 120m, 200m, and 280m before the last view batch) successfully queued.
+                {viewsRuns.length} Views batches ({viewsRuns[0]?.providerServiceId ? `#${viewsRuns[0]?.providerServiceId}` : ""}), {likesRuns.length} Likes batches ({likesRuns[0]?.providerServiceId ? `#${likesRuns[0]?.providerServiceId}` : ""}){savesRuns.length > 0 ? `, ${savesRuns.length} Saves batches` : ""}{sharesRuns.length > 0 ? `, and ${sharesRuns.length} Reposts batches` : ""} successfully queued across {order.durationHours} hours.
               </p>
             </div>
 
@@ -969,6 +1406,8 @@ export default function EngagementOrderDetailPage() {
             {/* Chronological Runs */}
             {allRuns.map((r) => {
               const isViews = r.engagementType === "views";
+              const isLikes = r.engagementType === "likes";
+              const isSaves = r.engagementType === "saves";
               const isDone = r.status === "completed" || r.status === "confirmed";
 
               return (
@@ -979,7 +1418,11 @@ export default function EngagementOrderDetailPage() {
                         ? "bg-emerald-500"
                         : isViews
                         ? "bg-[#3A4EFB]"
-                        : "bg-rose-500"
+                        : isLikes
+                        ? "bg-rose-500"
+                        : isSaves
+                        ? "bg-amber-500"
+                        : "bg-teal-500"
                     }`}
                   />
                   <div className="flex items-center gap-2 flex-wrap">
@@ -991,6 +1434,8 @@ export default function EngagementOrderDetailPage() {
                         ? "bg-emerald-100 text-emerald-800"
                         : r.status === "sent"
                         ? "bg-blue-100 text-blue-800"
+                        : r.status === "failed"
+                        ? "bg-rose-100 text-rose-800"
                         : "bg-slate-100 text-slate-700"
                     }`}>
                       {r.status}
@@ -1027,7 +1472,7 @@ export default function EngagementOrderDetailPage() {
                   {formatBdDateTime(order.updatedAt)} ({formatBdTime(order.updatedAt)} BD)
                 </span>
                 <p className="text-xs text-[#252943]/70">
-                  All 16 Views batches and 3 Likes batches confirmed delivered by upstream providers.
+                  All {viewsRuns.length} Views batches, {likesRuns.length} Likes batches{savesRuns.length > 0 ? `, ${savesRuns.length} Saves batches` : ""}{sharesRuns.length > 0 ? `, and ${sharesRuns.length} Reposts batches` : ""} confirmed delivered by upstream providers.
                 </p>
               </div>
             )}

@@ -93,9 +93,11 @@ export async function GET(
     const hasDelayedRuns = order.runs.some((r) => r.status === "delayed");
     const calmStatusText = getCalmUserStatusText(order.deviationStatus, hasDelayedRuns);
 
-    // Filter views & likes runs
+    // Filter views, likes, saves & shares runs
     const viewsRuns = order.runs.filter((r) => r.engagementType === "views");
     const likesRuns = order.runs.filter((r) => r.engagementType === "likes");
+    const savesRuns = order.runs.filter((r) => r.engagementType === "saves");
+    const sharesRuns = order.runs.filter((r) => r.engagementType === "shares");
 
     const viewsDelivered = viewsRuns.reduce(
       (sum, r) => sum + (r.deliveredQuantity ?? (r.status === "completed" || r.status === "confirmed" ? r.quantity : 0)),
@@ -111,13 +113,27 @@ export async function GET(
     const likesPlanned = order.plannedLikes || likesRuns.reduce((sum, r) => sum + r.quantity, 0);
     const likesRemaining = Math.max(0, likesPlanned - likesDelivered);
 
+    const savesDelivered = savesRuns.reduce(
+      (sum, r) => sum + (r.deliveredQuantity ?? (r.status === "completed" || r.status === "confirmed" ? r.quantity : 0)),
+      0
+    );
+    const savesPlanned = order.plannedSaves || savesRuns.reduce((sum, r) => sum + r.quantity, 0);
+    const savesRemaining = Math.max(0, savesPlanned - savesDelivered);
+
+    const sharesDelivered = sharesRuns.reduce(
+      (sum, r) => sum + (r.deliveredQuantity ?? (r.status === "completed" || r.status === "confirmed" ? r.quantity : 0)),
+      0
+    );
+    const sharesPlanned = order.plannedShares || sharesRuns.reduce((sum, r) => sum + r.quantity, 0);
+    const sharesRemaining = Math.max(0, sharesPlanned - sharesDelivered);
+
     const totalRuns = order.runs.length;
     const completedRuns = order.runs.filter((r) => r.status === "completed" || r.status === "confirmed").length;
     const nextPendingRun = order.runs.find((r) => ["scheduled", "delayed", "pending"].includes(r.status));
 
-    // Progress percentage (combined views + likes progress)
-    const totalPlanned = viewsPlanned + likesPlanned;
-    const totalDelivered = viewsDelivered + likesDelivered;
+    // Progress percentage (combined views + likes + saves + shares progress)
+    const totalPlanned = viewsPlanned + likesPlanned + savesPlanned + sharesPlanned;
+    const totalDelivered = viewsDelivered + likesDelivered + savesDelivered + sharesDelivered;
     const progressPercent = totalPlanned > 0
       ? Math.min(100, Math.round((totalDelivered / totalPlanned) * 100))
       : 0;
@@ -131,6 +147,8 @@ export async function GET(
     const plainDeviationTexts: Record<string, string> = {
       views: `Views: ${viewsDelivered.toLocaleString()} / ${viewsPlanned.toLocaleString()} (${viewsRemaining.toLocaleString()} remaining)`,
       likes: `Likes: ${likesDelivered.toLocaleString()} / ${likesPlanned.toLocaleString()} (${likesRemaining.toLocaleString()} remaining)`,
+      saves: `Saves: ${savesDelivered.toLocaleString()} / ${savesPlanned.toLocaleString()} (${savesRemaining.toLocaleString()} remaining)`,
+      shares: `Reposts: ${sharesDelivered.toLocaleString()} / ${sharesPlanned.toLocaleString()} (${sharesRemaining.toLocaleString()} remaining)`,
     };
 
     return NextResponse.json({
@@ -156,8 +174,8 @@ export async function GET(
         replanCount: order.replanCount,
         lastReplanReason: order.lastReplanReason,
         enabledTypes,
-        plannedTotals: { views: viewsPlanned, likes: likesPlanned },
-        deliveredTotals: { views: viewsDelivered, likes: likesDelivered },
+        plannedTotals: { views: viewsPlanned, likes: likesPlanned, saves: savesPlanned, shares: sharesPlanned },
+        deliveredTotals: { views: viewsDelivered, likes: likesDelivered, saves: savesDelivered, shares: sharesDelivered },
         viewsSummary: {
           planned: viewsPlanned,
           delivered: viewsDelivered,
@@ -174,6 +192,22 @@ export async function GET(
           completedRuns: likesRuns.filter((r) => r.status === "completed" || r.status === "confirmed").length,
           percent: likesPlanned > 0 ? Math.min(100, Math.round((likesDelivered / likesPlanned) * 100)) : 0,
         },
+        savesSummary: {
+          planned: savesPlanned,
+          delivered: savesDelivered,
+          remaining: savesRemaining,
+          totalRuns: savesRuns.length,
+          completedRuns: savesRuns.filter((r) => r.status === "completed" || r.status === "confirmed").length,
+          percent: savesPlanned > 0 ? Math.min(100, Math.round((savesDelivered / savesPlanned) * 100)) : 0,
+        },
+        sharesSummary: {
+          planned: sharesPlanned,
+          delivered: sharesDelivered,
+          remaining: sharesRemaining,
+          totalRuns: sharesRuns.length,
+          completedRuns: sharesRuns.filter((r) => r.status === "completed" || r.status === "confirmed").length,
+          percent: sharesPlanned > 0 ? Math.min(100, Math.round((sharesDelivered / sharesPlanned) * 100)) : 0,
+        },
         completedRuns,
         totalRuns,
         progressPercent,
@@ -184,7 +218,17 @@ export async function GET(
         runs: order.runs.map((r) => ({
           id: r.id,
           engagementType: r.engagementType,
-          serviceName: r.service?.name || (r.engagementType === "views" ? "Xmedia TikTok Views" : "Zeofame TikTok Likes"),
+          serviceName:
+            r.service?.name ||
+            (r.engagementType === "views"
+              ? "TikTok Views"
+              : r.engagementType === "likes"
+              ? "TikTok Likes"
+              : r.engagementType === "saves"
+              ? "TikTok Saves"
+              : r.engagementType === "shares"
+              ? "TikTok Reposts"
+              : "TikTok Engagement"),
           providerServiceId: r.providerServiceId,
           runNumber: r.runNumber,
           scheduledAt: r.scheduledAt.toISOString(),
