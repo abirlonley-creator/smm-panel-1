@@ -63,6 +63,24 @@ export const TIKTOK_TIER_PRESETS: Record<string, TikTokTierPreset> = {
       runsCount: 3,
       waveOffsets: [120, 200, 280],
     },
+    saves: {
+      enabled: false,
+      providerName: "Engagement Engine",
+      serviceId: "807",
+      minQuantity: 10,
+      maxQuantity: 12,
+      runsCount: 3,
+      waveOffsets: [180, 240, 280],
+    },
+    shares: {
+      enabled: false,
+      providerName: "Engagement Engine",
+      serviceId: "718",
+      minQuantity: 5,
+      maxQuantity: 10,
+      runsCount: 2,
+      waveOffsets: [200, 260],
+    },
     syncThreshold: {
       minViews: 500,
       maxViews: 700,
@@ -239,22 +257,97 @@ export const TIKTOK_TIER_PRESETS: Record<string, TikTokTierPreset> = {
   },
 };
 
+function getTierPresetsFilePath(): string {
+  return path.join(process.cwd(), "data", "tiktok-tier-presets.json");
+}
+
+let cachedTierPresets: Record<string, TikTokTierPreset> | null = null;
+
+export function getAllTikTokPresetsRecord(): Record<string, TikTokTierPreset> {
+  if (cachedTierPresets) {
+    return cachedTierPresets;
+  }
+
+  const filePath = getTierPresetsFilePath();
+  try {
+    if (fs.existsSync(filePath)) {
+      const data = fs.readFileSync(filePath, "utf-8");
+      const parsed = JSON.parse(data);
+      if (parsed && typeof parsed === "object") {
+        cachedTierPresets = {
+          ...TIKTOK_TIER_PRESETS,
+          ...parsed,
+        };
+        return cachedTierPresets!;
+      }
+    }
+  } catch (err) {
+    console.warn("[TIKTOK_PRESETS] Failed to read tier presets from disk, using defaults:", err);
+  }
+
+  cachedTierPresets = { ...TIKTOK_TIER_PRESETS };
+  return cachedTierPresets;
+}
+
+export function getAllTikTokPresets(): TikTokTierPreset[] {
+  return Object.values(getAllTikTokPresetsRecord());
+}
+
 export function getTikTokPresetById(presetId?: string): TikTokTierPreset {
-  if (presetId && TIKTOK_TIER_PRESETS[presetId]) {
-    return TIKTOK_TIER_PRESETS[presetId];
+  const all = getAllTikTokPresetsRecord();
+  if (presetId && all[presetId]) {
+    return all[presetId];
   }
   // Try matching by name
   if (presetId) {
-    const found = Object.values(TIKTOK_TIER_PRESETS).find(
+    const found = Object.values(all).find(
       (p) => p.name.toLowerCase() === presetId.toLowerCase() || p.id.toLowerCase() === presetId.toLowerCase()
     );
     if (found) return found;
   }
-  return TIKTOK_TIER_PRESETS.tiktok_2k;
+  return all.tiktok_2k || TIKTOK_TIER_PRESETS.tiktok_2k;
 }
 
-export function getAllTikTokPresets(): TikTokTierPreset[] {
-  return Object.values(TIKTOK_TIER_PRESETS);
+export function saveTikTokPreset(presetId: string, updates: Partial<TikTokTierPreset>): TikTokTierPreset {
+  const all = { ...getAllTikTokPresetsRecord() };
+  const current = all[presetId] || TIKTOK_TIER_PRESETS[presetId] || TIKTOK_TIER_PRESETS.tiktok_2k;
+
+  const updated: TikTokTierPreset = {
+    ...current,
+    ...updates,
+    views: { ...current.views, ...(updates.views || {}) },
+    likes: { ...current.likes, ...(updates.likes || {}) },
+    saves: updates.saves !== undefined ? (updates.saves ? { ...(current.saves || { enabled: false, providerName: "Engagement Engine", serviceId: "807", minQuantity: 10, maxQuantity: 12, runsCount: 4, waveOffsets: [240, 420, 600, 750] }), ...updates.saves } : undefined) : current.saves,
+    shares: updates.shares !== undefined ? (updates.shares ? { ...(current.shares || { enabled: false, providerName: "Engagement Engine", serviceId: "718", minQuantity: 10, maxQuantity: 12, runsCount: 2, waveOffsets: [360, 660] }), ...updates.shares } : undefined) : current.shares,
+    syncThreshold: { ...current.syncThreshold, ...(updates.syncThreshold || {}) },
+  };
+
+  all[presetId] = updated;
+  cachedTierPresets = all;
+
+  const filePath = getTierPresetsFilePath();
+  try {
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify(all, null, 2), "utf-8");
+  } catch (err) {
+    console.error("[TIKTOK_PRESETS] Failed to write presets to disk:", err);
+  }
+
+  return updated;
+}
+
+export function saveAllTikTokPresets(newPresets: Record<string, TikTokTierPreset>): Record<string, TikTokTierPreset> {
+  cachedTierPresets = { ...newPresets };
+  const filePath = getTierPresetsFilePath();
+  try {
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify(newPresets, null, 2), "utf-8");
+  } catch (err) {
+    console.error("[TIKTOK_PRESETS] Failed to write all presets to disk:", err);
+  }
+  return cachedTierPresets;
 }
 
 // Backwards-compatible configuration interface

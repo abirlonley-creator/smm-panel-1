@@ -217,6 +217,8 @@ export default function AdminPage() {
 
   // TikTok Engagement Preset Config state
   const [tiktokConfig, setTiktokConfig] = useState<any>(null);
+  const [tiktokTierPresets, setTiktokTierPresets] = useState<Record<string, any>>({});
+  const [selectedAdminPresetKey, setSelectedAdminPresetKey] = useState<string>("tiktok_2k");
   const [savingTiktokConfig, setSavingTiktokConfig] = useState(false);
   const [originalRates, setOriginalRates] = useState<{
     views: number;
@@ -362,6 +364,7 @@ export default function AdminPage() {
       if (engOrdersRes.success && Array.isArray(engOrdersRes.orders)) setEngagementOrders(engOrdersRes.orders);
       if (tiktokRes.success) {
         if (tiktokRes.config) setTiktokConfig(tiktokRes.config);
+        if (tiktokRes.presets) setTiktokTierPresets(tiktokRes.presets);
         if (tiktokRes.originalRates) setOriginalRates(tiktokRes.originalRates);
       }
       if (alertsRes.success) {
@@ -390,14 +393,18 @@ export default function AdminPage() {
       const res = await fetch("/api/admin/engagement-config", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(tiktokConfig),
+        body: JSON.stringify({
+          config: tiktokConfig,
+          presets: tiktokTierPresets,
+        }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
         throw new Error(data.error || "Failed to update TikTok engagement configuration");
       }
-      setTiktokConfig(data.config);
-      setActionMsg({ text: "TikTok Engagement configuration saved successfully.", type: "success" });
+      if (data.config) setTiktokConfig(data.config);
+      if (data.presets) setTiktokTierPresets(data.presets);
+      setActionMsg({ text: "TikTok Engagement presets and pricing configuration saved successfully.", type: "success" });
     } catch (err: any) {
       setActionMsg({ text: err.message || "Failed to save configuration", type: "error" });
     } finally {
@@ -1607,482 +1614,728 @@ export default function AdminPage() {
 
             {tiktokConfig ? (
               <form onSubmit={handleSaveTiktokConfig} className="space-y-6 text-xs">
-                {/* Master Switch & Preset Name */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED]">
-                  <div className="flex items-center justify-between sm:justify-start gap-4">
-                    <div>
-                      <span className="font-bold text-[#252943] block">Engagement System</span>
-                      <span className="text-[11px] text-[#252943]/60">Allow users to place organic orders</span>
+                {/* Master Switch & Preset Navigation Bar */}
+                <div className="space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED]">
+                    <div className="flex items-center gap-4">
+                      <div>
+                        <span className="font-bold text-[#252943] block text-sm">Engagement System Master Switch</span>
+                        <span className="text-[11px] text-[#252943]/60">Allow users to place organic orders globally</span>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={tiktokConfig.enabled}
+                          onChange={(e) => setTiktokConfig({ ...tiktokConfig, enabled: e.target.checked })}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                      </label>
                     </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={tiktokConfig.enabled}
-                        onChange={(e) => setTiktokConfig({ ...tiktokConfig, enabled: e.target.checked })}
-                        className="sr-only peer"
-                      />
-                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
-                    </label>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-bold text-[#252943]/60">Live Status:</span>
+                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${
+                        tiktokConfig.enabled ? "bg-emerald-100 text-emerald-800 border border-emerald-300" : "bg-rose-100 text-rose-800 border border-rose-300"
+                      }`}>
+                        {tiktokConfig.enabled ? "Active & Accepting Orders" : "Maintenance / Paused"}
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="sm:col-span-2">
-                    <label className="block font-bold text-[#252943] mb-1">Preset Display Name</label>
-                    <input
-                      type="text"
-                      value={tiktokConfig.presetName}
-                      onChange={(e) => setTiktokConfig({ ...tiktokConfig, presetName: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold text-[#252943]"
-                      required
-                    />
+                  {/* Preset Selector Tabs */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-[#3A4EFB]" />
+                        <span className="font-bold text-xs text-[#252943]">Choose Preset to Configure</span>
+                      </div>
+                      <span className="text-[11px] text-[#252943]/50">Edit any preset's services, turn services On/Off, or adjust quantities</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                      {[
+                        { id: "tiktok_2k", defaultLabel: "2K Starter", defaultBadge: "5h", defaultDuration: "5.0 Hours" },
+                        { id: "tiktok_5k", defaultLabel: "5K Velocity", defaultBadge: "16h", defaultDuration: "16.0 Hours (1 Day)" },
+                        { id: "tiktok_10k", defaultLabel: "10K Breakthrough", defaultBadge: "22h", defaultDuration: "22.0 Hours (1 Day)" },
+                        { id: "tiktok_50k", defaultLabel: "50K Mega Viral", defaultBadge: "48h", defaultDuration: "48.0 Hours (2 Days)" },
+                      ].map((tab) => {
+                        const isTabActive = selectedAdminPresetKey === tab.id;
+                        const presetData = tiktokTierPresets[tab.id];
+                        const displayName = presetData?.name || tab.defaultLabel;
+                        const badgeText = presetData?.badge || tab.defaultBadge;
+
+                        const viewsOn = presetData?.views ? presetData.views.enabled !== false : true;
+                        const likesOn = presetData?.likes ? presetData.likes.enabled !== false : true;
+                        const savesOn = presetData?.saves ? Boolean(presetData.saves.enabled) : tab.id !== "tiktok_2k";
+                        const sharesOn = presetData?.shares ? Boolean(presetData.shares.enabled) : tab.id !== "tiktok_2k";
+                        const activeCount = [viewsOn, likesOn, savesOn, sharesOn].filter(Boolean).length;
+
+                        return (
+                          <button
+                            key={tab.id}
+                            type="button"
+                            onClick={() => setSelectedAdminPresetKey(tab.id)}
+                            className={`p-3.5 rounded-2xl border text-left transition-all relative flex flex-col justify-between cursor-pointer ${
+                              isTabActive
+                                ? "bg-[#3A4EFB] text-white border-[#3A4EFB] shadow-md shadow-[#3A4EFB]/20 ring-2 ring-[#3A4EFB]"
+                                : "bg-white border-[#DEE0ED] hover:bg-[#F8F9FD] text-[#252943]"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-1 w-full mb-1.5">
+                              <span className="font-black text-xs truncate">{displayName}</span>
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                                isTabActive ? "bg-white/20 text-white" : "bg-[#DEE0ED] text-[#252943]"
+                              }`}>
+                                {badgeText}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between text-[10px] opacity-80 pt-1.5 border-t border-current/20">
+                              <span>{activeCount} / 4 Services On</span>
+                              <span className="font-mono font-bold">{isTabActive ? "Editing" : "Select"}</span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
 
-                {/* Two Column Grid: Views vs Likes Configurations */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* VIEWS CONFIGURATION */}
-                  <div className="p-5 rounded-2xl border border-[#DEE0ED] bg-[#F8F9FD]/50 space-y-4">
-                    <div className="flex items-center justify-between pb-2 border-b border-[#DEE0ED]">
-                      <div className="flex items-center gap-2">
-                        <Eye className="w-4 h-4 text-[#3A4EFB]" />
-                        <span className="font-bold text-sm text-[#252943]">TikTok Views Configuration</span>
-                      </div>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-bold">
-                        {tiktokConfig.views?.providerName || "Views Provider"}
-                      </span>
-                    </div>
+                {/* Preset Editor Section */}
+                {(() => {
+                  const fallbackPreset = {
+                    id: selectedAdminPresetKey,
+                    name: selectedAdminPresetKey === "tiktok_2k" ? "2K Starter" : selectedAdminPresetKey === "tiktok_5k" ? "5K Velocity" : selectedAdminPresetKey === "tiktok_10k" ? "10K Breakthrough" : "50K Mega Viral",
+                    tagline: selectedAdminPresetKey === "tiktok_2k" ? "5-hour organic pacing for new posts" : selectedAdminPresetKey === "tiktok_5k" ? "16-hour FYP push with likes & reposts" : selectedAdminPresetKey === "tiktok_10k" ? "22-hour algorithm breakout with high saves" : "48-hour multi-day viral simulation",
+                    badge: selectedAdminPresetKey === "tiktok_2k" ? "5h" : selectedAdminPresetKey === "tiktok_5k" ? "16h" : selectedAdminPresetKey === "tiktok_10k" ? "22h" : "48h",
+                    durationLabel: selectedAdminPresetKey === "tiktok_2k" ? "5.0 Hours" : selectedAdminPresetKey === "tiktok_5k" ? "16.0 Hours (1 Day)" : selectedAdminPresetKey === "tiktok_10k" ? "22.0 Hours (1 Day)" : "48.0 Hours (2 Days)",
+                    durationHours: selectedAdminPresetKey === "tiktok_2k" ? 5.0 : selectedAdminPresetKey === "tiktok_5k" ? 16.0 : selectedAdminPresetKey === "tiktok_10k" ? 22.0 : 48.0,
+                    targetViews: selectedAdminPresetKey === "tiktok_2k" ? 2000 : selectedAdminPresetKey === "tiktok_5k" ? 5000 : selectedAdminPresetKey === "tiktok_10k" ? 10000 : 50000,
+                    targetLikes: selectedAdminPresetKey === "tiktok_2k" ? 42 : selectedAdminPresetKey === "tiktok_5k" ? 175 : selectedAdminPresetKey === "tiktok_10k" ? 380 : 2000,
+                    views: {
+                      enabled: true,
+                      providerName: tiktokConfig?.views?.providerName || "Views Provider",
+                      serviceId: tiktokConfig?.views?.serviceId || "10322",
+                      minQuantity: selectedAdminPresetKey === "tiktok_2k" ? 150 : selectedAdminPresetKey === "tiktok_5k" ? 230 : selectedAdminPresetKey === "tiktok_10k" ? 380 : 1050,
+                      maxQuantity: selectedAdminPresetKey === "tiktok_2k" ? 220 : selectedAdminPresetKey === "tiktok_5k" ? 280 : selectedAdminPresetKey === "tiktok_10k" ? 430 : 1250,
+                      runsCount: selectedAdminPresetKey === "tiktok_2k" ? 16 : selectedAdminPresetKey === "tiktok_5k" ? 20 : selectedAdminPresetKey === "tiktok_10k" ? 26 : 44,
+                      intervalMinutes: selectedAdminPresetKey === "tiktok_2k" ? 20 : selectedAdminPresetKey === "tiktok_5k" ? 45 : selectedAdminPresetKey === "tiktok_10k" ? 48 : 62,
+                    },
+                    likes: {
+                      enabled: true,
+                      providerName: tiktokConfig?.likes?.providerName || "Likes Provider",
+                      serviceId: tiktokConfig?.likes?.serviceId || "1123",
+                      minQuantity: selectedAdminPresetKey === "tiktok_2k" ? 12 : selectedAdminPresetKey === "tiktok_5k" ? 11 : selectedAdminPresetKey === "tiktok_10k" ? 14 : 45,
+                      maxQuantity: selectedAdminPresetKey === "tiktok_2k" ? 16 : selectedAdminPresetKey === "tiktok_5k" ? 14 : selectedAdminPresetKey === "tiktok_10k" ? 18 : 55,
+                      runsCount: selectedAdminPresetKey === "tiktok_2k" ? 3 : selectedAdminPresetKey === "tiktok_5k" ? 14 : selectedAdminPresetKey === "tiktok_10k" ? 24 : 40,
+                      waveOffsets: [120, 200, 280],
+                    },
+                    saves: {
+                      enabled: selectedAdminPresetKey !== "tiktok_2k",
+                      providerName: tiktokConfig?.saves?.providerName || "Engagement Engine",
+                      serviceId: tiktokConfig?.saves?.serviceId || "807",
+                      minQuantity: 10,
+                      maxQuantity: 12,
+                      runsCount: selectedAdminPresetKey === "tiktok_50k" ? 30 : selectedAdminPresetKey === "tiktok_10k" ? 8 : 4,
+                      waveOffsets: [240, 420, 600, 750],
+                    },
+                    shares: {
+                      enabled: selectedAdminPresetKey !== "tiktok_2k",
+                      providerName: tiktokConfig?.shares?.providerName || "Engagement Engine",
+                      serviceId: tiktokConfig?.shares?.serviceId || "718",
+                      minQuantity: 10,
+                      maxQuantity: 12,
+                      runsCount: selectedAdminPresetKey === "tiktok_50k" ? 15 : selectedAdminPresetKey === "tiktok_10k" ? 4 : 2,
+                      waveOffsets: [360, 660],
+                    },
+                    syncThreshold: { minViews: 500, maxViews: 700 },
+                  };
 
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block font-bold text-[#252943]/70 mb-1">Provider Name</label>
-                        <input
-                          type="text"
-                          value={tiktokConfig.views?.providerName || "Views Provider"}
-                          onChange={(e) =>
-                            setTiktokConfig({
-                              ...tiktokConfig,
-                              views: { ...tiktokConfig.views, providerName: e.target.value },
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-medium"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-bold text-[#252943]/70 mb-1">Service ID</label>
-                        <input
-                          type="text"
-                          value={tiktokConfig.views?.serviceId || "10322"}
-                          onChange={(e) =>
-                            setTiktokConfig({
-                              ...tiktokConfig,
-                              views: { ...tiktokConfig.views, serviceId: e.target.value },
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-mono font-bold text-[#3A4EFB]"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-bold text-[#252943]/70 mb-1">Min Batch Quantity</label>
-                        <input
-                          type="number"
-                          value={tiktokConfig.views?.minQuantity ?? 150}
-                          onChange={(e) =>
-                            setTiktokConfig({
-                              ...tiktokConfig,
-                              views: { ...tiktokConfig.views, minQuantity: Number(e.target.value) },
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
-                          min={1}
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-bold text-[#252943]/70 mb-1">Max Batch Quantity</label>
-                        <input
-                          type="number"
-                          value={tiktokConfig.views?.maxQuantity ?? 220}
-                          onChange={(e) =>
-                            setTiktokConfig({
-                              ...tiktokConfig,
-                              views: { ...tiktokConfig.views, maxQuantity: Number(e.target.value) },
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
-                          min={1}
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-bold text-[#252943]/70 mb-1">Number of Runs</label>
-                        <input
-                          type="number"
-                          value={tiktokConfig.views?.runsCount ?? 16}
-                          onChange={(e) =>
-                            setTiktokConfig({
-                              ...tiktokConfig,
-                              views: { ...tiktokConfig.views, runsCount: Number(e.target.value) },
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
-                          min={1}
-                          max={100}
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-bold text-[#252943]/70 mb-1">Interval (Minutes)</label>
-                        <input
-                          type="number"
-                          value={tiktokConfig.views?.intervalMinutes ?? 20}
-                          onChange={(e) =>
-                            setTiktokConfig({
-                              ...tiktokConfig,
-                              views: { ...tiktokConfig.views, intervalMinutes: Number(e.target.value) },
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
-                          min={1}
-                          required
-                        />
-                      </div>
-                    </div>
-                  </div>
+                  const activePreset = {
+                    ...fallbackPreset,
+                    ...(tiktokTierPresets[selectedAdminPresetKey] || {}),
+                    views: { ...fallbackPreset.views, ...(tiktokTierPresets[selectedAdminPresetKey]?.views || {}) },
+                    likes: { ...fallbackPreset.likes, ...(tiktokTierPresets[selectedAdminPresetKey]?.likes || {}) },
+                    saves: { ...fallbackPreset.saves, ...(tiktokTierPresets[selectedAdminPresetKey]?.saves || {}) },
+                    shares: { ...fallbackPreset.shares, ...(tiktokTierPresets[selectedAdminPresetKey]?.shares || {}) },
+                    syncThreshold: { ...fallbackPreset.syncThreshold, ...(tiktokTierPresets[selectedAdminPresetKey]?.syncThreshold || {}) },
+                  };
 
-                  {/* LIKES CONFIGURATION */}
-                  <div className="p-5 rounded-2xl border border-[#DEE0ED] bg-[#F8F9FD]/50 space-y-4">
-                    <div className="flex items-center justify-between pb-2 border-b border-[#DEE0ED]">
-                      <div className="flex items-center gap-2">
-                        <Heart className="w-4 h-4 text-rose-600" />
-                        <span className="font-bold text-sm text-[#252943]">TikTok Likes Configuration</span>
-                      </div>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-rose-100 text-rose-800 font-bold">
-                        {tiktokConfig.likes?.providerName || "Likes Provider"}
-                      </span>
-                    </div>
+                  const updateActiveField = (field: string, val: any) => {
+                    const updated = { ...activePreset, [field]: val };
+                    setTiktokTierPresets((prev) => ({ ...prev, [selectedAdminPresetKey]: updated }));
+                    if (selectedAdminPresetKey === "tiktok_2k" && field === "name") {
+                      setTiktokConfig((prev: any) => ({ ...prev, presetName: val }));
+                    }
+                  };
 
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block font-bold text-[#252943]/70 mb-1">Provider Name</label>
-                        <input
-                          type="text"
-                          value={tiktokConfig.likes?.providerName || "Likes Provider"}
-                          onChange={(e) =>
-                            setTiktokConfig({
-                              ...tiktokConfig,
-                              likes: { ...tiktokConfig.likes, providerName: e.target.value },
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-medium"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-bold text-[#252943]/70 mb-1">Service ID</label>
-                        <input
-                          type="text"
-                          value={tiktokConfig.likes?.serviceId || "1123"}
-                          onChange={(e) =>
-                            setTiktokConfig({
-                              ...tiktokConfig,
-                              likes: { ...tiktokConfig.likes, serviceId: e.target.value },
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-mono font-bold text-[#3A4EFB]"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-bold text-[#252943]/70 mb-1">Min Batch Quantity</label>
-                        <input
-                          type="number"
-                          value={tiktokConfig.likes?.minQuantity ?? 12}
-                          onChange={(e) =>
-                            setTiktokConfig({
-                              ...tiktokConfig,
-                              likes: { ...tiktokConfig.likes, minQuantity: Number(e.target.value) },
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
-                          min={1}
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-bold text-[#252943]/70 mb-1">Max Batch Quantity</label>
-                        <input
-                          type="number"
-                          value={tiktokConfig.likes?.maxQuantity ?? 16}
-                          onChange={(e) =>
-                            setTiktokConfig({
-                              ...tiktokConfig,
-                              likes: { ...tiktokConfig.likes, maxQuantity: Number(e.target.value) },
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
-                          min={1}
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-bold text-[#252943]/70 mb-1">Number of Runs</label>
-                        <input
-                          type="number"
-                          value={tiktokConfig.likes?.runsCount ?? 3}
-                          onChange={(e) =>
-                            setTiktokConfig({
-                              ...tiktokConfig,
-                              likes: { ...tiktokConfig.likes, runsCount: Number(e.target.value) },
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
-                          min={1}
-                          max={50}
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-bold text-[#252943]/70 mb-1">Interval (Minutes)</label>
-                        <input
-                          type="number"
-                          value={tiktokConfig.likes?.intervalMinutes ?? 120}
-                          onChange={(e) =>
-                            setTiktokConfig({
-                              ...tiktokConfig,
-                              likes: { ...tiktokConfig.likes, intervalMinutes: Number(e.target.value) },
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
-                          min={1}
-                          required
-                        />
-                      </div>
-                    </div>
-                  </div>
+                  const updateServiceField = (svc: "views" | "likes" | "saves" | "shares", field: string, val: any) => {
+                    const currentSvc = activePreset[svc] || {};
+                    const updatedSvc = { ...currentSvc, [field]: val };
+                    const updated = { ...activePreset, [svc]: updatedSvc };
+                    setTiktokTierPresets((prev) => ({ ...prev, [selectedAdminPresetKey]: updated }));
+                    if (selectedAdminPresetKey === "tiktok_2k") {
+                      setTiktokConfig((prev: any) => ({
+                        ...prev,
+                        [svc]: { ...(prev?.[svc] || {}), [field]: val },
+                      }));
+                    }
+                  };
 
-                  {/* SAVES CONFIGURATION */}
-                  <div className="p-5 rounded-2xl border border-[#DEE0ED] bg-[#F8F9FD]/50 space-y-4">
-                    <div className="flex items-center justify-between pb-2 border-b border-[#DEE0ED]">
-                      <div className="flex items-center gap-2">
-                        <Bookmark className="w-4 h-4 text-amber-600" />
-                        <span className="font-bold text-sm text-[#252943]">TikTok Saves Configuration</span>
-                      </div>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-bold">
-                        {tiktokConfig.saves?.providerName || "Engagement Engine"}
-                      </span>
-                    </div>
+                  return (
+                    <div className="space-y-6">
+                      {/* Preset Metadata Card */}
+                      <div className="p-5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] space-y-4">
+                        <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]/80">
+                          <div className="flex items-center gap-2">
+                            <span className="w-7 h-7 rounded-lg bg-[#3A4EFB] text-white text-xs font-black flex items-center justify-center">
+                              P
+                            </span>
+                            <div>
+                              <h3 className="font-black text-sm text-[#252943]">
+                                Preset Details: {activePreset.name}
+                              </h3>
+                              <span className="text-[11px] text-[#252943]/60">
+                                This preset's values and active services will be shown live to users on /engagement
+                              </span>
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800">
+                            Key: {selectedAdminPresetKey}
+                          </span>
+                        </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block font-bold text-[#252943]/70 mb-1">Provider Name</label>
-                        <input
-                          type="text"
-                          value={tiktokConfig.saves?.providerName || "Engagement Engine"}
-                          onChange={(e) =>
-                            setTiktokConfig({
-                              ...tiktokConfig,
-                              saves: { ...(tiktokConfig.saves || {}), providerName: e.target.value },
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-medium"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-bold text-[#252943]/70 mb-1">Service ID</label>
-                        <input
-                          type="text"
-                          value={tiktokConfig.saves?.serviceId || "807"}
-                          onChange={(e) =>
-                            setTiktokConfig({
-                              ...tiktokConfig,
-                              saves: { ...(tiktokConfig.saves || {}), serviceId: e.target.value },
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-mono font-bold text-[#3A4EFB]"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-bold text-[#252943]/70 mb-1">Min Batch Quantity</label>
-                        <input
-                          type="number"
-                          value={tiktokConfig.saves?.minQuantity ?? 5}
-                          onChange={(e) =>
-                            setTiktokConfig({
-                              ...tiktokConfig,
-                              saves: { ...(tiktokConfig.saves || {}), minQuantity: Number(e.target.value) },
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
-                          min={1}
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-bold text-[#252943]/70 mb-1">Max Batch Quantity</label>
-                        <input
-                          type="number"
-                          value={tiktokConfig.saves?.maxQuantity ?? 10}
-                          onChange={(e) =>
-                            setTiktokConfig({
-                              ...tiktokConfig,
-                              saves: { ...(tiktokConfig.saves || {}), maxQuantity: Number(e.target.value) },
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
-                          min={1}
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-bold text-[#252943]/70 mb-1">Number of Runs</label>
-                        <input
-                          type="number"
-                          value={tiktokConfig.saves?.runsCount ?? 4}
-                          onChange={(e) =>
-                            setTiktokConfig({
-                              ...tiktokConfig,
-                              saves: { ...(tiktokConfig.saves || {}), runsCount: Number(e.target.value) },
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
-                          min={1}
-                          max={50}
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-bold text-[#252943]/70 mb-1">Interval (Minutes)</label>
-                        <input
-                          type="number"
-                          value={tiktokConfig.saves?.intervalMinutes ?? 120}
-                          onChange={(e) =>
-                            setTiktokConfig({
-                              ...tiktokConfig,
-                              saves: { ...(tiktokConfig.saves || {}), intervalMinutes: Number(e.target.value) },
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
-                          min={1}
-                          required
-                        />
-                      </div>
-                    </div>
-                  </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                          <div className="sm:col-span-2">
+                            <label className="block font-bold text-[#252943]/80 mb-1">Preset Display Name</label>
+                            <input
+                              type="text"
+                              value={activePreset.name}
+                              onChange={(e) => updateActiveField("name", e.target.value)}
+                              className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-bold text-[#252943]"
+                              required
+                            />
+                          </div>
 
-                  {/* SHARES / REPOSTS CONFIGURATION */}
-                  <div className="p-5 rounded-2xl border border-[#DEE0ED] bg-[#F8F9FD]/50 space-y-4">
-                    <div className="flex items-center justify-between pb-2 border-b border-[#DEE0ED]">
-                      <div className="flex items-center gap-2">
-                        <Share2 className="w-4 h-4 text-purple-600" />
-                        <span className="font-bold text-sm text-[#252943]">TikTok Reposts / Shares Configuration</span>
-                      </div>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-purple-100 text-purple-800 font-bold">
-                        {tiktokConfig.shares?.providerName || "Engagement Engine"}
-                      </span>
-                    </div>
+                          <div>
+                            <label className="block font-bold text-[#252943]/80 mb-1">Badge Tag</label>
+                            <input
+                              type="text"
+                              value={activePreset.badge}
+                              onChange={(e) => updateActiveField("badge", e.target.value)}
+                              className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-mono font-bold text-[#3A4EFB]"
+                              required
+                            />
+                          </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block font-bold text-[#252943]/70 mb-1">Provider Name</label>
-                        <input
-                          type="text"
-                          value={tiktokConfig.shares?.providerName || "Engagement Engine"}
-                          onChange={(e) =>
-                            setTiktokConfig({
-                              ...tiktokConfig,
-                              shares: { ...(tiktokConfig.shares || {}), providerName: e.target.value },
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-medium"
-                          required
-                        />
+                          <div>
+                            <label className="block font-bold text-[#252943]/80 mb-1">Duration (Hours)</label>
+                            <input
+                              type="number"
+                              step="0.5"
+                              value={activePreset.durationHours}
+                              onChange={(e) => {
+                                const h = Number(e.target.value);
+                                updateActiveField("durationHours", h);
+                                updateActiveField("durationLabel", `${h.toFixed(1)} Hours`);
+                              }}
+                              className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-bold text-[#252943]"
+                              min={0.5}
+                              required
+                            />
+                          </div>
+
+                          <div className="sm:col-span-4">
+                            <label className="block font-bold text-[#252943]/80 mb-1">Tagline (Shown on User Card)</label>
+                            <input
+                              type="text"
+                              value={activePreset.tagline}
+                              onChange={(e) => updateActiveField("tagline", e.target.value)}
+                              className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-medium text-[#252943]"
+                              placeholder="e.g. 5-hour organic pacing for new posts"
+                              required
+                            />
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <label className="block font-bold text-[#252943]/70 mb-1">Service ID</label>
-                        <input
-                          type="text"
-                          value={tiktokConfig.shares?.serviceId || "718"}
-                          onChange={(e) =>
-                            setTiktokConfig({
-                              ...tiktokConfig,
-                              shares: { ...(tiktokConfig.shares || {}), serviceId: e.target.value },
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-mono font-bold text-[#3A4EFB]"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-bold text-[#252943]/70 mb-1">Min Batch Quantity</label>
-                        <input
-                          type="number"
-                          value={tiktokConfig.shares?.minQuantity ?? 3}
-                          onChange={(e) =>
-                            setTiktokConfig({
-                              ...tiktokConfig,
-                              shares: { ...(tiktokConfig.shares || {}), minQuantity: Number(e.target.value) },
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
-                          min={1}
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-bold text-[#252943]/70 mb-1">Max Batch Quantity</label>
-                        <input
-                          type="number"
-                          value={tiktokConfig.shares?.maxQuantity ?? 8}
-                          onChange={(e) =>
-                            setTiktokConfig({
-                              ...tiktokConfig,
-                              shares: { ...(tiktokConfig.shares || {}), maxQuantity: Number(e.target.value) },
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
-                          min={1}
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-bold text-[#252943]/70 mb-1">Number of Runs</label>
-                        <input
-                          type="number"
-                          value={tiktokConfig.shares?.runsCount ?? 3}
-                          onChange={(e) =>
-                            setTiktokConfig({
-                              ...tiktokConfig,
-                              shares: { ...(tiktokConfig.shares || {}), runsCount: Number(e.target.value) },
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
-                          min={1}
-                          max={50}
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-bold text-[#252943]/70 mb-1">Interval (Minutes)</label>
-                        <input
-                          type="number"
-                          value={tiktokConfig.shares?.intervalMinutes ?? 120}
-                          onChange={(e) =>
-                            setTiktokConfig({
-                              ...tiktokConfig,
-                              shares: { ...(tiktokConfig.shares || {}), intervalMinutes: Number(e.target.value) },
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
-                          min={1}
-                          required
-                        />
+
+                      {/* Four Service Cards with Individual ON / OFF TOGGLES */}
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* 1. VIEWS SERVICE CARD */}
+                        <div className={`p-5 rounded-2xl border transition-all ${
+                          activePreset.views?.enabled !== false
+                            ? "bg-[#F8F9FD]/60 border-[#DEE0ED]"
+                            : "bg-slate-50 border-slate-300 opacity-75"
+                        } space-y-4`}>
+                          <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
+                            <div className="flex items-center gap-2.5">
+                              <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold ${
+                                activePreset.views?.enabled !== false ? "bg-blue-100 text-[#3A4EFB]" : "bg-slate-200 text-slate-500"
+                              }`}>
+                                <Eye className="w-4 h-4" />
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-sm text-[#252943]">TikTok Views Service</span>
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                    activePreset.views?.enabled !== false
+                                      ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                      : "bg-rose-100 text-rose-800 border border-rose-300"
+                                  }`}>
+                                    {activePreset.views?.enabled !== false ? "✓ Included" : "✕ Turned Off"}
+                                  </span>
+                                </div>
+                                <span className="text-[11px] text-[#252943]/60">
+                                  {activePreset.views?.enabled !== false
+                                    ? "Active in cards, batches & orders"
+                                    : "Removed from user card, batches & orders"}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Service On/Off Switch */}
+                            <div className="flex items-center gap-2">
+                              <span className="text-[11px] font-bold text-[#252943]/70">
+                                {activePreset.views?.enabled !== false ? "On" : "Off"}
+                              </span>
+                              <label className="relative inline-flex items-center cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={activePreset.views?.enabled !== false}
+                                  onChange={(e) => updateServiceField("views", "enabled", e.target.checked)}
+                                  className="sr-only peer"
+                                />
+                                <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                              </label>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block font-bold text-[#252943]/70 mb-1">Provider Name</label>
+                              <input
+                                type="text"
+                                value={activePreset.views?.providerName || "Views Provider"}
+                                onChange={(e) => updateServiceField("views", "providerName", e.target.value)}
+                                className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-medium"
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="block font-bold text-[#252943]/70 mb-1">Service ID</label>
+                              <input
+                                type="text"
+                                value={activePreset.views?.serviceId || "10322"}
+                                onChange={(e) => updateServiceField("views", "serviceId", e.target.value)}
+                                className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-mono font-bold text-[#3A4EFB]"
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="block font-bold text-[#252943]/70 mb-1">Min Batch Quantity</label>
+                              <input
+                                type="number"
+                                value={activePreset.views?.minQuantity ?? 150}
+                                onChange={(e) => updateServiceField("views", "minQuantity", Number(e.target.value))}
+                                className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
+                                min={1}
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="block font-bold text-[#252943]/70 mb-1">Max Batch Quantity</label>
+                              <input
+                                type="number"
+                                value={activePreset.views?.maxQuantity ?? 220}
+                                onChange={(e) => updateServiceField("views", "maxQuantity", Number(e.target.value))}
+                                className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
+                                min={1}
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="block font-bold text-[#252943]/70 mb-1">Number of Runs</label>
+                              <input
+                                type="number"
+                                value={activePreset.views?.runsCount ?? 16}
+                                onChange={(e) => updateServiceField("views", "runsCount", Number(e.target.value))}
+                                className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
+                                min={1}
+                                max={100}
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="block font-bold text-[#252943]/70 mb-1">Interval (Minutes)</label>
+                              <input
+                                type="number"
+                                value={activePreset.views?.intervalMinutes ?? 20}
+                                onChange={(e) => updateServiceField("views", "intervalMinutes", Number(e.target.value))}
+                                className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
+                                min={1}
+                                required
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 2. LIKES SERVICE CARD */}
+                        <div className={`p-5 rounded-2xl border transition-all ${
+                          activePreset.likes?.enabled !== false
+                            ? "bg-[#F8F9FD]/60 border-[#DEE0ED]"
+                            : "bg-slate-50 border-slate-300 opacity-75"
+                        } space-y-4`}>
+                          <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
+                            <div className="flex items-center gap-2.5">
+                              <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold ${
+                                activePreset.likes?.enabled !== false ? "bg-rose-100 text-rose-600" : "bg-slate-200 text-slate-500"
+                              }`}>
+                                <Heart className="w-4 h-4" />
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-sm text-[#252943]">TikTok Likes Service</span>
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                    activePreset.likes?.enabled !== false
+                                      ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                      : "bg-rose-100 text-rose-800 border border-rose-300"
+                                  }`}>
+                                    {activePreset.likes?.enabled !== false ? "✓ Included" : "✕ Turned Off"}
+                                  </span>
+                                </div>
+                                <span className="text-[11px] text-[#252943]/60">
+                                  {activePreset.likes?.enabled !== false
+                                    ? "Active in cards, batches & orders"
+                                    : "Removed from user card, batches & orders"}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Service On/Off Switch */}
+                            <div className="flex items-center gap-2">
+                              <span className="text-[11px] font-bold text-[#252943]/70">
+                                {activePreset.likes?.enabled !== false ? "On" : "Off"}
+                              </span>
+                              <label className="relative inline-flex items-center cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={activePreset.likes?.enabled !== false}
+                                  onChange={(e) => updateServiceField("likes", "enabled", e.target.checked)}
+                                  className="sr-only peer"
+                                />
+                                <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                              </label>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block font-bold text-[#252943]/70 mb-1">Provider Name</label>
+                              <input
+                                type="text"
+                                value={activePreset.likes?.providerName || "Likes Provider"}
+                                onChange={(e) => updateServiceField("likes", "providerName", e.target.value)}
+                                className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-medium"
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="block font-bold text-[#252943]/70 mb-1">Service ID</label>
+                              <input
+                                type="text"
+                                value={activePreset.likes?.serviceId || "1123"}
+                                onChange={(e) => updateServiceField("likes", "serviceId", e.target.value)}
+                                className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-mono font-bold text-[#3A4EFB]"
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="block font-bold text-[#252943]/70 mb-1">Min Batch Quantity</label>
+                              <input
+                                type="number"
+                                value={activePreset.likes?.minQuantity ?? 12}
+                                onChange={(e) => updateServiceField("likes", "minQuantity", Number(e.target.value))}
+                                className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
+                                min={1}
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="block font-bold text-[#252943]/70 mb-1">Max Batch Quantity</label>
+                              <input
+                                type="number"
+                                value={activePreset.likes?.maxQuantity ?? 16}
+                                onChange={(e) => updateServiceField("likes", "maxQuantity", Number(e.target.value))}
+                                className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
+                                min={1}
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="block font-bold text-[#252943]/70 mb-1">Number of Runs</label>
+                              <input
+                                type="number"
+                                value={activePreset.likes?.runsCount ?? 3}
+                                onChange={(e) => updateServiceField("likes", "runsCount", Number(e.target.value))}
+                                className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
+                                min={1}
+                                max={50}
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="block font-bold text-[#252943]/70 mb-1">Interval (Minutes)</label>
+                              <input
+                                type="number"
+                                value={activePreset.likes?.intervalMinutes ?? 120}
+                                onChange={(e) => updateServiceField("likes", "intervalMinutes", Number(e.target.value))}
+                                className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
+                                min={1}
+                                required
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 3. SAVES SERVICE CARD */}
+                        <div className={`p-5 rounded-2xl border transition-all ${
+                          Boolean(activePreset.saves?.enabled)
+                            ? "bg-[#F8F9FD]/60 border-[#DEE0ED]"
+                            : "bg-slate-50 border-slate-300 opacity-75"
+                        } space-y-4`}>
+                          <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
+                            <div className="flex items-center gap-2.5">
+                              <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold ${
+                                Boolean(activePreset.saves?.enabled) ? "bg-amber-100 text-amber-700" : "bg-slate-200 text-slate-500"
+                              }`}>
+                                <Bookmark className="w-4 h-4" />
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-sm text-[#252943]">TikTok Saves Service</span>
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                    Boolean(activePreset.saves?.enabled)
+                                      ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                      : "bg-rose-100 text-rose-800 border border-rose-300"
+                                  }`}>
+                                    {Boolean(activePreset.saves?.enabled) ? "✓ Included" : "✕ Turned Off"}
+                                  </span>
+                                </div>
+                                <span className="text-[11px] text-[#252943]/60">
+                                  {Boolean(activePreset.saves?.enabled)
+                                    ? "Active in cards, batches & orders"
+                                    : "Removed from user card, batches & orders"}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Service On/Off Switch */}
+                            <div className="flex items-center gap-2">
+                              <span className="text-[11px] font-bold text-[#252943]/70">
+                                {Boolean(activePreset.saves?.enabled) ? "On" : "Off"}
+                              </span>
+                              <label className="relative inline-flex items-center cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(activePreset.saves?.enabled)}
+                                  onChange={(e) => updateServiceField("saves", "enabled", e.target.checked)}
+                                  className="sr-only peer"
+                                />
+                                <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                              </label>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block font-bold text-[#252943]/70 mb-1">Provider Name</label>
+                              <input
+                                type="text"
+                                value={activePreset.saves?.providerName || "Engagement Engine"}
+                                onChange={(e) => updateServiceField("saves", "providerName", e.target.value)}
+                                className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-medium"
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="block font-bold text-[#252943]/70 mb-1">Service ID</label>
+                              <input
+                                type="text"
+                                value={activePreset.saves?.serviceId || "807"}
+                                onChange={(e) => updateServiceField("saves", "serviceId", e.target.value)}
+                                className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-mono font-bold text-[#3A4EFB]"
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="block font-bold text-[#252943]/70 mb-1">Min Batch Quantity</label>
+                              <input
+                                type="number"
+                                value={activePreset.saves?.minQuantity ?? 10}
+                                onChange={(e) => updateServiceField("saves", "minQuantity", Number(e.target.value))}
+                                className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
+                                min={1}
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="block font-bold text-[#252943]/70 mb-1">Max Batch Quantity</label>
+                              <input
+                                type="number"
+                                value={activePreset.saves?.maxQuantity ?? 12}
+                                onChange={(e) => updateServiceField("saves", "maxQuantity", Number(e.target.value))}
+                                className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
+                                min={1}
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="block font-bold text-[#252943]/70 mb-1">Number of Runs</label>
+                              <input
+                                type="number"
+                                value={activePreset.saves?.runsCount ?? 4}
+                                onChange={(e) => updateServiceField("saves", "runsCount", Number(e.target.value))}
+                                className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
+                                min={1}
+                                max={50}
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="block font-bold text-[#252943]/70 mb-1">Interval (Minutes)</label>
+                              <input
+                                type="number"
+                                value={activePreset.saves?.intervalMinutes ?? 120}
+                                onChange={(e) => updateServiceField("saves", "intervalMinutes", Number(e.target.value))}
+                                className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
+                                min={1}
+                                required
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 4. SHARES / REPOSTS SERVICE CARD */}
+                        <div className={`p-5 rounded-2xl border transition-all ${
+                          Boolean(activePreset.shares?.enabled)
+                            ? "bg-[#F8F9FD]/60 border-[#DEE0ED]"
+                            : "bg-slate-50 border-slate-300 opacity-75"
+                        } space-y-4`}>
+                          <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
+                            <div className="flex items-center gap-2.5">
+                              <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold ${
+                                Boolean(activePreset.shares?.enabled) ? "bg-purple-100 text-purple-700" : "bg-slate-200 text-slate-500"
+                              }`}>
+                                <Share2 className="w-4 h-4" />
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-sm text-[#252943]">TikTok Reposts Service</span>
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                    Boolean(activePreset.shares?.enabled)
+                                      ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                      : "bg-rose-100 text-rose-800 border border-rose-300"
+                                  }`}>
+                                    {Boolean(activePreset.shares?.enabled) ? "✓ Included" : "✕ Turned Off"}
+                                  </span>
+                                </div>
+                                <span className="text-[11px] text-[#252943]/60">
+                                  {Boolean(activePreset.shares?.enabled)
+                                    ? "Active in cards, batches & orders"
+                                    : "Removed from user card, batches & orders"}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Service On/Off Switch */}
+                            <div className="flex items-center gap-2">
+                              <span className="text-[11px] font-bold text-[#252943]/70">
+                                {Boolean(activePreset.shares?.enabled) ? "On" : "Off"}
+                              </span>
+                              <label className="relative inline-flex items-center cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(activePreset.shares?.enabled)}
+                                  onChange={(e) => updateServiceField("shares", "enabled", e.target.checked)}
+                                  className="sr-only peer"
+                                />
+                                <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                              </label>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block font-bold text-[#252943]/70 mb-1">Provider Name</label>
+                              <input
+                                type="text"
+                                value={activePreset.shares?.providerName || "Engagement Engine"}
+                                onChange={(e) => updateServiceField("shares", "providerName", e.target.value)}
+                                className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-medium"
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="block font-bold text-[#252943]/70 mb-1">Service ID</label>
+                              <input
+                                type="text"
+                                value={activePreset.shares?.serviceId || "718"}
+                                onChange={(e) => updateServiceField("shares", "serviceId", e.target.value)}
+                                className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-mono font-bold text-[#3A4EFB]"
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="block font-bold text-[#252943]/70 mb-1">Min Batch Quantity</label>
+                              <input
+                                type="number"
+                                value={activePreset.shares?.minQuantity ?? 5}
+                                onChange={(e) => updateServiceField("shares", "minQuantity", Number(e.target.value))}
+                                className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
+                                min={1}
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="block font-bold text-[#252943]/70 mb-1">Max Batch Quantity</label>
+                              <input
+                                type="number"
+                                value={activePreset.shares?.maxQuantity ?? 10}
+                                onChange={(e) => updateServiceField("shares", "maxQuantity", Number(e.target.value))}
+                                className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
+                                min={1}
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="block font-bold text-[#252943]/70 mb-1">Number of Runs</label>
+                              <input
+                                type="number"
+                                value={activePreset.shares?.runsCount ?? 2}
+                                onChange={(e) => updateServiceField("shares", "runsCount", Number(e.target.value))}
+                                className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
+                                min={1}
+                                max={50}
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="block font-bold text-[#252943]/70 mb-1">Interval (Minutes)</label>
+                              <input
+                                type="number"
+                                value={activePreset.shares?.intervalMinutes ?? 120}
+                                onChange={(e) => updateServiceField("shares", "intervalMinutes", Number(e.target.value))}
+                                className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-semibold"
+                                min={1}
+                                required
+                              />
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </div>
+                  );
+                })()}
 
                 {/* Section 4: Engagement Retail Pricing & Profit Margin Manager */}
                 <div className="p-6 rounded-3xl border-2 border-emerald-300 bg-gradient-to-br from-emerald-50/40 via-white to-emerald-50/20 space-y-6 shadow-subtle">

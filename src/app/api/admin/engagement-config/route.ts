@@ -4,6 +4,11 @@ import { prisma } from "@/lib/prisma";
 import {
   getTikTokEngagementConfig,
   saveTikTokEngagementConfig,
+  getAllTikTokPresetsRecord,
+  getAllTikTokPresets,
+  saveTikTokPreset,
+  saveAllTikTokPresets,
+  type TikTokTierPreset,
   type TikTokEngagementPresetConfig,
 } from "@/lib/engagement/tiktok-preset-config";
 import { getAdminViewsProvider, getAdminEngagementProvider } from "@/lib/provider/admin-provider";
@@ -15,6 +20,8 @@ export async function GET(request: Request) {
   }
 
   const config = getTikTokEngagementConfig();
+  const presets = getAllTikTokPresetsRecord();
+  const presetsList = getAllTikTokPresets();
 
   // Resolve live wholesale provider rates
   let viewsOriginalRate = 2.23;
@@ -89,6 +96,8 @@ export async function GET(request: Request) {
   return NextResponse.json({
     success: true,
     config,
+    presets,
+    presetsList,
     originalRates: {
       views: viewsOriginalRate,
       likes: likesOriginalRate,
@@ -107,11 +116,30 @@ export async function PUT(request: Request) {
 
   try {
     const body = await request.json();
-    const updated = saveTikTokEngagementConfig(body);
+
+    // 1. Update individual preset if presetId and preset updates are provided
+    if (body.presetId && body.preset) {
+      saveTikTokPreset(body.presetId, body.preset);
+    }
+
+    // 2. Update all presets if presets record is provided
+    if (body.presets && typeof body.presets === "object") {
+      saveAllTikTokPresets(body.presets);
+    }
+
+    // 3. Update global config/pricing if config or pricing is provided
+    let updatedConfig = getTikTokEngagementConfig();
+    if (body.config || body.pricing || body.views || body.likes || body.saves || body.shares) {
+      const configPayload = body.config || body;
+      updatedConfig = saveTikTokEngagementConfig(configPayload);
+    }
+
     return NextResponse.json({
       success: true,
-      config: updated,
-      message: "TikTok Engagement configuration saved successfully.",
+      config: updatedConfig,
+      presets: getAllTikTokPresetsRecord(),
+      presetsList: getAllTikTokPresets(),
+      message: "TikTok Engagement presets and pricing configuration saved successfully.",
     });
   } catch (error: any) {
     return NextResponse.json(
@@ -119,5 +147,9 @@ export async function PUT(request: Request) {
       { status: 400 }
     );
   }
+}
+
+export async function POST(request: Request) {
+  return PUT(request);
 }
 

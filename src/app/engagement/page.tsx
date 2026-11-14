@@ -77,10 +77,12 @@ interface PresetOption {
   badge: string;
   durationLabel: string;
   durationHours: number;
-  views: { count: number; min: number; max: number; interval: number };
-  likes: { count: number; min: number; max: number; offsets: number[] };
-  saves?: { count: number; min: number; max: number; offsets: number[] };
-  shares?: { count: number; min: number; max: number; offsets: number[] };
+  targetViews?: number;
+  targetLikes?: number;
+  views: { enabled?: boolean; count: number; min: number; max: number; interval: number };
+  likes: { enabled?: boolean; count: number; min: number; max: number; offsets: number[] };
+  saves?: { enabled?: boolean; count: number; min: number; max: number; offsets: number[] };
+  shares?: { enabled?: boolean; count: number; min: number; max: number; offsets: number[] };
   syncThreshold: { minViews: number; maxViews: number };
 }
 
@@ -92,8 +94,8 @@ const PRESET_OPTIONS: Record<string, PresetOption> = {
     badge: "5h",
     durationLabel: "5.0 Hours",
     durationHours: 5.0,
-    views: { count: 16, min: 150, max: 220, interval: 20 },
-    likes: { count: 3, min: 12, max: 16, offsets: [120, 200, 280] },
+    views: { enabled: true, count: 16, min: 150, max: 220, interval: 20 },
+    likes: { enabled: true, count: 3, min: 12, max: 16, offsets: [120, 200, 280] },
     syncThreshold: { minViews: 500, maxViews: 700 },
   },
   tiktok_5k: {
@@ -103,15 +105,16 @@ const PRESET_OPTIONS: Record<string, PresetOption> = {
     badge: "16h",
     durationLabel: "16.0 Hours (1 Day)",
     durationHours: 16.0,
-    views: { count: 20, min: 230, max: 280, interval: 45 },
+    views: { enabled: true, count: 20, min: 230, max: 280, interval: 45 },
     likes: {
+      enabled: true,
       count: 14,
       min: 11,
       max: 14,
       offsets: [45, 105, 165, 225, 285, 345, 405, 465, 525, 585, 645, 705, 765, 810],
     },
-    saves: { count: 4, min: 10, max: 12, offsets: [240, 420, 600, 750] },
-    shares: { count: 2, min: 10, max: 12, offsets: [360, 660] },
+    saves: { enabled: true, count: 4, min: 10, max: 12, offsets: [240, 420, 600, 750] },
+    shares: { enabled: true, count: 2, min: 10, max: 12, offsets: [360, 660] },
     syncThreshold: { minViews: 1000, maxViews: 1500 },
   },
   tiktok_10k: {
@@ -121,8 +124,9 @@ const PRESET_OPTIONS: Record<string, PresetOption> = {
     badge: "22h",
     durationLabel: "22.0 Hours (1 Day)",
     durationHours: 22.0,
-    views: { count: 26, min: 380, max: 430, interval: 48 },
+    views: { enabled: true, count: 26, min: 380, max: 430, interval: 48 },
     likes: {
+      enabled: true,
       count: 24,
       min: 14,
       max: 18,
@@ -130,8 +134,8 @@ const PRESET_OPTIONS: Record<string, PresetOption> = {
         48, 96, 144, 192, 240, 288, 336, 384, 432, 480, 528, 576, 624, 672, 720, 768, 816, 864, 912, 960, 1008, 1056, 1104, 1152,
       ],
     },
-    saves: { count: 8, min: 10, max: 13, offsets: [192, 336, 480, 624, 768, 912, 1008, 1104] },
-    shares: { count: 4, min: 10, max: 12, offsets: [336, 576, 816, 1056] },
+    saves: { enabled: true, count: 8, min: 10, max: 13, offsets: [192, 336, 480, 624, 768, 912, 1008, 1104] },
+    shares: { enabled: true, count: 4, min: 10, max: 12, offsets: [336, 576, 816, 1056] },
     syncThreshold: { minViews: 2000, maxViews: 3000 },
   },
   tiktok_50k: {
@@ -141,8 +145,9 @@ const PRESET_OPTIONS: Record<string, PresetOption> = {
     badge: "48h",
     durationLabel: "48.0 Hours (2 Days)",
     durationHours: 48.0,
-    views: { count: 44, min: 1050, max: 1250, interval: 62 },
+    views: { enabled: true, count: 44, min: 1050, max: 1250, interval: 62 },
     likes: {
+      enabled: true,
       count: 40,
       min: 45,
       max: 55,
@@ -152,6 +157,7 @@ const PRESET_OPTIONS: Record<string, PresetOption> = {
       ],
     },
     saves: {
+      enabled: true,
       count: 30,
       min: 13,
       max: 17,
@@ -161,6 +167,7 @@ const PRESET_OPTIONS: Record<string, PresetOption> = {
       ],
     },
     shares: {
+      enabled: true,
       count: 15,
       min: 10,
       max: 14,
@@ -174,24 +181,28 @@ const PRESET_OPTIONS: Record<string, PresetOption> = {
 
 function generatePlanForPreset(p: PresetOption) {
   const views: number[] = [];
-  for (let i = 0; i < p.views.count; i++) {
-    views.push(Math.floor(Math.random() * (p.views.max - p.views.min + 1)) + p.views.min);
+  if (p.views.enabled !== false) {
+    for (let i = 0; i < p.views.count; i++) {
+      views.push(Math.floor(Math.random() * (p.views.max - p.views.min + 1)) + p.views.min);
+    }
   }
 
   const likes: number[] = [];
-  for (let i = 0; i < p.likes.count; i++) {
-    likes.push(Math.floor(Math.random() * (p.likes.max - p.likes.min + 1)) + p.likes.min);
+  if (p.likes.enabled !== false) {
+    for (let i = 0; i < p.likes.count; i++) {
+      likes.push(Math.floor(Math.random() * (p.likes.max - p.likes.min + 1)) + p.likes.min);
+    }
   }
 
   const saves: number[] = [];
-  if (p.saves) {
+  if (p.saves && p.saves.enabled !== false) {
     for (let i = 0; i < p.saves.count; i++) {
       saves.push(Math.floor(Math.random() * (p.saves.max - p.saves.min + 1)) + p.saves.min);
     }
   }
 
   const shares: number[] = [];
-  if (p.shares) {
+  if (p.shares && p.shares.enabled !== false) {
     for (let i = 0; i < p.shares.count; i++) {
       shares.push(Math.floor(Math.random() * (p.shares.max - p.shares.min + 1)) + p.shares.min);
     }
@@ -229,7 +240,56 @@ export default function EngagementPage() {
   const [showAddFundsModal, setShowAddFundsModal] = useState(false);
   const [showAllBatches, setShowAllBatches] = useState(false);
 
-  const currentPreset = PRESET_OPTIONS[selectedPresetId] || PRESET_OPTIONS.tiktok_2k;
+  const activePresets: Record<string, PresetOption> = useMemo(() => {
+    if (Array.isArray(statusData?.presets) && statusData.presets.length > 0) {
+      const result: Record<string, PresetOption> = {};
+      for (const raw of statusData.presets) {
+        result[raw.id] = {
+          id: raw.id,
+          name: raw.name || raw.id,
+          tagline: raw.tagline || "",
+          badge: raw.badge || `${raw.durationHours}h`,
+          durationLabel: raw.durationLabel || `${raw.durationHours} Hours`,
+          durationHours: raw.durationHours || 5.0,
+          targetViews: raw.targetViews,
+          targetLikes: raw.targetLikes,
+          views: {
+            enabled: raw.views?.enabled !== false,
+            count: raw.views?.runsCount ?? 16,
+            min: raw.views?.minQuantity ?? 150,
+            max: raw.views?.maxQuantity ?? 220,
+            interval: raw.views?.intervalMinutes ?? 20,
+          },
+          likes: {
+            enabled: raw.likes?.enabled !== false,
+            count: raw.likes?.runsCount ?? 3,
+            min: raw.likes?.minQuantity ?? 12,
+            max: raw.likes?.maxQuantity ?? 16,
+            offsets: raw.likes?.waveOffsets ?? [120, 200, 280],
+          },
+          saves: raw.saves ? {
+            enabled: Boolean(raw.saves.enabled),
+            count: raw.saves?.runsCount ?? 4,
+            min: raw.saves?.minQuantity ?? 10,
+            max: raw.saves?.maxQuantity ?? 12,
+            offsets: raw.saves?.waveOffsets ?? [240, 420, 600, 750],
+          } : undefined,
+          shares: raw.shares ? {
+            enabled: Boolean(raw.shares.enabled),
+            count: raw.shares?.runsCount ?? 2,
+            min: raw.shares?.minQuantity ?? 10,
+            max: raw.shares?.maxQuantity ?? 12,
+            offsets: raw.shares?.waveOffsets ?? [360, 660],
+          } : undefined,
+          syncThreshold: raw.syncThreshold || { minViews: 500, maxViews: 700 },
+        };
+      }
+      return result;
+    }
+    return PRESET_OPTIONS;
+  }, [statusData?.presets]);
+
+  const currentPreset = activePresets[selectedPresetId] || activePresets.tiktok_2k || PRESET_OPTIONS.tiktok_2k;
 
   const [plannedSchedule, setPlannedSchedule] = useState<{
     views: number[];
@@ -244,7 +304,7 @@ export default function EngagementPage() {
   function switchPreset(presetId: string) {
     setSelectedPresetId(presetId);
     setShowAllBatches(false);
-    const p = PRESET_OPTIONS[presetId] || PRESET_OPTIONS.tiktok_2k;
+    const p = activePresets[presetId] || activePresets.tiktok_2k || PRESET_OPTIONS.tiktok_2k;
     setPlannedSchedule(generatePlanForPreset(p));
     setPlanTimestamp(new Date());
   }
@@ -253,6 +313,15 @@ export default function EngagementPage() {
     setPlannedSchedule(generatePlanForPreset(currentPreset));
     setPlanTimestamp(new Date());
   }
+
+  useEffect(() => {
+    if (statusData?.presets) {
+      const p = activePresets[selectedPresetId] || activePresets.tiktok_2k;
+      if (p) {
+        setPlannedSchedule(generatePlanForPreset(p));
+      }
+    }
+  }, [statusData?.presets, selectedPresetId]);
 
   async function fetchStatus(isManual = false) {
     if (isManual) setRefreshing(true);
@@ -335,17 +404,19 @@ export default function EngagementPage() {
       note?: string;
     }> = [];
 
-    // Map likes by offset
+    // Map likes by offset (only if likes enabled)
     const likesMap = new Map<number, { qty: number; wave: number }>();
-    currentPreset.likes.offsets.forEach((offset, idx) => {
-      if (plannedSchedule.likes[idx]) {
-        likesMap.set(offset, { qty: plannedSchedule.likes[idx], wave: idx + 1 });
-      }
-    });
+    if (currentPreset.likes.enabled !== false) {
+      currentPreset.likes.offsets.forEach((offset, idx) => {
+        if (plannedSchedule.likes[idx]) {
+          likesMap.set(offset, { qty: plannedSchedule.likes[idx], wave: idx + 1 });
+        }
+      });
+    }
 
-    // Map saves by offset
+    // Map saves by offset (only if saves enabled)
     const savesMap = new Map<number, { qty: number; wave: number }>();
-    if (currentPreset.saves) {
+    if (currentPreset.saves?.enabled) {
       currentPreset.saves.offsets.forEach((offset, idx) => {
         if (plannedSchedule.saves[idx]) {
           savesMap.set(offset, { qty: plannedSchedule.saves[idx], wave: idx + 1 });
@@ -353,9 +424,9 @@ export default function EngagementPage() {
       });
     }
 
-    // Map shares by offset
+    // Map shares by offset (only if shares enabled)
     const sharesMap = new Map<number, { qty: number; wave: number }>();
-    if (currentPreset.shares) {
+    if (currentPreset.shares?.enabled) {
       currentPreset.shares.offsets.forEach((offset, idx) => {
         if (plannedSchedule.shares[idx]) {
           sharesMap.set(offset, { qty: plannedSchedule.shares[idx], wave: idx + 1 });
@@ -363,42 +434,74 @@ export default function EngagementPage() {
       });
     }
 
-    plannedSchedule.views.forEach((viewQty, index) => {
-      const runNumber = index + 1;
-      const minuteOffset = index * currentPreset.views.interval;
-      const clockTime = formatBdTime(minuteOffset, planTimestamp);
+    // If views are enabled, step through views batches
+    if (currentPreset.views.enabled !== false && plannedSchedule.views.length > 0) {
+      plannedSchedule.views.forEach((viewQty, index) => {
+        const runNumber = index + 1;
+        const minuteOffset = index * currentPreset.views.interval;
+        const clockTime = formatBdTime(minuteOffset, planTimestamp);
 
-      // Check if any engagement waves land on or near this view batch
-      const likeInfo = likesMap.get(minuteOffset);
-      const saveInfo = savesMap.get(minuteOffset);
-      const shareInfo = sharesMap.get(minuteOffset);
+        // Check if any engagement waves land on or near this view batch
+        const likeInfo = likesMap.get(minuteOffset);
+        const saveInfo = savesMap.get(minuteOffset);
+        const shareInfo = sharesMap.get(minuteOffset);
 
-      let note = "";
-      if (runNumber === 1) {
-        note = "Instant Launch • View batch #1 dispatches immediately";
-      } else if (runNumber === Math.ceil(currentPreset.views.count * 0.25)) {
-        note = "Steady Momentum • Natural scheduled pacing active";
-      } else if (runNumber === currentPreset.views.count) {
-        note = "Final Views Batch • Campaign 100% Completed";
-      }
+        let note = "";
+        if (runNumber === 1) {
+          note = "Instant Launch • View batch #1 dispatches immediately";
+        } else if (runNumber === Math.ceil(currentPreset.views.count * 0.25)) {
+          note = "Steady Momentum • Natural scheduled pacing active";
+        } else if (runNumber === currentPreset.views.count) {
+          note = "Final Views Batch • Campaign 100% Completed";
+        }
 
-      rows.push({
-        runNumber,
-        minuteOffset,
-        clockTime,
-        viewQty,
-        likeQty: likeInfo?.qty,
-        likeWave: likeInfo?.wave,
-        saveQty: saveInfo?.qty,
-        saveWave: saveInfo?.wave,
-        shareQty: shareInfo?.qty,
-        shareWave: shareInfo?.wave,
-        note,
+        rows.push({
+          runNumber,
+          minuteOffset,
+          clockTime,
+          viewQty,
+          likeQty: likeInfo?.qty,
+          likeWave: likeInfo?.wave,
+          saveQty: saveInfo?.qty,
+          saveWave: saveInfo?.wave,
+          shareQty: shareInfo?.qty,
+          shareWave: shareInfo?.wave,
+          note,
+        });
       });
-    });
+    } else {
+      // If views are turned off, create schedule purely from active engagement wave timestamps
+      const allOffsets = Array.from(
+        new Set([
+          ...Array.from(likesMap.keys()),
+          ...Array.from(savesMap.keys()),
+          ...Array.from(sharesMap.keys()),
+        ])
+      ).sort((a, b) => a - b);
 
-    // Also include any engagement waves that don't fall directly on a view run minute
-    // (Ensure everything is visible)
+      allOffsets.forEach((minuteOffset, idx) => {
+        const runNumber = idx + 1;
+        const clockTime = formatBdTime(minuteOffset, planTimestamp);
+        const likeInfo = likesMap.get(minuteOffset);
+        const saveInfo = savesMap.get(minuteOffset);
+        const shareInfo = sharesMap.get(minuteOffset);
+
+        rows.push({
+          runNumber,
+          minuteOffset,
+          clockTime,
+          viewQty: 0,
+          likeQty: likeInfo?.qty,
+          likeWave: likeInfo?.wave,
+          saveQty: saveInfo?.qty,
+          saveWave: saveInfo?.wave,
+          shareQty: shareInfo?.qty,
+          shareWave: shareInfo?.wave,
+          note: runNumber === 1 ? "Instant Engagement Launch" : `Pacing Wave #${runNumber}`,
+        });
+      });
+    }
+
     return rows;
   }, [plannedSchedule, planTimestamp, currentPreset]);
 
@@ -439,10 +542,10 @@ export default function EngagementPage() {
           presetId: currentPreset.id,
           presetName: currentPreset.name,
           platform: "TikTok",
-          plannedViews: plannedSchedule.views,
-          plannedLikes: plannedSchedule.likes,
-          plannedSaves: plannedSchedule.saves,
-          plannedShares: plannedSchedule.shares,
+          plannedViews: currentPreset.views.enabled !== false ? plannedSchedule.views : [],
+          plannedLikes: currentPreset.likes.enabled !== false ? plannedSchedule.likes : [],
+          plannedSaves: currentPreset.saves?.enabled ? plannedSchedule.saves : [],
+          plannedShares: currentPreset.shares?.enabled ? plannedSchedule.shares : [],
         }),
       });
 
@@ -618,8 +721,15 @@ export default function EngagementPage() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {Object.values(PRESET_OPTIONS).map((preset) => {
+          {Object.values(activePresets).map((preset) => {
             const isSelected = selectedPresetId === preset.id;
+            const viewsEnabled = preset.views.enabled !== false;
+            const likesEnabled = preset.likes.enabled !== false;
+            const savesEnabled = Boolean(preset.saves?.enabled);
+            const sharesEnabled = Boolean(preset.shares?.enabled);
+
+            const estViews = preset.targetViews || (preset.id === "tiktok_2k" ? 2000 : preset.id === "tiktok_5k" ? 5000 : preset.id === "tiktok_10k" ? 10000 : 50000);
+
             return (
               <button
                 key={preset.id}
@@ -631,7 +741,7 @@ export default function EngagementPage() {
                     : "bg-[#F8F9FD] border-[#DEE0ED] hover:bg-white hover:border-[#3A4EFB]/40"
                 }`}
               >
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-[#252943]">
                       {preset.name}
@@ -646,15 +756,53 @@ export default function EngagementPage() {
                   <p className="text-[11px] text-[#252943]/60 leading-snug">
                     {preset.tagline}
                   </p>
+
+                  {/* Active Service Indicators on Card */}
+                  <div className="flex items-center flex-wrap gap-1 pt-1">
+                    {viewsEnabled && (
+                      <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[9px] font-bold border border-blue-200/60">
+                        Views
+                      </span>
+                    )}
+                    {likesEnabled && (
+                      <span className="px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 text-[9px] font-bold border border-rose-200/60">
+                        Likes
+                      </span>
+                    )}
+                    {savesEnabled && (
+                      <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 text-[9px] font-bold border border-amber-200/60">
+                        Saves
+                      </span>
+                    )}
+                    {sharesEnabled && (
+                      <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 text-[9px] font-bold border border-purple-200/60">
+                        Reposts
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="pt-2.5 mt-2.5 border-t border-[#DEE0ED]/60 flex items-center justify-between text-[11px]">
-                  <span className="font-bold text-blue-700 font-mono">
-                    {preset.id === "tiktok_2k" ? "~2,000 Views" : preset.id === "tiktok_5k" ? "~5,000 Views" : preset.id === "tiktok_10k" ? "~10,000 Views" : "~50,000 Views"}
-                  </span>
-                  <span className="text-[10px] text-[#252943]/50 font-medium">
-                    {preset.views.count} Batches
-                  </span>
+                  {viewsEnabled ? (
+                    <>
+                      <span className="font-bold text-blue-700 font-mono">
+                        ~{estViews.toLocaleString()} Views
+                      </span>
+                      <span className="text-[10px] text-[#252943]/50 font-medium">
+                        {preset.views.count} Batches
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="font-bold text-rose-700 font-mono flex items-center gap-1">
+                        <Heart className="w-3 h-3 fill-rose-500" />
+                        <span>{likesEnabled ? `${preset.likes.count} Likes Waves` : "Custom Pacing"}</span>
+                      </span>
+                      <span className="text-[10px] text-amber-800 font-bold bg-amber-100/70 px-1.5 py-0.5 rounded border border-amber-200">
+                        Views Off
+                      </span>
+                    </>
+                  )}
                 </div>
               </button>
             );
@@ -723,36 +871,40 @@ export default function EngagementPage() {
             <div className="p-2">
               <span className="text-[10px] uppercase font-bold text-[#252943]/40 block leading-tight">Views</span>
               <span className="text-base font-black text-blue-700 font-mono">
-                {totalViews.toLocaleString()}
+                {currentPreset.views.enabled !== false ? totalViews.toLocaleString() : "—"}
               </span>
-              <span className="text-[10px] text-[#252943]/50 block font-medium">{currentPreset.views.count} batches</span>
+              <span className="text-[10px] text-[#252943]/50 block font-medium">
+                {currentPreset.views.enabled !== false ? `${currentPreset.views.count} batches` : "Turned Off"}
+              </span>
             </div>
 
             <div className="p-2">
               <span className="text-[10px] uppercase font-bold text-[#252943]/40 block leading-tight">Likes</span>
               <span className="text-base font-black text-rose-600 font-mono">
-                {totalLikes}
+                {currentPreset.likes.enabled !== false ? totalLikes : "—"}
               </span>
-              <span className="text-[10px] text-[#252943]/50 block font-medium">{currentPreset.likes.count} waves</span>
+              <span className="text-[10px] text-[#252943]/50 block font-medium">
+                {currentPreset.likes.enabled !== false ? `${currentPreset.likes.count} waves` : "Turned Off"}
+              </span>
             </div>
 
             <div className="p-2">
               <span className="text-[10px] uppercase font-bold text-[#252943]/40 block leading-tight">Saves</span>
               <span className="text-base font-black text-amber-700 font-mono">
-                {totalSaves > 0 ? totalSaves : "—"}
+                {currentPreset.saves?.enabled && totalSaves > 0 ? totalSaves : "—"}
               </span>
               <span className="text-[10px] text-[#252943]/50 block font-medium">
-                {currentPreset.saves ? `${currentPreset.saves.count} waves` : "None"}
+                {currentPreset.saves?.enabled ? `${currentPreset.saves.count} waves` : "Turned Off"}
               </span>
             </div>
 
             <div className="p-2">
               <span className="text-[10px] uppercase font-bold text-[#252943]/40 block leading-tight">Reposts</span>
               <span className="text-base font-black text-purple-700 font-mono">
-                {totalShares > 0 ? totalShares : "—"}
+                {currentPreset.shares?.enabled && totalShares > 0 ? totalShares : "—"}
               </span>
               <span className="text-[10px] text-[#252943]/50 block font-medium">
-                {currentPreset.shares ? `${currentPreset.shares.count} waves` : "None"}
+                {currentPreset.shares?.enabled ? `${currentPreset.shares.count} waves` : "Turned Off"}
               </span>
             </div>
 
@@ -786,22 +938,24 @@ export default function EngagementPage() {
                   </div>
 
                   <div className="flex items-center flex-wrap gap-1.5 self-end sm:self-auto shrink-0">
-                    <span className="px-2 py-0.5 rounded-md text-[11px] font-bold font-mono bg-blue-50 text-blue-700 border border-blue-200/60">
-                      {row.viewQty} views
-                    </span>
-                    {row.likeQty && (
+                    {row.viewQty > 0 && currentPreset.views.enabled !== false && (
+                      <span className="px-2 py-0.5 rounded-md text-[11px] font-bold font-mono bg-blue-50 text-blue-700 border border-blue-200/60">
+                        {row.viewQty} views
+                      </span>
+                    )}
+                    {row.likeQty && currentPreset.likes.enabled !== false && (
                       <span className="px-2 py-0.5 rounded-md text-[11px] font-bold font-mono bg-rose-50 text-rose-700 border border-rose-200/60 flex items-center gap-1">
                         <Heart className="w-2.5 h-2.5 fill-rose-500 text-rose-500" />
                         <span>+{row.likeQty} likes</span>
                       </span>
                     )}
-                    {row.saveQty && (
+                    {row.saveQty && currentPreset.saves?.enabled && (
                       <span className="px-2 py-0.5 rounded-md text-[11px] font-bold font-mono bg-amber-50 text-amber-700 border border-amber-200/60 flex items-center gap-1">
                         <Bookmark className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
                         <span>+{row.saveQty} saves</span>
                       </span>
                     )}
-                    {row.shareQty && (
+                    {row.shareQty && currentPreset.shares?.enabled && (
                       <span className="px-2 py-0.5 rounded-md text-[11px] font-bold font-mono bg-purple-50 text-purple-700 border border-purple-200/60 flex items-center gap-1">
                         <Share2 className="w-2.5 h-2.5 text-purple-600" />
                         <span>+{row.shareQty} shares</span>
@@ -856,7 +1010,13 @@ export default function EngagementPage() {
                   ₹{exactTotalCost.toFixed(2)}
                 </span>
                 <span className="text-[11px] text-[#252943]/50">
-                  (₹{exactViewsCost.toFixed(2)} views • ₹{exactLikesCost.toFixed(2)} likes{exactSavesCost > 0 ? ` • ₹${exactSavesCost.toFixed(2)} saves` : ""}{exactSharesCost > 0 ? ` • ₹${exactSharesCost.toFixed(2)} reposts` : ""})
+                  ({[
+                    currentPreset.views.enabled !== false ? `₹${exactViewsCost.toFixed(2)} views` : null,
+                    currentPreset.likes.enabled !== false ? `₹${exactLikesCost.toFixed(2)} likes` : null,
+                    currentPreset.saves?.enabled && exactSavesCost > 0 ? `₹${exactSavesCost.toFixed(2)} saves` : null,
+                    currentPreset.shares?.enabled && exactSharesCost > 0 ? `₹${exactSharesCost.toFixed(2)} reposts` : null,
+                  ].filter(Boolean).join(" • ") || "₹0.00"}
+                  )
                 </span>
               </div>
             </div>

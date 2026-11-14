@@ -203,60 +203,64 @@ export async function POST(request: Request) {
     const savesRate = config.pricing?.savesUserRate ?? ((zeofameSavesService?.ratePer1000 ?? 0.22) * 2.5);
     const sharesRate = config.pricing?.sharesUserRate ?? ((zeofameSharesService?.ratePer1000 ?? 0.22) * 2.5);
 
-    // A. Views Runs
+    // A. Views Runs (if enabled)
     const viewsRuns: Array<{ runNumber: number; scheduledAt: Date; quantity: number; cost: number }> = [];
     let totalPlannedViews = 0;
     let totalViewsCost = 0;
-    const minV = Math.min(preset.views.minQuantity, preset.views.maxQuantity);
-    const maxV = Math.max(preset.views.minQuantity, preset.views.maxQuantity);
+    if (preset.views.enabled !== false) {
+      const minV = Math.min(preset.views.minQuantity, preset.views.maxQuantity);
+      const maxV = Math.max(preset.views.minQuantity, preset.views.maxQuantity);
 
-    for (let i = 0; i < preset.views.runsCount; i++) {
-      let qty: number;
-      if (
-        parsed.plannedViews &&
-        typeof parsed.plannedViews[i] === "number" &&
-        parsed.plannedViews[i] >= minV &&
-        parsed.plannedViews[i] <= maxV
-      ) {
-        qty = parsed.plannedViews[i];
-      } else {
-        qty = Math.floor(Math.random() * (maxV - minV + 1)) + minV;
+      for (let i = 0; i < preset.views.runsCount; i++) {
+        let qty: number;
+        if (
+          parsed.plannedViews &&
+          typeof parsed.plannedViews[i] === "number" &&
+          parsed.plannedViews[i] >= minV &&
+          parsed.plannedViews[i] <= maxV
+        ) {
+          qty = parsed.plannedViews[i];
+        } else {
+          qty = Math.floor(Math.random() * (maxV - minV + 1)) + minV;
+        }
+        const scheduledAt = new Date(now + i * preset.views.intervalMinutes * 60 * 1000);
+        const runCost = Number(((qty / 1000) * viewsRate).toFixed(4));
+
+        totalPlannedViews += qty;
+        totalViewsCost += runCost;
+        viewsRuns.push({ runNumber: i + 1, scheduledAt, quantity: qty, cost: runCost });
       }
-      const scheduledAt = new Date(now + i * preset.views.intervalMinutes * 60 * 1000);
-      const runCost = Number(((qty / 1000) * viewsRate).toFixed(4));
-
-      totalPlannedViews += qty;
-      totalViewsCost += runCost;
-      viewsRuns.push({ runNumber: i + 1, scheduledAt, quantity: qty, cost: runCost });
     }
 
-    // B. Likes Runs
+    // B. Likes Runs (if enabled)
     const likesRuns: Array<{ runNumber: number; scheduledAt: Date; quantity: number; cost: number }> = [];
     let totalPlannedLikes = 0;
     let totalLikesCost = 0;
-    const minL = Math.min(preset.likes.minQuantity, preset.likes.maxQuantity);
-    const maxL = Math.max(preset.likes.minQuantity, preset.likes.maxQuantity);
-    const likesOffsets = preset.likes.waveOffsets || [120, 200, 280];
+    if (preset.likes.enabled !== false) {
+      const minL = Math.min(preset.likes.minQuantity, preset.likes.maxQuantity);
+      const maxL = Math.max(preset.likes.minQuantity, preset.likes.maxQuantity);
+      const likesOffsets = preset.likes.waveOffsets || [120, 200, 280];
 
-    for (let i = 0; i < preset.likes.runsCount; i++) {
-      let qty: number;
-      if (
-        parsed.plannedLikes &&
-        typeof parsed.plannedLikes[i] === "number" &&
-        parsed.plannedLikes[i] >= minL &&
-        parsed.plannedLikes[i] <= maxL
-      ) {
-        qty = parsed.plannedLikes[i];
-      } else {
-        qty = Math.floor(Math.random() * (maxL - minL + 1)) + minL;
+      for (let i = 0; i < preset.likes.runsCount; i++) {
+        let qty: number;
+        if (
+          parsed.plannedLikes &&
+          typeof parsed.plannedLikes[i] === "number" &&
+          parsed.plannedLikes[i] >= minL &&
+          parsed.plannedLikes[i] <= maxL
+        ) {
+          qty = parsed.plannedLikes[i];
+        } else {
+          qty = Math.floor(Math.random() * (maxL - minL + 1)) + minL;
+        }
+        const offsetMinutes = likesOffsets[i] ?? (120 + i * 80);
+        const scheduledAt = new Date(now + offsetMinutes * 60 * 1000);
+        const runCost = Number(((qty / 1000) * likesRate).toFixed(4));
+
+        totalPlannedLikes += qty;
+        totalLikesCost += runCost;
+        likesRuns.push({ runNumber: i + 1, scheduledAt, quantity: qty, cost: runCost });
       }
-      const offsetMinutes = likesOffsets[i] ?? (120 + i * 80);
-      const scheduledAt = new Date(now + offsetMinutes * 60 * 1000);
-      const runCost = Number(((qty / 1000) * likesRate).toFixed(4));
-
-      totalPlannedLikes += qty;
-      totalLikesCost += runCost;
-      likesRuns.push({ runNumber: i + 1, scheduledAt, quantity: qty, cost: runCost });
     }
 
     // C. Saves Runs (if enabled)
@@ -353,13 +357,13 @@ export async function POST(request: Request) {
     const engProviderBalance = typeof zeofameConn.balance === "number" ? zeofameConn.balance : null;
 
     let adminOutOfBalanceProvider: string | null = null;
-    if (viewsProviderBalance !== null && viewsProviderBalance <= 0) {
+    if (totalPlannedViews > 0 && viewsProviderBalance !== null && viewsProviderBalance <= 0) {
       adminOutOfBalanceProvider = xmediaConn.name || "Views Network";
-    } else if (engProviderBalance !== null && engProviderBalance <= 0) {
+    } else if ((totalPlannedLikes > 0 || totalPlannedSaves > 0 || totalPlannedShares > 0) && engProviderBalance !== null && engProviderBalance <= 0) {
       adminOutOfBalanceProvider = zeofameConn.name || "Engagement Network";
-    } else if (viewsProviderBalance !== null && viewsProviderBalance < viewsWholesaleCost && !xmediaConn.isMock) {
+    } else if (totalPlannedViews > 0 && viewsProviderBalance !== null && viewsProviderBalance < viewsWholesaleCost && !xmediaConn.isMock) {
       adminOutOfBalanceProvider = xmediaConn.name || "Views Network";
-    } else if (engProviderBalance !== null && engProviderBalance < engWholesaleCost && !zeofameConn.isMock) {
+    } else if ((totalPlannedLikes > 0 || totalPlannedSaves > 0 || totalPlannedShares > 0) && engProviderBalance !== null && engProviderBalance < engWholesaleCost && !zeofameConn.isMock) {
       adminOutOfBalanceProvider = zeofameConn.name || "Engagement Network";
     }
 
@@ -412,7 +416,9 @@ export async function POST(request: Request) {
         },
       });
 
-      const enabledTypes = ["views", "likes"];
+      const enabledTypes: string[] = [];
+      if (totalPlannedViews > 0) enabledTypes.push("views");
+      if (totalPlannedLikes > 0) enabledTypes.push("likes");
       if (totalPlannedSaves > 0) enabledTypes.push("saves");
       if (totalPlannedShares > 0) enabledTypes.push("shares");
 
