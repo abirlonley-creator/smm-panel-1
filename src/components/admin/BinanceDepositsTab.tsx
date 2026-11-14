@@ -206,7 +206,7 @@ export function BinanceDepositsTab() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search user, ref, txid..."
+              placeholder="Search user, ref, order ID..."
               className="bg-white border border-[#DEE0ED] rounded-xl pl-8 pr-3 py-2 text-xs text-[#252943] placeholder-[#252943]/40 focus:border-[#3A4EFB] outline-none w-44 sm:w-56 shadow-subtle"
             />
           </div>
@@ -231,7 +231,7 @@ export function BinanceDepositsTab() {
                 <th className="px-5 py-3.5">Reference / User</th>
                 <th className="px-4 py-3.5">Amount (INR)</th>
                 <th className="px-4 py-3.5">Amount (USDT)</th>
-                <th className="px-4 py-3.5">Binance TxID / Order ID</th>
+                <th className="px-4 py-3.5">Binance Order ID</th>
                 <th className="px-4 py-3.5">Status</th>
                 <th className="px-4 py-3.5">Created At</th>
                 <th className="px-5 py-3.5 text-right">Actions</th>

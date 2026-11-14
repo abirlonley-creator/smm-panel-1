@@ -438,7 +438,7 @@ export function BinanceAddFundsModal({
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
                     <label className="block text-xs font-bold text-[#252943]">
-                      Step 2: Enter Binance Order ID / TxID
+                      Step 2: Enter Binance Order ID
                     </label>
                     <span className="text-[10px] text-[#252943]/50">Found on transfer receipt</span>
                   </div>
@@ -534,7 +534,7 @@ export function BinanceAddFundsModal({
                       <span className="font-mono font-bold text-[#252943]">{deposit?.depositRef || "N/A"}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-[#252943]/60 font-medium">Submitted TxID:</span>
+                      <span className="text-[#252943]/60 font-medium">Submitted Order ID:</span>
                       <span className="font-mono font-bold text-[#3A4EFB] truncate max-w-[200px]">{txnId}</span>
                     </div>
                     <div className="flex items-center justify-between border-t border-[#DEE0ED] pt-2">
@@ -546,7 +546,7 @@ export function BinanceAddFundsModal({
                   {/* 24/7 Telegram Instant Credit Button */}
                   <div className="space-y-2 pt-1">
                     <a
-                      href={`https://t.me/Ghostfinds?text=Hi%20Support,%20I%20have%20submitted%20a%20deposit%20${deposit?.depositRef || ""}%20for%20₹${deposit?.inrAmount || inrAmount}%20TxID:%20${txnId}`}
+                      href={`https://t.me/Ghostfinds?text=Hi%20Support,%20I%20have%20submitted%20a%20deposit%20${deposit?.depositRef || ""}%20for%20₹${deposit?.inrAmount || inrAmount}%20Order%20ID:%20${txnId}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="w-full py-3.5 px-4 rounded-2xl bg-[#0088cc] hover:bg-[#0077b5] text-white text-xs font-bold transition-all shadow-subtle flex items-center justify-center gap-2 press-scale"

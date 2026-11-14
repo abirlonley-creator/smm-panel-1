@@ -176,10 +176,10 @@ export async function verifyAndCreditDeposit({
 
   const cleanTxnId = txnId.trim();
   if (!cleanTxnId || cleanTxnId.length < 6) {
-    throw new Error("Please enter a valid Binance Order ID or Transaction ID (at least 6 characters).");
+    throw new Error("Please enter a valid Binance Order ID (at least 6 characters).");
   }
 
-  // 1. Strict Unique Check: Prevent double-spending or reuse of the same Binance Txn ID
+  // 1. Strict Unique Check: Prevent double-spending or reuse of the same Binance Order ID
   const duplicateTxn = await prisma.paymentDeposit.findFirst({
     where: {
       txnId: cleanTxnId,
@@ -189,7 +189,7 @@ export async function verifyAndCreditDeposit({
 
   if (duplicateTxn) {
     throw new Error(
-      "This Binance transaction ID has already been credited. Each payment can only be credited once."
+      "This Binance Order ID has already been credited. Each payment can only be credited once."
     );
   }
 
@@ -236,7 +236,7 @@ export async function verifyAndCreditDeposit({
         where: { txnId: cleanTxnId, status: "VERIFIED" },
       });
       if (concurrentCheck) {
-        throw new Error("This Binance transaction ID has already been claimed.");
+        throw new Error("This Binance Order ID has already been claimed.");
       }
 
       // A. Update deposit status
@@ -268,7 +268,7 @@ export async function verifyAndCreditDeposit({
           amount: deposit.inrAmount,
           balanceAfter: updatedUser.walletBalance,
           referenceId: deposit.depositRef,
-          description: `Binance Pay Deposit (${deposit.usdtAmount} USDT @ ₹${deposit.exchangeRate}) - TxID: ${cleanTxnId}`,
+          description: `Binance Pay Deposit (${deposit.usdtAmount} USDT @ ₹${deposit.exchangeRate}) - Order ID: ${cleanTxnId}`,
         },
       });
 
