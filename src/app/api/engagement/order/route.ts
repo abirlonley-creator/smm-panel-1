@@ -134,19 +134,19 @@ export async function POST(request: Request) {
       where: { userId },
     });
 
-    // A. Zeofame Connection
+    // A. Engagement Connection
     const zeofameConn = userConnections.find((c) => {
       const name = (c.name || "").toLowerCase();
       const url = (c.apiUrl || "").toLowerCase();
-      return name.includes("zeofame") || name.includes("zefame") || url.includes("zeofame") || url.includes("zefame");
+      return name.includes("zeofame") || name.includes("zefame") || name.includes("engagement") || url.includes("zeofame") || url.includes("zefame");
     });
 
     if (!zeofameConn || !zeofameConn.active) {
       return NextResponse.json(
         {
           success: false,
-          error: "API Connection Required: Connect your Zeofame API to activate TikTok Likes, Saves & Reposts.",
-          missingProvider: "Zeofame",
+          error: "API Connection Required: Connect your Engagement API to activate TikTok Likes, Saves & Reposts.",
+          missingProvider: "Engagement Provider",
         },
         { status: 400 }
       );
@@ -161,24 +161,24 @@ export async function POST(request: Request) {
       await zeofameAdapter.getBalance();
     } catch (e: any) {
       return NextResponse.json(
-        { success: false, error: `Zeofame API connection invalid: ${e.message}. Please check your credentials in API Key settings.` },
+        { success: false, error: `Engagement API connection invalid: ${e.message}. Please check your credentials in API Key settings.` },
         { status: 400 }
       );
     }
 
-    // B. Xmedia Connection
+    // B. Views Connection
     const xmediaConn = userConnections.find((c) => {
       const name = (c.name || "").toLowerCase();
       const url = (c.apiUrl || "").toLowerCase();
-      return name.includes("xmedia") || url.includes("xmedia");
+      return name.includes("xmedia") || name.includes("views") || url.includes("xmedia");
     });
 
     if (!xmediaConn || !xmediaConn.active) {
       return NextResponse.json(
         {
           success: false,
-          error: "API Connection Required: Connect your Xmedia API to activate the TikTok Views service.",
-          missingProvider: "Xmedia",
+          error: "API Connection Required: Connect your Views API to activate the TikTok Views service.",
+          missingProvider: "Views Provider",
         },
         { status: 400 }
       );
@@ -193,7 +193,7 @@ export async function POST(request: Request) {
       await xmediaAdapter.getBalance();
     } catch (e: any) {
       return NextResponse.json(
-        { success: false, error: `Xmedia API connection invalid: ${e.message}. Please check your credentials in API Key settings.` },
+        { success: false, error: `Views API connection invalid: ${e.message}. Please check your credentials in API Key settings.` },
         { status: 400 }
       );
     }

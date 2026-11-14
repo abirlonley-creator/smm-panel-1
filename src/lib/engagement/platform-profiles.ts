@@ -671,7 +671,7 @@ export function drawRealisticTotals(
 }
 
 // ----------------------------------------------------------------------------
-// Default Config-Driven Profiles (Using seeded provider xmedia)
+// Default Config-Driven Profiles (Using seeded default provider)
 // ----------------------------------------------------------------------------
 
 export const DEFAULT_PLATFORM_PROFILES: Record<string, PlatformProfile> = {

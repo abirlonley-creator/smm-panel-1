@@ -174,7 +174,7 @@ export default function OrdersPage() {
               Order Management
             </h1>
             <p className="text-xs sm:text-sm text-[#252943]/60 mt-0.5">
-              Live progress tracking, provider order references, and scheduled delivery status.
+              Live progress tracking, delivery references, and scheduled delivery status.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -331,7 +331,7 @@ export default function OrdersPage() {
                           </Link>
                         </div>
 
-                        {/* Prominent Upstream API Provider & Order ID Badge */}
+                        {/* Prominent Delivery & Order Reference Badge */}
                         <div className="mt-1 flex items-center gap-1.5 flex-wrap">
                           {isEngagement ? (
                             <>
@@ -339,20 +339,20 @@ export default function OrdersPage() {
                                 <Zap className="w-2.5 h-2.5" /> TikTok Engagement
                               </span>
                               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                                Xmedia (Views)
+                                Views Batches
                               </span>
                               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
-                                Zeofame (Likes)
+                                Engagement Waves
                               </span>
                             </>
                           ) : order.providerOrderId ? (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
                               <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-                              {order.service.userProvider?.name || order.service.provider?.name || "API"}: #{order.providerOrderId}
+                              Ref: {order.orderRef}
                             </span>
                           ) : order.dripFeedRuns && order.dripFeedRuns.length > 0 ? (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
-                              {order.service.userProvider?.name || order.service.provider?.name || "API"}: {order.dripFeedRuns.filter((r) => r.status === "COMPLETED").length}/{order.dripFeedRuns.length} runs sent
+                              Drip Delivery: {order.dripFeedRuns.filter((r) => r.status === "COMPLETED").length}/{order.dripFeedRuns.length} runs sent
                             </span>
                           ) : order.isScheduled ? (
                             (() => {
@@ -372,7 +372,7 @@ export default function OrdersPage() {
                             })()
                           ) : (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-gray-50 text-gray-500 border border-gray-200">
-                              {order.service.userProvider?.name || order.service.provider?.name || "API"}
+                              Automated Network
                             </span>
                           )}
                         </div>

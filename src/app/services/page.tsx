@@ -400,11 +400,11 @@ export default function ServicesPage() {
             })}
           </div>
 
-          {/* Provider Filter & Quick ID shortcuts */}
-          <div className="flex items-center gap-3 text-[11px] text-[#252943]/60 flex-wrap">
-            {providers.length > 0 && (
+          {/* Network Filter */}
+          {providers.length > 1 && (
+            <div className="flex items-center gap-3 text-[11px] text-[#252943]/60 flex-wrap">
               <div className="flex items-center gap-1.5">
-                <span className="font-semibold text-[#252943]/60">Provider:</span>
+                <span className="font-semibold text-[#252943]/60">Network:</span>
                 <select
                   value={selectedProviderId}
                   onChange={(e) => {
@@ -413,32 +413,16 @@ export default function ServicesPage() {
                   }}
                   className="bg-[#F8F9FD] border border-[#DEE0ED] rounded-lg px-2 py-1 text-xs font-semibold text-[#252943] focus:border-[#3A4EFB]"
                 >
-                  <option value="">All Providers</option>
-                  {providers.map((pr) => (
+                  <option value="">All Networks</option>
+                  {providers.map((pr, idx) => (
                     <option key={pr.id} value={pr.id}>
-                      {pr.name} ({pr.currency})
+                      Network {idx + 1} ({pr.currency})
                     </option>
                   ))}
                 </select>
               </div>
-            )}
-
-            <span className="font-medium text-[#252943]/50">Quick IDs:</span>
-            {["1", "2", "101", "201", "301", "401"].map((id) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => handleQuickIdFilter(id)}
-                className={`px-2.5 py-1 rounded-md text-xs font-bold transition-colors ${
-                  activeQuery === id 
-                    ? "bg-[#3A4EFB] text-white shadow-subtle" 
-                    : "bg-[#F8F9FD] border border-[#DEE0ED] hover:bg-[#DEE0ED]/60 text-[#252943]"
-                }`}
-              >
-                #{id}
-              </button>
-            ))}
-          </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -512,7 +496,7 @@ export default function ServicesPage() {
                 <Star className="w-8 h-8 text-amber-400 mx-auto fill-amber-100" />
                 <p className="text-sm font-bold text-[#252943]">No favourite services added yet</p>
                 <p className="text-xs text-[#252943]/60 max-w-md mx-auto">
-                  Click on &quot;All&quot; above to view all provider services and click &quot;+ Add&quot; on any service to add it to your favourites. Once added, it will show here and in the order section!
+                  Click on &quot;All&quot; above to view all catalog services and click &quot;+ Add&quot; on any service to add it to your favourites. Once added, it will show here and in the order section!
                 </p>
                 <button
                   type="button"
@@ -543,7 +527,6 @@ export default function ServicesPage() {
               <thead className="bg-[#F8F9FD] border-b border-[#DEE0ED] text-[#252943]/60 font-medium">
                 <tr>
                   <th className="py-3 px-3 w-24 text-center">Favourite</th>
-                  <th className="py-3 px-4 w-28">Service ID</th>
                   <th className="py-3 px-4">Service Name & Type</th>
                   <th className="py-3 px-4">Category</th>
                   <th className="py-3 px-4 text-right">Min / Max</th>
@@ -586,33 +569,6 @@ export default function ServicesPage() {
                       </button>
                     </td>
 
-                    {/* Service ID with Quick Copy & Provider Badge */}
-                    <td className="py-3.5 px-4 font-bold text-[#252943]">
-                      <div className="flex flex-col gap-1 items-start">
-                        <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(s.externalId);
-                            setCopiedId(s.externalId);
-                            setTimeout(() => setCopiedId(null), 1500);
-                          }}
-                          className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#DEE0ED]/60 hover:bg-[#DEE0ED] text-xs font-bold text-[#252943] transition-colors"
-                          title="Click to copy Service ID"
-                        >
-                          <span>#{s.externalId}</span>
-                          {copiedId === s.externalId ? (
-                            <Check className="w-3 h-3 text-emerald-600" />
-                          ) : (
-                            <Copy className="w-3 h-3 text-[#252943]/40" />
-                          )}
-                        </button>
-                        {s.providerName && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200">
-                            {s.providerName}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-
                     <td className="py-3.5 px-4 max-w-sm">
                       <div className="flex items-center gap-1.5 mb-0.5">
                         <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-[#DEE0ED]/50 text-[#252943]">
@@ -644,8 +600,7 @@ export default function ServicesPage() {
                     <td className="py-3.5 px-4 text-right font-bold text-[#3A4EFB] text-sm tracking-tight">
                       {formatCurrency(
                         s.ratePer1000,
-                        providers.find((p) => p.id === s.providerId)?.currency ||
-                          (s.providerName?.toLowerCase().includes("zeofame") ? "EUR" : "INR")
+                        providers.find((p) => p.id === s.providerId)?.currency || "USD"
                       )}
                     </td>
 

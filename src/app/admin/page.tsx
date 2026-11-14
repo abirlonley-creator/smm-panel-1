@@ -662,7 +662,7 @@ export default function AdminPage() {
               Administration Gate
             </h1>
             <p className="text-xs text-[#252943]/60">
-              Administrative role required. Enter your admin passkey (e.g. <code>abir90</code>).
+              Administrative role required. Enter your administrator passkey.
             </p>
           </div>
 
@@ -979,7 +979,7 @@ export default function AdminPage() {
                           </span>
                         </td>
                         <td className="px-4 py-3 font-mono text-[11px] text-[#252943]/70">
-                          {pk.keyPrefix}
+                          ••••••••
                         </td>
                         <td className="px-4 py-3">
                           <span
@@ -1502,7 +1502,7 @@ export default function AdminPage() {
 
                 {/* Two Column Grid: Views vs Likes Configurations */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* VIEWS CONFIGURATION (Xmedia #10322) */}
+                  {/* VIEWS CONFIGURATION */}
                   <div className="p-5 rounded-2xl border border-[#DEE0ED] bg-[#F8F9FD]/50 space-y-4">
                     <div className="flex items-center justify-between pb-2 border-b border-[#DEE0ED]">
                       <div className="flex items-center gap-2">
@@ -1510,7 +1510,7 @@ export default function AdminPage() {
                         <span className="font-bold text-sm text-[#252943]">TikTok Views Configuration</span>
                       </div>
                       <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-bold">
-                        {tiktokConfig.views?.providerName || "Xmedia"}
+                        {tiktokConfig.views?.providerName || "Views Provider"}
                       </span>
                     </div>
 
@@ -1519,7 +1519,7 @@ export default function AdminPage() {
                         <label className="block font-bold text-[#252943]/70 mb-1">Provider Name</label>
                         <input
                           type="text"
-                          value={tiktokConfig.views?.providerName || "Xmedia"}
+                          value={tiktokConfig.views?.providerName || "Views Provider"}
                           onChange={(e) =>
                             setTiktokConfig({
                               ...tiktokConfig,
@@ -1613,7 +1613,7 @@ export default function AdminPage() {
                     </div>
                   </div>
 
-                  {/* LIKES CONFIGURATION (Zeofame #1123) */}
+                  {/* LIKES CONFIGURATION */}
                   <div className="p-5 rounded-2xl border border-[#DEE0ED] bg-[#F8F9FD]/50 space-y-4">
                     <div className="flex items-center justify-between pb-2 border-b border-[#DEE0ED]">
                       <div className="flex items-center gap-2">
@@ -1621,7 +1621,7 @@ export default function AdminPage() {
                         <span className="font-bold text-sm text-[#252943]">TikTok Likes Configuration</span>
                       </div>
                       <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-rose-100 text-rose-800 font-bold">
-                        {tiktokConfig.likes?.providerName || "Zeofame"}
+                        {tiktokConfig.likes?.providerName || "Likes Provider"}
                       </span>
                     </div>
 
@@ -1630,7 +1630,7 @@ export default function AdminPage() {
                         <label className="block font-bold text-[#252943]/70 mb-1">Provider Name</label>
                         <input
                           type="text"
-                          value={tiktokConfig.likes?.providerName || "Zeofame"}
+                          value={tiktokConfig.likes?.providerName || "Likes Provider"}
                           onChange={(e) =>
                             setTiktokConfig({
                               ...tiktokConfig,
@@ -2044,7 +2044,7 @@ export default function AdminPage() {
                         </option>
                       ))
                     ) : (
-                      <option value="cmvm1iusy0000j5quq9ozboir">xmedia (Live)</option>
+                      <option value="cmvm1iusy0000j5quq9ozboir">Primary Provider (Live)</option>
                     )}
                   </select>
                 </div>

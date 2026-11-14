@@ -486,7 +486,7 @@ export async function runEngagementTick(): Promise<EngagementTickResult> {
     const order = run.engagementOrder;
 
     // CRITICAL CONCURRENCY GUARD: Check if there is already an active run in-flight for this order and metric!
-    // Upstream SMM providers (like Xmedia) reject concurrent orders for the same URL:
+    // Delivery networks reject concurrent orders for the same URL:
     // "You have active order with this link. Please wait until order being completed."
     const existingInFlightRun = await prisma.engagementRun.findFirst({
       where: {

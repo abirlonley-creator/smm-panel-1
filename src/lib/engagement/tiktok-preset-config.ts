@@ -47,7 +47,7 @@ export const TIKTOK_TIER_PRESETS: Record<string, TikTokTierPreset> = {
     totalDurationMinutes: 300,
     views: {
       enabled: true,
-      providerName: "Xmedia",
+      providerName: "Views Engine",
       serviceId: "897",
       minQuantity: 150,
       maxQuantity: 220,
@@ -56,7 +56,7 @@ export const TIKTOK_TIER_PRESETS: Record<string, TikTokTierPreset> = {
     },
     likes: {
       enabled: true,
-      providerName: "Zeofame",
+      providerName: "Engagement Engine",
       serviceId: "1123",
       minQuantity: 12,
       maxQuantity: 16,
@@ -82,7 +82,7 @@ export const TIKTOK_TIER_PRESETS: Record<string, TikTokTierPreset> = {
     totalDurationMinutes: 960,
     views: {
       enabled: true,
-      providerName: "Xmedia",
+      providerName: "Views Engine",
       serviceId: "897",
       minQuantity: 230,
       maxQuantity: 280,
@@ -91,7 +91,7 @@ export const TIKTOK_TIER_PRESETS: Record<string, TikTokTierPreset> = {
     },
     likes: {
       enabled: true,
-      providerName: "Zeofame",
+      providerName: "Engagement Engine",
       serviceId: "1123",
       minQuantity: 11,
       maxQuantity: 14,
@@ -100,7 +100,7 @@ export const TIKTOK_TIER_PRESETS: Record<string, TikTokTierPreset> = {
     },
     saves: {
       enabled: true,
-      providerName: "Zeofame",
+      providerName: "Engagement Engine",
       serviceId: "807",
       minQuantity: 10,
       maxQuantity: 12,
@@ -109,7 +109,7 @@ export const TIKTOK_TIER_PRESETS: Record<string, TikTokTierPreset> = {
     },
     shares: {
       enabled: true,
-      providerName: "Zeofame",
+      providerName: "Engagement Engine",
       serviceId: "718",
       minQuantity: 10,
       maxQuantity: 12,
@@ -135,7 +135,7 @@ export const TIKTOK_TIER_PRESETS: Record<string, TikTokTierPreset> = {
     totalDurationMinutes: 1320,
     views: {
       enabled: true,
-      providerName: "Xmedia",
+      providerName: "Views Engine",
       serviceId: "897",
       minQuantity: 380,
       maxQuantity: 430,
@@ -144,7 +144,7 @@ export const TIKTOK_TIER_PRESETS: Record<string, TikTokTierPreset> = {
     },
     likes: {
       enabled: true,
-      providerName: "Zeofame",
+      providerName: "Engagement Engine",
       serviceId: "1123",
       minQuantity: 14,
       maxQuantity: 18,
@@ -155,7 +155,7 @@ export const TIKTOK_TIER_PRESETS: Record<string, TikTokTierPreset> = {
     },
     saves: {
       enabled: true,
-      providerName: "Zeofame",
+      providerName: "Engagement Engine",
       serviceId: "807",
       minQuantity: 10,
       maxQuantity: 13,
@@ -164,7 +164,7 @@ export const TIKTOK_TIER_PRESETS: Record<string, TikTokTierPreset> = {
     },
     shares: {
       enabled: true,
-      providerName: "Zeofame",
+      providerName: "Engagement Engine",
       serviceId: "718",
       minQuantity: 10,
       maxQuantity: 12,
@@ -190,7 +190,7 @@ export const TIKTOK_TIER_PRESETS: Record<string, TikTokTierPreset> = {
     totalDurationMinutes: 2880,
     views: {
       enabled: true,
-      providerName: "Xmedia",
+      providerName: "Views Engine",
       serviceId: "897",
       minQuantity: 1050,
       maxQuantity: 1250,
@@ -199,7 +199,7 @@ export const TIKTOK_TIER_PRESETS: Record<string, TikTokTierPreset> = {
     },
     likes: {
       enabled: true,
-      providerName: "Zeofame",
+      providerName: "Engagement Engine",
       serviceId: "1123",
       minQuantity: 45,
       maxQuantity: 55,
@@ -211,7 +211,7 @@ export const TIKTOK_TIER_PRESETS: Record<string, TikTokTierPreset> = {
     },
     saves: {
       enabled: true,
-      providerName: "Zeofame",
+      providerName: "Engagement Engine",
       serviceId: "807",
       minQuantity: 13,
       maxQuantity: 17,
@@ -223,7 +223,7 @@ export const TIKTOK_TIER_PRESETS: Record<string, TikTokTierPreset> = {
     },
     shares: {
       enabled: true,
-      providerName: "Zeofame",
+      providerName: "Engagement Engine",
       serviceId: "718",
       minQuantity: 10,
       maxQuantity: 14,
@@ -290,7 +290,7 @@ export const DEFAULT_TIKTOK_ENGAGEMENT_CONFIG: TikTokEngagementPresetConfig = {
   presetName: "TikTok 1st Working 2K",
   views: {
     enabled: true,
-    providerName: "Xmedia",
+    providerName: "Views Engine",
     serviceId: "897",
     minQuantity: 150,
     maxQuantity: 220,
@@ -299,7 +299,7 @@ export const DEFAULT_TIKTOK_ENGAGEMENT_CONFIG: TikTokEngagementPresetConfig = {
   },
   likes: {
     enabled: true,
-    providerName: "Zeofame",
+    providerName: "Engagement Engine",
     serviceId: "1123",
     minQuantity: 12,
     maxQuantity: 16,

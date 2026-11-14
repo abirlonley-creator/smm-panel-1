@@ -13,6 +13,15 @@ interface ServiceCacheEntry {
 const MEMORY_CACHE = new Map<string, ServiceCacheEntry>();
 const CACHE_TTL_MS = 60 * 1000; // 60s cache for lightning fast instant switching
 
+function sanitizeProviderBrand(name?: string | null): string {
+  if (!name) return "Primary Network";
+  const lower = name.toLowerCase();
+  if (lower.includes("xmedia") || lower.includes("x media")) return "Views Network";
+  if (lower.includes("zeofame")) return "Engagement Network";
+  if (lower.includes("airgrow")) return "Growth Network";
+  return name;
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -110,8 +119,7 @@ export async function GET(request: Request) {
         return NextResponse.json({
           success: true,
           provider: {
-            name: singleService.userProvider?.name || singleService.provider?.name || config.name,
-            apiUrl: config.isMock ? "Mock SMM Provider" : config.apiUrl,
+            name: sanitizeProviderBrand(singleService.userProvider?.name || singleService.provider?.name || config.name),
             isMock: config.isMock,
             isLive: !config.isMock,
             cached: true,
@@ -121,7 +129,7 @@ export async function GET(request: Request) {
             {
               ...singleService,
               providerId: singleService.userProviderId || singleService.providerId,
-              providerName: singleService.userProvider?.name || singleService.provider?.name || config.name,
+              providerName: sanitizeProviderBrand(singleService.userProvider?.name || singleService.provider?.name || config.name),
               providerServiceId: singleService.providerServiceId || singleService.externalId,
             },
           ],
@@ -285,7 +293,7 @@ export async function GET(request: Request) {
       return {
         ...s,
         providerId: pId,
-        providerName: pName,
+        providerName: sanitizeProviderBrand(pName),
         providerServiceId: pSrvId,
         isFavourite: isFav,
         inSnapshot,
@@ -320,8 +328,7 @@ export async function GET(request: Request) {
     const responsePayload = {
       success: true,
       provider: {
-        name: config.name,
-        apiUrl: config.isMock ? "Mock SMM Provider" : config.apiUrl,
+        name: sanitizeProviderBrand(config.name),
         isMock: config.isMock,
         isLive: !config.isMock && wasRefreshedLive,
         cached: !wasRefreshedLive,
@@ -338,10 +345,9 @@ export async function GET(request: Request) {
         ).length;
         return {
           id: p.id,
-          name: p.name,
+          name: sanitizeProviderBrand(p.name),
           currency: p.currency,
           balance: p.balance,
-          apiUrl: p.apiUrl,
           isActive: p.id === config.id,
           servicesCount: count,
         };

@@ -399,7 +399,7 @@ export default function EngagementPage() {
     }
 
     if (!isReady) {
-      setErrorMsg("Both Zeofame and Xmedia APIs must be connected and verified before ordering.");
+      setErrorMsg("Both Views and Engagement delivery engines must be connected and verified before ordering.");
       return;
     }
 
@@ -451,7 +451,7 @@ export default function EngagementPage() {
         </div>
         <div className="text-center">
           <p className="text-sm font-bold text-[#252943]">Loading TikTok Engagement Engine</p>
-          <p className="text-xs text-[#252943]/60 mt-0.5">Connecting Xmedia Views & Zeofame Likes/Saves...</p>
+          <p className="text-xs text-[#252943]/60 mt-0.5">Initializing Views & Engagement Delivery Engines...</p>
         </div>
       </div>
     );
@@ -489,7 +489,7 @@ export default function EngagementPage() {
             </span>
           </div>
           <p className="text-xs text-[#252943]/70">
-            Coordinated Views (Xmedia #10322) with Likes (#1123), Saves (#807), and Reposts (#718) on Zeofame.
+            Coordinated high-retention Views with naturally scheduled Likes, Saves, and Reposts.
           </p>
         </div>
 
@@ -514,7 +514,7 @@ export default function EngagementPage() {
             </button>
           </div>
 
-          {/* Upstream APIs Indicator */}
+          {/* Engine Status Indicator */}
           <button
             type="button"
             onClick={() => setShowApiDetails(!showApiDetails)}
@@ -525,25 +525,25 @@ export default function EngagementPage() {
             }`}
           >
             <span className={`w-2 h-2 rounded-full ${isReady ? "bg-emerald-500" : "bg-amber-500 animate-pulse"}`} />
-            <span>{isReady ? "Dual APIs Active" : "API Setup Required"}</span>
+            <span>{isReady ? "Delivery Engines Ready" : "Setup Required"}</span>
             {showApiDetails ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           </button>
         </div>
       </div>
 
-      {/* Expandable API Details */}
+      {/* Expandable Engine Details */}
       {showApiDetails && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-3xl bg-[#F8F9FD] border border-[#DEE0ED] animate-fadeIn">
-          {/* Xmedia Card */}
+          {/* Views Engine Card */}
           <div className="bg-white p-4 rounded-2xl border border-[#DEE0ED] shadow-subtle space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 font-black text-xs flex items-center justify-center">
-                  XM
+                  VW
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-[#252943]">Xmedia (Views Provider)</h4>
-                  <span className="text-[10px] text-[#252943]/60">Service ID #10322</span>
+                  <h4 className="text-xs font-bold text-[#252943]">Views Delivery Engine</h4>
+                  <span className="text-[10px] text-[#252943]/60">High-Retention Network</span>
                 </div>
               </div>
               <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
@@ -553,26 +553,21 @@ export default function EngagementPage() {
               </span>
             </div>
             <div className="text-[11px] text-[#252943]/70 flex justify-between pt-1 border-t border-[#DEE0ED]/60">
-              <span>Provider Balance:</span>
-              <span className="font-bold text-[#252943]">{xmedia?.balance != null ? `₹${xmedia.balance.toFixed(2)}` : "—"}</span>
+              <span>Engine Status:</span>
+              <span className="font-bold text-[#252943]">{xmedia?.connected ? "Ready & Active" : "Setup Required"}</span>
             </div>
-            {!xmedia?.connected && (
-              <Link href="/api-key" className="text-xs font-bold text-[#3A4EFB] hover:underline flex items-center gap-1 pt-1">
-                <span>Connect Xmedia API</span> <ExternalLink className="w-3 h-3" />
-              </Link>
-            )}
           </div>
 
-          {/* Zeofame Card */}
+          {/* Engagement Engine Card */}
           <div className="bg-white p-4 rounded-2xl border border-[#DEE0ED] shadow-subtle space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-lg bg-rose-100 text-rose-700 font-black text-xs flex items-center justify-center">
-                  ZF
+                  EG
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-[#252943]">Zeofame (Likes, Saves & Reposts)</h4>
-                  <span className="text-[10px] text-[#252943]/60">Services #1123, #807, #718</span>
+                  <h4 className="text-xs font-bold text-[#252943]">Engagement Delivery Engine</h4>
+                  <span className="text-[10px] text-[#252943]/60">Organic Likes, Saves & Reposts</span>
                 </div>
               </div>
               <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
@@ -582,14 +577,9 @@ export default function EngagementPage() {
               </span>
             </div>
             <div className="text-[11px] text-[#252943]/70 flex justify-between pt-1 border-t border-[#DEE0ED]/60">
-              <span>Provider Balance:</span>
-              <span className="font-bold text-[#252943]">{zeofame?.balance != null ? `€${zeofame.balance.toFixed(4)}` : "—"}</span>
+              <span>Engine Status:</span>
+              <span className="font-bold text-[#252943]">{zeofame?.connected ? "Ready & Active" : "Setup Required"}</span>
             </div>
-            {!zeofame?.connected && (
-              <Link href="/api-key" className="text-xs font-bold text-[#3A4EFB] hover:underline flex items-center gap-1 pt-1">
-                <span>Connect Zeofame API</span> <ExternalLink className="w-3 h-3" />
-              </Link>
-            )}
           </div>
         </div>
       )}

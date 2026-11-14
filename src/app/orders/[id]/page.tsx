@@ -148,7 +148,7 @@ export default function OrderDetailPage() {
       const data = await res.json();
       if (data.success) {
         setOrderFromResponse(data.order);
-        setActionMsg({ text: "Provider status synchronized successfully.", type: "success" });
+        setActionMsg({ text: "Delivery status synchronized successfully.", type: "success" });
       } else {
         setActionMsg({ text: data.error || "Failed to reconcile status", type: "error" });
       }
@@ -479,16 +479,10 @@ export default function OrderDetailPage() {
                   ? order.status === "CANCELLED" ? "Cancelled" : monitorStatusLabel
                   : undefined}
               />
-              {order.providerOrderId ? (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 shadow-sm">
-                  <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                  {order.service.userProvider?.name || order.service.provider?.name || "API"}: #{order.providerOrderId}
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-                  {order.service.userProvider?.name || order.service.provider?.name || "API"}
-                </span>
-              )}
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 shadow-sm">
+                <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                Ref: {order.orderRef}
+              </span>
             </div>
             <p className="text-xs text-[#252943]/60 mt-1">
               Created on {formatBdDateTime(order.createdAt)} (BD Time 🇧🇩)
@@ -555,7 +549,7 @@ export default function OrderDetailPage() {
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white hover:bg-[#F8F9FD] text-[#252943] text-xs font-semibold transition-all press-scale"
               >
                 <RefreshCw className={`w-3.5 h-3.5 text-[#3A4EFB] ${reconciling ? "animate-spin" : ""}`} />
-                Check Provider Status
+                Sync Live Status
               </button>
             )}
 
@@ -619,7 +613,7 @@ export default function OrderDetailPage() {
             {adaptiveSubmittedQuantity > 0 ? (
               <div>
                 <div className="mb-2 flex items-center justify-between gap-3 text-xs">
-                  <span className="font-semibold text-[#252943]">Provider delivery progress</span>
+                  <span className="font-semibold text-[#252943]">Delivery progress</span>
                   <span className="font-bold text-[#3A4EFB]">
                     {adaptiveDeliveredQuantity.toLocaleString()} of {adaptiveSubmittedQuantity.toLocaleString()} sent units delivered ({percentComplete}%)
                   </span>
@@ -627,7 +621,7 @@ export default function OrderDetailPage() {
                 <div
                   className="h-2.5 w-full overflow-hidden rounded-full bg-[#DEE0ED]/60"
                   role="progressbar"
-                  aria-label="Provider delivery progress"
+                  aria-label="Delivery progress"
                   aria-valuemin={0}
                   aria-valuemax={adaptiveSubmittedQuantity}
                   aria-valuenow={Math.min(adaptiveDeliveredQuantity, adaptiveSubmittedQuantity)}
@@ -639,7 +633,7 @@ export default function OrderDetailPage() {
               <div className="rounded-xl border border-[#DEE0ED] bg-[#F8F9FD] p-4">
                 <p className="text-sm font-semibold text-[#252943]">
                   {order.status === "CANCELLED" || order.monitoringSession?.status === "STOPPED"
-                    ? "Monitoring has stopped; no batch was sent to the provider."
+                    ? "Monitoring has stopped; no batch was dispatched."
                     : steps.length > 0
                       ? "Batches have been measured, but none have been sent yet."
                       : "No batch has been created yet."}
@@ -660,14 +654,14 @@ export default function OrderDetailPage() {
                   help: `Sum of ${steps.length} measured ${steps.length === 1 ? "batch" : "batches"}`,
                 },
                 {
-                  label: "Sent to provider",
+                  label: "Dispatched",
                   value: adaptiveSubmittedQuantity.toLocaleString(),
-                  help: "Units accepted by the provider",
+                  help: "Units accepted for delivery",
                 },
                 {
                   label: "Delivered",
                   value: adaptiveDeliveredQuantity.toLocaleString(),
-                  help: "Delivery reported by the provider",
+                  help: "Delivery reported by delivery engine",
                 },
                 {
                   label: "Waiting to send",
@@ -699,7 +693,7 @@ export default function OrderDetailPage() {
                   <div>
                     <h2 className="text-sm font-bold text-amber-950">Scheduled Execution Active</h2>
                     <p className="mt-1 text-xs text-amber-900 leading-relaxed">
-                      This order is queued to dispatch autonomously to the upstream provider at{" "}
+                      This order is queued to dispatch autonomously to the delivery engine at{" "}
                       <strong className="text-amber-950 font-bold">
                         {(() => {
                           if (order.notes) {
@@ -713,7 +707,7 @@ export default function OrderDetailPage() {
                       </strong>.
                     </p>
                     <p className="mt-1 text-xs text-amber-800/80 leading-relaxed">
-                      Once the scheduled execution window arrives, our autonomous runner submits the order, confirms the provider order ID, and tracks real-time delivery until completed.
+                      Once the scheduled execution window arrives, our autonomous runner submits the order and tracks real-time delivery until completed.
                     </p>
                   </div>
                 </div>
@@ -753,7 +747,7 @@ export default function OrderDetailPage() {
 
       {/* Two Column Layout: Order Meta + Scheduled Delivery Steps */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Left Side: Order & Provider Attributes */}
+        {/* Left Side: Order & Delivery Attributes */}
         <div className="space-y-6">
           <div className="bg-white rounded-2xl border border-[#DEE0ED] p-5 shadow-subtle space-y-4 text-xs">
             <h3 className="font-semibold text-[#252943] pb-2 border-b border-[#DEE0ED]">
@@ -780,15 +774,10 @@ export default function OrderDetailPage() {
               </div>
 
               <div>
-                <span className="text-[#252943]/50 text-[11px] block">Connected API Provider</span>
+                <span className="text-[#252943]/50 text-[11px] block">Delivery Network</span>
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-[#F0F2FA] text-[#3A4EFB] mt-0.5 border border-[#DEE0ED]">
-                  {order.service.userProvider?.name || order.service.provider?.name || "Connected API"}
+                  Automated High-Speed Network
                 </span>
-                {order.service.userProvider?.apiUrl && (
-                  <span className="text-[10px] text-[#252943]/40 font-mono block mt-0.5 truncate">
-                    {order.service.userProvider.apiUrl}
-                  </span>
-                )}
               </div>
 
               <div>
@@ -808,20 +797,12 @@ export default function OrderDetailPage() {
 
               <div>
                 <span className="text-[#252943]/50 text-[11px] block">
-                  {isAdaptiveMonitor ? "Provider submission" : "Upstream Provider Order ID"}
+                  Delivery Reference
                 </span>
                 <span className="font-bold text-[#252943] flex items-center gap-1.5 mt-0.5">
-                  {order.providerOrderId ? (
-                    <span className="text-sm font-mono text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                      #{order.providerOrderId}
-                    </span>
-                  ) : (
-                    <span className="text-xs text-[#252943]/50 font-normal">
-                      {isAdaptiveMonitor
-                        ? adaptiveSubmittedQuantity > 0 ? "See references in batch history" : "No batches sent yet"
-                        : "Pending Dispatch"}
-                    </span>
-                  )}
+                  <span className="text-sm font-mono text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                    #{order.orderRef}
+                  </span>
                 </span>
               </div>
             </div>
@@ -872,7 +853,7 @@ export default function OrderDetailPage() {
                       <th className="py-2.5 px-4 w-16">Run</th>
                       <th className="py-2.5 px-4">Scheduled Execution</th>
                       <th className="py-2.5 px-4 text-right">Quantity</th>
-                      <th className="py-2.5 px-4">Upstream API Order ID</th>
+                      <th className="py-2.5 px-4">Delivery Ref</th>
                       <th className="py-2.5 px-4">Status</th>
                     </tr>
                   </thead>
@@ -889,13 +870,9 @@ export default function OrderDetailPage() {
                           {run.quantity.toLocaleString()}
                         </td>
                         <td className="py-3 px-4">
-                          {run.providerOrderId ? (
-                            <span className="font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 text-xs">
-                              #{run.providerOrderId}
-                            </span>
-                          ) : (
-                            <span className="text-[#252943]/40 text-xs">—</span>
-                          )}
+                          <span className="font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 text-xs">
+                            Batch #{run.runNumber}
+                          </span>
                         </td>
                         <td className="py-3 px-4">
                           <StatusBadge status={run.status} />
@@ -926,7 +903,7 @@ export default function OrderDetailPage() {
                       <th className="py-2.5 px-4 w-12">Step</th>
                       <th className="py-2.5 px-4">{isAdaptiveMonitor ? "Measured / sent" : "Scheduled Execution"}</th>
                       <th className="py-2.5 px-4 text-right">Quantity</th>
-                      <th className="py-2.5 px-4">Provider Ref</th>
+                      <th className="py-2.5 px-4">Batch Ref</th>
                       <th className="py-2.5 px-4">Status</th>
                     </tr>
                   </thead>
@@ -957,7 +934,7 @@ export default function OrderDetailPage() {
                             {step.quantity.toLocaleString()}
                           </td>
                           <td className="py-3 px-4 text-xs font-medium text-[#252943]/70">
-                            {step.providerOrderId || "—"}
+                            Batch #{step.stepNumber}
                           </td>
                           <td className="py-3 px-4">
                             <StatusBadge status={isDelayed ? "DELAYED" : step.status} />
@@ -1124,7 +1101,7 @@ function StatusBadge({ status, label }: { status: string; label?: string }) {
   const statusLabels: Record<string, string> = {
     COMPLETED: "Completed",
     PROCESSING: "Processing",
-    SUBMITTED: "Sent to provider",
+    SUBMITTED: "In Delivery",
     PARTIAL: "Partially delivered",
     SCHEDULED: "Scheduled",
     PENDING: "Queued",

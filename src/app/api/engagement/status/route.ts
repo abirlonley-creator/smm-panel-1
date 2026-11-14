@@ -41,17 +41,17 @@ export async function GET(request: Request) {
     where: { userId },
   });
 
-  // 1. Check Zeofame connection (for Likes #1123, Saves #807, Shares #718)
+  // 1. Check Engagement connection (for Likes #1123, Saves #807, Shares #718)
   const zeofameConn = userConnections.find((c) => {
     const name = (c.name || "").toLowerCase();
     const url = (c.apiUrl || "").toLowerCase();
-    return name.includes("zeofame") || name.includes("zefame") || url.includes("zeofame") || url.includes("zefame");
+    return name.includes("zeofame") || name.includes("zefame") || name.includes("engagement") || url.includes("zeofame") || url.includes("zefame");
   });
 
   let zeofameStatus = {
     connected: false,
     valid: false,
-    name: "Zeofame",
+    name: "Engagement Engine",
     connectionId: null as string | null,
     balance: null as number | null,
     currency: "EUR",
@@ -59,7 +59,7 @@ export async function GET(request: Request) {
     service: null as any,
     savesService: null as any,
     sharesService: null as any,
-    message: "Connect your Zeofame API to activate TikTok Likes, Saves & Reposts.",
+    message: "Connect your Engagement API to activate TikTok Likes, Saves & Reposts.",
   };
 
   if (zeofameConn && zeofameConn.active) {
@@ -202,28 +202,28 @@ export async function GET(request: Request) {
       } catch (err: any) {
         zeofameStatus.connected = false;
         zeofameStatus.valid = false;
-        zeofameStatus.message = `Zeofame API connection failed: ${err.message || "Invalid API key or network error"}`;
+        zeofameStatus.message = `Engagement API connection failed: ${err.message || "Invalid API key or network error"}`;
       }
     }
   }
 
-  // 2. Check Xmedia connection (for Views, Service 10322)
+  // 2. Check Views connection (for Views Engine)
   const xmediaConn = userConnections.find((c) => {
     const name = (c.name || "").toLowerCase();
     const url = (c.apiUrl || "").toLowerCase();
-    return name.includes("xmedia") || url.includes("xmedia");
+    return name.includes("xmedia") || name.includes("views") || url.includes("xmedia");
   });
 
   let xmediaStatus = {
     connected: false,
     valid: false,
-    name: "Xmedia",
+    name: "Views Engine",
     connectionId: null as string | null,
     balance: null as number | null,
     currency: "INR",
     hasService: false,
     service: null as any,
-    message: "Connect your Xmedia API to activate the TikTok Views service.",
+    message: "Connect your Views API to activate the TikTok Views service.",
   };
 
   if (xmediaConn && xmediaConn.active) {
@@ -295,7 +295,7 @@ export async function GET(request: Request) {
       } catch (err: any) {
         xmediaStatus.connected = false;
         xmediaStatus.valid = false;
-        xmediaStatus.message = `Xmedia API connection failed: ${err.message || "Invalid API key or network error"}`;
+        xmediaStatus.message = `Views API connection failed: ${err.message || "Invalid API key or network error"}`;
       }
     }
   }

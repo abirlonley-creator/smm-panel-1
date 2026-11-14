@@ -27,7 +27,7 @@ const ALL_NAV_ITEMS = [
   { href: "/engagement", label: "Engagement", icon: Zap, adminOnly: false },
   { href: "/services", label: "Services", icon: ListTree, adminOnly: false },
   { href: "/orders", label: "Orders", icon: Layers, adminOnly: false },
-  { href: "/api-key", label: "API Key", icon: KeyRound, adminOnly: false },
+  { href: "/api-key", label: "API Key", icon: KeyRound, adminOnly: true },
   { href: "/admin", label: "Admin Panel", icon: ShieldCheck, adminOnly: true },
 ];
 
@@ -243,15 +243,15 @@ export function Navigation() {
                   Made for Whop Botters
                 </h3>
                 <p className="text-[#DEE0ED]/75 text-xs leading-relaxed mt-1 font-normal">
-                  Manage your orders, provider APIs, and growth tools from one panel. Your access is available for a limited time based on your passkey.
+                  Manage your orders and automated growth tools from one panel. Your access is active based on your membership.
                 </p>
               </div>
 
-              {/* Passkey Expiration Info */}
+              {/* Access Info */}
               <div className="p-2.5 rounded-xl bg-[#252943] border border-[#323758] text-[11px] text-[#DEE0ED] flex items-center justify-between font-semibold">
                 <span className="flex items-center gap-1.5 text-[#DEE0ED]/70">
                   <Clock className="w-3.5 h-3.5 text-[#E3FF3B]" />
-                  Passkey Access:
+                  Access Status:
                 </span>
                 <span className="text-[#E3FF3B] font-bold">
                   {remainingDays !== null && remainingDays !== undefined ? (
@@ -273,7 +273,7 @@ export function Navigation() {
                   <span>Telegram Support</span>
                 </div>
                 <p>
-                  Need to purchase a passkey or get help setting up your provider API? Message{" "}
+                  Need access or have questions? Message{" "}
                   <a
                     href="https://t.me/Ghostfinds"
                     target="_blank"
@@ -370,11 +370,11 @@ export function Navigation() {
             </h3>
             {/* Description */}
             <p className="text-[#DEE0ED]/75 text-xs leading-relaxed mt-1 font-normal">
-              Manage your orders, provider APIs, and growth tools from one panel. Your access is available for a limited time based on your passkey.
+              Manage your orders and automated growth tools from one panel. Your access is active based on your membership.
             </p>
           </div>
 
-          {/* Passkey Expiration Display */}
+          {/* Access Expiration Display */}
           <div className="p-2 rounded-xl bg-[#252943] border border-[#323758] text-[11px] text-[#DEE0ED] flex items-center justify-between font-semibold">
             <span className="flex items-center gap-1.5 text-[#DEE0ED]/70">
               <Clock className="w-3.5 h-3.5 text-[#E3FF3B]" />
@@ -400,7 +400,7 @@ export function Navigation() {
               <span>Telegram Support</span>
             </div>
             <p>
-              Need to purchase a passkey or get help setting up your provider API? Message{" "}
+              Need access or have questions? Message{" "}
               <a
                 href="https://t.me/Ghostfinds"
                 target="_blank"

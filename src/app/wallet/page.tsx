@@ -22,6 +22,15 @@ import Link from "next/link";
 import { formatProviderBalance } from "@/lib/currency";
 import { BRAND } from "@/lib/brand";
 
+function sanitizeProviderName(name: string): string {
+  if (!name) return "Provider Account";
+  const lower = name.toLowerCase();
+  if (lower.includes("xmedia") || lower.includes("x media")) return "Views Provider";
+  if (lower.includes("zeofame")) return "Engagement Provider";
+  if (lower.includes("airgrow")) return "Growth Provider";
+  return name;
+}
+
 interface ProviderBalanceCard {
   connectionId: string;
   providerName: string;
@@ -519,7 +528,7 @@ export default function WalletPage() {
             <Server className="w-10 h-10 text-[#3A4EFB]/40 mx-auto" />
             <h4 className="text-sm font-bold text-[#252943]">No SMM Providers Connected</h4>
             <p className="text-xs text-[#252943]/60 max-w-md mx-auto">
-              Add your upstream SMM provider (e.g. Zeofame, xmedia, or any SMM v2 endpoint) to import services and route orders.
+              Add your SMM provider endpoint to import services and route orders.
             </p>
             <button
               type="button"
@@ -543,7 +552,7 @@ export default function WalletPage() {
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-[#F8F9FD] border border-[#DEE0ED] text-[#252943]">
-                        {provider.providerName}
+                        {sanitizeProviderName(provider.providerName)}
                       </span>
                       <div className="flex items-center gap-1">
                         <button
@@ -717,7 +726,7 @@ export default function WalletPage() {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Zeofame or xmedia"
+                  placeholder="e.g. Primary Provider"
                   value={providerName}
                   onChange={(e) => setProviderName(e.target.value)}
                   className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3.5 py-2 text-xs text-[#252943] focus:border-[#3A4EFB]"
@@ -912,7 +921,7 @@ export default function WalletPage() {
             <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
               <h3 className="text-sm font-bold text-[#252943] flex items-center gap-2">
                 <Edit3 className="w-4 h-4 text-[#3A4EFB]" />
-                Update Credentials: {selectedConnection.providerName}
+                Update Credentials: {selectedConnection && sanitizeProviderName(selectedConnection.providerName)}
               </h3>
               <button
                 type="button"

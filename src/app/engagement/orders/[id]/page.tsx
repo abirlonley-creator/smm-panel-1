@@ -387,10 +387,10 @@ export default function EngagementOrderDetailPage() {
               onClick={handleSyncWithProviders}
               disabled={syncing}
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-[#DEE0ED] bg-white hover:bg-[#F8F9FD] text-[#252943] text-xs font-bold transition-all shadow-subtle"
-              title="Sync live status from upstream Xmedia and Zeofame APIs"
+              title="Sync live delivery status"
             >
               <RefreshCw className={`w-3.5 h-3.5 text-[#3A4EFB] ${syncing ? "animate-spin" : ""}`} />
-              <span>Sync with Providers</span>
+              <span>Sync Status</span>
             </button>
 
             {!isCompleted && !isCancelled && (
@@ -433,7 +433,7 @@ export default function EngagementOrderDetailPage() {
               <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
               <div>
                 <span className="text-xs font-bold block text-rose-900">
-                  {failedRuns.length} delivery batches encountered upstream provider conflicts (active delivery on link)
+                  {failedRuns.length} delivery batches encountered temporary pacing delays
                 </span>
                 <span className="text-[11px] text-rose-800/80">
                   Click below to resume and retry all failed batches safely spaced 20 minutes apart without link collisions.
@@ -718,7 +718,7 @@ export default function EngagementOrderDetailPage() {
                   <div>
                     <h3 className="text-sm font-bold text-[#252943]">{viewsRuns[0]?.serviceName || "TikTok Views"}</h3>
                     <p className="text-[11px] text-[#252943]/60">
-                      Provider Service ID #{viewsRuns[0]?.providerServiceId || "—"} • {viewsRuns.length} batches
+                      Automated High-Speed Delivery • {viewsRuns.length} batches
                     </p>
                   </div>
                 </div>
@@ -783,7 +783,7 @@ export default function EngagementOrderDetailPage() {
                   <div>
                     <h3 className="text-sm font-bold text-[#252943]">{likesRuns[0]?.serviceName || "TikTok Likes"}</h3>
                     <p className="text-[11px] text-[#252943]/60">
-                      Provider Service ID #{likesRuns[0]?.providerServiceId || "—"} • {likesRuns.length} batches
+                      Organic Pacing Network • {likesRuns.length} batches
                     </p>
                   </div>
                 </div>
@@ -859,7 +859,7 @@ export default function EngagementOrderDetailPage() {
                       <div>
                         <h3 className="text-sm font-bold text-[#252943]">{savesRuns[0]?.serviceName || "TikTok Saves"}</h3>
                         <p className="text-[11px] text-[#252943]/60">
-                          Provider Service ID #{savesRuns[0]?.providerServiceId || "—"} • {savesRuns.length} batches
+                          Organic Saves Network • {savesRuns.length} batches
                         </p>
                       </div>
                     </div>
@@ -924,7 +924,7 @@ export default function EngagementOrderDetailPage() {
                       <div>
                         <h3 className="text-sm font-bold text-[#252943]">{sharesRuns[0]?.serviceName || "TikTok Reposts"}</h3>
                         <p className="text-[11px] text-[#252943]/60">
-                          Provider Service ID #{sharesRuns[0]?.providerServiceId || "—"} • {sharesRuns.length} batches
+                          Organic Reposts Network • {sharesRuns.length} batches
                         </p>
                       </div>
                     </div>
@@ -989,7 +989,7 @@ export default function EngagementOrderDetailPage() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#DEE0ED]">
             <div>
               <h2 className="text-base font-bold text-[#252943]">
-                {viewsRuns[0]?.serviceName || "TikTok Views"} ({viewsRuns[0]?.providerServiceId ? `#${viewsRuns[0]?.providerServiceId}` : ""})
+                {viewsRuns[0]?.serviceName || "TikTok Views"}
               </h2>
               <p className="text-xs text-[#252943]/60">
                 {viewsRuns.length} randomized delivery runs scheduled across {order.durationHours} hours.
@@ -1048,7 +1048,7 @@ export default function EngagementOrderDetailPage() {
                   <th className="py-2.5 px-3">Run #</th>
                   <th className="py-2.5 px-3">Scheduled (BD Time)</th>
                   <th className="py-2.5 px-3">Quantity</th>
-                  <th className="py-2.5 px-3">Upstream Order ID</th>
+                  <th className="py-2.5 px-3">Delivery Ref</th>
                   <th className="py-2.5 px-3">Delivered</th>
                   <th className="py-2.5 px-3">Status</th>
                   <th className="py-2.5 px-3 text-right">Action</th>
@@ -1067,7 +1067,7 @@ export default function EngagementOrderDetailPage() {
                       {r.quantity}
                     </td>
                     <td className="py-2.5 px-3 font-mono text-[11px] text-[#3A4EFB]">
-                      {r.providerOrderId ? `#${r.providerOrderId}` : "—"}
+                      Batch #{r.runNumber}
                     </td>
                     <td className="py-2.5 px-3 font-mono font-bold text-emerald-600">
                       {r.deliveredQuantity ?? (r.status === "completed" ? r.quantity : 0)}
@@ -1111,7 +1111,7 @@ export default function EngagementOrderDetailPage() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#DEE0ED]">
             <div>
               <h2 className="text-base font-bold text-[#252943]">
-                {likesRuns[0]?.serviceName || "TikTok Likes"} ({likesRuns[0]?.providerServiceId ? `#${likesRuns[0]?.providerServiceId}` : ""})
+                {likesRuns[0]?.serviceName || "TikTok Likes"}
               </h2>
               <p className="text-xs text-[#252943]/60">
                 {likesRuns.length} natural delivery runs scheduled across {order.durationHours} hours.
@@ -1132,7 +1132,7 @@ export default function EngagementOrderDetailPage() {
                   <th className="py-2.5 px-3">Run #</th>
                   <th className="py-2.5 px-3">Scheduled (BD Time)</th>
                   <th className="py-2.5 px-3">Quantity</th>
-                  <th className="py-2.5 px-3">Upstream Order ID</th>
+                  <th className="py-2.5 px-3">Delivery Ref</th>
                   <th className="py-2.5 px-3">Delivered</th>
                   <th className="py-2.5 px-3">Status</th>
                   <th className="py-2.5 px-3 text-right">Action</th>
@@ -1156,7 +1156,7 @@ export default function EngagementOrderDetailPage() {
                       {r.quantity}
                     </td>
                     <td className="py-2.5 px-3 font-mono text-[11px] text-[#3A4EFB]">
-                      {r.providerOrderId ? `#${r.providerOrderId}` : "—"}
+                      Batch #{r.runNumber}
                     </td>
                     <td className="py-2.5 px-3 font-mono font-bold text-emerald-600">
                       {r.deliveredQuantity ?? (r.status === "completed" ? r.quantity : 0)}
@@ -1200,7 +1200,7 @@ export default function EngagementOrderDetailPage() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#DEE0ED]">
             <div>
               <h2 className="text-base font-bold text-[#252943]">
-                {savesRuns[0]?.serviceName || "TikTok Saves"} ({savesRuns[0]?.providerServiceId ? `#${savesRuns[0]?.providerServiceId}` : ""})
+                {savesRuns[0]?.serviceName || "TikTok Saves"}
               </h2>
               <p className="text-xs text-[#252943]/60">
                 {savesRuns.length} delivery runs scheduled across {order.durationHours} hours.
@@ -1220,7 +1220,7 @@ export default function EngagementOrderDetailPage() {
                   <th className="py-2.5 px-3">Run #</th>
                   <th className="py-2.5 px-3">Scheduled (BD Time)</th>
                   <th className="py-2.5 px-3">Quantity</th>
-                  <th className="py-2.5 px-3">Upstream Order ID</th>
+                  <th className="py-2.5 px-3">Delivery Ref</th>
                   <th className="py-2.5 px-3">Delivered</th>
                   <th className="py-2.5 px-3">Status</th>
                   <th className="py-2.5 px-3 text-right">Action</th>
@@ -1239,7 +1239,7 @@ export default function EngagementOrderDetailPage() {
                       {r.quantity}
                     </td>
                     <td className="py-2.5 px-3 font-mono text-[11px] text-[#3A4EFB]">
-                      {r.providerOrderId ? `#${r.providerOrderId}` : "—"}
+                      Batch #{r.runNumber}
                     </td>
                     <td className="py-2.5 px-3 font-mono font-bold text-emerald-600">
                       {r.deliveredQuantity ?? (r.status === "completed" ? r.quantity : 0)}
@@ -1283,7 +1283,7 @@ export default function EngagementOrderDetailPage() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#DEE0ED]">
             <div>
               <h2 className="text-base font-bold text-[#252943]">
-                {sharesRuns[0]?.serviceName || "TikTok Reposts"} ({sharesRuns[0]?.providerServiceId ? `#${sharesRuns[0]?.providerServiceId}` : ""})
+                {sharesRuns[0]?.serviceName || "TikTok Reposts"}
               </h2>
               <p className="text-xs text-[#252943]/60">
                 {sharesRuns.length} delivery runs scheduled across {order.durationHours} hours.
@@ -1303,7 +1303,7 @@ export default function EngagementOrderDetailPage() {
                   <th className="py-2.5 px-3">Run #</th>
                   <th className="py-2.5 px-3">Scheduled (BD Time)</th>
                   <th className="py-2.5 px-3">Quantity</th>
-                  <th className="py-2.5 px-3">Upstream Order ID</th>
+                  <th className="py-2.5 px-3">Delivery Ref</th>
                   <th className="py-2.5 px-3">Delivered</th>
                   <th className="py-2.5 px-3">Status</th>
                   <th className="py-2.5 px-3 text-right">Action</th>
@@ -1322,7 +1322,7 @@ export default function EngagementOrderDetailPage() {
                       {r.quantity}
                     </td>
                     <td className="py-2.5 px-3 font-mono text-[11px] text-[#3A4EFB]">
-                      {r.providerOrderId ? `#${r.providerOrderId}` : "—"}
+                      Batch #{r.runNumber}
                     </td>
                     <td className="py-2.5 px-3 font-mono font-bold text-emerald-600">
                       {r.deliveredQuantity ?? (r.status === "completed" ? r.quantity : 0)}
@@ -1382,7 +1382,7 @@ export default function EngagementOrderDetailPage() {
                 {formatBdDateTime(order.createdAt)} ({formatBdTime(order.createdAt)} BD)
               </span>
               <p className="text-xs text-[#252943]/70">
-                {viewsRuns.length} Views batches ({viewsRuns[0]?.providerServiceId ? `#${viewsRuns[0]?.providerServiceId}` : ""}), {likesRuns.length} Likes batches ({likesRuns[0]?.providerServiceId ? `#${likesRuns[0]?.providerServiceId}` : ""}){savesRuns.length > 0 ? `, ${savesRuns.length} Saves batches` : ""}{sharesRuns.length > 0 ? `, and ${sharesRuns.length} Reposts batches` : ""} successfully queued across {order.durationHours} hours.
+                {viewsRuns.length} Views batches, {likesRuns.length} Likes batches{savesRuns.length > 0 ? `, ${savesRuns.length} Saves batches` : ""}{sharesRuns.length > 0 ? `, and ${sharesRuns.length} Reposts batches` : ""} successfully queued across {order.durationHours} hours.
               </p>
             </div>
 
@@ -1450,12 +1450,6 @@ export default function EngagementOrderDetailPage() {
                     <span>Scheduled: {formatBdTime(r.scheduledAt)} BD</span>
                     <span>•</span>
                     <span>Quantity: {r.quantity}</span>
-                    {r.providerOrderId && (
-                      <>
-                        <span>•</span>
-                        <span className="text-[#3A4EFB]">Order ID: #{r.providerOrderId}</span>
-                      </>
-                    )}
                   </div>
                 </div>
               );
@@ -1472,7 +1466,7 @@ export default function EngagementOrderDetailPage() {
                   {formatBdDateTime(order.updatedAt)} ({formatBdTime(order.updatedAt)} BD)
                 </span>
                 <p className="text-xs text-[#252943]/70">
-                  All {viewsRuns.length} Views batches, {likesRuns.length} Likes batches{savesRuns.length > 0 ? `, ${savesRuns.length} Saves batches` : ""}{sharesRuns.length > 0 ? `, and ${sharesRuns.length} Reposts batches` : ""} confirmed delivered by upstream providers.
+                  All {viewsRuns.length} Views batches, {likesRuns.length} Likes batches{savesRuns.length > 0 ? `, ${savesRuns.length} Saves batches` : ""}{sharesRuns.length > 0 ? `, and ${sharesRuns.length} Reposts batches` : ""} confirmed delivered by delivery networks.
                 </p>
               </div>
             )}

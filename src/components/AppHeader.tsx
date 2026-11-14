@@ -101,7 +101,7 @@ export function AppHeader() {
           {role === "ADMIN" ? (
             <Link
               href="/admin"
-              title="Open Admin Panel & Passkeys"
+              title="Open Admin Panel"
               className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-black uppercase tracking-wider bg-[#252943] text-[#E3FF3B] border border-[#323758] shadow-subtle hover:bg-[#1a1d31] transition-all cursor-pointer"
             >
               <ShieldCheck className="w-3.5 h-3.5 text-[#E3FF3B]" />
@@ -144,7 +144,7 @@ export function AppHeader() {
         {role === "ADMIN" && (
           <Link
             href="/admin"
-            title="Open Admin Panel & Passkeys"
+            title="Open Admin Panel"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#252943] hover:bg-[#1a1d31] border border-[#323758] text-[#E3FF3B] text-xs font-bold transition-all shadow-subtle"
           >
             <ShieldCheck className="w-3.5 h-3.5 text-[#E3FF3B]" />
@@ -152,15 +152,17 @@ export function AppHeader() {
           </Link>
         )}
 
-        {/* API Key Action */}
-        <Link
-          href="/api-key"
-          title="Add / Configure Provider API Key"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#F8F9FD] hover:bg-white border border-[#DEE0ED] text-[#252943]/80 hover:text-[#3A4EFB] hover:border-[#3A4EFB] text-xs font-semibold transition-all shadow-subtle"
-        >
-          <KeyRound className="w-3.5 h-3.5 text-[#3A4EFB]" />
-          <span className="hidden sm:inline">API Key</span>
-        </Link>
+        {/* API Key Action (Admin Only) */}
+        {role === "ADMIN" && (
+          <Link
+            href="/api-key"
+            title="Configure Provider API Key"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#F8F9FD] hover:bg-white border border-[#DEE0ED] text-[#252943]/80 hover:text-[#3A4EFB] hover:border-[#3A4EFB] text-xs font-semibold transition-all shadow-subtle"
+          >
+            <KeyRound className="w-3.5 h-3.5 text-[#3A4EFB]" />
+            <span className="hidden sm:inline">API Key</span>
+          </Link>
+        )}
 
         {/* Logout Action */}
         <button

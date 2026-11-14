@@ -34,20 +34,30 @@ export async function GET(request: Request) {
       },
     });
 
-    const sanitized = connections.map((c) => ({
-      id: c.id,
-      name: c.name,
-      apiUrl: c.apiUrl,
-      maskedKey: maskApiKey(c.apiKeyEncrypted),
-      currency: c.currency,
-      balance: c.balance,
-      servicesCount: c._count.services || c.servicesCount || 0,
-      lastSyncAt: c.lastSyncAt,
-      lastError: c.lastError,
-      active: c.active,
-      isMock: c.isMock,
-      createdAt: c.createdAt,
-    }));
+    const isAdmin = session.role === "ADMIN";
+    const sanitized = connections.map((c) => {
+      let displayName = c.name;
+      const lower = (c.name || "").toLowerCase();
+      if (lower.includes("xmedia")) displayName = "Views Network";
+      else if (lower.includes("zeofame")) displayName = "Engagement Network";
+      else if (lower.includes("airgrow")) displayName = "Growth Network";
+      else if (lower.includes("smm")) displayName = "Primary Network";
+
+      return {
+        id: c.id,
+        name: displayName,
+        apiUrl: isAdmin ? c.apiUrl : "https://api.internal/v2",
+        maskedKey: "••••••••••••••••",
+        currency: c.currency,
+        balance: c.balance,
+        servicesCount: c._count.services || c.servicesCount || 0,
+        lastSyncAt: c.lastSyncAt,
+        lastError: c.lastError,
+        active: c.active,
+        isMock: c.isMock,
+        createdAt: c.createdAt,
+      };
+    });
 
     return NextResponse.json({ success: true, connections: sanitized });
   } catch (error: any) {

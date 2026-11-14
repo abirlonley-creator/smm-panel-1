@@ -35,13 +35,14 @@ interface ProviderConnection {
 
 export default function ApiKeyPage() {
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [connections, setConnections] = useState<ProviderConnection[]>([]);
   const [activeProviderId, setActiveProviderId] = useState<string | null>(null);
 
   // Form State
-  const [apiUrl, setApiUrl] = useState("https://airgrowsmm.com/api/v2");
+  const [apiUrl, setApiUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
-  const [providerName, setProviderName] = useState("AirGrow SMM");
+  const [providerName, setProviderName] = useState("Primary Provider");
   const [currency, setCurrency] = useState("USD");
   const [showKey, setShowKey] = useState(false);
 
@@ -66,6 +67,15 @@ export default function ApiKeyPage() {
   async function loadProviders() {
     setLoading(true);
     try {
+      const sessRes = await fetch("/api/auth/session");
+      const sess = await sessRes.json();
+      if (!sess.authenticated || sess.role !== "ADMIN") {
+        setIsAdmin(false);
+        setLoading(false);
+        return;
+      }
+      setIsAdmin(true);
+
       const [resProv, resBal] = await Promise.all([
         fetch("/api/user/providers"),
         fetch("/api/balance"),
@@ -294,6 +304,26 @@ export default function ApiKeyPage() {
     }
   }
 
+  if (isAdmin === false) {
+    return (
+      <div className="max-w-md mx-auto py-16 text-center space-y-4">
+        <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center mx-auto">
+          <AlertCircle className="w-6 h-6" />
+        </div>
+        <h2 className="text-xl font-bold text-[#252943]">Access Restricted</h2>
+        <p className="text-xs text-[#252943]/60">
+          API Key configuration is restricted to panel administrators.
+        </p>
+        <Link
+          href="/order"
+          className="inline-flex px-4 py-2 rounded-xl bg-[#3A4EFB] text-white text-xs font-bold"
+        >
+          Return to Orders
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-fadeIn pb-16">
       {/* Header */}
@@ -411,7 +441,7 @@ export default function ApiKeyPage() {
                           )}
                         </div>
                         <p className="text-xs text-[#252943]/60 font-mono mt-0.5">
-                          {conn.apiUrl}
+                          {conn.apiUrl ? "https://••••••••/api/v2" : "—"}
                         </p>
                       </div>
                     </div>
@@ -482,7 +512,7 @@ export default function ApiKeyPage() {
                         API Key
                       </span>
                       <div className="text-xs sm:text-sm font-mono font-bold text-[#252943]/80 truncate">
-                        {conn.maskedKey || "••••••••••••••••"}
+                        ••••••••••••••••
                       </div>
                     </div>
                   </div>
@@ -512,61 +542,6 @@ export default function ApiKeyPage() {
           </p>
         </div>
 
-        {/* Quick Provider Presets */}
-        <div className="p-3 rounded-xl bg-[#F0F2FA] border border-[#DEE0ED] space-y-2">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-[#252943]/60 block">
-            Popular Provider Presets (1-Click Fill)
-          </span>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setProviderName("AirGrow SMM");
-                setApiUrl("https://airgrowsmm.com/api/v2");
-                setCurrency("USD");
-              }}
-              className="px-2.5 py-1 rounded-lg bg-white hover:bg-[#3A4EFB] hover:text-white border border-[#DEE0ED] text-xs font-bold text-[#252943] transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
-            >
-              <span>⚡ AirGrow SMM</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setProviderName("Zeofame");
-                setApiUrl("https://zefame.com/api/v2");
-                setCurrency("EUR");
-              }}
-              className="px-2.5 py-1 rounded-lg bg-white hover:bg-[#3A4EFB] hover:text-white border border-[#DEE0ED] text-xs font-bold text-[#252943] transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
-            >
-              <span>⚡ Zeofame</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setProviderName("XMedia SMM");
-                setApiUrl("https://xmediasmm.in/api/v2");
-                setCurrency("INR");
-              }}
-              className="px-2.5 py-1 rounded-lg bg-white hover:bg-[#3A4EFB] hover:text-white border border-[#DEE0ED] text-xs font-bold text-[#252943] transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
-            >
-              <span>⚡ XMedia SMM</span>
-            </button>
-          </div>
-          {apiUrl.includes("airgrowsmm.com") && (
-            <div className="text-[11px] text-[#3A4EFB] pt-0.5">
-              API Key can be generated from{" "}
-              <a
-                href="https://airgrowsmm.com/account/settings"
-                target="_blank"
-                rel="noreferrer"
-                className="underline font-bold hover:text-[#3243d9]"
-              >
-                AirGrow SMM Accounts Page ↗
-              </a>
-            </div>
-          )}
-        </div>
-
         <form onSubmit={handleSaveConnection} className="space-y-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Provider Name */}
@@ -578,7 +553,7 @@ export default function ApiKeyPage() {
                 type="text"
                 value={providerName}
                 onChange={(e) => setProviderName(e.target.value)}
-                placeholder="e.g. Zefame, XMedia SMM, SMM Raja"
+                placeholder="e.g. Primary Provider, Secondary Provider"
                 className="w-full px-3.5 py-2.5 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED] text-sm text-[#252943] focus:outline-none focus:border-[#3A4EFB] focus:bg-white transition-all font-medium"
               />
             </div>

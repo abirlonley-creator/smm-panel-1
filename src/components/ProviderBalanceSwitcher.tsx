@@ -217,12 +217,12 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
             title={
               activeProvider.stale
                 ? "Balance may be stale. Click to refresh live."
-                : `Refresh ${activeProvider.name} balance`
+                : "Refresh live balance"
             }
             className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-bold text-[#252943] hover:text-[#3A4EFB] transition-colors"
           >
             <Wallet className="w-3.5 h-3.5 text-[#3A4EFB] shrink-0" />
-            <span className="max-w-[100px] truncate">{activeProvider.name}:</span>
+            <span className="truncate">Balance:</span>
             {isUnavailable ? (
               <span className="text-amber-700 font-semibold">Unavailable</span>
             ) : (
@@ -243,7 +243,7 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
             <button
               type="button"
               onClick={() => setDropdownOpen(!dropdownOpen)}
-              title="Switch provider balance"
+              title="Switch active balance"
               id="header-provider-switcher-btn"
               className="px-2 py-1.5 border-l border-[#DEE0ED] text-[#252943]/60 hover:text-[#3A4EFB] hover:bg-white rounded-r-xl transition-colors"
             >
@@ -260,11 +260,11 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
         {dropdownOpen && hasMultiple && (
           <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl border border-[#DEE0ED] shadow-xl p-2 z-50 animate-scaleUp">
             <div className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[#252943]/50 border-b border-[#DEE0ED]/60 mb-1 flex items-center justify-between">
-              <span>Switch Active Provider</span>
-              <span className="text-[9px] text-[#3A4EFB] font-semibold">{providers.length} Connected</span>
+              <span>Switch Active Balance</span>
+              <span className="text-[9px] text-[#3A4EFB] font-semibold">{providers.length} Accounts</span>
             </div>
             <div className="space-y-1 max-h-56 overflow-y-auto">
-              {providers.map((p) => {
+              {providers.map((p, idx) => {
                 const isSelected = p.id === activeProviderId;
                 const pUnavailable = p.balance === null;
                 return (
@@ -281,7 +281,7 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
                   >
                     <div className="flex flex-col min-w-0 pr-2">
                       <div className="flex items-center gap-1.5">
-                        <span className="truncate">{p.name}</span>
+                        <span className="truncate">Balance #{idx + 1}</span>
                         {isSelected && <Check className="w-3.5 h-3.5 text-[#3A4EFB] shrink-0" />}
                       </div>
                       <span className="text-[11px] font-bold text-[#252943]/70">
@@ -302,11 +302,11 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
             </div>
             <div className="pt-2 mt-1 border-t border-[#DEE0ED]/60 px-1">
               <Link
-                href="/api-key"
+                href="/wallet"
                 onClick={() => setDropdownOpen(false)}
                 className="text-[11px] text-[#3A4EFB] hover:underline font-semibold flex items-center justify-between"
               >
-                <span>Manage API Key</span>
+                <span>Wallet & Balance</span>
                 <ExternalLink className="w-3 h-3" />
               </Link>
             </div>
@@ -338,13 +338,13 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
           </div>
           <div>
             <span className="text-[10px] uppercase tracking-wider text-[#DEE0ED]/60 font-semibold block leading-none mb-1">
-              Provider Balance
+              Account Balance
             </span>
             <Link
-              href="/api-key"
+              href="/wallet"
               className="text-xs font-bold text-[#E3FF3B] hover:underline flex items-center gap-1"
             >
-              Connect API Key →
+              View Wallet →
             </Link>
           </div>
         </div>
@@ -363,14 +363,14 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
-              <span className="text-[10px] uppercase tracking-wider text-[#DEE0ED]/60 font-semibold block leading-none truncate max-w-[100px]">
-                {activeProvider.name}
+              <span className="text-[10px] uppercase tracking-wider text-[#DEE0ED]/60 font-semibold block leading-none truncate max-w-[120px]">
+                Account Balance
               </span>
               {hasMultiple && (
                 <button
                   type="button"
                   onClick={() => setDropdownOpen(!dropdownOpen)}
-                  title="Switch provider balance"
+                  title="Switch account balance"
                   id="sidebar-provider-switcher-btn"
                   className="p-0.5 rounded text-[#DEE0ED]/70 hover:text-white hover:bg-[#323758] transition-colors"
                 >
@@ -404,7 +404,7 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
           type="button"
           onClick={() => loadBalanceData(true)}
           disabled={refreshing}
-          title={`Refresh ${activeProvider.name} live balance`}
+          title="Refresh live balance"
           className="p-1.5 rounded-lg text-[#DEE0ED]/70 hover:text-white hover:bg-[#323758] transition-colors press-scale"
         >
           <RefreshCw
@@ -417,11 +417,11 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
       {dropdownOpen && hasMultiple && (
         <div className="absolute left-0 right-0 mt-2 bg-[#1A1D31] border border-[#323758] rounded-2xl shadow-2xl p-2 z-50 animate-scaleUp">
           <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[#DEE0ED]/50 border-b border-[#323758] mb-1 flex items-center justify-between">
-            <span>Select Provider</span>
-            <span className="text-[#E3FF3B]">{providers.length} Connected</span>
+            <span>Select Account</span>
+            <span className="text-[#E3FF3B]">{providers.length} Accounts</span>
           </div>
           <div className="space-y-1 max-h-48 overflow-y-auto">
-            {providers.map((p) => {
+            {providers.map((p, idx) => {
               const isSelected = p.id === activeProviderId;
               const pUnavailable = p.balance === null;
               return (
@@ -437,7 +437,7 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
                   }`}
                 >
                   <div className="flex flex-col min-w-0 pr-1">
-                    <span className="truncate">{p.name}</span>
+                    <span className="truncate">Account #{idx + 1}</span>
                     <span className="text-[10px] text-[#DEE0ED]/70 font-semibold">
                       {pUnavailable
                         ? "Unavailable"
@@ -451,11 +451,11 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
           </div>
           <div className="pt-2 mt-1 border-t border-[#323758] px-1 text-center">
             <Link
-              href="/api-key"
+              href="/wallet"
               onClick={() => setDropdownOpen(false)}
               className="text-[10px] text-[#E3FF3B] hover:underline font-semibold"
             >
-              Configure API Key →
+              View Wallet & Balance →
             </Link>
           </div>
         </div>

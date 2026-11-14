@@ -65,8 +65,8 @@ export async function GET(
       connection: {
         id: connection.id,
         name: connection.name,
-        apiUrl: connection.apiUrl,
-        maskedKey: maskApiKey(connection.apiKeyEncrypted),
+        apiUrl: session.role === "ADMIN" ? connection.apiUrl : "https://api.internal/v2",
+        maskedKey: "••••••••••••••••",
         currency: connection.currency,
         balance: connection.balance,
         servicesCount: connection._count.services,

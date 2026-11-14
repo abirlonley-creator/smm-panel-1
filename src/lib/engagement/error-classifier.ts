@@ -113,7 +113,7 @@ export function classifyProviderError(err: string | Error | any, httpStatus?: nu
     };
   }
 
-  // 7. Active Order Conflict on Upstream Provider (e.g. Xmedia: "You have active order with this link")
+  // 7. Active Order Conflict on Delivery Engine (e.g. "You have active order with this link")
   if (
     lower.includes("active order with this link") ||
     lower.includes("wait until order being completed") ||
