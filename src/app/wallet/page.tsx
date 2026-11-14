@@ -21,6 +21,7 @@ import {
 import Link from "next/link";
 import { formatProviderBalance } from "@/lib/currency";
 import { BRAND } from "@/lib/brand";
+import { BinanceAddFundsModal } from "@/components/BinanceAddFundsModal";
 
 function sanitizeProviderName(name: string): string {
   if (!name) return "Provider Account";
@@ -980,72 +981,13 @@ export default function WalletPage() {
         </div>
       )}
 
-      {/* Deposit INR Modal */}
-      {showDepositModal && (
-        <div className="fixed inset-0 z-50 bg-[#252943]/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 animate-scaleUp">
-            <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
-              <h3 className="text-sm font-bold text-[#252943] flex items-center gap-2">
-                <Wallet className="w-4 h-4 text-[#3A4EFB]" />
-                Add Funds to {BRAND.walletName}
-              </h3>
-              <button
-                type="button"
-                onClick={() => setShowDepositModal(false)}
-                className="p-1 rounded-lg text-[#252943]/60 hover:text-[#252943]"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleDepositFunds} className="space-y-3.5 text-xs">
-              <div className="space-y-1">
-                <label className="font-semibold text-[#252943]">Deposit Amount (INR ₹)</label>
-                <input
-                  type="number"
-                  min="50"
-                  step="50"
-                  required
-                  value={depositAmount}
-                  onChange={(e) => setDepositAmount(Number(e.target.value))}
-                  className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3.5 py-2 text-sm font-bold text-[#252943] focus:border-[#3A4EFB]"
-                />
-              </div>
-
-              <div className="flex items-center gap-2 pt-1">
-                {[100, 500, 1000, 2500].map((amt) => (
-                  <button
-                    key={amt}
-                    type="button"
-                    onClick={() => setDepositAmount(amt)}
-                    className="flex-1 py-1.5 rounded-lg border border-[#DEE0ED] hover:bg-[#F8F9FD] text-[11px] font-semibold text-[#252943]"
-                  >
-                    +₹{amt}
-                  </button>
-                ))}
-              </div>
-
-              <div className="pt-3 border-t border-[#DEE0ED] flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowDepositModal(false)}
-                  className="px-3.5 py-2 rounded-xl border border-[#DEE0ED] text-xs font-semibold text-[#252943]/70 hover:bg-[#F8F9FD]"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="px-4 py-2 rounded-xl bg-[#E3FF3B] text-[#252943] text-xs font-bold hover:bg-[#d6f228] transition-colors flex items-center gap-1.5"
-                >
-                  {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  <span>Add Funds Now</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Binance Pay Deposit Modal */}
+      <BinanceAddFundsModal
+        isOpen={showDepositModal}
+        onClose={() => setShowDepositModal(false)}
+        currentBalance={walletBalance}
+        onSuccess={() => loadWalletData(true)}
+      />
     </div>
   );
 }

@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { formatProviderBalance } from "@/lib/currency";
+import { BinanceAddFundsModal } from "@/components/BinanceAddFundsModal";
 
 interface ProviderItem {
   id: string;
@@ -221,49 +222,18 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
   const activeProvider = providers.find((p) => p.id === activeProviderId) || providers[0];
   const hasMultiple = providers.length > 1;
 
-  // Add Funds Modal (Blank / Placeholder as requested)
-  const renderAddFundsModal = () => {
-    if (!showAddFundsModal) return null;
-    return (
-      <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
-        <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 max-w-md w-full shadow-2xl space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-[#3A4EFB]/10 text-[#3A4EFB] flex items-center justify-center">
-                <Wallet className="w-4 h-4" />
-              </div>
-              <h3 className="text-base font-bold text-[#252943]">Add Funds</h3>
-            </div>
-            <button
-              onClick={() => setShowAddFundsModal(false)}
-              className="text-[#252943]/40 hover:text-[#252943] text-sm p-1 rounded-lg"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] text-xs text-[#252943]/70 space-y-2">
-            <p className="font-bold text-[#252943] text-sm">
-              Current Balance: ₹{walletBalance.toFixed(2)}
-            </p>
-            <p className="leading-relaxed">
-              Automated payment methods are being configured. To top up your wallet balance, please contact an administrator or message us directly on Telegram @Ghostfinds.
-            </p>
-          </div>
-
-          <div className="flex justify-end pt-2">
-            <button
-              type="button"
-              onClick={() => setShowAddFundsModal(false)}
-              className="px-4 py-2 rounded-xl bg-[#252943] text-white text-xs font-bold hover:bg-[#1a1d31] transition-all shadow-subtle press-scale"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
+  // Binance Pay Add Funds Modal
+  const renderAddFundsModal = () => (
+    <BinanceAddFundsModal
+      isOpen={showAddFundsModal}
+      onClose={() => setShowAddFundsModal(false)}
+      currentBalance={walletBalance}
+      onSuccess={(newBal) => {
+        setWalletBalance(newBal);
+        loadBalanceData(true);
+      }}
+    />
+  );
 
   // -------------------------------------------------------------
   // NON-ADMIN VIEW (Regular Users)

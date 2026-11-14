@@ -35,10 +35,12 @@ import {
   Heart,
   Bookmark,
   Share2,
+  CreditCard,
 } from "lucide-react";
 import { formatProviderBalance } from "@/lib/currency";
 import { OrderMonitorTab } from "@/components/admin/OrderMonitorTab";
 import { AlertsHealthTab } from "@/components/admin/AlertsHealthTab";
+import { BinanceDepositsTab } from "@/components/admin/BinanceDepositsTab";
 
 interface PasskeyData {
   id: string;
@@ -148,7 +150,7 @@ export default function AdminPage() {
   const [loggingIn, setLoggingIn] = useState(false);
 
   // Admin Data state
-  const [activeTab, setActiveTab] = useState<"keys" | "ordermonitor" | "monitoring" | "provider" | "audit" | "engagement" | "alerts">("keys");
+  const [activeTab, setActiveTab] = useState<"keys" | "ordermonitor" | "monitoring" | "provider" | "audit" | "engagement" | "alerts" | "deposits">("keys");
   const [passkeys, setPasskeys] = useState<PasskeyData[]>([]);
   const [passkeySearchQuery, setPasskeySearchQuery] = useState("");
   const [diagnostics, setDiagnostics] = useState<DiagnosticsData | null>(null);
@@ -878,6 +880,19 @@ export default function AdminPage() {
               {alertsMetrics.openAlertsCount}
             </span>
           ) : null}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("deposits")}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${
+            activeTab === "deposits"
+              ? "border-[#3A4EFB] text-[#3A4EFB] bg-[#3A4EFB]/5"
+              : "border-transparent text-[#252943]/60 hover:text-[#252943]"
+          }`}
+        >
+          <CreditCard className="w-4 h-4" />
+          <span>Binance Deposits</span>
         </button>
       </div>
 
@@ -2213,6 +2228,13 @@ export default function AdminPage() {
       ====================================================================== */}
       {activeTab === "alerts" && (
         <AlertsHealthTab />
+      )}
+
+      {/* =====================================================================
+          TAB 7: BINANCE PAY DEPOSITS
+      ====================================================================== */}
+      {activeTab === "deposits" && (
+        <BinanceDepositsTab />
       )}
 
       {/* Remap Service Modal */}
