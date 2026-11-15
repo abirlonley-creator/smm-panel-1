@@ -16,6 +16,14 @@ const nextConfig = {
         source: '/likes analyze',
         destination: '/likes-analyze',
       },
+      {
+        source: '/addfunds',
+        destination: '/wallet',
+      },
+      {
+        source: '/add-funds',
+        destination: '/wallet',
+      },
     ];
   },
 };

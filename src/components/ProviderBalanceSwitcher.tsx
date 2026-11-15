@@ -266,14 +266,13 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
               <Wallet className="w-3.5 h-3.5 text-[#3A4EFB]" />
               <span>Balance: ₹{walletBalance.toFixed(2)}</span>
             </div>
-            <button
-              type="button"
-              onClick={() => setShowAddFundsModal(true)}
+            <Link
+              href="/wallet"
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-[#F0B90B] to-[#e0a800] hover:brightness-105 text-[#1E2329] text-xs font-black transition-all shadow-subtle press-scale"
             >
               <Zap className="w-3.5 h-3.5 fill-[#1E2329]" />
               <span>Add Funds</span>
-            </button>
+            </Link>
           </div>
           {renderAddFundsModal()}
         </>
@@ -311,14 +310,13 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
             </button>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setShowAddFundsModal(true)}
+          <Link
+            href="/wallet"
             className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-[#F0B90B] to-[#e0a800] hover:brightness-105 text-[#1E2329] text-xs font-black text-center transition-all press-scale flex items-center justify-center gap-1.5 shadow-subtle"
           >
             <Zap className="w-3.5 h-3.5 fill-[#1E2329]" />
             <span>Add Funds · Binance Pay</span>
-          </button>
+          </Link>
         </div>
         {renderAddFundsModal()}
       </>

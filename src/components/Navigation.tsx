@@ -28,6 +28,7 @@ const ALL_NAV_ITEMS = [
   { href: "/engagement", label: "Engagement", icon: Zap, adminOnly: false },
   { href: "/services", label: "Services", icon: ListTree, adminOnly: true },
   { href: "/orders", label: "Orders", icon: Layers, adminOnly: false },
+  { href: "/wallet", label: "Add Funds", icon: Wallet, adminOnly: false },
   { href: "/api-key", label: "API Key", icon: KeyRound, adminOnly: true },
   { href: "/admin", label: "Admin Panel", icon: ShieldCheck, adminOnly: true },
 ];
@@ -213,6 +214,8 @@ export function Navigation() {
               const isActive =
                 item.href === "/order"
                   ? pathname === "/order" || pathname === "/"
+                  : item.href === "/wallet"
+                  ? pathname === "/wallet" || pathname === "/addfunds" || pathname === "/add-funds"
                   : pathname === item.href || pathname.startsWith(item.href + "/");
               return (
                 <Link
@@ -317,6 +320,8 @@ export function Navigation() {
             const isActive =
               item.href === "/order"
                 ? pathname === "/order" || pathname === "/"
+                : item.href === "/wallet"
+                ? pathname === "/wallet" || pathname === "/addfunds" || pathname === "/add-funds"
                 : pathname === item.href || pathname.startsWith(item.href + "/");
             return (
               <Link

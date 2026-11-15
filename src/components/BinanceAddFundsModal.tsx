@@ -19,6 +19,7 @@ interface BinanceAddFundsModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentBalance?: number;
+  initialAmount?: number;
   onSuccess?: (newBalance: number) => void;
 }
 
@@ -28,6 +29,7 @@ export function BinanceAddFundsModal({
   isOpen,
   onClose,
   currentBalance = 0,
+  initialAmount,
   onSuccess,
 }: BinanceAddFundsModalProps) {
   const [mounted, setMounted] = useState(false);
@@ -35,7 +37,7 @@ export function BinanceAddFundsModal({
   // Stepper state: "pay" (Step 1: Make payment) -> "verify" (Step 2: Verify payment) -> "success"
   const [step, setStep] = useState<"pay" | "verify" | "success">("pay");
 
-  const [inrAmount, setInrAmount] = useState<number>(100);
+  const [inrAmount, setInrAmount] = useState<number>(() => (initialAmount && initialAmount > 0 ? initialAmount : 100));
   const [exchangeRate, setExchangeRate] = useState<number>(90.0);
   const [binanceUid, setBinanceUid] = useState<string>("1161493552");
 
@@ -72,6 +74,10 @@ export function BinanceAddFundsModal({
       setErrorMessage(null);
       setSuccessMessage(null);
       return;
+    }
+
+    if (initialAmount && initialAmount > 0) {
+      setInrAmount(initialAmount);
     }
 
     function handleKeyDown(e: KeyboardEvent) {
