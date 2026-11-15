@@ -47,7 +47,7 @@ export async function GET(request: Request) {
       }
     }
 
-    // 2. Build Prisma where clause
+    // 2. Build Prisma where clause (exclude orphaned ghost accounts with 0 passkeys/sessions)
     const whereClause: any = {};
 
     if (matchedUserIdByOrder) {
@@ -61,9 +61,18 @@ export async function GET(request: Request) {
         { orders: { some: { orderRef: { contains: cleanSearch, mode: "insensitive" } } } },
         { engagementOrders: { some: { orderRef: { contains: cleanSearch, mode: "insensitive" } } } },
       ];
+    } else {
+      // Show genuine accounts with passkeys, sessions, orders, or admin role
+      whereClause.OR = [
+        { role: "ADMIN" },
+        { passkeys: { some: {} } },
+        { sessions: { some: {} } },
+        { orders: { some: {} } },
+        { engagementOrders: { some: {} } },
+      ];
     }
 
-    // 3. Fetch Users with Orders, Transactions, and Passkeys
+    // 3. Fetch Users with Sessions, Orders, Transactions, and Passkeys
     const users = await prisma.user.findMany({
       where: whereClause,
       include: {
@@ -79,6 +88,16 @@ export async function GET(request: Request) {
             createdAt: true,
           },
           orderBy: { createdAt: "desc" },
+        },
+        sessions: {
+          select: {
+            id: true,
+            expiresAt: true,
+            lastActivityAt: true,
+            createdAt: true,
+          },
+          orderBy: { lastActivityAt: "desc" },
+          take: 5,
         },
         orders: {
           select: {
@@ -144,11 +163,35 @@ export async function GET(request: Request) {
       take: 100,
     });
 
+    const now = Date.now();
+
     // 4. Transform into rich simplified live situation items
     const formattedUsers = users.map((u) => {
       // Primary name from passkey label or capitalized username
       const primaryPasskey = u.passkeys[0];
       const displayName = primaryPasskey?.label?.trim() || u.username;
+
+      // Activity analysis
+      const mostRecentSession = u.sessions[0];
+      const lastActivityTime = mostRecentSession
+        ? new Date(mostRecentSession.lastActivityAt).getTime()
+        : primaryPasskey?.lastUsedAt
+        ? new Date(primaryPasskey.lastUsedAt).getTime()
+        : new Date(u.createdAt).getTime();
+
+      const msSinceActive = now - lastActivityTime;
+      const isOnline = msSinceActive <= 15 * 60 * 1000; // active in last 15 min
+      const isActiveToday = msSinceActive <= 24 * 60 * 60 * 1000; // active in last 24h
+      const hasActiveSession = u.sessions.some((s) => new Date(s.expiresAt).getTime() > now);
+
+      let activityStatus: "ONLINE" | "RECENT" | "IDLE" | "OFFLINE" = "OFFLINE";
+      if (isOnline) {
+        activityStatus = "ONLINE";
+      } else if (isActiveToday || hasActiveSession) {
+        activityStatus = "RECENT";
+      } else if (msSinceActive <= 7 * 24 * 60 * 60 * 1000) {
+        activityStatus = "IDLE";
+      }
 
       // Consolidate standard & engagement orders
       const standardOrders = u.orders.map((o) => ({
@@ -226,6 +269,14 @@ export async function GET(request: Request) {
         status: u.status,
         walletBalance: u.walletBalance,
         createdAt: u.createdAt,
+        activity: {
+          status: activityStatus,
+          isOnline,
+          isActiveToday,
+          hasActiveSession,
+          lastActivityAt: new Date(lastActivityTime).toISOString(),
+          sessionsCount: u.sessions.length,
+        },
         passkey: primaryPasskey
           ? {
               label: primaryPasskey.label,
@@ -252,7 +303,11 @@ export async function GET(request: Request) {
 
     // Apply optional status filters
     let filteredUsers = formattedUsers;
-    if (filter === "ACTIVE_ORDERS") {
+    if (filter === "ACTIVE_USERS") {
+      filteredUsers = formattedUsers.filter(
+        (u) => u.activity.isOnline || u.activity.isActiveToday || u.activity.hasActiveSession
+      );
+    } else if (filter === "ACTIVE_ORDERS") {
       filteredUsers = formattedUsers.filter((u) => u.liveMetrics.activeCount > 0);
     } else if (filter === "CANCELLED_REFUNDED") {
       filteredUsers = formattedUsers.filter(
@@ -262,13 +317,20 @@ export async function GET(request: Request) {
       filteredUsers = formattedUsers.filter((u) => u.walletBalance > 0);
     }
 
-    // Global counts for top summary bar
+    // Customer-only breakdown vs Admin
+    const customerUsers = formattedUsers.filter((u) => u.role === "USER");
+    const adminUsers = formattedUsers.filter((u) => u.role === "ADMIN");
+
+    // Global counts for top summary bar (Customer balances and orders strictly track real users)
     const globalStats = {
-      totalUsers: formattedUsers.length,
-      usersWithActiveOrders: formattedUsers.filter((u) => u.liveMetrics.activeCount > 0).length,
-      usersWithRefunds: formattedUsers.filter((u) => u.liveMetrics.refundedCount > 0).length,
-      totalBalances: formattedUsers.reduce((sum, u) => sum + u.walletBalance, 0),
-      totalRefunds: formattedUsers.reduce((sum, u) => sum + u.liveMetrics.totalRefundedAmount, 0),
+      totalUsers: customerUsers.length,
+      totalCustomers: customerUsers.length,
+      totalAdmins: adminUsers.length,
+      activeUsers: formattedUsers.filter((u) => u.activity.isOnline || u.activity.isActiveToday).length,
+      usersWithActiveOrders: customerUsers.filter((u) => u.liveMetrics.activeCount > 0).length,
+      usersWithRefunds: customerUsers.filter((u) => u.liveMetrics.refundedCount > 0).length,
+      totalBalances: customerUsers.reduce((sum, u) => sum + (u.walletBalance || 0), 0),
+      totalRefunds: customerUsers.reduce((sum, u) => sum + (u.liveMetrics.totalRefundedAmount || 0), 0),
     };
 
     return NextResponse.json({

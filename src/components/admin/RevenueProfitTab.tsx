@@ -329,11 +329,11 @@ export function RevenueProfitTab() {
             </div>
             <div>
               <div className="text-3xl font-black text-emerald-700 font-mono tracking-tight">
-                +₹{summary.totalProfit.toFixed(2)}
+                {summary.totalProfit > 0 ? `+₹${summary.totalProfit.toFixed(2)}` : `₹${summary.totalProfit.toFixed(2)}`}
               </div>
               <div className="mt-1 flex items-center gap-1.5">
                 <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-black uppercase tracking-wider">
-                  {summary.marginPercent >= 0 ? `+${summary.marginPercent}%` : `${summary.marginPercent}%`} Margin
+                  {summary.marginPercent > 0 ? `+${summary.marginPercent}%` : `${summary.marginPercent}%`} Margin
                 </span>
                 <span className="text-[11px] text-emerald-900/70 font-semibold">
                   (Revenue - Wholesale Cost)
