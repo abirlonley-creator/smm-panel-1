@@ -19,6 +19,7 @@ import {
   RotateCcw,
   AlertTriangle,
   CheckCircle2,
+  Users,
 } from "lucide-react";
 
 interface FinancialSummary {
@@ -44,17 +45,58 @@ interface StreamBreakdown {
   deliveredRuns?: number;
 }
 
+interface CustomerFinancialItem {
+  id: string;
+  username: string;
+  name: string;
+  passkeyLabel: string | null;
+  walletBalance: number;
+  totalDeposited: number;
+  ordersCount: number;
+  revenue: number;
+  upstreamCost: number;
+  profit: number;
+  marginPercent: number;
+  isOnline: boolean;
+  isActiveToday: boolean;
+}
+
 interface LedgerItem {
   id: string;
   orderRef: string;
   type: "ENGAGEMENT" | "ORDER";
   name: string;
+  customerName?: string;
+  customerUsername?: string;
   customerPaid: number;
   upstreamCost: number;
   profit: number;
   marginPercent: number;
   status: string;
   createdAt: string;
+}
+
+function getCustomerGradient(str: string): string {
+  const gradients = [
+    "from-blue-600 to-indigo-600 text-white",
+    "from-purple-600 to-pink-600 text-white",
+    "from-emerald-500 to-teal-700 text-white",
+    "from-amber-500 to-orange-600 text-white",
+    "from-rose-500 to-red-700 text-white",
+    "from-cyan-600 to-blue-700 text-white",
+  ];
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return gradients[Math.abs(hash) % gradients.length];
+}
+
+function getInitials(name: string): string {
+  if (!name) return "U";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
 }
 
 export function RevenueProfitTab() {
@@ -66,6 +108,7 @@ export function RevenueProfitTab() {
     engagement: StreamBreakdown;
     smmOrders: StreamBreakdown;
   } | null>(null);
+  const [customers, setCustomers] = useState<CustomerFinancialItem[]>([]);
   const [recentLedger, setRecentLedger] = useState<LedgerItem[]>([]);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetting, setResetting] = useState(false);
@@ -81,6 +124,7 @@ export function RevenueProfitTab() {
       if (data.success) {
         setSummary(data.summary);
         setBreakdown(data.breakdown);
+        setCustomers(data.customers || []);
         setRecentLedger(data.recentLedger || []);
       }
     } catch (err) {
@@ -376,6 +420,123 @@ export function RevenueProfitTab() {
         </div>
       )}
 
+      {/* Real Customer Financial Breakdown (Sakib, Flex, John) */}
+      <div className="p-6 rounded-3xl bg-white border border-[#DEE0ED] shadow-subtle space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#DEE0ED]">
+          <div>
+            <h3 className="text-sm font-bold text-[#252943] flex items-center gap-2">
+              <Users className="w-4 h-4 text-[#3A4EFB]" />
+              <span>Real Customer Financials (Sakib, Flex, John)</span>
+            </h3>
+            <p className="text-xs text-[#252943]/60">
+              Live revenue and profit generated strictly by genuine customer accounts. No fake or admin test numbers.
+            </p>
+          </div>
+          <span className="text-xs text-emerald-700 font-bold bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full w-fit">
+            {customers.length} Registered Customers Tracked
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {customers.map((cust) => {
+            const hasProfit = cust.profit > 0;
+            return (
+              <div
+                key={cust.id}
+                className="p-5 rounded-3xl bg-[#F8F9FD] border border-[#DEE0ED] hover:border-[#3A4EFB] transition-all space-y-4"
+              >
+                {/* Header: Avatar, Name, Status */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${getCustomerGradient(
+                        cust.username
+                      )} flex items-center justify-center font-bold text-sm shadow-xs`}
+                    >
+                      {getInitials(cust.name)}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <h4 className="text-sm font-bold text-[#252943]">{cust.name}</h4>
+                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-white text-gray-700 border border-gray-200">
+                          USER
+                        </span>
+                      </div>
+                      <span className="text-[11px] font-mono text-gray-500 block">
+                        @{cust.username}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div>
+                    {cust.isOnline ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        Online
+                      </span>
+                    ) : cust.isActiveToday ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                        Active Today
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 text-gray-500">
+                        Offline
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* 3 Metrics: Customer Paid, We Got Charged, Net Profit */}
+                <div className="grid grid-cols-3 gap-2 p-3 rounded-2xl bg-white border border-gray-200/80 text-center">
+                  <div>
+                    <span className="text-[9px] uppercase font-bold text-gray-400 block mb-0.5">
+                      Customer Paid
+                    </span>
+                    <span className="text-xs font-black text-gray-900 font-mono">
+                      ₹{cust.revenue.toFixed(2)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] uppercase font-bold text-rose-600 block mb-0.5">
+                      We Got Charged
+                    </span>
+                    <span className="text-xs font-black text-rose-700 font-mono">
+                      ₹{cust.upstreamCost.toFixed(2)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] uppercase font-bold text-emerald-700 block mb-0.5">
+                      Net Profit
+                    </span>
+                    <span
+                      className={`text-xs font-black font-mono ${
+                        hasProfit ? "text-emerald-700" : "text-gray-800"
+                      }`}
+                    >
+                      {cust.profit > 0 ? `+₹${cust.profit.toFixed(2)}` : `₹${cust.profit.toFixed(2)}`}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Bottom Row: Margin %, Orders, Wallet Balance */}
+                <div className="pt-2 border-t border-gray-200/60 flex items-center justify-between text-[11px] text-[#252943]/70 font-medium">
+                  <span>
+                    Orders: <strong className="text-gray-900">{cust.ordersCount}</strong>
+                  </span>
+                  <span>
+                    Margin: <strong className="text-emerald-700">{cust.marginPercent}%</strong>
+                  </span>
+                  <span>
+                    Balance: <strong className="font-mono text-emerald-600">₹{cust.walletBalance.toFixed(2)}</strong>
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Breakdown by Service Stream */}
       {breakdown && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -532,6 +693,7 @@ export function RevenueProfitTab() {
               <thead className="bg-[#F8F9FD] border-b border-[#DEE0ED] text-[#252943]/60 font-semibold">
                 <tr>
                   <th className="py-2.5 px-3">Order Ref</th>
+                  <th className="py-2.5 px-3">Customer</th>
                   <th className="py-2.5 px-3">Type</th>
                   <th className="py-2.5 px-3">Service / Campaign</th>
                   <th className="py-2.5 px-3 text-right">Customer Paid (₹)</th>
@@ -547,6 +709,12 @@ export function RevenueProfitTab() {
                   <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
                     <td className="py-3 px-3 font-mono font-bold text-gray-900">
                       {item.orderRef}
+                    </td>
+                    <td className="py-3 px-3">
+                      <span className="font-bold text-gray-900 block truncate">{item.customerName || "Customer"}</span>
+                      {item.customerUsername && (
+                        <span className="text-[10px] font-mono text-gray-400 block truncate">@{item.customerUsername}</span>
+                      )}
                     </td>
                     <td className="py-3 px-3">
                       <span

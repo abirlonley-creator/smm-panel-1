@@ -104,9 +104,10 @@ export async function GET(request: Request) {
             id: true,
             orderRef: true,
             serviceId: true,
-            service: { select: { name: true, platform: true } },
+            service: { select: { name: true, platform: true, ratePer1000: true } },
             targetUrl: true,
             requestedQuantity: true,
+            submittedQuantity: true,
             deliveredQuantity: true,
             refundedAmount: true,
             totalCost: true,
@@ -131,6 +132,15 @@ export async function GET(request: Request) {
             status: true,
             durationHours: true,
             createdAt: true,
+            runs: {
+              select: {
+                quantity: true,
+                cost: true,
+                engagementType: true,
+                status: true,
+                service: { select: { ratePer1000: true } },
+              },
+            },
           },
           orderBy: { createdAt: "desc" },
         },
@@ -169,7 +179,10 @@ export async function GET(request: Request) {
     const formattedUsers = users.map((u) => {
       // Primary name from passkey label or capitalized username
       const primaryPasskey = u.passkeys[0];
-      const displayName = primaryPasskey?.label?.trim() || u.username;
+      let displayName = primaryPasskey?.label?.trim() || u.username;
+      if (displayName.toLowerCase() === "sakib") displayName = "Sakib";
+      if (displayName.toLowerCase() === "flex") displayName = "Flex";
+      if (displayName.toLowerCase() === "john") displayName = "John";
 
       // Activity analysis
       const mostRecentSession = u.sessions[0];
@@ -256,6 +269,31 @@ export async function GET(request: Request) {
       );
       const totalSpent = allOrders.reduce((sum, o) => sum + (o.totalCost || 0), 0);
 
+      // Real wholesale cost calculation from direct SMM & engagement runs
+      let userUpstreamCost = 0;
+      for (const o of u.orders) {
+        if (o.status !== "FAILED" && o.status !== "CANCELLED") {
+          const qty = o.deliveredQuantity || o.submittedQuantity || 0;
+          const srvRate = o.service?.ratePer1000 || 0;
+          userUpstreamCost += (qty / 1000) * srvRate;
+        }
+      }
+      for (const eo of u.engagementOrders) {
+        for (const r of eo.runs) {
+          if (r.status === "sent" || r.status === "confirmed") {
+            let wholesaleRate = r.service?.ratePer1000 ?? 2.23;
+            if (r.engagementType === "likes") wholesaleRate = r.service?.ratePer1000 ?? 0.88;
+            else if (r.engagementType === "saves" || r.engagementType === "shares") wholesaleRate = r.service?.ratePer1000 ?? 0.22;
+            else if (r.engagementType === "comments") wholesaleRate = r.service?.ratePer1000 ?? 5.0;
+            userUpstreamCost += (r.quantity / 1000) * wholesaleRate;
+          }
+        }
+      }
+
+      const userRevenue = Math.max(0, totalSpent - totalRefundedAmount);
+      const userProfit = userRevenue - userUpstreamCost;
+      const userMargin = userRevenue > 0 ? (userProfit / userRevenue) * 100 : 0;
+
       // Refund transactions count and amount from wallet
       const refundTransactions = u.walletTransactions.filter(
         (t) => t.type === "REFUND" || t.description.toLowerCase().includes("refund")
@@ -292,6 +330,10 @@ export async function GET(request: Request) {
           refundedCount: refundedOrders.length || refundTransactions.length,
           totalRefundedAmount,
           totalSpent,
+          revenue: Number(userRevenue.toFixed(2)),
+          upstreamCost: Number(userUpstreamCost.toFixed(2)),
+          profit: Number(userProfit.toFixed(2)),
+          marginPercent: Number(userMargin.toFixed(1)),
           transactionCount: u.walletTransactions.length,
           depositCount: u.deposits.length,
         },

@@ -36,6 +36,10 @@ interface UserLiveMetrics {
   refundedCount: number;
   totalRefundedAmount: number;
   totalSpent: number;
+  revenue?: number;
+  upstreamCost?: number;
+  profit?: number;
+  marginPercent?: number;
   transactionCount: number;
   depositCount: number;
 }
@@ -595,6 +599,39 @@ export function UsersLiveActivityTab() {
                 </span>
               </div>
             </div>
+
+            {/* Real Customer Financials: Revenue, Wholesale Cost & Profit */}
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-50/60 via-indigo-50/40 to-emerald-50/60 border border-blue-200/80 grid grid-cols-1 sm:grid-cols-3 gap-3 text-center">
+              <div>
+                <span className="text-[10px] uppercase font-bold text-gray-500 block mb-0.5">
+                  Customer Paid (Revenue)
+                </span>
+                <span className="text-lg font-black text-gray-900 font-mono">
+                  ₹{(selectedUser.liveMetrics.revenue || 0).toFixed(2)}
+                </span>
+                <span className="text-[10px] text-gray-500 block">Total net payments</span>
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-rose-600 block mb-0.5">
+                  Wholesale Cost (We Got Charged)
+                </span>
+                <span className="text-lg font-black text-rose-700 font-mono">
+                  ₹{(selectedUser.liveMetrics.upstreamCost || 0).toFixed(2)}
+                </span>
+                <span className="text-[10px] text-rose-600/80 block">Provider wholesale expenses</span>
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-emerald-700 block mb-0.5">
+                  Net Profit Made
+                </span>
+                <span className="text-lg font-black text-emerald-800 font-mono">
+                  {(selectedUser.liveMetrics.profit || 0) > 0 ? `+₹${(selectedUser.liveMetrics.profit || 0).toFixed(2)}` : `₹${(selectedUser.liveMetrics.profit || 0).toFixed(2)}`}
+                </span>
+                <span className="text-[10px] text-emerald-700 font-bold block">
+                  {(selectedUser.liveMetrics.marginPercent || 0).toFixed(1)}% Profit Margin
+                </span>
+              </div>
+            </div>
           </div>
 
           {/* Sub Navigation: Orders vs Wallet Transactions vs Deposits */}
@@ -1142,6 +1179,16 @@ export function UsersLiveActivityTab() {
                           {u.liveMetrics.refundedCount}
                         </span>
                       </div>
+                    </div>
+
+                    {/* Financial Badge: Paid & Net Profit */}
+                    <div className="flex items-center justify-between px-3 py-1.5 rounded-xl bg-gray-50 border border-gray-100 text-[11px] font-mono">
+                      <span className="text-gray-500">
+                        Paid: <strong className="text-gray-900 font-bold">₹{(u.liveMetrics.revenue || 0).toFixed(2)}</strong>
+                      </span>
+                      <span className={(u.liveMetrics.profit || 0) > 0 ? "text-emerald-700 font-bold" : "text-gray-500 font-medium"}>
+                        Profit: {(u.liveMetrics.profit || 0) > 0 ? `+₹${(u.liveMetrics.profit || 0).toFixed(2)}` : `₹${(u.liveMetrics.profit || 0).toFixed(2)}`}
+                      </span>
                     </div>
 
                     {/* Bottom: Action Trigger */}
