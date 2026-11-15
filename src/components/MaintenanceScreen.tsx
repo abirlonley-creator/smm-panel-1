@@ -79,15 +79,12 @@ export function MaintenanceScreen({
           <span>Support (@{cleanHandle})</span>
         </a>
 
-        {/* Quiet footer status & admin */}
-        <div className="pt-2 flex items-center justify-between text-[11px] text-neutral-500 border-t border-white/5">
+        {/* Quiet footer status */}
+        <div className="pt-2 flex items-center justify-center text-[11px] text-neutral-500 border-t border-white/5">
           <span className="flex items-center gap-1.5">
             <span className={`w-1 h-1 rounded-full ${checking ? "bg-blue-400 animate-pulse" : "bg-neutral-600"}`} />
             <span>Auto-reconnecting</span>
           </span>
-          <Link href="/admin" className="hover:text-neutral-300 transition-colors text-[11px]">
-            Admin
-          </Link>
         </div>
 
       </div>

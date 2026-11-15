@@ -446,16 +446,18 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
                 );
               })}
             </div>
-            <div className="pt-2 mt-1 border-t border-[#DEE0ED]/60 px-1">
-              <Link
-                href="/admin"
-                onClick={() => setDropdownOpen(false)}
-                className="text-[11px] text-[#3A4EFB] hover:underline font-semibold flex items-center justify-between"
-              >
-                <span>Admin Provider Settings</span>
-                <ExternalLink className="w-3 h-3" />
-              </Link>
-            </div>
+            {isAdmin && (
+              <div className="pt-2 mt-1 border-t border-[#DEE0ED]/60 px-1">
+                <Link
+                  href="/admin"
+                  onClick={() => setDropdownOpen(false)}
+                  className="text-[11px] text-[#3A4EFB] hover:underline font-semibold flex items-center justify-between"
+                >
+                  <span>Admin Provider Settings</span>
+                  <ExternalLink className="w-3 h-3" />
+                </Link>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -486,12 +488,18 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
             <span className="text-[10px] uppercase tracking-wider text-[#DEE0ED]/60 font-semibold block leading-none mb-1">
               Account Balance
             </span>
-            <Link
-              href="/admin"
-              className="text-xs font-bold text-[#E3FF3B] hover:underline flex items-center gap-1"
-            >
-              Configure Providers →
-            </Link>
+            {isAdmin ? (
+              <Link
+                href="/admin"
+                className="text-xs font-bold text-[#E3FF3B] hover:underline flex items-center gap-1"
+              >
+                Configure Providers →
+              </Link>
+            ) : (
+              <span className="text-xs font-bold text-white font-mono">
+                ₹{walletBalance.toFixed(2)}
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -595,15 +603,17 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
               );
             })}
           </div>
-          <div className="pt-2 mt-1 border-t border-[#323758] px-1 text-center">
-            <Link
-              href="/admin"
-              onClick={() => setDropdownOpen(false)}
-              className="text-[10px] text-[#E3FF3B] hover:underline font-semibold"
-            >
-              Configure Providers →
-            </Link>
-          </div>
+          {isAdmin && (
+            <div className="pt-2 mt-1 border-t border-[#323758] px-1 text-center">
+              <Link
+                href="/admin"
+                onClick={() => setDropdownOpen(false)}
+                className="text-[10px] text-[#E3FF3B] hover:underline font-semibold"
+              >
+                Configure Providers →
+              </Link>
+            </div>
+          )}
         </div>
       )}
     </div>

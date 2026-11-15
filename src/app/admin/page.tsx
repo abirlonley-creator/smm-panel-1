@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ShieldCheck,
   Key,
@@ -78,6 +79,7 @@ export type OperationsSubTab = "orders" | "alerts";
 export type SettingsSubTab = "engagement" | "provider";
 
 export default function AdminPage() {
+  const router = useRouter();
   const [session, setSession] = useState<{ authenticated: boolean; label?: string; role?: string } | null>(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
 
@@ -224,11 +226,13 @@ export default function AdminPage() {
       const res = await fetch("/api/admin/auth");
       const data = await res.json();
       setSession(data);
-      if (data.authenticated) {
+      if (data.authenticated && data.role === "ADMIN") {
         await loadAllAdminData();
+      } else {
+        router.replace("/engagement");
       }
     } catch (err) {
-      console.error("Auth check failed", err);
+      router.replace("/engagement");
     } finally {
       setCheckingAuth(false);
     }
@@ -683,59 +687,9 @@ export default function AdminPage() {
     );
   }
 
-  // If not authenticated as ADMIN, display Admin Login Gate
+  // If not authenticated as ADMIN, redirect away and render nothing (never show passkey input to users)
   if (!session?.authenticated || session.role !== "ADMIN") {
-    return (
-      <div className="max-w-md mx-auto py-12 animate-fadeIn">
-        <div className="bg-white rounded-3xl border border-[#DEE0ED] p-8 shadow-subtle space-y-6">
-          <div className="text-center space-y-2">
-            <div className="w-12 h-12 rounded-2xl bg-[#252943] text-[#E3FF3B] flex items-center justify-center mx-auto shadow-subtle">
-              <ShieldCheck className="w-6 h-6" />
-            </div>
-            <h1 className="text-xl font-extrabold text-[#252943] tracking-tight">
-              Administration Gate
-            </h1>
-            <p className="text-xs text-[#252943]/60">
-              Administrative role required. Enter your administrator passkey.
-            </p>
-          </div>
-
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-[#252943] mb-1.5">
-                Admin Passkey
-              </label>
-              <div className="relative">
-                <input
-                  type="password"
-                  value={accessKeyInput}
-                  onChange={(e) => setAccessKeyInput(e.target.value)}
-                  placeholder="Enter administrator passkey..."
-                  className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl pl-9 pr-3.5 py-2.5 text-xs font-mono font-bold text-[#252943] focus:border-[#3A4EFB] outline-none"
-                  autoFocus
-                />
-                <Key className="w-4 h-4 text-[#252943]/40 absolute left-3 top-3" />
-              </div>
-            </div>
-
-            {loginError && (
-              <div className="p-3 rounded-xl bg-red-50 text-red-800 border border-red-200 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
-                <span>{loginError}</span>
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={loggingIn || !accessKeyInput.trim()}
-              className="w-full py-2.5 rounded-xl bg-[#252943] hover:bg-[#1A1D31] text-white text-xs font-bold transition-all shadow-subtle flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              {loggingIn ? <Loader2 className="w-4 h-4 animate-spin" /> : "Authenticate as Admin"}
-            </button>
-          </form>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   const filteredPasskeys = passkeys.filter((pk) => {

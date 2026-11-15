@@ -59,6 +59,26 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  // Strict protection for /admin routes:
+  // If a user navigates to /admin, verify admin authentication exists.
+  // Normal users who only hold a standard USER session will be redirected to /engagement
+  // so they can never view, inspect, or interact with the admin panel.
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+    const isAdmin = Boolean(adminCookie || adminHeader);
+    if (!isAdmin) {
+      const fallbackUrl = new URL("/engagement", request.url);
+      return NextResponse.redirect(fallbackUrl);
+    }
+  }
+
+  // Strict protection for /api/admin/ endpoints
+  if (pathname.startsWith("/api/admin/")) {
+    const isAdmin = Boolean(adminCookie || adminHeader);
+    if (!isAdmin) {
+      return NextResponse.json({ success: false, error: "Not found" }, { status: 404 });
+    }
+  }
+
   return NextResponse.next();
 }
 
