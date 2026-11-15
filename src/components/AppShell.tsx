@@ -1,16 +1,66 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { Navigation } from "@/components/Navigation";
 import { AppHeader } from "@/components/AppHeader";
+import { MaintenanceScreen } from "@/components/MaintenanceScreen";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isLoginPage = pathname === "/login";
+  const isMaintenancePage = pathname === "/maintenance";
+  const isAdminPage = pathname.startsWith("/admin");
 
-  if (isLoginPage) {
+  const [underMaintenance, setUnderMaintenance] = useState(false);
+  const [maintInfo, setMaintInfo] = useState<{ title?: string; message?: string; supportTelegram?: string }>({});
+
+  // Monitor maintenance status for regular user pages
+  useEffect(() => {
+    if (isAdminPage || isMaintenancePage) return;
+
+    let active = true;
+    async function checkMaintenance() {
+      try {
+        const res = await fetch("/api/system/maintenance", { cache: "no-store" });
+        const data = await res.json();
+        if (active && data.success) {
+          setUnderMaintenance(Boolean(data.underMaintenance));
+          if (data.title || data.message) {
+            setMaintInfo({
+              title: data.title,
+              message: data.message,
+              supportTelegram: data.supportTelegram,
+            });
+          }
+        }
+      } catch (err) {
+        // ignore
+      }
+    }
+
+    checkMaintenance();
+    const interval = setInterval(checkMaintenance, 5000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [isAdminPage, isMaintenancePage]);
+
+  if (isLoginPage || isMaintenancePage) {
     return <>{children}</>;
+  }
+
+  // If Under Update mode is enabled and user is on a non-admin page, lock access completely
+  if (underMaintenance && !isAdminPage) {
+    return (
+      <MaintenanceScreen
+        customTitle={maintInfo.title}
+        customMessage={maintInfo.message}
+        supportTelegram={maintInfo.supportTelegram}
+        onRestored={() => setUnderMaintenance(false)}
+      />
+    );
   }
 
   return (

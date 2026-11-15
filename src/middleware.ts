@@ -27,8 +27,13 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Allow health check and scheduler tick endpoints for monitoring & automated crons
-  if (pathname === "/api/health" || pathname === "/api/scheduler/tick") {
+  // Allow health check, maintenance status, and scheduler tick endpoints for monitoring & automated crons
+  if (
+    pathname === "/api/health" ||
+    pathname === "/api/scheduler/tick" ||
+    pathname === "/api/system/maintenance" ||
+    pathname === "/maintenance"
+  ) {
     return NextResponse.next();
   }
 

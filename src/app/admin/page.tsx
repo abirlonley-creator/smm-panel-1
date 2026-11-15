@@ -40,6 +40,8 @@ import {
   Coins,
   MessageSquare,
   TrendingUp,
+  Wrench,
+  Hammer,
 } from "lucide-react";
 import { formatProviderBalance } from "@/lib/currency";
 import { OrderMonitorTab } from "@/components/admin/OrderMonitorTab";
@@ -234,6 +236,55 @@ export default function AdminPage() {
     comments: 5.00,
   });
 
+  // Maintenance (Under Update) State
+  const [maintenance, setMaintenance] = useState<{
+    enabled: boolean;
+    title: string;
+    message: string;
+    supportTelegram: string;
+    updatedAt?: string;
+  }>({
+    enabled: false,
+    title: "Currently we're updating the website",
+    message: "Please hold on for a moment while admin completes updates. Your orders are actively being delivered in the backend.",
+    supportTelegram: "Ghostfinds",
+  });
+  const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
+  const [togglingMaintenance, setTogglingMaintenance] = useState(false);
+  const [maintTitleInput, setMaintTitleInput] = useState("");
+  const [maintMessageInput, setMaintMessageInput] = useState("");
+
+  async function handleToggleMaintenance(nextEnabled: boolean) {
+    setTogglingMaintenance(true);
+    try {
+      const res = await fetch("/api/admin/maintenance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          enabled: nextEnabled,
+          title: maintTitleInput.trim() || undefined,
+          message: maintMessageInput.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to toggle maintenance mode");
+      }
+      setMaintenance(data.maintenance);
+      setShowMaintenanceModal(false);
+      setActionMsg({
+        type: "success",
+        text: nextEnabled
+          ? "Website is now in Under Update mode. Regular users are blocked, but all backend order deliveries continue active."
+          : "Website is now LIVE! User access has been fully restored.",
+      });
+    } catch (err: any) {
+      setActionMsg({ type: "error", text: err.message || "Failed to update maintenance mode" });
+    } finally {
+      setTogglingMaintenance(false);
+    }
+  }
+
   // Check auth on load
   async function checkAuth() {
     try {
@@ -348,7 +399,7 @@ export default function AdminPage() {
   async function loadAllAdminData() {
     setLoadingData(true);
     try {
-      const [keysRes, diagRes, provRes, engRes, alertsRes, engOrdersRes, tiktokRes] = await Promise.all([
+      const [keysRes, diagRes, provRes, engRes, alertsRes, engOrdersRes, tiktokRes, maintRes] = await Promise.all([
         fetch("/api/admin/keys").then((r) => r.json()),
         fetch("/api/admin/diagnostics").then((r) => r.json()),
         fetch("/api/admin/provider").then((r) => r.json()),
@@ -356,7 +407,14 @@ export default function AdminPage() {
         fetch("/api/admin/alerts").then((r) => r.json()).catch(() => ({ success: false })),
         fetch("/api/engagement/orders").then((r) => r.json()).catch(() => ({ success: false })),
         fetch("/api/admin/engagement-config").then((r) => r.json()).catch(() => ({ success: false })),
+        fetch("/api/admin/maintenance").then((r) => r.json()).catch(() => ({ success: false })),
       ]);
+
+      if (maintRes?.success && maintRes.maintenance) {
+        setMaintenance(maintRes.maintenance);
+        setMaintTitleInput(maintRes.maintenance.title);
+        setMaintMessageInput(maintRes.maintenance.message);
+      }
 
       if (keysRes.success) setPasskeys(keysRes.keys);
       if (diagRes.success) setDiagnostics(diagRes);
@@ -783,6 +841,31 @@ export default function AdminPage() {
             </button>
           ) : null}
 
+          {/* Under Update (Maintenance Mode) Toggle Button */}
+          <button
+            type="button"
+            onClick={() => setShowMaintenanceModal(true)}
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-subtle press-scale ${
+              maintenance.enabled
+                ? "bg-rose-600 hover:bg-rose-700 text-white border border-rose-700 animate-pulse"
+                : "bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300"
+            }`}
+            title="Configure Under Update / Maintenance Mode"
+          >
+            {maintenance.enabled ? (
+              <>
+                <span className="w-2 h-2 rounded-full bg-[#E3FF3B] animate-ping" />
+                <Wrench className="w-3.5 h-3.5 text-[#E3FF3B]" />
+                <span className="font-black">UNDER UPDATE: ACTIVE</span>
+              </>
+            ) : (
+              <>
+                <Wrench className="w-3.5 h-3.5 text-amber-600" />
+                <span>Under Update: OFF</span>
+              </>
+            )}
+          </button>
+
           <button
             type="button"
             onClick={() => setActiveTab("revenue")}
@@ -832,6 +915,50 @@ export default function AdminPage() {
           <button onClick={() => setActionMsg(null)} className="text-gray-400 hover:text-gray-700">
             <XCircle className="w-4 h-4" />
           </button>
+        </div>
+      )}
+
+      {/* Prominent Under Update Alert Banner (when active) */}
+      {maintenance.enabled && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-rose-500/10 to-amber-500/15 border-2 border-amber-500/70 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fadeIn">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm animate-pulse mt-0.5 sm:mt-0">
+              <Wrench className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="text-sm font-black text-amber-950 uppercase tracking-wide">
+                  UNDER UPDATE MODE IS CURRENTLY ACTIVE
+                </h4>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-600 text-white animate-pulse">
+                  USERS LOCKED OUT
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-600 text-white">
+                  BACKEND ORDERS DELIVERING
+                </span>
+              </div>
+              <p className="text-xs text-amber-900/90 font-medium mt-0.5">
+                Regular users are blocked from accessing the panel and cannot see the passkey section. All background order deliveries continue normally.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Link
+              href="/maintenance"
+              target="_blank"
+              className="px-3 py-2 rounded-xl bg-white border border-amber-300 text-xs font-bold text-amber-950 hover:bg-amber-50 transition-colors shadow-xs"
+            >
+              Preview User Window ↗
+            </Link>
+            <button
+              type="button"
+              onClick={() => handleToggleMaintenance(false)}
+              disabled={togglingMaintenance}
+              className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-black transition-all shadow-subtle press-scale"
+            >
+              Turn OFF (Restore Site)
+            </button>
+          </div>
         </div>
       )}
 
@@ -3714,6 +3841,158 @@ export default function AdminPage() {
                 </form>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Maintenance Mode Configuration Modal */}
+      {showMaintenanceModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setShowMaintenanceModal(false)}
+          className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4 animate-fadeIn"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl border border-[#DEE0ED] max-w-lg w-full p-6 shadow-2xl space-y-5 animate-scaleUp"
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-2.5">
+                <div
+                  className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                    maintenance.enabled ? "bg-rose-100 text-rose-600" : "bg-amber-100 text-amber-600"
+                  }`}
+                >
+                  <Wrench className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-[#252943]">
+                    Under Update / Maintenance Control
+                  </h3>
+                  <p className="text-[11px] text-gray-500">
+                    Control public site access while keeping backend order delivery active
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowMaintenanceModal(false)}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Current Status Badge */}
+            <div
+              className={`p-4 rounded-2xl border flex items-center justify-between ${
+                maintenance.enabled
+                  ? "bg-rose-50 border-rose-200 text-rose-900"
+                  : "bg-emerald-50 border-emerald-200 text-emerald-900"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <span
+                  className={`w-3 h-3 rounded-full ${
+                    maintenance.enabled ? "bg-rose-600 animate-ping" : "bg-emerald-500"
+                  }`}
+                />
+                <div>
+                  <span className="text-xs font-black uppercase tracking-wider block">
+                    Current Mode: {maintenance.enabled ? "UNDER UPDATE (ACTIVE)" : "NORMAL SITE LIVE"}
+                  </span>
+                  <span className="text-[11px] opacity-80">
+                    {maintenance.enabled
+                      ? "Users are locked out and see the update window. No passkey section shown."
+                      : "All users can login and access the panel normally."}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Guarantees Callout */}
+            <div className="space-y-2 p-3.5 rounded-2xl bg-[#F8F9FD] border border-gray-100 text-xs text-gray-700">
+              <div className="flex items-center gap-1.5 font-bold text-gray-900">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span>Backend Delivery Protection</span>
+              </div>
+              <p className="text-[11px] text-gray-600 leading-relaxed">
+                When enabled, cron workers (`/api/scheduler/tick`), TikTok S-Curve delivery runs, and upstream provider dispatches continue to process in the background. Only front-end user access is shielded.
+              </p>
+            </div>
+
+            {/* Custom Message Inputs */}
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Window Headline
+                </label>
+                <input
+                  type="text"
+                  value={maintTitleInput}
+                  onChange={(e) => setMaintTitleInput(e.target.value)}
+                  placeholder="Currently we're updating the website"
+                  className="w-full bg-[#F8F9FD] border border-[#DEE0ED] focus:border-[#3A4EFB] rounded-xl px-3.5 py-2 text-xs font-semibold text-[#252943] outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Window Description & Reassurance Message
+                </label>
+                <textarea
+                  rows={3}
+                  value={maintMessageInput}
+                  onChange={(e) => setMaintMessageInput(e.target.value)}
+                  placeholder="Please hold on for a moment while admin updates the website..."
+                  className="w-full bg-[#F8F9FD] border border-[#DEE0ED] focus:border-[#3A4EFB] rounded-xl p-3 text-xs font-medium text-[#252943] outline-none resize-none"
+                />
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="pt-3 border-t border-gray-100 flex items-center justify-between gap-3">
+              <Link
+                href="/maintenance"
+                target="_blank"
+                className="text-xs font-bold text-[#3A4EFB] hover:underline flex items-center gap-1"
+              >
+                <span>Preview Window</span>
+                <span>↗</span>
+              </Link>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowMaintenanceModal(false)}
+                  className="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-xs font-bold text-gray-700 transition-colors"
+                >
+                  Cancel
+                </button>
+                {maintenance.enabled ? (
+                  <button
+                    type="button"
+                    onClick={() => handleToggleMaintenance(false)}
+                    disabled={togglingMaintenance}
+                    className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-subtle transition-all press-scale flex items-center gap-1.5"
+                  >
+                    {togglingMaintenance && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    <span>Disable & Restore Site</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleToggleMaintenance(true)}
+                    disabled={togglingMaintenance}
+                    className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black shadow-subtle transition-all press-scale flex items-center gap-1.5"
+                  >
+                    {togglingMaintenance && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    <span>Enable Under Update Mode</span>
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}

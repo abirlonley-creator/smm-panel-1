@@ -12,6 +12,7 @@ import { logOrderEvent } from "@/lib/engagement/event-logger";
 import { recordAdminAlert } from "@/lib/engagement/alert-service";
 import { runEngagementTick } from "@/lib/engagement/worker";
 import { resolveTargetUrl } from "@/lib/urls/tiktok-resolver";
+import { getMaintenanceState } from "@/lib/maintenance/maintenance-service";
 import { z } from "zod";
 
 const createEngagementOrderSchema = z.object({
@@ -85,6 +86,18 @@ export async function POST(request: Request) {
   const session = await getAuthSession(request);
   if (!session.authenticated || !session.user) {
     return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  }
+
+  const maintenance = await getMaintenanceState();
+  if (maintenance.enabled && session.user.role !== "ADMIN") {
+    return NextResponse.json(
+      {
+        success: false,
+        underMaintenance: true,
+        error: "Currently we're updating the website. Please hold on for a moment while admin completes updates. Your existing orders remain actively delivering.",
+      },
+      { status: 503 }
+    );
   }
 
   try {

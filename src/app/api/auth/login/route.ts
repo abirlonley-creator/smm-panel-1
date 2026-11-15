@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { verifyPasskey, createSession } from "@/lib/auth/passkey-service";
 import { SESSION_COOKIE_NAME, ADMIN_COOKIE_NAME } from "@/lib/auth/session";
+import { getMaintenanceState } from "@/lib/maintenance/maintenance-service";
 import { cookies } from "next/headers";
 import { z } from "zod";
 
@@ -31,6 +32,19 @@ export async function POST(request: Request) {
           isExpired: verification.isExpired || false,
         },
         { status: 401 }
+      );
+    }
+
+    // Check if Under Update / Maintenance mode is active: only ADMIN can log in
+    const maintenance = await getMaintenanceState();
+    if (maintenance.enabled && verification.role !== "ADMIN") {
+      return NextResponse.json(
+        {
+          success: false,
+          underMaintenance: true,
+          error: "Currently we're updating the website. Please hold on for a moment while admin updates the website. All orders are actively being delivered in the backend.",
+        },
+        { status: 503 }
       );
     }
 

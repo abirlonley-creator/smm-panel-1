@@ -6,6 +6,7 @@ import { calculateGrowthPlan } from "@/lib/scheduler/calculator";
 import { ScheduleMode } from "@/lib/types";
 import { generateDripFeedSequence } from "@/lib/orders/drip-feed-randomizer";
 import { recordAdminAlert } from "@/lib/engagement/alert-service";
+import { getMaintenanceState } from "@/lib/maintenance/maintenance-service";
 import { z } from "zod";
 
 const createOrderSchema = z.object({
@@ -51,6 +52,19 @@ const createOrderSchema = z.object({
 
 export async function POST(request: Request) {
   try {
+    const session = await getAuthSession(request);
+    const maintenance = await getMaintenanceState();
+    if (maintenance.enabled && session?.user?.role !== "ADMIN") {
+      return NextResponse.json(
+        {
+          success: false,
+          underMaintenance: true,
+          error: "Currently we're updating the website. Please hold on for a moment while admin completes updates. Your existing orders remain actively delivering.",
+        },
+        { status: 503 }
+      );
+    }
+
     const body = await request.json();
     const parsed = createOrderSchema.safeParse(body);
 
@@ -124,7 +138,6 @@ export async function POST(request: Request) {
       }
     }
 
-    const session = await getAuthSession(request);
     if (!session.authenticated || !session.user) {
       return NextResponse.json(
         { success: false, error: "Authentication required to place orders." },

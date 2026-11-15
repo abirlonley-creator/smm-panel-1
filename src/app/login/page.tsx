@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { KeyRound, ArrowRight, Eye, EyeOff, AlertCircle, Send } from "lucide-react";
+import { MaintenanceScreen } from "@/components/MaintenanceScreen";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -10,6 +11,36 @@ export default function LoginPage() {
   const [showKey, setShowKey] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [underMaintenance, setUnderMaintenance] = useState(false);
+  const [maintInfo, setMaintInfo] = useState<{ title?: string; message?: string; supportTelegram?: string }>({});
+
+  useEffect(() => {
+    fetch("/api/system/maintenance", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.underMaintenance) {
+          setUnderMaintenance(true);
+          setMaintInfo({
+            title: data.title,
+            message: data.message,
+            supportTelegram: data.supportTelegram,
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  if (underMaintenance) {
+    return (
+      <MaintenanceScreen
+        customTitle={maintInfo.title}
+        customMessage={maintInfo.message}
+        supportTelegram={maintInfo.supportTelegram}
+        onRestored={() => setUnderMaintenance(false)}
+      />
+    );
+  }
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
