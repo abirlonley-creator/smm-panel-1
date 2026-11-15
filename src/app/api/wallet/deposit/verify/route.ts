@@ -32,11 +32,9 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           success: false,
-          requiresAdminReview: Boolean(result.requiresAdminReview),
-          error: result.error || "Payment not found. Check if the Order ID is correct.",
+          error: result.error || "Payment not found. Check your Binance Order ID.",
           message: result.message,
           failureReason: result.failureReason,
-          deposit: result.deposit,
         },
         { status: 200 }
       );
@@ -45,7 +43,6 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       verified: Boolean(result.verified),
-      pendingVerification: Boolean(result.pendingVerification),
       alreadyCredited: Boolean(result.alreadyCredited),
       newBalance: result.newBalance,
       deposit: result.deposit,

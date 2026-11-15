@@ -628,12 +628,7 @@ export default function WalletPage() {
                                 <Download className="w-3 h-3" />
                                 <span>Download invoice</span>
                               </button>
-                            ) : isPendingReview ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/15 text-amber-700 border border-amber-500/30 text-[11px] font-semibold">
-                                <Clock className="w-3 h-3 text-amber-600" />
-                                <span>Review by Admin</span>
-                              </span>
-                            ) : isPending ? (
+                            ) : isPending || isPendingReview ? (
                               <button
                                 type="button"
                                 onClick={() => {

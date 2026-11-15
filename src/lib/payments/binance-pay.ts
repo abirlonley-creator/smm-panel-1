@@ -375,77 +375,22 @@ export async function verifyAndCreditDeposit({
     }
 
     // =========================================================================
-    // CASE B: AUTOMATED MATCH FAILED / NOT FOUND -> FORWARD TO ADMIN PANEL
+    // CASE B: AUTOMATED MATCH FAILED / NOT FOUND -> DO NOT FORWARD TO ADMIN
     // =========================================================================
-    // Save the user's entered Order ID so the admin sees it in the Admin Panel
-    const updatedDeposit = await prisma.paymentDeposit.update({
-      where: { id: deposit.id },
-      data: {
-        txnId: cleanTxnId,
-        senderBinanceId: senderBinanceId?.trim() || null,
-        status: "PENDING",
-        rejectionReason: `${failureReason} • Forwarded for Admin Review`,
-        rawVerification: JSON.stringify({
-          attemptedAt: new Date().toISOString(),
-          cleanTxnId,
-          failureReason,
-          verificationResult,
-        }),
-      },
-    });
-
-    // Notify Admin through AdminAlert table
-    await prisma.adminAlert.create({
-      data: {
-        severity: "medium",
-        type: "payment_pending_review",
-        userId: deposit.userId,
-        reason: `Deposit ${deposit.depositRef} (₹${deposit.inrAmount} / ${deposit.usdtAmount} USDT) with Order ID "${cleanTxnId}" requires manual review: ${failureReason}.`,
-        suggestedAction: "Check Binance app and approve or reject deposit in Binance Deposits tab.",
-        status: "open",
-      },
-    }).catch(() => {});
-
     return {
       success: false,
-      requiresAdminReview: true,
-      error: "Payment not found. Check if the Order ID is correct.",
-      message:
-        "Payment could not be verified automatically. Check if the Order ID is correct. Your payment details have been forwarded to the Admin Panel for manual review. Our admin will verify and credit your balance shortly.",
-      deposit: updatedDeposit,
+      requiresAdminReview: false,
+      error: "Payment not found. Check your Binance Order ID.",
+      message: "Payment not found. Check your Binance Order ID.",
       failureReason,
     };
   } else {
-    // Manual fallback mode if API keys are ever absent
-    const updatedDeposit = await prisma.paymentDeposit.update({
-      where: { id: deposit.id },
-      data: {
-        txnId: cleanTxnId,
-        senderBinanceId: senderBinanceId?.trim() || null,
-        status: "PENDING",
-        rejectionReason: "Manual review queued (API in maintenance) • Forwarded to Admin Panel",
-      },
-    });
-
-    await prisma.adminAlert.create({
-      data: {
-        severity: "low",
-        type: "payment_manual_review",
-        userId: deposit.userId,
-        reason: `Deposit ${deposit.depositRef} (₹${deposit.inrAmount} / ${deposit.usdtAmount} USDT) - Order ID: "${cleanTxnId}". Forwarded for Admin Panel confirmation.`,
-        suggestedAction: "Check Binance account and approve deposit in Binance Deposits tab.",
-        status: "open",
-      },
-    }).catch(() => {});
-
+    // API not configured or unavailable -> directly report payment not found
     return {
       success: false,
-      requiresAdminReview: true,
-      pendingVerification: true,
-      deposit: updatedDeposit,
-      error: "Payment queued for Admin Review",
-      message:
-        "Your payment has been logged with Order ID and forwarded to the Admin Panel. Our team will verify and credit your balance shortly. For instant updates, contact 24/7 Support.",
+      requiresAdminReview: false,
+      error: "Payment not found. Check your Binance Order ID.",
+      message: "Payment not found. Check your Binance Order ID.",
     };
   }
 }

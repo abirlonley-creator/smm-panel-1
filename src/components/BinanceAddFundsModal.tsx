@@ -49,7 +49,6 @@ export function BinanceAddFundsModal({
   const [txnId, setTxnId] = useState("");
   const [senderBinanceId, setSenderBinanceId] = useState("");
   const [verifying, setVerifying] = useState(false);
-  const [isPendingReview, setIsPendingReview] = useState(false);
 
   // Clipboard & feedback
   const [copiedUid, setCopiedUid] = useState(false);
@@ -70,7 +69,6 @@ export function BinanceAddFundsModal({
       setStep("pay");
       setTxnId("");
       setSenderBinanceId("");
-      setIsPendingReview(false);
       setErrorMessage(null);
       setSuccessMessage(null);
       return;
@@ -179,16 +177,11 @@ export function BinanceAddFundsModal({
       }
 
       if (!data.success) {
-        if (data.requiresAdminReview) {
-          setIsPendingReview(true);
-          setErrorMessage(data.error || "Payment not found. Check if the Order ID is correct.");
-          return;
-        }
-        throw new Error(data.error || "Payment verification failed.");
+        setErrorMessage(data.error || "Payment not found. Check your Binance Order ID.");
+        return;
       }
 
       // Success branch:
-      setIsPendingReview(false);
       setSuccessMessage(data.message || `₹${inrAmount.toFixed(2)} credited successfully!`);
 
       // Only notify balance state if actually credited
@@ -471,36 +464,6 @@ export function BinanceAddFundsModal({
                 </div>
               )}
 
-              {/* Informative Admin Review Alert */}
-              {isPendingReview && (
-                <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-2 animate-fadeIn">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5 text-amber-600" />
-                      <span>Forwarded to Admin Panel</span>
-                    </span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-200/80 text-amber-900">
-                      Pending Review
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-amber-800 leading-relaxed">
-                    Order ID <span className="font-mono font-bold text-gray-900">{txnId}</span> has been saved and forwarded to the Admin Panel for manual verification. Our admin will review and credit your balance shortly.
-                  </p>
-                  <div className="pt-1 flex items-center justify-between border-t border-amber-200/60">
-                    <span className="text-[10px] text-amber-700">Need instant confirmation?</span>
-                    <a
-                      href="https://t.me/Ghostfinds"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-2.5 py-1 rounded-lg bg-[#0088cc] hover:bg-[#0077b5] text-white font-bold text-[10px] flex items-center gap-1 transition-colors"
-                    >
-                      <Send className="w-2.5 h-2.5" />
-                      <span>24/7 Telegram Support</span>
-                    </a>
-                  </div>
-                </div>
-              )}
-
               {/* Summary Bar: Amount & Send to Binance ID (Screenshot 1) */}
               <div className="p-3 rounded-xl bg-[#F3F4F6] border border-gray-200/80 flex items-center justify-between">
                 <div>
@@ -650,75 +613,29 @@ export function BinanceAddFundsModal({
           )}
 
           {/* ============================================================== */}
-          {/* STEP 3: SUCCESS OR UNDER REVIEW FEEDBACK                       */}
+          {/* STEP 3: SUCCESS FEEDBACK (INSTANT AUTO-CREDIT)                 */}
           {/* ============================================================== */}
           {step === "success" && (
             <div className="py-6 text-center space-y-4 animate-scaleUp">
-              {isPendingReview ? (
-                <>
-                  <div className="w-14 h-14 rounded-full bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center mx-auto shadow-sm">
-                    <Clock className="w-7 h-7" />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-bold text-gray-900">
-                      Payment Submitted for Verification
-                    </h3>
-                    <p className="text-xs text-gray-600 max-w-xs mx-auto mt-1 leading-relaxed">
-                      Your Binance Order ID has been recorded. Our team is verifying your payment and your wallet will be credited shortly.
-                    </p>
-                  </div>
-                  <div className="p-3.5 rounded-2xl bg-[#F8F9FD] border border-gray-200 text-xs text-gray-600 max-w-xs mx-auto text-left space-y-1">
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Order ID:</span>
-                      <span className="font-mono font-bold text-gray-900">{txnId}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Amount:</span>
-                      <span className="font-bold text-gray-900">₹{inrAmount.toFixed(2)} INR</span>
-                    </div>
-                  </div>
-                  <div className="pt-2 max-w-xs mx-auto space-y-2">
-                    <a
-                      href="https://t.me/Ghostfinds"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full py-2.5 px-4 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5"
-                    >
-                      <Send className="w-3.5 h-3.5" />
-                      <span>Instant Approval: Telegram @Ghostfinds</span>
-                    </a>
-                    <button
-                      type="button"
-                      onClick={onClose}
-                      className="w-full py-2.5 px-4 rounded-xl border border-gray-200 text-xs font-bold text-gray-700 hover:bg-gray-50 transition-colors"
-                    >
-                      Close
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="w-14 h-14 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center mx-auto shadow-sm">
-                    <CheckCircle2 className="w-7 h-7" />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-bold text-gray-900">Payment Successful!</h3>
-                    <p className="text-xs text-gray-600 mt-1">
-                      {successMessage || `₹${inrAmount.toFixed(2)} INR has been credited to your wallet.`}
-                    </p>
-                  </div>
-                  <div className="p-3 rounded-xl bg-emerald-50/70 border border-emerald-200 text-xs font-bold text-emerald-800 max-w-xs mx-auto font-mono">
-                    Balance Added: +₹{deposit?.inrAmount?.toFixed(2) || inrAmount.toFixed(2)} INR
-                  </div>
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    className="w-full max-w-xs py-3 px-4 rounded-xl bg-[#2563EB] text-white text-xs font-bold hover:bg-[#1D4ED8] transition-all shadow-sm press-scale mx-auto"
-                  >
-                    Done
-                  </button>
-                </>
-              )}
+              <div className="w-14 h-14 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center mx-auto shadow-sm">
+                <CheckCircle2 className="w-7 h-7" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-gray-900">Payment Successful!</h3>
+                <p className="text-xs text-gray-600 mt-1">
+                  {successMessage || `₹${inrAmount.toFixed(2)} INR has been credited to your wallet.`}
+                </p>
+              </div>
+              <div className="p-3 rounded-xl bg-emerald-50/70 border border-emerald-200 text-xs font-bold text-emerald-800 max-w-xs mx-auto font-mono">
+                Balance Added: +₹{deposit?.inrAmount?.toFixed(2) || inrAmount.toFixed(2)} INR
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-full max-w-xs py-3 px-4 rounded-xl bg-[#2563EB] text-white text-xs font-bold hover:bg-[#1D4ED8] transition-all shadow-sm press-scale mx-auto"
+              >
+                Done
+              </button>
             </div>
           )}
         </div>
