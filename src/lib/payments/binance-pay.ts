@@ -133,7 +133,7 @@ async function queryBinanceApiPayTransaction(orderOrTxnId: string): Promise<{
 
     const data = await res.json();
     if (data?.code === "000000" && Array.isArray(data.data)) {
-      const cleanSearch = orderOrTxnId.trim().toLowerCase();
+      const cleanSearch = orderOrTxnId.trim().replace(/^#\s*/, "").toLowerCase();
       const match = data.data.find((tx: any) => {
         const orderMatch = tx.orderId && String(tx.orderId).trim().toLowerCase() === cleanSearch;
         const txnMatch = tx.transactionId && String(tx.transactionId).trim().toLowerCase() === cleanSearch;
@@ -184,7 +184,7 @@ export async function verifyAndCreditDeposit({
   senderBinanceId,
 }: {
   userId: string;
-  depositId: string;
+  depositId?: string;
   txnId: string;
   senderBinanceId?: string;
 }) {
@@ -194,13 +194,13 @@ export async function verifyAndCreditDeposit({
     );
   }
 
-  const cleanTxnId = txnId.trim();
+  const cleanTxnId = txnId.trim().replace(/^#\s*/, "");
   if (!cleanTxnId) {
     throw new Error("Please enter your Binance Order ID.");
   }
 
-  // Strict format check: accepts standard 10-25 digit numeric Order IDs or alphanumeric Binance Transaction IDs (P_...)
-  if (!/^[A-Za-z0-9_]{10,35}$/.test(cleanTxnId)) {
+  // Permissive alphanumeric check for Binance Order IDs or Transaction IDs (numeric 6-30 digits or alphanumeric P_...)
+  if (!/^[A-Za-z0-9_#-]{6,45}$/.test(cleanTxnId)) {
     throw new Error(
       "Invalid Binance Order ID format. Enter the numeric Order ID or Transaction ID from your Binance Pay receipt."
     );
@@ -215,15 +215,27 @@ export async function verifyAndCreditDeposit({
   });
 
   if (duplicateTxn) {
-    throw new Error(
-      "This Binance Order ID has already been credited. Each payment can only be credited once."
-    );
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { walletBalance: true } });
+    return {
+      success: true,
+      alreadyCredited: true,
+      newBalance: user?.walletBalance ?? duplicateTxn.inrAmount,
+      deposit: duplicateTxn,
+      message: "This Binance Order ID has already been credited to wallet balance.",
+    };
   }
 
   // 2. Retrieve deposit and ensure user ownership
-  const deposit = await prisma.paymentDeposit.findUnique({
-    where: { id: depositId },
-  });
+  let deposit = depositId
+    ? await prisma.paymentDeposit.findUnique({
+        where: { id: depositId },
+        include: { user: { select: { id: true, username: true, walletBalance: true } } },
+      })
+    : await prisma.paymentDeposit.findFirst({
+        where: { userId, status: "PENDING" },
+        orderBy: { createdAt: "desc" },
+        include: { user: { select: { id: true, username: true, walletBalance: true } } },
+      });
 
   if (!deposit) {
     throw new Error("Deposit order not found. Please initiate a new payment request.");
@@ -250,114 +262,158 @@ export async function verifyAndCreditDeposit({
   if (config.isApiConfigured) {
     // Automated check against live Binance Pay records via read-only API
     const verificationResult = await queryBinanceApiPayTransaction(cleanTxnId);
+
+    let automatedMatchSuccess = false;
+    let failureReason = "";
+
     if (!verificationResult.verified) {
-      throw new Error(
-        `Binance verification failed: ${
-          verificationResult.statusText ||
-          "Payment could not be verified on Binance records. Please ensure the payment is completed on the Binance app and retry, or contact 24/7 Support."
-        }`
-      );
-    }
-
-    // Security Check A: Must be an incoming payment (positive amount)
-    if (!verificationResult.isIncoming || (verificationResult.amount ?? 0) <= 0) {
-      throw new Error("Invalid transaction: The provided ID is an outgoing transfer, not an incoming deposit.");
-    }
-
-    // Security Check B: Currency must be USDT
-    if (verificationResult.currency && verificationResult.currency.toUpperCase() !== "USDT") {
-      throw new Error(`Unsupported currency: Received ${verificationResult.currency}. Deposits must be in USDT.`);
-    }
-
-    // Security Check C: Recipient must be our official Binance UID
-    if (verificationResult.receiverUid && verificationResult.receiverUid !== ADMIN_BINANCE_UID) {
-      throw new Error(
-        `Invalid recipient: Payment was transferred to Binance UID ${verificationResult.receiverUid}, not our official panel UID (${ADMIN_BINANCE_UID}).`
-      );
-    }
-
-    // Security Check D: Amount verification (prevent underpayment attacks)
-    const requiredUsdt = deposit.usdtAmount;
-    const receivedUsdt = verificationResult.amount || 0;
-    if (receivedUsdt < requiredUsdt * 0.98) {
-      throw new Error(
-        `Underpayment detected: This deposit request requires ${requiredUsdt} USDT, but only ${receivedUsdt} USDT was received on Binance. Please contact support.`
-      );
-    }
-
-    // Credit amount: if user sent more USDT, credit them fairly for the higher amount
-    const creditInr =
-      receivedUsdt > requiredUsdt
-        ? Number((receivedUsdt * deposit.exchangeRate).toFixed(2))
-        : deposit.inrAmount;
-
-    // 4. Atomically credit user balance and mark deposit VERIFIED
-    const orderIdToLock = verificationResult.orderId || cleanTxnId;
-    const txnIdToLock = verificationResult.transactionId || cleanTxnId;
-
-    const result = await prisma.$transaction(async (tx) => {
-      // Re-verify uniqueness inside transaction lock for both orderId and transactionId
-      const concurrentCheck = await tx.paymentDeposit.findFirst({
-        where: {
-          status: "VERIFIED",
-          OR: [
-            { txnId: cleanTxnId },
-            { txnId: orderIdToLock },
-            { txnId: txnIdToLock },
-          ],
-        },
-      });
-      if (concurrentCheck) {
-        throw new Error("This Binance Order ID has already been claimed.");
+      failureReason = "Transaction not found on Binance Pay records";
+    } else if (!verificationResult.isIncoming || (verificationResult.amount ?? 0) <= 0) {
+      failureReason = "Transaction is an outgoing transfer, not an incoming payment";
+    } else if (verificationResult.currency && verificationResult.currency.toUpperCase() !== "USDT") {
+      failureReason = `Unsupported currency: Received ${verificationResult.currency}. Deposits must be in USDT`;
+    } else {
+      // Recipient check: matches our UID
+      const adminUid = String(ADMIN_BINANCE_UID).trim();
+      const receiverUidStr = String(verificationResult.receiverUid || "").trim();
+      if (receiverUidStr && receiverUidStr !== adminUid) {
+        failureReason = `Recipient mismatch: Transferred to Binance ID ${receiverUidStr}, not official ID ${adminUid}`;
+      } else {
+        // Amount verification
+        const requiredUsdt = deposit.usdtAmount;
+        const receivedUsdt = verificationResult.amount || 0;
+        if (receivedUsdt < requiredUsdt * 0.98) {
+          failureReason = `Underpayment: Required ${requiredUsdt} USDT, but received ${receivedUsdt} USDT on Binance`;
+        } else {
+          automatedMatchSuccess = true;
+        }
       }
+    }
 
-      // A. Update deposit status
-      const updatedDeposit = await tx.paymentDeposit.update({
-        where: { id: deposit.id },
-        data: {
-          status: "VERIFIED",
-          txnId: orderIdToLock,
-          senderBinanceId: verificationResult.senderUid || senderBinanceId?.trim() || null,
-          inrAmount: creditInr,
-          usdtAmount: receivedUsdt,
-          verifiedAt: new Date(),
-          rawVerification: JSON.stringify(verificationResult),
-        },
-      });
+    // =========================================================================
+    // CASE A: AUTOMATED MATCH SUCCESSFUL -> CREDIT WALLET IMMEDIATELY
+    // =========================================================================
+    if (automatedMatchSuccess) {
+      const receivedUsdt = verificationResult.amount || deposit.usdtAmount;
+      const requiredUsdt = deposit.usdtAmount;
 
-      // B. Atomically increment user's walletBalance
-      const updatedUser = await tx.user.update({
-        where: { id: userId },
-        data: {
-          walletBalance: { increment: creditInr },
-        },
-        select: { id: true, walletBalance: true },
-      });
+      // Credit amount: if user sent more USDT, credit them fairly for the higher amount
+      const creditInr =
+        receivedUsdt > requiredUsdt
+          ? Number((receivedUsdt * deposit.exchangeRate).toFixed(2))
+          : deposit.inrAmount;
 
-      // C. Create immutable WalletTransaction audit record
-      const auditRecord = await tx.walletTransaction.create({
-        data: {
-          userId,
-          type: "CREDIT",
-          amount: creditInr,
-          balanceAfter: updatedUser.walletBalance,
-          referenceId: deposit.depositRef,
-          description: `Binance Pay Auto-Verified: ₹${creditInr} (${receivedUsdt} USDT @ ₹${deposit.exchangeRate}) - Order ID: ${orderIdToLock}`,
-        },
+      const orderIdToLock = verificationResult.orderId || cleanTxnId;
+      const txnIdToLock = verificationResult.transactionId || cleanTxnId;
+
+      const result = await prisma.$transaction(async (tx) => {
+        // Re-verify inside lock
+        const concurrentCheck = await tx.paymentDeposit.findFirst({
+          where: {
+            status: "VERIFIED",
+            OR: [
+              { txnId: cleanTxnId },
+              { txnId: orderIdToLock },
+              { txnId: txnIdToLock },
+            ],
+          },
+        });
+        if (concurrentCheck) {
+          throw new Error("This Binance Order ID has already been claimed.");
+        }
+
+        // A. Update deposit status to VERIFIED
+        const updatedDeposit = await tx.paymentDeposit.update({
+          where: { id: deposit.id },
+          data: {
+            status: "VERIFIED",
+            txnId: orderIdToLock,
+            senderBinanceId: verificationResult.senderUid || senderBinanceId?.trim() || null,
+            inrAmount: creditInr,
+            usdtAmount: receivedUsdt,
+            verifiedAt: new Date(),
+            rejectionReason: null,
+            rawVerification: JSON.stringify(verificationResult),
+          },
+        });
+
+        // B. Increment wallet balance
+        const updatedUser = await tx.user.update({
+          where: { id: userId },
+          data: {
+            walletBalance: { increment: creditInr },
+          },
+          select: { id: true, walletBalance: true },
+        });
+
+        // C. Create immutable audit record
+        const auditRecord = await tx.walletTransaction.create({
+          data: {
+            userId,
+            type: "CREDIT",
+            amount: creditInr,
+            balanceAfter: updatedUser.walletBalance,
+            referenceId: deposit.depositRef,
+            description: `Binance Pay Auto-Verified: ₹${creditInr} (${receivedUsdt} USDT @ ₹${deposit.exchangeRate}) - Order ID: ${orderIdToLock}`,
+          },
+        });
+
+        return {
+          updatedDeposit,
+          newBalance: updatedUser.walletBalance,
+          auditRecord,
+        };
       });
 
       return {
-        updatedDeposit,
-        newBalance: updatedUser.walletBalance,
-        auditRecord,
+        success: true,
+        verified: true,
+        newBalance: result.newBalance,
+        deposit: result.updatedDeposit,
+        message: `Payment verified instantly! ₹${creditInr.toFixed(2)} has been credited to your wallet.`,
       };
+    }
+
+    // =========================================================================
+    // CASE B: AUTOMATED MATCH FAILED / NOT FOUND -> FORWARD TO ADMIN PANEL
+    // =========================================================================
+    // Save the user's entered Order ID so the admin sees it in the Admin Panel
+    const updatedDeposit = await prisma.paymentDeposit.update({
+      where: { id: deposit.id },
+      data: {
+        txnId: cleanTxnId,
+        senderBinanceId: senderBinanceId?.trim() || null,
+        status: "PENDING",
+        rejectionReason: `${failureReason} • Forwarded for Admin Review`,
+        rawVerification: JSON.stringify({
+          attemptedAt: new Date().toISOString(),
+          cleanTxnId,
+          failureReason,
+          verificationResult,
+        }),
+      },
     });
 
+    // Notify Admin through AdminAlert table
+    await prisma.adminAlert.create({
+      data: {
+        severity: "medium",
+        type: "payment_pending_review",
+        userId: deposit.userId,
+        reason: `Deposit ${deposit.depositRef} (₹${deposit.inrAmount} / ${deposit.usdtAmount} USDT) with Order ID "${cleanTxnId}" requires manual review: ${failureReason}.`,
+        suggestedAction: "Check Binance app and approve or reject deposit in Binance Deposits tab.",
+        status: "open",
+      },
+    }).catch(() => {});
+
     return {
-      success: true,
-      newBalance: result.newBalance,
-      deposit: result.updatedDeposit,
-      message: `Payment verified instantly! ₹${creditInr.toFixed(2)} has been credited to your wallet.`,
+      success: false,
+      requiresAdminReview: true,
+      error: "Payment not found. Check if the Order ID is correct.",
+      message:
+        "Payment could not be verified automatically. Check if the Order ID is correct. Your payment details have been forwarded to the Admin Panel for manual review. Our admin will verify and credit your balance shortly.",
+      deposit: updatedDeposit,
+      failureReason,
     };
   } else {
     // Manual fallback mode if API keys are ever absent
@@ -367,15 +423,29 @@ export async function verifyAndCreditDeposit({
         txnId: cleanTxnId,
         senderBinanceId: senderBinanceId?.trim() || null,
         status: "PENDING",
+        rejectionReason: "Manual review queued (API in maintenance) • Forwarded to Admin Panel",
       },
     });
 
+    await prisma.adminAlert.create({
+      data: {
+        severity: "low",
+        type: "payment_manual_review",
+        userId: deposit.userId,
+        reason: `Deposit ${deposit.depositRef} (₹${deposit.inrAmount} / ${deposit.usdtAmount} USDT) - Order ID: "${cleanTxnId}". Forwarded for Admin Panel confirmation.`,
+        suggestedAction: "Check Binance account and approve deposit in Binance Deposits tab.",
+        status: "open",
+      },
+    }).catch(() => {});
+
     return {
-      success: true,
+      success: false,
+      requiresAdminReview: true,
       pendingVerification: true,
       deposit: updatedDeposit,
+      error: "Payment queued for Admin Review",
       message:
-        "Payment submitted! Our team is verifying your Binance transaction. Your balance will be credited upon confirmation. For instant updates, contact 24/7 Support.",
+        "Your payment has been logged with Order ID and forwarded to the Admin Panel. Our team will verify and credit your balance shortly. For instant updates, contact 24/7 Support.",
     };
   }
 }

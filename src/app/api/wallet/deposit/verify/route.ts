@@ -6,7 +6,7 @@ import { z } from "zod";
 export const dynamic = "force-dynamic";
 
 const verifyDepositSchema = z.object({
-  depositId: z.string().min(1, "Deposit ID is required"),
+  depositId: z.string().optional(),
   txnId: z.string().min(5, "Binance Order ID or Transaction ID is required"),
   senderBinanceId: z.string().optional(),
 });
@@ -28,8 +28,23 @@ export async function POST(request: Request) {
       senderBinanceId: parsed.senderBinanceId,
     });
 
+    if (!result.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          requiresAdminReview: Boolean(result.requiresAdminReview),
+          error: result.error || "Payment not found. Check if the Order ID is correct.",
+          message: result.message,
+          failureReason: result.failureReason,
+          deposit: result.deposit,
+        },
+        { status: 200 }
+      );
+    }
+
     return NextResponse.json({
       success: true,
+      verified: Boolean(result.verified),
       pendingVerification: Boolean(result.pendingVerification),
       alreadyCredited: Boolean(result.alreadyCredited),
       newBalance: result.newBalance,

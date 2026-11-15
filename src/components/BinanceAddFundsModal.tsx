@@ -167,26 +167,29 @@ export function BinanceAddFundsModal({
         }),
       });
       const data = await res.json();
-      if (!res.ok || !data.success) {
+      if (!res.ok) {
         throw new Error(data.error || "Payment verification failed.");
       }
 
-      if (data.pendingVerification) {
-        setIsPendingReview(true);
-        setSuccessMessage(
-          data.message || "Payment submitted! Our team is verifying your Binance transaction."
-        );
-      } else {
-        setIsPendingReview(false);
-        setSuccessMessage(data.message || `₹${inrAmount.toFixed(2)} credited successfully!`);
+      if (!data.success) {
+        if (data.requiresAdminReview) {
+          setIsPendingReview(true);
+          setErrorMessage(data.error || "Payment not found. Check if the Order ID is correct.");
+          return;
+        }
+        throw new Error(data.error || "Payment verification failed.");
+      }
 
-        // Only notify balance state if actually credited
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(new CustomEvent("balance-updated"));
-        }
-        if (onSuccess && typeof data.newBalance === "number") {
-          onSuccess(data.newBalance);
-        }
+      // Success branch:
+      setIsPendingReview(false);
+      setSuccessMessage(data.message || `₹${inrAmount.toFixed(2)} credited successfully!`);
+
+      // Only notify balance state if actually credited
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("balance-updated"));
+      }
+      if (onSuccess && typeof data.newBalance === "number") {
+        onSuccess(data.newBalance);
       }
 
       setStep("success");
@@ -448,6 +451,44 @@ export function BinanceAddFundsModal({
           {/* ============================================================== */}
           {step === "verify" && (
             <form onSubmit={handleVerifyPayment} className="space-y-4">
+              {/* Red Alert Banner matching user screenshot */}
+              {errorMessage && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs font-bold text-rose-700 flex items-center gap-2 animate-fadeIn">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                  <span>{errorMessage}</span>
+                </div>
+              )}
+
+              {/* Informative Admin Review Alert */}
+              {isPendingReview && (
+                <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-2 animate-fadeIn">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Forwarded to Admin Panel</span>
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-200/80 text-amber-900">
+                      Pending Review
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-amber-800 leading-relaxed">
+                    Order ID <span className="font-mono font-bold text-gray-900">{txnId}</span> has been saved and forwarded to the Admin Panel for manual verification. Our admin will review and credit your balance shortly.
+                  </p>
+                  <div className="pt-1 flex items-center justify-between border-t border-amber-200/60">
+                    <span className="text-[10px] text-amber-700">Need instant confirmation?</span>
+                    <a
+                      href="https://t.me/Ghostfinds"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-2.5 py-1 rounded-lg bg-[#0088cc] hover:bg-[#0077b5] text-white font-bold text-[10px] flex items-center gap-1 transition-colors"
+                    >
+                      <Send className="w-2.5 h-2.5" />
+                      <span>24/7 Telegram Support</span>
+                    </a>
+                  </div>
+                </div>
+              )}
+
               {/* Summary Bar: Amount & Send to Binance ID (Screenshot 1) */}
               <div className="p-3 rounded-xl bg-[#F3F4F6] border border-gray-200/80 flex items-center justify-between">
                 <div>
@@ -556,13 +597,6 @@ export function BinanceAddFundsModal({
                   className="w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-xs font-mono text-gray-700 outline-none focus:border-[#2563EB]"
                 />
               </div>
-
-              {errorMessage && (
-                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs font-bold text-rose-700 flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span>{errorMessage}</span>
-                </div>
-              )}
 
               {/* Buttons: Back & Verify payment (Screenshot 1) */}
               <div className="flex items-center gap-2 pt-1">

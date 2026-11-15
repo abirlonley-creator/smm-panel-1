@@ -294,8 +294,16 @@ export function BinanceDepositsTab() {
                             : "bg-rose-100 text-rose-800"
                         }`}
                       >
-                        {d.status}
+                        {d.status === "PENDING" ? "PENDING REVIEW" : d.status}
                       </span>
+                      {d.rejectionReason && (
+                        <span
+                          className="text-[10px] text-amber-900/70 block mt-1 font-normal max-w-[200px] leading-tight line-clamp-2"
+                          title={d.rejectionReason}
+                        >
+                          {d.rejectionReason}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-[11px] text-[#252943]/60">
                       {new Date(d.createdAt).toLocaleString()}
