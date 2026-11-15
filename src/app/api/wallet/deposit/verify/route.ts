@@ -32,9 +32,11 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           success: false,
-          error: result.error || "Payment not found. Check your Binance Order ID.",
+          requiresAdminReview: Boolean(result.requiresAdminReview),
+          error: result.error || "Payment not found. Queued for Admin Review. Check your Binance Order ID.",
           message: result.message,
           failureReason: result.failureReason,
+          deposit: result.deposit,
         },
         { status: 200 }
       );

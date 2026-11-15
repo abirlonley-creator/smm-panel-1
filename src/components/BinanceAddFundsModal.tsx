@@ -177,7 +177,7 @@ export function BinanceAddFundsModal({
       }
 
       if (!data.success) {
-        setErrorMessage(data.error || "Payment not found. Check your Binance Order ID.");
+        setErrorMessage(data.error || "Payment not found. Queued for Admin Review. Check your Binance Order ID.");
         return;
       }
 

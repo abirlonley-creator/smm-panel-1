@@ -154,8 +154,8 @@ async function queryBinanceApiPayTransaction(orderOrTxnId: string): Promise<{
           senderUid: match.payerInfo?.binanceId
             ? String(match.payerInfo.binanceId)
             : match.counterpartyId
-            ? String(match.counterpartyId)
-            : undefined,
+              ? String(match.counterpartyId)
+              : undefined,
           senderName: match.payerInfo?.name || undefined,
           receiverUid: match.receiverInfo?.binanceId
             ? String(match.receiverInfo.binanceId)
@@ -228,14 +228,14 @@ export async function verifyAndCreditDeposit({
   // 2. Retrieve deposit and ensure user ownership
   let deposit = depositId
     ? await prisma.paymentDeposit.findUnique({
-        where: { id: depositId },
-        include: { user: { select: { id: true, username: true, walletBalance: true } } },
-      })
+      where: { id: depositId },
+      include: { user: { select: { id: true, username: true, walletBalance: true } } },
+    })
     : await prisma.paymentDeposit.findFirst({
-        where: { userId, status: "PENDING" },
-        orderBy: { createdAt: "desc" },
-        include: { user: { select: { id: true, username: true, walletBalance: true } } },
-      });
+      where: { userId, status: "PENDING" },
+      orderBy: { createdAt: "desc" },
+      include: { user: { select: { id: true, username: true, walletBalance: true } } },
+    });
 
   if (!deposit) {
     throw new Error("Deposit order not found. Please initiate a new payment request.");
@@ -254,6 +254,29 @@ export async function verifyAndCreditDeposit({
       deposit,
       message: "This deposit has already been credited to your wallet balance.",
     };
+  }
+
+  // Check for uniqueness: if another unverified deposit has this txnId, clear it so current deposit can use it
+  const existingTxnDeposit = await prisma.paymentDeposit.findFirst({
+    where: { txnId: cleanTxnId },
+  });
+
+  if (existingTxnDeposit && existingTxnDeposit.id !== deposit.id) {
+    if (existingTxnDeposit.status === "VERIFIED") {
+      const user = await prisma.user.findUnique({ where: { id: userId }, select: { walletBalance: true } });
+      return {
+        success: true,
+        alreadyCredited: true,
+        newBalance: user?.walletBalance ?? existingTxnDeposit.inrAmount,
+        deposit: existingTxnDeposit,
+        message: "This Binance Order ID has already been credited to wallet balance.",
+      };
+    } else {
+      await prisma.paymentDeposit.update({
+        where: { id: existingTxnDeposit.id },
+        data: { txnId: null },
+      });
+    }
   }
 
   // 3. Automated Binance Verification
@@ -375,22 +398,52 @@ export async function verifyAndCreditDeposit({
     }
 
     // =========================================================================
-    // CASE B: AUTOMATED MATCH FAILED / NOT FOUND -> DO NOT FORWARD TO ADMIN
+    // CASE B: AUTOMATED MATCH FAILED / NOT FOUND -> QUEUE FOR ADMIN
     // =========================================================================
+    const updatedDeposit = await prisma.paymentDeposit.update({
+      where: { id: deposit.id },
+      data: {
+        txnId: cleanTxnId,
+        senderBinanceId: senderBinanceId?.trim() || null,
+        status: "PENDING",
+        rejectionReason: failureReason
+          ? `Not auto-matched: ${failureReason} (Queued for Admin)`
+          : "Not auto-matched on Binance records (Queued for Admin)",
+        rawVerification: JSON.stringify({
+          attemptedAt: new Date().toISOString(),
+          cleanTxnId,
+          failureReason,
+          verificationResult,
+        }),
+      },
+    });
+
     return {
       success: false,
-      requiresAdminReview: false,
-      error: "Payment not found. Check your Binance Order ID.",
-      message: "Payment not found. Check your Binance Order ID.",
+      requiresAdminReview: true,
+      error: "Payment not found. Queued for Admin Review. Check your Binance Order ID.",
+      message: "Payment not found. Queued for Admin Review. Check your Binance Order ID.",
+      deposit: updatedDeposit,
       failureReason,
     };
   } else {
-    // API not configured or unavailable -> directly report payment not found
+    // API not configured or unavailable -> queue for admin
+    const updatedDeposit = await prisma.paymentDeposit.update({
+      where: { id: deposit.id },
+      data: {
+        txnId: cleanTxnId,
+        senderBinanceId: senderBinanceId?.trim() || null,
+        status: "PENDING",
+        rejectionReason: "Queued for Admin Review",
+      },
+    });
+
     return {
       success: false,
-      requiresAdminReview: false,
-      error: "Payment not found. Check your Binance Order ID.",
-      message: "Payment not found. Check your Binance Order ID.",
+      requiresAdminReview: true,
+      error: "Payment not found. Queued for Admin Review. Check your Binance Order ID.",
+      message: "Payment not found. Queued for Admin Review. Check your Binance Order ID.",
+      deposit: updatedDeposit,
     };
   }
 }

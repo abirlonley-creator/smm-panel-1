@@ -253,33 +253,43 @@ export function BinanceDepositsTab() {
                         User: {d.user?.username || "—"}
                       </span>
                     </td>
-                    <td className="px-4 py-3 font-bold text-emerald-700">
-                      ₹{d.inrAmount.toFixed(2)}
+                    <td className="px-4 py-3">
+                      <span className="text-sm font-black text-emerald-700 block">
+                        ₹{d.inrAmount.toFixed(2)}
+                      </span>
+                      <span className="text-[10px] text-[#252943]/60 font-medium">
+                        Rate: ₹{d.exchangeRate || 90}/USDT
+                      </span>
                     </td>
-                    <td className="px-4 py-3 font-bold text-[#F0B90B] font-mono">
-                      {d.usdtAmount.toFixed(2)} USDT
+                    <td className="px-4 py-3">
+                      <span className="text-sm font-black text-amber-600 font-mono block">
+                        {d.usdtAmount.toFixed(2)} USDT
+                      </span>
                     </td>
-                    <td className="px-4 py-3 font-mono text-[11px] text-[#252943]/80">
+                    <td className="px-4 py-3">
                       {d.txnId ? (
                         <div className="flex items-center gap-1.5">
-                          <span>{d.txnId}</span>
+                          <span className="font-mono text-xs font-bold text-gray-900 bg-amber-50 border border-amber-200/80 px-2 py-1 rounded-md">
+                            {d.txnId}
+                          </span>
                           <button
                             type="button"
                             onClick={() => copyText(d.txnId!, d.id)}
-                            className="text-[#252943]/40 hover:text-[#3A4EFB]"
+                            className="p-1 rounded hover:bg-[#F8F9FD] text-[#252943]/50 hover:text-[#3A4EFB] transition-colors"
+                            title="Copy Order ID"
                           >
                             {copiedId === d.id ? (
-                              <Check className="w-3 h-3 text-emerald-600" />
+                              <Check className="w-3.5 h-3.5 text-emerald-600" />
                             ) : (
-                              <Copy className="w-3 h-3" />
+                              <Copy className="w-3.5 h-3.5" />
                             )}
                           </button>
                         </div>
                       ) : (
-                        <span className="text-[#252943]/40 italic">Not submitted</span>
+                        <span className="text-[#252943]/40 italic text-[11px]">Not submitted</span>
                       )}
                       {d.senderBinanceId && (
-                        <span className="text-[9px] text-[#252943]/50 block">
+                        <span className="text-[10px] text-[#252943]/60 block mt-0.5">
                           Sender: {d.senderBinanceId}
                         </span>
                       )}
@@ -290,11 +300,11 @@ export function BinanceDepositsTab() {
                           d.status === "VERIFIED"
                             ? "bg-emerald-100 text-emerald-800"
                             : d.status === "PENDING"
-                            ? "bg-amber-100 text-amber-800"
+                            ? "bg-amber-100 text-amber-800 border border-amber-200"
                             : "bg-rose-100 text-rose-800"
                         }`}
                       >
-                        {d.status === "PENDING" ? "PENDING REVIEW" : d.status}
+                        {d.status === "PENDING" ? (d.txnId ? "QUEUED FOR ADMIN" : "AWAITING PAYMENT") : d.status}
                       </span>
                       {d.rejectionReason && (
                         <span

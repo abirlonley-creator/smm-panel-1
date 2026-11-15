@@ -629,16 +629,23 @@ export default function WalletPage() {
                                 <span>Download invoice</span>
                               </button>
                             ) : isPending || isPendingReview ? (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setInrAmountStr(dep.inrAmount.toString());
-                                  setShowBinanceModal(true);
-                                }}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 text-blue-700 border border-blue-500/30 text-[11px] font-semibold transition-colors"
-                              >
-                                <span>Verify Payment</span>
-                              </button>
+                              dep.txnId ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/15 text-amber-700 border border-amber-500/30 text-[11px] font-semibold">
+                                  <Clock className="w-3 h-3 text-amber-600" />
+                                  <span>Queued for Admin</span>
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setInrAmountStr(dep.inrAmount.toString());
+                                    setShowBinanceModal(true);
+                                  }}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 text-blue-700 border border-blue-500/30 text-[11px] font-semibold transition-colors"
+                                >
+                                  <span>Verify Payment</span>
+                                </button>
+                              )
                             ) : (
                               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 border border-rose-200 text-[11px] font-semibold">
                                 <span>Rejected</span>
