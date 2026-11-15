@@ -2,24 +2,11 @@
 
 import React, { useState, useEffect } from "react";
 import {
-  TrendingUp,
-  DollarSign,
-  CreditCard,
-  Layers,
-  ArrowUpRight,
-  ArrowDownRight,
   RefreshCw,
   Loader2,
-  Percent,
-  Coins,
-  ShieldCheck,
-  Clock,
-  Sparkles,
-  Zap,
   RotateCcw,
-  AlertTriangle,
   CheckCircle2,
-  Users,
+  AlertCircle,
 } from "lucide-react";
 
 interface FinancialSummary {
@@ -74,22 +61,6 @@ interface LedgerItem {
   marginPercent: number;
   status: string;
   createdAt: string;
-}
-
-function getCustomerGradient(str: string): string {
-  const gradients = [
-    "from-blue-600 to-indigo-600 text-white",
-    "from-purple-600 to-pink-600 text-white",
-    "from-emerald-500 to-teal-700 text-white",
-    "from-amber-500 to-orange-600 text-white",
-    "from-rose-500 to-red-700 text-white",
-    "from-cyan-600 to-blue-700 text-white",
-  ];
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = str.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return gradients[Math.abs(hash) % gradients.length];
 }
 
 function getInitials(name: string): string {
@@ -149,7 +120,7 @@ export function RevenueProfitTab() {
         setTimeout(() => {
           setResetSuccess(false);
           setShowResetConfirm(false);
-        }, 1200);
+        }, 1000);
         await loadFinancials(range, true);
       }
     } catch (err) {
@@ -165,48 +136,32 @@ export function RevenueProfitTab() {
 
   if (loading && !summary) {
     return (
-      <div className="p-16 text-center space-y-3 bg-white rounded-3xl border border-[#DEE0ED] shadow-subtle">
-        <Loader2 className="w-8 h-8 text-[#3A4EFB] animate-spin mx-auto" />
-        <p className="text-xs font-bold text-[#252943]">
-          Calculating live upstream charges, customer billings, and net profit...
-        </p>
+      <div className="py-16 text-center text-xs text-[#252943]/60 bg-white rounded-2xl border border-[#DEE0ED]">
+        <Loader2 className="w-5 h-5 text-[#3A4EFB] animate-spin mx-auto mb-2" />
+        <span>Loading financials...</span>
       </div>
     );
   }
 
+  const grossOrders = (breakdown?.engagement.ordersCount || 0) + (breakdown?.smmOrders.ordersCount || 0);
+
   return (
-    <div className="space-y-6 animate-fadeIn">
-      {/* Header with Title and Range Switcher */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 rounded-3xl bg-white border border-[#DEE0ED] shadow-subtle">
+    <div className="space-y-5 animate-fadeIn">
+      {/* ── Minimal Header ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#DEE0ED]">
         <div>
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 flex items-center justify-center font-bold">
-              <TrendingUp className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-[#252943]">
-                  Revenue, Wholesale Expenses & Net Profit
-                </h2>
-                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold border border-emerald-200">
-                  Customers Only
-                </span>
-              </div>
-              <p className="text-xs text-[#252943]/60">
-                Live financial tracking of what users were charged vs upstream wholesale expenses (tracks registered customer activity only — admin accounts are excluded from metrics).
-              </p>
-            </div>
-          </div>
+          <h2 className="text-base font-bold text-[#252943]">Revenue & Profit</h2>
+          <p className="text-xs text-[#252943]/60">Customer orders vs wholesale provider expenses</p>
         </div>
 
-        {/* Range Selector, Reset & Refresh */}
-        <div className="flex items-center flex-wrap gap-2">
-          <div className="flex items-center p-1 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED]">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Range Pills */}
+          <div className="flex items-center p-0.5 rounded-xl bg-[#F4F5F9] border border-[#DEE0ED]">
             {(
               [
-                { label: "All Time", value: "all" },
-                { label: "30 Days", value: "30d" },
-                { label: "7 Days", value: "7d" },
+                { label: "All", value: "all" },
+                { label: "30d", value: "30d" },
+                { label: "7d", value: "7d" },
                 { label: "Today", value: "today" },
               ] as const
             ).map((item) => (
@@ -214,10 +169,10 @@ export function RevenueProfitTab() {
                 key={item.value}
                 type="button"
                 onClick={() => setRange(item.value)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
                   range === item.value
-                    ? "bg-[#3A4EFB] text-white shadow-subtle"
-                    : "text-[#252943]/70 hover:text-[#252943]"
+                    ? "bg-white text-[#252943] shadow-xs"
+                    : "text-[#252943]/60 hover:text-[#252943]"
                 }`}
               >
                 {item.label}
@@ -225,63 +180,52 @@ export function RevenueProfitTab() {
             ))}
           </div>
 
+          {/* Refresh */}
           <button
             type="button"
             onClick={() => loadFinancials(range, true)}
             disabled={refreshing}
-            className="p-2 rounded-xl border border-[#DEE0ED] bg-white hover:bg-slate-50 text-[#252943]/70 hover:text-[#252943] transition-colors disabled:opacity-50"
-            title="Refresh Financials"
+            className="p-1.5 rounded-xl border border-[#DEE0ED] bg-white hover:bg-slate-50 text-[#252943]/70 transition-colors"
+            title="Refresh"
           >
-            <RefreshCw className={`w-4 h-4 text-[#3A4EFB] ${refreshing ? "animate-spin" : ""}`} />
+            <RefreshCw className={`w-3.5 h-3.5 text-[#3A4EFB] ${refreshing ? "animate-spin" : ""}`} />
           </button>
 
+          {/* Reset */}
           <button
             type="button"
             onClick={() => setShowResetConfirm(true)}
-            className="px-3 py-2 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-subtle"
-            title="Reset All Metrics to 0"
+            className="px-2.5 py-1 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold transition-colors flex items-center gap-1"
+            title="Reset metrics to 0"
           >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>Reset to 0</span>
+            <RotateCcw className="w-3 h-3" />
+            <span>Reset</span>
           </button>
         </div>
       </div>
 
-      {/* Confirmation Modal to Reset Financials to 0 */}
+      {/* ── Reset Confirmation Modal ── */}
       {showResetConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 max-w-md w-full shadow-2xl space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
-                <AlertTriangle className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="font-bold text-sm text-[#252943]">
-                  Reset Financial Tracking to ₹0.00?
-                </h3>
-                <p className="text-[11px] text-[#252943]/60">
-                  Starting fresh for real customer orders
-                </p>
-              </div>
-            </div>
-
-            <p className="text-xs text-[#252943]/70 leading-relaxed bg-[#F8F9FD] p-3.5 rounded-2xl border border-[#DEE0ED]">
-              This will clear all previous test orders and deposits so that this financial page starts completely fresh at <strong>₹0.00</strong>. From now on, only genuine customer orders placed by regular users will be tracked.
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-fadeIn">
+          <div className="bg-white rounded-2xl border border-[#DEE0ED] p-5 max-w-sm w-full shadow-xl space-y-3">
+            <h3 className="font-bold text-sm text-[#252943]">Reset financial tracking to 0?</h3>
+            <p className="text-xs text-[#252943]/70">
+              This resets all previous test metrics to ₹0.00. Genuine customer orders will continue tracking cleanly.
             </p>
 
             {resetSuccess && (
-              <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2">
+              <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>All metrics successfully reset to 0!</span>
+                <span>Reset complete</span>
               </div>
             )}
 
-            <div className="flex items-center justify-end gap-2.5 pt-2">
+            <div className="flex items-center justify-end gap-2 pt-2">
               <button
                 type="button"
                 disabled={resetting}
                 onClick={() => setShowResetConfirm(false)}
-                className="px-4 py-2 rounded-xl border border-[#DEE0ED] bg-white hover:bg-slate-50 text-xs font-bold text-[#252943]"
+                className="px-3 py-1.5 rounded-xl border border-[#DEE0ED] bg-white hover:bg-slate-50 text-xs font-semibold text-[#252943]"
               >
                 Cancel
               </button>
@@ -289,469 +233,197 @@ export function RevenueProfitTab() {
                 type="button"
                 disabled={resetting}
                 onClick={handleResetFinancials}
-                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all shadow-subtle flex items-center gap-1.5"
+                className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold transition-all flex items-center gap-1.5"
               >
-                {resetting ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <RotateCcw className="w-3.5 h-3.5" />
-                )}
-                <span>{resetting ? "Resetting..." : "Confirm & Reset to 0"}</span>
+                {resetting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                <span>{resetting ? "Resetting..." : "Confirm"}</span>
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Hero 4 KPI Cards */}
+      {/* ── 4 Minimal KPI Blocks ── */}
       {summary && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Card 1: Revenue Made */}
-          <div className="p-5 rounded-3xl bg-white border border-[#DEE0ED] shadow-subtle flex flex-col justify-between space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] uppercase font-bold text-[#252943]/60">
-                How Much We Made (Revenue)
-              </span>
-              <div className="w-8 h-8 rounded-xl bg-blue-50 text-[#3A4EFB] flex items-center justify-center">
-                <Coins className="w-4 h-4" />
-              </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED]">
+            <span className="text-[11px] font-medium text-[#252943]/60 block mb-1">Revenue</span>
+            <div className="text-xl font-bold text-[#252943] font-mono">
+              ₹{summary.totalRevenue.toFixed(2)}
             </div>
-            <div>
-              <div className="text-2xl font-black text-[#252943] font-mono tracking-tight">
-                ₹{summary.totalRevenue.toFixed(2)}
-              </div>
-              <p className="text-[11px] text-[#252943]/60 mt-1 flex items-center gap-1">
-                <span>Net customer payments after refunds</span>
-              </p>
-            </div>
-            <div className="pt-2 border-t border-[#DEE0ED]/60 flex items-center justify-between text-[11px]">
-              <span className="text-gray-500">Gross Orders Billed:</span>
-              <span className="font-bold text-gray-800">
-                {(breakdown?.engagement.ordersCount || 0) + (breakdown?.smmOrders.ordersCount || 0)} orders
-              </span>
-            </div>
+            <span className="text-[11px] text-[#252943]/50 block mt-1">{grossOrders} orders</span>
           </div>
 
-          {/* Card 2: What We Got Charged (Upstream Cost) */}
-          <div className="p-5 rounded-3xl bg-white border border-[#DEE0ED] shadow-subtle flex flex-col justify-between space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] uppercase font-bold text-rose-600">
-                What We Got Charged (Expenses)
-              </span>
-              <div className="w-8 h-8 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
-                <ArrowDownRight className="w-4 h-4" />
-              </div>
+          <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED]">
+            <span className="text-[11px] font-medium text-[#252943]/60 block mb-1">Wholesale Cost</span>
+            <div className="text-xl font-bold text-rose-700 font-mono">
+              ₹{summary.totalUpstreamCost.toFixed(2)}
             </div>
-            <div>
-              <div className="text-2xl font-black text-rose-700 font-mono tracking-tight">
-                ₹{summary.totalUpstreamCost.toFixed(2)}
-              </div>
-              <p className="text-[11px] text-[#252943]/60 mt-1">
-                Wholesale cost charged by upstream SMM providers
-              </p>
-            </div>
-            <div className="pt-2 border-t border-[#DEE0ED]/60 flex items-center justify-between text-[11px]">
-              <span className="text-gray-500">Wholesale Expense Ratio:</span>
-              <span className="font-bold text-rose-600">
-                {summary.totalRevenue > 0
-                  ? ((summary.totalUpstreamCost / summary.totalRevenue) * 100).toFixed(1)
-                  : "0.0"}
-                %
-              </span>
-            </div>
+            <span className="text-[11px] text-[#252943]/50 block mt-1">
+              {summary.totalRevenue > 0
+                ? `${((summary.totalUpstreamCost / summary.totalRevenue) * 100).toFixed(0)}% of revenue`
+                : "0%"}
+            </span>
           </div>
 
-          {/* Card 3: In Profit */}
-          <div className="p-5 rounded-3xl bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-white border-2 border-emerald-500/30 shadow-subtle flex flex-col justify-between space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] uppercase font-bold text-emerald-800">
-                Net Profit
-              </span>
-              <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold shadow-xs">
-                <ArrowUpRight className="w-4 h-4" />
-              </div>
+          <div className="p-4 rounded-2xl bg-white border border-emerald-200">
+            <span className="text-[11px] font-medium text-emerald-800 block mb-1">Net Profit</span>
+            <div className="text-xl font-bold text-emerald-700 font-mono">
+              {summary.totalProfit >= 0 ? `+₹${summary.totalProfit.toFixed(2)}` : `₹${summary.totalProfit.toFixed(2)}`}
             </div>
-            <div>
-              <div className="text-3xl font-black text-emerald-700 font-mono tracking-tight">
-                {summary.totalProfit > 0 ? `+₹${summary.totalProfit.toFixed(2)}` : `₹${summary.totalProfit.toFixed(2)}`}
-              </div>
-              <div className="mt-1 flex items-center gap-1.5">
-                <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-black uppercase tracking-wider">
-                  {summary.marginPercent > 0 ? `+${summary.marginPercent}%` : `${summary.marginPercent}%`} Margin
-                </span>
-                <span className="text-[11px] text-emerald-900/70 font-semibold">
-                  (Revenue - Wholesale Cost)
-                </span>
-              </div>
-            </div>
-            <div className="pt-2 border-t border-emerald-500/20 flex items-center justify-between text-[11px]">
-              <span className="text-emerald-900/70">Profit Per Rupee Billed:</span>
-              <span className="font-bold text-emerald-800">
-                ₹{summary.totalRevenue > 0 ? (summary.totalProfit / summary.totalRevenue).toFixed(2) : "0.00"}
-              </span>
-            </div>
+            <span className="text-[11px] text-emerald-700 font-semibold block mt-1">
+              {summary.marginPercent}% margin
+            </span>
           </div>
 
-          {/* Card 4: Binance Capital Inflow */}
-          <div className="p-5 rounded-3xl bg-white border border-[#DEE0ED] shadow-subtle flex flex-col justify-between space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] uppercase font-bold text-amber-700">
-                Binance Pay Capital
-              </span>
-              <div className="w-8 h-8 rounded-xl bg-[#F0B90B]/10 border border-[#F0B90B]/30 text-[#F0B90B] flex items-center justify-center font-black text-xs">
-                <span>B</span>
-              </div>
+          <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED]">
+            <span className="text-[11px] font-medium text-[#252943]/60 block mb-1">Binance Deposits</span>
+            <div className="text-xl font-bold text-[#252943] font-mono">
+              ₹{summary.totalDepositsVerified.toFixed(2)}
             </div>
-            <div>
-              <div className="text-2xl font-black text-[#252943] font-mono tracking-tight">
-                ₹{summary.totalDepositsVerified.toFixed(2)}
-              </div>
-              <p className="text-[11px] text-[#252943]/60 mt-1">
-                {summary.verifiedDepositsCount} confirmed deposit{summary.verifiedDepositsCount === 1 ? "" : "s"}
-              </p>
-            </div>
-            <div className="pt-2 border-t border-[#DEE0ED]/60 flex items-center justify-between text-[11px]">
-              <span className="text-amber-800 font-medium">Pending Review:</span>
-              <span className="font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                ₹{summary.totalDepositsPending.toFixed(2)} ({summary.pendingDepositsCount})
-              </span>
-            </div>
+            <span className="text-[11px] text-amber-700 block mt-1">
+              {summary.pendingDepositsCount > 0 ? `₹${summary.totalDepositsPending.toFixed(0)} pending` : "0 pending"}
+            </span>
           </div>
         </div>
       )}
 
-      {/* Real Customer Financial Breakdown (Sakib, Flex, John) */}
-      <div className="p-6 rounded-3xl bg-white border border-[#DEE0ED] shadow-subtle space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#DEE0ED]">
-          <div>
-            <h3 className="text-sm font-bold text-[#252943] flex items-center gap-2">
-              <Users className="w-4 h-4 text-[#3A4EFB]" />
-              <span>Real Customer Financials (Sakib, Flex, John)</span>
-            </h3>
-            <p className="text-xs text-[#252943]/60">
-              Live revenue and profit generated strictly by genuine customer accounts. No fake or admin test numbers.
-            </p>
-          </div>
-          <span className="text-xs text-emerald-700 font-bold bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full w-fit">
-            {customers.length} Registered Customers Tracked
-          </span>
+      {/* ── Customer Accounts Breakdown (Sakib, Flex, John) ── */}
+      <div className="rounded-2xl bg-white border border-[#DEE0ED] overflow-hidden">
+        <div className="px-4 py-3 border-b border-[#DEE0ED] flex items-center justify-between">
+          <h3 className="text-xs font-bold text-[#252943]">Customer Financials ({customers.length})</h3>
+          <span className="text-[11px] text-[#252943]/50">Real user metrics only</span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {customers.map((cust) => {
-            const hasProfit = cust.profit > 0;
-            return (
-              <div
-                key={cust.id}
-                className="p-5 rounded-3xl bg-[#F8F9FD] border border-[#DEE0ED] hover:border-[#3A4EFB] transition-all space-y-4"
-              >
-                {/* Header: Avatar, Name, Status */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${getCustomerGradient(
-                        cust.username
-                      )} flex items-center justify-center font-bold text-sm shadow-xs`}
-                    >
-                      {getInitials(cust.name)}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <h4 className="text-sm font-bold text-[#252943]">{cust.name}</h4>
-                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-white text-gray-700 border border-gray-200">
-                          USER
-                        </span>
+        {customers.length === 0 ? (
+          <div className="p-6 text-center text-xs text-neutral-400">No customer accounts registered yet.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs min-w-[640px]">
+              <thead className="bg-[#F8F9FD] text-[#252943]/60 text-[11px] border-b border-[#DEE0ED]">
+                <tr>
+                  <th className="py-2.5 px-4 font-semibold">Customer</th>
+                  <th className="py-2.5 px-3 font-semibold text-right">Orders</th>
+                  <th className="py-2.5 px-3 font-semibold text-right">Paid</th>
+                  <th className="py-2.5 px-3 font-semibold text-right">Wholesale Cost</th>
+                  <th className="py-2.5 px-3 font-semibold text-right">Net Profit</th>
+                  <th className="py-2.5 px-3 font-semibold text-right">Margin</th>
+                  <th className="py-2.5 px-4 font-semibold text-right">Balance</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#DEE0ED]/60 font-medium text-[#252943]">
+                {customers.map((cust) => (
+                  <tr key={cust.id} className="hover:bg-slate-50/60 transition-colors">
+                    <td className="py-2.5 px-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-slate-100 text-slate-700 font-bold text-xs flex items-center justify-center shrink-0">
+                          {getInitials(cust.name)}
+                        </div>
+                        <div className="min-w-0">
+                          <span className="font-semibold block truncate leading-tight">{cust.name}</span>
+                          <span className="text-[10px] text-[#252943]/50 font-mono">@{cust.username}</span>
+                        </div>
                       </div>
-                      <span className="text-[11px] font-mono text-gray-500 block">
-                        @{cust.username}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div>
-                    {cust.isOnline ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                        Online
-                      </span>
-                    ) : cust.isActiveToday ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                        Active Today
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 text-gray-500">
-                        Offline
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* 3 Metrics: Customer Paid, We Got Charged, Net Profit */}
-                <div className="grid grid-cols-3 gap-2 p-3 rounded-2xl bg-white border border-gray-200/80 text-center">
-                  <div>
-                    <span className="text-[9px] uppercase font-bold text-gray-400 block mb-0.5">
-                      Customer Paid
-                    </span>
-                    <span className="text-xs font-black text-gray-900 font-mono">
-                      ₹{cust.revenue.toFixed(2)}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[9px] uppercase font-bold text-rose-600 block mb-0.5">
-                      We Got Charged
-                    </span>
-                    <span className="text-xs font-black text-rose-700 font-mono">
-                      ₹{cust.upstreamCost.toFixed(2)}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[9px] uppercase font-bold text-emerald-700 block mb-0.5">
-                      Net Profit
-                    </span>
-                    <span
-                      className={`text-xs font-black font-mono ${
-                        hasProfit ? "text-emerald-700" : "text-gray-800"
-                      }`}
-                    >
-                      {cust.profit > 0 ? `+₹${cust.profit.toFixed(2)}` : `₹${cust.profit.toFixed(2)}`}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Bottom Row: Margin %, Orders, Wallet Balance */}
-                <div className="pt-2 border-t border-gray-200/60 flex items-center justify-between text-[11px] text-[#252943]/70 font-medium">
-                  <span>
-                    Orders: <strong className="text-gray-900">{cust.ordersCount}</strong>
-                  </span>
-                  <span>
-                    Margin: <strong className="text-emerald-700">{cust.marginPercent}%</strong>
-                  </span>
-                  <span>
-                    Balance: <strong className="font-mono text-emerald-600">₹{cust.walletBalance.toFixed(2)}</strong>
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-mono text-[#252943]/80">{cust.ordersCount}</td>
+                    <td className="py-2.5 px-3 text-right font-mono font-semibold">₹{cust.revenue.toFixed(2)}</td>
+                    <td className="py-2.5 px-3 text-right font-mono text-rose-600">₹{cust.upstreamCost.toFixed(2)}</td>
+                    <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-700">
+                      {cust.profit >= 0 ? `+₹${cust.profit.toFixed(2)}` : `₹${cust.profit.toFixed(2)}`}
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-mono text-[#252943]/70">{cust.marginPercent}%</td>
+                    <td className="py-2.5 px-4 text-right font-mono font-semibold text-emerald-600">
+                      ₹{cust.walletBalance.toFixed(2)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
-      {/* Breakdown by Service Stream */}
+      {/* ── Quiet Stream Comparison ── */}
       {breakdown && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Stream 1: TikTok Organic Engagement Engine */}
-          <div className="p-6 rounded-3xl bg-white border border-[#DEE0ED] shadow-subtle space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold">
-                  <Zap className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-[#252943]">
-                    TikTok Organic Engagement Engine
-                  </h3>
-                  <span className="text-[11px] text-[#252943]/60">
-                    S-Curve algorithmic views, likes, saves & shares
-                  </span>
-                </div>
-              </div>
-              <span className="px-2.5 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200 text-[10px] font-bold">
-                {breakdown.engagement.ordersCount} Campaigns
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED] flex items-center justify-between text-xs">
+            <div>
+              <span className="font-bold text-[#252943] block">TikTok Organic</span>
+              <span className="text-[11px] text-[#252943]/50">
+                {breakdown.engagement.ordersCount} campaigns ({breakdown.engagement.deliveredRuns || 0} batches)
               </span>
             </div>
-
-            <div className="grid grid-cols-3 gap-3 text-center">
-              <div className="p-3 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED]">
-                <span className="text-[10px] font-bold uppercase text-gray-500 block">
-                  Customer Paid
-                </span>
-                <span className="text-lg font-black text-[#252943] font-mono">
-                  ₹{breakdown.engagement.revenue.toFixed(2)}
-                </span>
-              </div>
-              <div className="p-3 rounded-2xl bg-rose-50/50 border border-rose-100">
-                <span className="text-[10px] font-bold uppercase text-rose-600 block">
-                  We Got Charged
-                </span>
-                <span className="text-lg font-black text-rose-700 font-mono">
-                  ₹{breakdown.engagement.upstreamCost.toFixed(2)}
-                </span>
-              </div>
-              <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200">
-                <span className="text-[10px] font-bold uppercase text-emerald-700 block">
-                  Net Profit
-                </span>
-                <span className="text-lg font-black text-emerald-800 font-mono">
-                  +₹{breakdown.engagement.profit.toFixed(2)}
-                </span>
-              </div>
-            </div>
-
-            <div className="p-3 rounded-2xl bg-purple-50/50 border border-purple-100 flex items-center justify-between text-xs">
-              <span className="text-purple-900 font-semibold flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-                <span>Profit Margin:</span>
+            <div className="text-right">
+              <span className="font-bold text-emerald-700 block font-mono">
+                +₹{breakdown.engagement.profit.toFixed(2)}
               </span>
-              <span className="font-black text-purple-900 font-mono">
-                {breakdown.engagement.marginPercent}% Margin ({breakdown.engagement.deliveredRuns || 0} batches delivered)
+              <span className="text-[11px] text-[#252943]/50">
+                ₹{breakdown.engagement.revenue.toFixed(0)} rev • {breakdown.engagement.marginPercent}% margin
               </span>
             </div>
           </div>
 
-          {/* Stream 2: Direct SMM Orders */}
-          <div className="p-6 rounded-3xl bg-white border border-[#DEE0ED] shadow-subtle space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-blue-50 text-[#3A4EFB] flex items-center justify-center font-bold">
-                  <Layers className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-[#252943]">Direct SMM Orders</h3>
-                  <span className="text-[11px] text-[#252943]/60">
-                    Standard orders placed via catalog & manual orders
-                  </span>
-                </div>
-              </div>
-              <span className="px-2.5 py-1 rounded-full bg-blue-50 text-[#3A4EFB] border border-blue-200 text-[10px] font-bold">
-                {breakdown.smmOrders.ordersCount} Orders
-              </span>
+          <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED] flex items-center justify-between text-xs">
+            <div>
+              <span className="font-bold text-[#252943] block">Direct SMM</span>
+              <span className="text-[11px] text-[#252943]/50">{breakdown.smmOrders.ordersCount} orders</span>
             </div>
-
-            <div className="grid grid-cols-3 gap-3 text-center">
-              <div className="p-3 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED]">
-                <span className="text-[10px] font-bold uppercase text-gray-500 block">
-                  Customer Paid
-                </span>
-                <span className="text-lg font-black text-[#252943] font-mono">
-                  ₹{breakdown.smmOrders.revenue.toFixed(2)}
-                </span>
-              </div>
-              <div className="p-3 rounded-2xl bg-rose-50/50 border border-rose-100">
-                <span className="text-[10px] font-bold uppercase text-rose-600 block">
-                  We Got Charged
-                </span>
-                <span className="text-lg font-black text-rose-700 font-mono">
-                  ₹{breakdown.smmOrders.upstreamCost.toFixed(2)}
-                </span>
-              </div>
-              <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200">
-                <span className="text-[10px] font-bold uppercase text-emerald-700 block">
-                  Net Profit
-                </span>
-                <span className="text-lg font-black text-emerald-800 font-mono">
-                  +₹{breakdown.smmOrders.profit.toFixed(2)}
-                </span>
-              </div>
-            </div>
-
-            <div className="p-3 rounded-2xl bg-blue-50/50 border border-blue-100 flex items-center justify-between text-xs">
-              <span className="text-blue-900 font-semibold flex items-center gap-1.5">
-                <Percent className="w-3.5 h-3.5 text-[#3A4EFB]" />
-                <span>Profit Margin:</span>
+            <div className="text-right">
+              <span className="font-bold text-emerald-700 block font-mono">
+                +₹{breakdown.smmOrders.profit.toFixed(2)}
               </span>
-              <span className="font-black text-blue-900 font-mono">
-                {breakdown.smmOrders.marginPercent}% Margin
+              <span className="text-[11px] text-[#252943]/50">
+                ₹{breakdown.smmOrders.revenue.toFixed(0)} rev • {breakdown.smmOrders.marginPercent}% margin
               </span>
             </div>
           </div>
         </div>
       )}
 
-      {/* Recent Orders Profit & Cost Ledger */}
-      <div className="p-6 rounded-3xl bg-white border border-[#DEE0ED] shadow-subtle space-y-4">
-        <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
-          <div>
-            <h3 className="text-sm font-bold text-[#252943] flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-emerald-600" />
-              <span>Live Order Profit & Wholesale Expense Ledger</span>
-            </h3>
-            <p className="text-xs text-[#252943]/60">
-              Itemized billing vs wholesale provider expenses for recent orders & campaigns
-            </p>
-          </div>
-          <span className="text-xs text-[#252943]/60 font-semibold">
-            Showing latest {recentLedger.length} items
-          </span>
+      {/* ── Recent Orders Ledger ── */}
+      <div className="rounded-2xl bg-white border border-[#DEE0ED] overflow-hidden">
+        <div className="px-4 py-3 border-b border-[#DEE0ED] flex items-center justify-between">
+          <h3 className="text-xs font-bold text-[#252943]">Order Ledger</h3>
+          <span className="text-[11px] text-[#252943]/50">{recentLedger.length} recent entries</span>
         </div>
 
         {recentLedger.length === 0 ? (
-          <div className="p-10 text-center space-y-2 bg-[#F8F9FD] rounded-2xl border border-[#DEE0ED]">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto border border-emerald-200">
-              <CheckCircle2 className="w-5 h-5" />
-            </div>
-            <p className="text-xs font-bold text-[#252943]">
-              All metrics reset to ₹0.00 • Clean slate active
-            </p>
-            <p className="text-[11px] text-[#252943]/60 max-w-sm mx-auto">
-              Financial metrics now track registered customer orders and deposits only. Admin testing accounts are safely excluded.
-            </p>
-          </div>
+          <div className="p-8 text-center text-xs text-neutral-400">No orders recorded yet.</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs min-w-[800px]">
-              <thead className="bg-[#F8F9FD] border-b border-[#DEE0ED] text-[#252943]/60 font-semibold">
+            <table className="w-full text-left text-xs min-w-[700px]">
+              <thead className="bg-[#F8F9FD] text-[#252943]/60 text-[11px] border-b border-[#DEE0ED]">
                 <tr>
-                  <th className="py-2.5 px-3">Order Ref</th>
-                  <th className="py-2.5 px-3">Customer</th>
-                  <th className="py-2.5 px-3">Type</th>
-                  <th className="py-2.5 px-3">Service / Campaign</th>
-                  <th className="py-2.5 px-3 text-right">Customer Paid (₹)</th>
-                  <th className="py-2.5 px-3 text-right">Wholesale Cost (₹)</th>
-                  <th className="py-2.5 px-3 text-right">Net Profit (₹)</th>
-                  <th className="py-2.5 px-3 text-right">Margin</th>
-                  <th className="py-2.5 px-3 text-center">Status</th>
-                  <th className="py-2.5 px-3 text-right">Date</th>
+                  <th className="py-2.5 px-4 font-semibold">Ref</th>
+                  <th className="py-2.5 px-3 font-semibold">Customer</th>
+                  <th className="py-2.5 px-3 font-semibold">Service</th>
+                  <th className="py-2.5 px-3 font-semibold text-right">Paid</th>
+                  <th className="py-2.5 px-3 font-semibold text-right">Cost</th>
+                  <th className="py-2.5 px-3 font-semibold text-right">Profit</th>
+                  <th className="py-2.5 px-3 font-semibold text-center">Status</th>
+                  <th className="py-2.5 px-4 font-semibold text-right">Date</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#DEE0ED]/60 font-medium">
+              <tbody className="divide-y divide-[#DEE0ED]/60 font-medium text-[#252943]">
                 {recentLedger.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="py-3 px-3 font-mono font-bold text-gray-900">
-                      {item.orderRef}
-                    </td>
-                    <td className="py-3 px-3">
-                      <span className="font-bold text-gray-900 block truncate">{item.customerName || "Customer"}</span>
-                      {item.customerUsername && (
-                        <span className="text-[10px] font-mono text-gray-400 block truncate">@{item.customerUsername}</span>
-                      )}
-                    </td>
-                    <td className="py-3 px-3">
-                      <span
-                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                          item.type === "ENGAGEMENT"
-                            ? "bg-purple-50 text-purple-700 border border-purple-200"
-                            : "bg-blue-50 text-blue-700 border border-blue-200"
-                        }`}
-                      >
-                        {item.type === "ENGAGEMENT" ? "Engagement" : "Direct SMM"}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3 text-gray-800 max-w-[200px] truncate" title={item.name}>
+                  <tr key={item.id} className="hover:bg-slate-50/60 transition-colors">
+                    <td className="py-2.5 px-4 font-mono font-semibold">{item.orderRef}</td>
+                    <td className="py-2.5 px-3 truncate max-w-[120px]">{item.customerName || "Customer"}</td>
+                    <td className="py-2.5 px-3 truncate max-w-[180px] text-[#252943]/80" title={item.name}>
                       {item.name}
                     </td>
-                    <td className="py-3 px-3 text-right font-mono font-bold text-gray-900">
-                      ₹{item.customerPaid.toFixed(2)}
-                    </td>
-                    <td className="py-3 px-3 text-right font-mono text-rose-600 font-semibold">
-                      -₹{item.upstreamCost.toFixed(2)}
-                    </td>
-                    <td className="py-3 px-3 text-right font-mono font-black text-emerald-700">
+                    <td className="py-2.5 px-3 text-right font-mono font-semibold">₹{item.customerPaid.toFixed(2)}</td>
+                    <td className="py-2.5 px-3 text-right font-mono text-rose-600">₹{item.upstreamCost.toFixed(2)}</td>
+                    <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-700">
                       +₹{item.profit.toFixed(2)}
                     </td>
-                    <td className="py-3 px-3 text-right">
-                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        {item.marginPercent}%
-                      </span>
-                    </td>
-                    <td className="py-3 px-3 text-center">
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-700">
+                    <td className="py-2.5 px-3 text-center">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-700">
                         {item.status}
                       </span>
                     </td>
-                    <td className="py-3 px-3 text-right text-gray-500 font-mono text-[11px]">
-                      {new Date(item.createdAt).toLocaleDateString()}{" "}
-                      {new Date(item.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    <td className="py-2.5 px-4 text-right text-[11px] text-[#252943]/50 font-mono">
+                      {new Date(item.createdAt).toLocaleDateString()}
                     </td>
                   </tr>
                 ))}

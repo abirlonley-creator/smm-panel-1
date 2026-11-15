@@ -42,6 +42,7 @@ import {
   TrendingUp,
   Wrench,
   Hammer,
+  LogOut,
 } from "lucide-react";
 import { formatProviderBalance } from "@/lib/currency";
 import { OrderMonitorTab } from "@/components/admin/OrderMonitorTab";
@@ -750,95 +751,67 @@ export default function AdminPage() {
   });
 
   return (
-    <div className="space-y-8 animate-fadeIn max-w-6xl mx-auto pb-16">
-      {/* Admin Top Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-[#DEE0ED]">
+    <div className="space-y-6 animate-fadeIn max-w-6xl mx-auto pb-16">
+      {/* ── Minimalist Admin Header ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#DEE0ED]">
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-md bg-[#252943] text-[#E3FF3B]">
-              SUPERADMIN CONSOLE
-            </span>
-            <span className="text-xs text-[#252943]/60">• AuraSMM v2</span>
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-[#252943] tracking-tight">
-            Administration & Monitoring
+          <h1 className="text-xl font-bold text-[#252943] tracking-tight">
+            Admin Console
           </h1>
         </div>
 
-        <div className="flex items-center gap-2.5">
-          {alertsMetrics?.openAlertsCount ? (
-            <button
-              type="button"
-              onClick={() => navigateTo("alerts")}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-50 border border-rose-300 text-xs font-bold text-rose-800 hover:bg-rose-100 transition-all shadow-subtle press-scale animate-pulse"
-            >
-              <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
-              <span>Alerts</span>
-              <span className="w-5 h-5 rounded-full bg-rose-600 text-white text-[10px] font-black flex items-center justify-center">
-                {alertsMetrics.openAlertsCount}
-              </span>
-            </button>
-          ) : null}
-
-          {/* Under Update (Maintenance Mode) Toggle Button */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Under Update toggle button */}
           <button
             type="button"
             onClick={() => setShowMaintenanceModal(true)}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-subtle press-scale ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border ${
               maintenance.enabled
-                ? "bg-rose-600 hover:bg-rose-700 text-white border border-rose-700 animate-pulse"
-                : "bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300"
+                ? "bg-rose-50 border-rose-300 text-rose-700 font-bold"
+                : "bg-white border-[#DEE0ED] text-[#252943]/70 hover:text-[#252943]"
             }`}
-            title="Configure Under Update / Maintenance Mode"
           >
-            {maintenance.enabled ? (
-              <>
-                <span className="w-2 h-2 rounded-full bg-[#E3FF3B] animate-ping" />
-                <Wrench className="w-3.5 h-3.5 text-[#E3FF3B]" />
-                <span className="font-black">UNDER UPDATE: ACTIVE</span>
-              </>
-            ) : (
-              <>
-                <Wrench className="w-3.5 h-3.5 text-amber-600" />
-                <span>Under Update: OFF</span>
-              </>
-            )}
+            {maintenance.enabled ? "Update Mode: ON" : "Update Mode: OFF"}
           </button>
 
-          <button
-            type="button"
-            onClick={() => navigateTo("revenue")}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-800 hover:bg-emerald-100/70 transition-all shadow-subtle press-scale"
-          >
-            <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Revenue & Profit</span>
-          </button>
-
+          {/* Refresh Data */}
           <button
             type="button"
             onClick={loadAllAdminData}
             disabled={loadingData}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-[#DEE0ED] text-xs font-bold text-[#252943] hover:border-[#3A4EFB] shadow-subtle transition-all press-scale"
+            className="p-2 rounded-xl border border-[#DEE0ED] bg-white hover:bg-slate-50 text-[#252943]/70 hover:text-[#252943] transition-colors"
+            title="Refresh Data"
           >
             <RefreshCw className={`w-3.5 h-3.5 text-[#3A4EFB] ${loadingData ? "animate-spin" : ""}`} />
-            <span>Refresh</span>
           </button>
 
+          {/* Force Worker Tick */}
           <button
             type="button"
             onClick={handleTriggerWorkerTick}
             disabled={runningTick}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#252943] text-white text-xs font-bold shadow-subtle hover:bg-[#1A1D31] transition-all press-scale"
+            className="px-3 py-1.5 rounded-xl border border-[#DEE0ED] bg-white hover:bg-slate-50 text-[#252943]/70 text-xs font-semibold transition-colors flex items-center gap-1.5"
+            title="Execute Delivery Tick"
           >
-            <Play className={`w-3.5 h-3.5 text-[#E3FF3B] ${runningTick ? "animate-spin" : ""}`} />
-            <span>Force Worker Tick</span>
+            <Play className={`w-3 h-3 text-emerald-600 ${runningTick ? "animate-spin" : ""}`} />
+            <span>Tick</span>
+          </button>
+
+          {/* Logout */}
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="p-2 rounded-xl border border-[#DEE0ED] bg-white hover:bg-rose-50 text-rose-600 hover:border-rose-200 transition-colors"
+            title="Logout"
+          >
+            <LogOut className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
       {actionMsg && (
         <div
-          className={`p-4 rounded-2xl flex items-center justify-between text-xs font-semibold animate-fadeIn ${actionMsg.type === "success"
+          className={`p-3 rounded-xl flex items-center justify-between text-xs font-medium animate-fadeIn ${actionMsg.type === "success"
             ? "bg-emerald-50 text-emerald-900 border border-emerald-200"
             : "bg-red-50 text-red-900 border border-red-200"
             }`}
@@ -857,35 +830,15 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* Prominent Under Update Alert Banner (when active) */}
+      {/* ── Quiet Banners (Only when active) ── */}
       {maintenance.enabled && (
-        <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-rose-500/10 to-amber-500/15 border-2 border-amber-500/70 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fadeIn">
-          <div className="flex items-start sm:items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm animate-pulse mt-0.5 sm:mt-0">
-              <Wrench className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h4 className="text-sm font-black text-amber-950 uppercase tracking-wide">
-                  UNDER UPDATE MODE IS CURRENTLY ACTIVE
-                </h4>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-600 text-white animate-pulse">
-                  USERS LOCKED OUT
-                </span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-600 text-white">
-                  BACKEND ORDERS DELIVERING
-                </span>
-              </div>
-              <p className="text-xs text-amber-900/90 font-medium mt-0.5">
-                Regular users are blocked from accessing the panel and cannot see the passkey section. All background order deliveries continue normally.
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
+        <div className="px-4 py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2 animate-fadeIn">
+          <span>Website is in update mode. Regular users are shielded while background orders deliver.</span>
+          <div className="flex items-center gap-3 shrink-0 text-xs">
             <Link
               href="/maintenance"
               target="_blank"
-              className="px-3 py-2 rounded-xl bg-white border border-amber-300 text-xs font-bold text-amber-950 hover:bg-amber-50 transition-colors shadow-xs"
+              className="font-bold underline hover:text-amber-950"
             >
               Preview User Window ↗
             </Link>
@@ -893,330 +846,196 @@ export default function AdminPage() {
               type="button"
               onClick={() => handleToggleMaintenance(false)}
               disabled={togglingMaintenance}
-              className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-black transition-all shadow-subtle press-scale"
+              className="font-bold text-rose-700 hover:underline"
             >
-              Turn OFF (Restore Site)
+              Turn Off
             </button>
           </div>
         </div>
       )}
 
-      {/* Critical Admin Provider Balance Alert Banner */}
       {alertsMetrics?.openAlertsCount > 0 && (
-        <div className="p-4 rounded-2xl bg-rose-50 border-2 border-rose-300 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fadeIn">
-          <div className="flex items-start sm:items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-rose-600 text-white flex items-center justify-center shrink-0 animate-pulse mt-0.5 sm:mt-0 shadow-sm">
-              <AlertTriangle className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h4 className="text-sm font-black text-rose-950 uppercase tracking-wide">
-                  CRITICAL: Admin Provider Alert ({alertsMetrics.openAlertsCount} Open)
-                </h4>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-600 text-white animate-pulse">
-                  {alertsMetrics.openAlertsCount}
-                </span>
-              </div>
-              <p className="text-xs text-rose-800 font-medium mt-0.5">
-                {alerts.some((a) => a.type === "insufficient_balance" && a.status === "open")
-                  ? "Admin provider has run out of balance! User campaign orders cannot be fulfilled until you recharge the provider balance."
-                  : "Attention required on active orders or delivery health."}
-              </p>
-            </div>
-          </div>
+        <div className="px-4 py-2.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-900 flex items-center justify-between gap-3 animate-fadeIn">
+          <span>Provider balance alert: {alertsMetrics.openAlertsCount} issue(s) need attention.</span>
           <button
             type="button"
             onClick={() => navigateTo("alerts")}
-            className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black shrink-0 transition-all shadow-subtle press-scale flex items-center gap-1.5"
+            className="font-bold text-rose-700 underline shrink-0"
           >
-            <span>Review Alerts</span>
-            <span className="w-4 h-4 rounded-full bg-white text-rose-600 text-[10px] font-black flex items-center justify-center">
-              {alertsMetrics.openAlertsCount}
-            </span>
+            Review Alerts
           </button>
         </div>
       )}
 
-      {/* =====================================================================
-          SIMPLIFIED 4-PILLAR CATEGORY NAVIGATION
-      ====================================================================== */}
-      <div className="space-y-4">
-        {/* Top 4 Primary Category Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {/* Category 1: Customers & Access */}
+      {/* ── Minimalist Segmented Navigation ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#DEE0ED] pb-3">
+        {/* 4 Primary Categories */}
+        <div className="flex items-center gap-1 p-1 rounded-2xl bg-[#F4F5F9] border border-[#DEE0ED] w-fit overflow-x-auto">
           <button
             type="button"
             onClick={() => setCategory("customers")}
-            className={`p-4 rounded-3xl border text-left transition-all relative overflow-hidden group ${
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
               category === "customers"
-                ? "bg-white border-[#3A4EFB] shadow-md ring-2 ring-[#3A4EFB]/15"
-                : "bg-white/90 border-[#DEE0ED] hover:border-[#3A4EFB]/50 hover:bg-white shadow-subtle"
+                ? "bg-white text-[#252943] shadow-xs"
+                : "text-[#252943]/60 hover:text-[#252943]"
             }`}
           >
-            <div className="flex items-center justify-between mb-3">
-              <div
-                className={`w-9 h-9 rounded-2xl flex items-center justify-center transition-colors ${
-                  category === "customers"
-                    ? "bg-[#3A4EFB] text-white shadow-xs"
-                    : "bg-blue-50 text-[#3A4EFB] group-hover:bg-[#3A4EFB]/10"
-                }`}
-              >
-                <Users className="w-4 h-4" />
-              </div>
-              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200/60 font-mono">
-                {passkeys.length} Passkeys
-              </span>
-            </div>
-            <div className="font-extrabold text-sm text-[#252943] tracking-tight">Customers & Access</div>
-            <div className="text-[11px] text-[#252943]/60 truncate mt-0.5">Directory, live situation & passkeys</div>
-            {category === "customers" && (
-              <div className="absolute bottom-0 left-0 right-0 h-1 bg-[#3A4EFB]" />
-            )}
+            Customers
           </button>
 
-          {/* Category 2: Finances & Capital */}
           <button
             type="button"
             onClick={() => setCategory("financials")}
-            className={`p-4 rounded-3xl border text-left transition-all relative overflow-hidden group ${
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
               category === "financials"
-                ? "bg-white border-emerald-600 shadow-md ring-2 ring-emerald-600/15"
-                : "bg-white/90 border-[#DEE0ED] hover:border-emerald-500/50 hover:bg-white shadow-subtle"
+                ? "bg-white text-[#252943] shadow-xs"
+                : "text-[#252943]/60 hover:text-[#252943]"
             }`}
           >
-            <div className="flex items-center justify-between mb-3">
-              <div
-                className={`w-9 h-9 rounded-2xl flex items-center justify-center transition-colors ${
-                  category === "financials"
-                    ? "bg-emerald-600 text-white shadow-xs"
-                    : "bg-emerald-50 text-emerald-700 group-hover:bg-emerald-100/70"
-                }`}
-              >
-                <TrendingUp className="w-4 h-4" />
-              </div>
-              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200/60">
-                Real Profit
-              </span>
-            </div>
-            <div className="font-extrabold text-sm text-[#252943] tracking-tight">Finances & Capital</div>
-            <div className="text-[11px] text-[#252943]/60 truncate mt-0.5">Revenue, margins & Binance crypto</div>
-            {category === "financials" && (
-              <div className="absolute bottom-0 left-0 right-0 h-1 bg-emerald-600" />
-            )}
+            Finances
           </button>
 
-          {/* Category 3: Orders & Operations */}
           <button
             type="button"
             onClick={() => setCategory("operations")}
-            className={`p-4 rounded-3xl border text-left transition-all relative overflow-hidden group ${
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
               category === "operations"
-                ? "bg-white border-[#3A4EFB] shadow-md ring-2 ring-[#3A4EFB]/15"
-                : "bg-white/90 border-[#DEE0ED] hover:border-[#3A4EFB]/50 hover:bg-white shadow-subtle"
+                ? "bg-white text-[#252943] shadow-xs"
+                : "text-[#252943]/60 hover:text-[#252943]"
             }`}
           >
-            <div className="flex items-center justify-between mb-3">
-              <div
-                className={`w-9 h-9 rounded-2xl flex items-center justify-center transition-colors ${
-                  category === "operations"
-                    ? "bg-[#3A4EFB] text-white shadow-xs"
-                    : "bg-indigo-50 text-[#3A4EFB] group-hover:bg-[#3A4EFB]/10"
-                }`}
-              >
-                <Layers className="w-4 h-4" />
-              </div>
-              {alertsMetrics?.openAlertsCount ? (
-                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-rose-600 text-white animate-pulse">
-                  {alertsMetrics.openAlertsCount} Alerts
-                </span>
-              ) : (
-                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/60">
-                  Healthy
-                </span>
-              )}
-            </div>
-            <div className="font-extrabold text-sm text-[#252943] tracking-tight">Orders & Operations</div>
-            <div className="text-[11px] text-[#252943]/60 truncate mt-0.5">Live execution, speed & health</div>
-            {category === "operations" && (
-              <div className="absolute bottom-0 left-0 right-0 h-1 bg-[#3A4EFB]" />
-            )}
+            Orders
           </button>
 
-          {/* Category 4: Services & Engine */}
           <button
             type="button"
             onClick={() => setCategory("settings")}
-            className={`p-4 rounded-3xl border text-left transition-all relative overflow-hidden group ${
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
               category === "settings"
-                ? "bg-white border-[#252943] shadow-md ring-2 ring-[#252943]/15"
-                : "bg-white/90 border-[#DEE0ED] hover:border-[#252943]/50 hover:bg-white shadow-subtle"
+                ? "bg-white text-[#252943] shadow-xs"
+                : "text-[#252943]/60 hover:text-[#252943]"
             }`}
           >
-            <div className="flex items-center justify-between mb-3">
-              <div
-                className={`w-9 h-9 rounded-2xl flex items-center justify-center transition-colors ${
-                  category === "settings"
-                    ? "bg-[#252943] text-white shadow-xs"
-                    : "bg-slate-100 text-[#252943] group-hover:bg-slate-200/70"
-                }`}
-              >
-                <Sliders className="w-4 h-4" />
-              </div>
-              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200/60">
-                Presets & API
-              </span>
-            </div>
-            <div className="font-extrabold text-sm text-[#252943] tracking-tight">Services & Engine</div>
-            <div className="text-[11px] text-[#252943]/60 truncate mt-0.5">TikTok presets, curves & provider API</div>
-            {category === "settings" && (
-              <div className="absolute bottom-0 left-0 right-0 h-1 bg-[#252943]" />
-            )}
+            Settings
           </button>
         </div>
 
-        {/* Sub-navigation View Switcher for the Active Category */}
-        <div className="flex items-center justify-between gap-3 p-2 rounded-2xl bg-white border border-[#DEE0ED] shadow-subtle overflow-x-auto">
+        {/* Sub-tabs for Current Category */}
+        <div className="flex items-center gap-1 text-xs">
           {category === "customers" && (
-            <div className="flex items-center gap-1.5">
+            <>
               <button
                 type="button"
                 onClick={() => setCustomersSubTab("directory")}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                className={`px-3 py-1.5 rounded-xl font-semibold transition-all ${
                   customersSubTab === "directory"
-                    ? "bg-[#3A4EFB] text-white shadow-subtle"
-                    : "text-[#252943]/70 hover:text-[#252943] hover:bg-slate-50"
+                    ? "bg-[#252943] text-white"
+                    : "text-[#252943]/70 hover:bg-gray-100"
                 }`}
               >
-                <Users className="w-3.5 h-3.5" />
-                <span>Users & Live Activity</span>
-                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
-                  customersSubTab === "directory" ? "bg-white/20 text-white" : "bg-blue-100 text-blue-800"
-                }`}>
-                  Live
-                </span>
+                Directory
               </button>
-
               <button
                 type="button"
                 onClick={() => setCustomersSubTab("passkeys")}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                className={`px-3 py-1.5 rounded-xl font-semibold transition-all ${
                   customersSubTab === "passkeys"
-                    ? "bg-[#3A4EFB] text-white shadow-subtle"
-                    : "text-[#252943]/70 hover:text-[#252943] hover:bg-slate-50"
+                    ? "bg-[#252943] text-white"
+                    : "text-[#252943]/70 hover:bg-gray-100"
                 }`}
               >
-                <Key className="w-3.5 h-3.5" />
-                <span>Passkeys & Credentials</span>
-                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
-                  customersSubTab === "passkeys" ? "bg-white/20 text-white" : "bg-gray-100 text-gray-700"
-                }`}>
-                  {passkeys.length}
-                </span>
+                Passkeys ({passkeys.length})
               </button>
-            </div>
+            </>
           )}
 
           {category === "financials" && (
-            <div className="flex items-center gap-1.5">
+            <>
               <button
                 type="button"
                 onClick={() => setFinancialsSubTab("revenue")}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                className={`px-3 py-1.5 rounded-xl font-semibold transition-all ${
                   financialsSubTab === "revenue"
-                    ? "bg-emerald-600 text-white shadow-subtle"
-                    : "text-[#252943]/70 hover:text-[#252943] hover:bg-slate-50"
+                    ? "bg-[#252943] text-white"
+                    : "text-[#252943]/70 hover:bg-gray-100"
                 }`}
               >
-                <TrendingUp className="w-3.5 h-3.5" />
-                <span>Revenue, Wholesale & Net Profit</span>
-                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
-                  financialsSubTab === "revenue" ? "bg-white/20 text-white" : "bg-emerald-100 text-emerald-800"
-                }`}>
-                  Real Profit
-                </span>
+                Revenue & Profit
               </button>
-
               <button
                 type="button"
                 onClick={() => setFinancialsSubTab("deposits")}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                className={`px-3 py-1.5 rounded-xl font-semibold transition-all ${
                   financialsSubTab === "deposits"
-                    ? "bg-[#3A4EFB] text-white shadow-subtle"
-                    : "text-[#252943]/70 hover:text-[#252943] hover:bg-slate-50"
+                    ? "bg-[#252943] text-white"
+                    : "text-[#252943]/70 hover:bg-gray-100"
                 }`}
               >
-                <CreditCard className="w-3.5 h-3.5" />
-                <span>Binance Crypto Deposits</span>
+                Binance Deposits
               </button>
-            </div>
+            </>
           )}
 
           {category === "operations" && (
-            <div className="flex items-center gap-1.5">
+            <>
               <button
                 type="button"
                 onClick={() => setOperationsSubTab("orders")}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                className={`px-3 py-1.5 rounded-xl font-semibold transition-all ${
                   operationsSubTab === "orders"
-                    ? "bg-[#3A4EFB] text-white shadow-subtle"
-                    : "text-[#252943]/70 hover:text-[#252943] hover:bg-slate-50"
+                    ? "bg-[#252943] text-white"
+                    : "text-[#252943]/70 hover:bg-gray-100"
                 }`}
               >
-                <Layers className="w-3.5 h-3.5" />
-                <span>Order Execution Monitor</span>
+                Order Monitor
               </button>
-
               <button
                 type="button"
                 onClick={() => {
                   setOperationsSubTab("alerts");
                   loadAlerts();
                 }}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                className={`px-3 py-1.5 rounded-xl font-semibold transition-all flex items-center gap-1.5 ${
                   operationsSubTab === "alerts"
-                    ? "bg-rose-600 text-white shadow-subtle"
-                    : "text-[#252943]/70 hover:text-[#252943] hover:bg-slate-50"
+                    ? "bg-[#252943] text-white"
+                    : "text-[#252943]/70 hover:bg-gray-100"
                 }`}
               >
-                <AlertTriangle className="w-3.5 h-3.5" />
-                <span>Alerts & Delivery Health</span>
+                <span>Alerts</span>
                 {alertsMetrics?.openAlertsCount ? (
-                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-rose-600 text-white animate-pulse">
+                  <span className="w-4 h-4 rounded-full bg-rose-600 text-white text-[10px] font-bold flex items-center justify-center">
                     {alertsMetrics.openAlertsCount}
                   </span>
                 ) : null}
               </button>
-            </div>
+            </>
           )}
 
           {category === "settings" && (
-            <div className="flex items-center gap-1.5">
+            <>
               <button
                 type="button"
                 onClick={() => setSettingsSubTab("engagement")}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                className={`px-3 py-1.5 rounded-xl font-semibold transition-all ${
                   settingsSubTab === "engagement"
-                    ? "bg-[#3A4EFB] text-white shadow-subtle"
-                    : "text-[#252943]/70 hover:text-[#252943] hover:bg-slate-50"
+                    ? "bg-[#252943] text-white"
+                    : "text-[#252943]/70 hover:bg-gray-100"
                 }`}
               >
-                <Sliders className="w-3.5 h-3.5" />
-                <span>TikTok Organic Presets & Catalog</span>
+                TikTok Presets
               </button>
-
               <button
                 type="button"
                 onClick={() => setSettingsSubTab("provider")}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                className={`px-3 py-1.5 rounded-xl font-semibold transition-all ${
                   settingsSubTab === "provider"
-                    ? "bg-[#252943] text-white shadow-subtle"
-                    : "text-[#252943]/70 hover:text-[#252943] hover:bg-slate-50"
+                    ? "bg-[#252943] text-white"
+                    : "text-[#252943]/70 hover:bg-gray-100"
                 }`}
               >
-                <Server className="w-3.5 h-3.5" />
-                <span>Fallback System Provider API</span>
+                Provider API
               </button>
-            </div>
+            </>
           )}
         </div>
       </div>
