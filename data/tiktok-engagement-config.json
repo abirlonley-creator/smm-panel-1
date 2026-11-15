@@ -1,0 +1,51 @@
+{
+  "enabled": true,
+  "presetName": "TikTok 1st Working 2K",
+  "views": {
+    "enabled": true,
+    "providerName": "Views Engine",
+    "serviceId": "897",
+    "minQuantity": 150,
+    "maxQuantity": 220,
+    "runsCount": 16,
+    "intervalMinutes": 20
+  },
+  "likes": {
+    "enabled": true,
+    "providerName": "Engagement Engine",
+    "serviceId": "1123",
+    "minQuantity": 12,
+    "maxQuantity": 16,
+    "runsCount": 3,
+    "intervalMinutes": 120
+  },
+  "saves": {
+    "enabled": true,
+    "providerName": "Engagement Engine",
+    "serviceId": "807",
+    "minQuantity": 5,
+    "maxQuantity": 10,
+    "runsCount": 4,
+    "intervalMinutes": 120
+  },
+  "shares": {
+    "enabled": true,
+    "providerName": "Engagement Engine",
+    "serviceId": "718",
+    "minQuantity": 3,
+    "maxQuantity": 8,
+    "runsCount": 3,
+    "intervalMinutes": 120
+  },
+  "pricing": {
+    "viewsUserRate": 4.5,
+    "likesUserRate": 2,
+    "savesUserRate": 0.8,
+    "sharesUserRate": 0.8,
+    "commentsUserRate": 15
+  },
+  "syncThreshold": {
+    "minViews": 500,
+    "maxViews": 700
+  }
+}
