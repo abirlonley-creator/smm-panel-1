@@ -12,6 +12,7 @@ import {
   Send,
   Clock,
   ArrowLeft,
+  ExternalLink,
 } from "lucide-react";
 
 interface BinanceAddFundsModalProps {
@@ -377,27 +378,32 @@ export function BinanceAddFundsModal({
                 </div>
               </div>
 
-              {/* Binance Pay QR Code with Center Emblem (Screenshot 2) */}
-              <div className="flex justify-center py-1">
-                <div className="relative w-44 h-44 p-2 bg-white rounded-2xl border border-gray-200 shadow-xs flex items-center justify-center">
+              {/* Official Binance Pay QR Code */}
+              <div className="flex flex-col items-center justify-center py-1 gap-2">
+                <a
+                  href="https://app.binance.com/uni-qr/Dqvi2v2V"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Click to open in Binance App"
+                  className="relative w-48 h-48 p-2.5 bg-white rounded-2xl border border-gray-200 shadow-sm flex items-center justify-center hover:border-[#2563EB] transition-all group"
+                >
                   <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
-                      binanceUid
-                    )}`}
-                    alt={`Binance Pay UID ${binanceUid}`}
-                    className="w-full h-full object-contain rounded-lg"
-                    width={160}
-                    height={160}
+                    src="/binance-pay-qr.png"
+                    alt="Official Binance Pay QR Code"
+                    className="w-full h-full object-contain rounded-xl"
+                    width={180}
+                    height={180}
                   />
-                  {/* Binance Emblem in Center */}
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="w-9 h-9 rounded-xl bg-white p-1 shadow-md border border-gray-100 flex items-center justify-center">
-                      <div className="w-full h-full rounded-lg bg-[#F0B90B] flex items-center justify-center text-black font-black text-xs">
-                        <span>B</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                </a>
+                <a
+                  href="https://app.binance.com/uni-qr/Dqvi2v2V"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[11px] font-bold text-[#2563EB] hover:underline flex items-center gap-1"
+                >
+                  <span>Or tap here to open Binance Pay directly</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
               </div>
 
               {/* Instructions Box (Screenshot 2) */}
