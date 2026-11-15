@@ -467,6 +467,32 @@ export async function POST(request: Request) {
         },
       });
 
+      // Safe resolution of Provider.id to prevent Foreign Key Constraint Violations on EngagementRun_providerId_fkey
+      // EngagementRun.providerId strictly references the Provider table (not UserProviderConnection).
+      const validProviders = new Set(
+        (await tx.provider.findMany({ select: { id: true } })).map((p) => p.id)
+      );
+
+      const viewsProviderId =
+        xmediaViewsService.providerId && validProviders.has(xmediaViewsService.providerId)
+          ? xmediaViewsService.providerId
+          : null;
+
+      const likesProviderId =
+        zeofameLikesService.providerId && validProviders.has(zeofameLikesService.providerId)
+          ? zeofameLikesService.providerId
+          : null;
+
+      const savesProviderId =
+        zeofameSavesService?.providerId && validProviders.has(zeofameSavesService.providerId)
+          ? zeofameSavesService.providerId
+          : null;
+
+      const sharesProviderId =
+        zeofameSharesService?.providerId && validProviders.has(zeofameSharesService.providerId)
+          ? zeofameSharesService.providerId
+          : null;
+
       // D. Create Views Runs
       for (const vr of viewsRuns) {
         await tx.engagementRun.create({
@@ -474,7 +500,7 @@ export async function POST(request: Request) {
             engagementOrderId: engagementOrder.id,
             engagementType: "views",
             serviceId: xmediaViewsService.id,
-            providerId: xmediaViewsService.providerId || xmediaViewsService.userProviderId || null,
+            providerId: viewsProviderId,
             providerServiceId: String(xmediaViewsService.providerServiceId || xmediaViewsService.externalId),
             runNumber: vr.runNumber,
             scheduledAt: vr.scheduledAt,
@@ -493,7 +519,7 @@ export async function POST(request: Request) {
             engagementOrderId: engagementOrder.id,
             engagementType: "likes",
             serviceId: zeofameLikesService.id,
-            providerId: zeofameLikesService.providerId || zeofameLikesService.userProviderId || null,
+            providerId: likesProviderId,
             providerServiceId: String(zeofameLikesService.providerServiceId || zeofameLikesService.externalId),
             runNumber: lr.runNumber,
             scheduledAt: lr.scheduledAt,
@@ -512,7 +538,7 @@ export async function POST(request: Request) {
             engagementOrderId: engagementOrder.id,
             engagementType: "saves",
             serviceId: zeofameSavesService.id,
-            providerId: zeofameSavesService?.providerId || zeofameSavesService?.userProviderId || null,
+            providerId: savesProviderId,
             providerServiceId: String(zeofameSavesService.providerServiceId || zeofameSavesService.externalId),
             runNumber: sr.runNumber,
             scheduledAt: sr.scheduledAt,
@@ -531,7 +557,7 @@ export async function POST(request: Request) {
             engagementOrderId: engagementOrder.id,
             engagementType: "shares",
             serviceId: zeofameSharesService.id,
-            providerId: zeofameSharesService?.providerId || zeofameSharesService?.userProviderId || null,
+            providerId: sharesProviderId,
             providerServiceId: String(zeofameSharesService.providerServiceId || zeofameSharesService.externalId),
             runNumber: shr.runNumber,
             scheduledAt: shr.scheduledAt,
