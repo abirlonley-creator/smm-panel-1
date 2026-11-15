@@ -79,6 +79,8 @@ interface PresetOption {
   durationHours: number;
   targetViews?: number;
   targetLikes?: number;
+  targetSaves?: number;
+  targetShares?: number;
   views: { enabled?: boolean; count: number; min: number; max: number; interval: number };
   likes: { enabled?: boolean; count: number; min: number; max: number; offsets: number[] };
   saves?: { enabled?: boolean; count: number; min: number; max: number; offsets: number[] };
@@ -94,6 +96,10 @@ const PRESET_OPTIONS: Record<string, PresetOption> = {
     badge: "5h",
     durationLabel: "5.0 Hours",
     durationHours: 5.0,
+    targetViews: 2960,
+    targetLikes: 42,
+    targetSaves: 0,
+    targetShares: 0,
     views: { enabled: true, count: 16, min: 150, max: 220, interval: 20 },
     likes: { enabled: true, count: 3, min: 12, max: 16, offsets: [120, 200, 280] },
     syncThreshold: { minViews: 500, maxViews: 700 },
@@ -105,6 +111,10 @@ const PRESET_OPTIONS: Record<string, PresetOption> = {
     badge: "16h",
     durationLabel: "16.0 Hours (1 Day)",
     durationHours: 16.0,
+    targetViews: 5100,
+    targetLikes: 170,
+    targetSaves: 44,
+    targetShares: 22,
     views: { enabled: true, count: 20, min: 230, max: 280, interval: 45 },
     likes: {
       enabled: true,
@@ -124,6 +134,10 @@ const PRESET_OPTIONS: Record<string, PresetOption> = {
     badge: "22h",
     durationLabel: "22.0 Hours (1 Day)",
     durationHours: 22.0,
+    targetViews: 10500,
+    targetLikes: 384,
+    targetSaves: 90,
+    targetShares: 44,
     views: { enabled: true, count: 26, min: 380, max: 430, interval: 48 },
     likes: {
       enabled: true,
@@ -145,6 +159,10 @@ const PRESET_OPTIONS: Record<string, PresetOption> = {
     badge: "48h",
     durationLabel: "48.0 Hours (2 Days)",
     durationHours: 48.0,
+    targetViews: 50000,
+    targetLikes: 2000,
+    targetSaves: 450,
+    targetShares: 180,
     views: { enabled: true, count: 44, min: 1050, max: 1250, interval: 62 },
     likes: {
       enabled: true,
@@ -179,32 +197,86 @@ const PRESET_OPTIONS: Record<string, PresetOption> = {
   },
 };
 
+function distributeTargetWithJitter(target: number, count: number, min: number, max: number): number[] {
+  if (count <= 0) return [];
+  if (count === 1) return [target];
+
+  const base = Math.floor(target / count);
+  const result: number[] = new Array(count).fill(base);
+  let remainder = target - base * count;
+
+  // Add natural pacing jitter (+/- 1-2) while keeping exact total and staying within bounds
+  for (let i = 0; i < count - 1; i += 2) {
+    const maxJitter = Math.min(2, Math.floor((max - min) / 3));
+    if (maxJitter > 0) {
+      const jitter = Math.floor(Math.random() * (maxJitter * 2 + 1)) - maxJitter;
+      if (
+        result[i] + jitter <= max &&
+        result[i] + jitter >= min &&
+        result[i + 1] - jitter <= max &&
+        result[i + 1] - jitter >= min
+      ) {
+        result[i] += jitter;
+        result[i + 1] -= jitter;
+      }
+    }
+  }
+
+  // Distribute remainder so the sum matches target 100% exactly
+  let idx = 0;
+  while (remainder > 0) {
+    if (result[idx % count] < max) {
+      result[idx % count]++;
+      remainder--;
+    }
+    idx++;
+  }
+
+  return result;
+}
+
 function generatePlanForPreset(p: PresetOption) {
   const views: number[] = [];
   if (p.views.enabled !== false) {
-    for (let i = 0; i < p.views.count; i++) {
-      views.push(Math.floor(Math.random() * (p.views.max - p.views.min + 1)) + p.views.min);
+    if (p.targetViews && p.views.count > 0) {
+      views.push(...distributeTargetWithJitter(p.targetViews, p.views.count, p.views.min, p.views.max));
+    } else {
+      for (let i = 0; i < p.views.count; i++) {
+        views.push(Math.floor(Math.random() * (p.views.max - p.views.min + 1)) + p.views.min);
+      }
     }
   }
 
   const likes: number[] = [];
   if (p.likes.enabled !== false) {
-    for (let i = 0; i < p.likes.count; i++) {
-      likes.push(Math.floor(Math.random() * (p.likes.max - p.likes.min + 1)) + p.likes.min);
+    if (p.targetLikes && p.likes.count > 0) {
+      likes.push(...distributeTargetWithJitter(p.targetLikes, p.likes.count, p.likes.min, p.likes.max));
+    } else {
+      for (let i = 0; i < p.likes.count; i++) {
+        likes.push(Math.floor(Math.random() * (p.likes.max - p.likes.min + 1)) + p.likes.min);
+      }
     }
   }
 
   const saves: number[] = [];
   if (p.saves && p.saves.enabled !== false) {
-    for (let i = 0; i < p.saves.count; i++) {
-      saves.push(Math.floor(Math.random() * (p.saves.max - p.saves.min + 1)) + p.saves.min);
+    if (p.targetSaves && p.saves.count > 0) {
+      saves.push(...distributeTargetWithJitter(p.targetSaves, p.saves.count, p.saves.min, p.saves.max));
+    } else {
+      for (let i = 0; i < p.saves.count; i++) {
+        saves.push(Math.floor(Math.random() * (p.saves.max - p.saves.min + 1)) + p.saves.min);
+      }
     }
   }
 
   const shares: number[] = [];
   if (p.shares && p.shares.enabled !== false) {
-    for (let i = 0; i < p.shares.count; i++) {
-      shares.push(Math.floor(Math.random() * (p.shares.max - p.shares.min + 1)) + p.shares.min);
+    if (p.targetShares && p.shares.count > 0) {
+      shares.push(...distributeTargetWithJitter(p.targetShares, p.shares.count, p.shares.min, p.shares.max));
+    } else {
+      for (let i = 0; i < p.shares.count; i++) {
+        shares.push(Math.floor(Math.random() * (p.shares.max - p.shares.min + 1)) + p.shares.min);
+      }
     }
   }
 
@@ -388,121 +460,114 @@ export default function EngagementPage() {
   const hasSufficientFunds = walletBalance >= exactTotalCost;
   const isReady = Boolean(statusData?.readyToOrder);
 
-  // Build the batch rows
+  // Build the batch rows with unified timeline across all engagement waves
   const scheduleRows = useMemo(() => {
-    const rows: Array<{
-      runNumber: number;
-      minuteOffset: number;
-      clockTime: string;
-      viewQty: number;
-      likeQty?: number;
-      likeWave?: number;
-      saveQty?: number;
-      saveWave?: number;
-      shareQty?: number;
-      shareWave?: number;
-      note?: string;
-    }> = [];
+    // Map all unique minute offsets across views, likes, saves, shares
+    const offsetMap = new Map<
+      number,
+      {
+        viewQty: number;
+        likeQty?: number;
+        likeWave?: number;
+        totalLikeWaves?: number;
+        saveQty?: number;
+        saveWave?: number;
+        totalSaveWaves?: number;
+        shareQty?: number;
+        shareWave?: number;
+        totalShareWaves?: number;
+      }
+    >();
 
-    // Map likes by offset (only if likes enabled)
-    const likesMap = new Map<number, { qty: number; wave: number }>();
-    if (currentPreset.likes.enabled !== false) {
-      currentPreset.likes.offsets.forEach((offset, idx) => {
-        if (plannedSchedule.likes[idx]) {
-          likesMap.set(offset, { qty: plannedSchedule.likes[idx], wave: idx + 1 });
-        }
-      });
-    }
+    const getOrCreate = (offset: number) => {
+      let entry = offsetMap.get(offset);
+      if (!entry) {
+        entry = { viewQty: 0 };
+        offsetMap.set(offset, entry);
+      }
+      return entry;
+    };
 
-    // Map saves by offset (only if saves enabled)
-    const savesMap = new Map<number, { qty: number; wave: number }>();
-    if (currentPreset.saves?.enabled) {
-      currentPreset.saves.offsets.forEach((offset, idx) => {
-        if (plannedSchedule.saves[idx]) {
-          savesMap.set(offset, { qty: plannedSchedule.saves[idx], wave: idx + 1 });
-        }
-      });
-    }
-
-    // Map shares by offset (only if shares enabled)
-    const sharesMap = new Map<number, { qty: number; wave: number }>();
-    if (currentPreset.shares?.enabled) {
-      currentPreset.shares.offsets.forEach((offset, idx) => {
-        if (plannedSchedule.shares[idx]) {
-          sharesMap.set(offset, { qty: plannedSchedule.shares[idx], wave: idx + 1 });
-        }
-      });
-    }
-
-    // If views are enabled, step through views batches
+    // 1. Views
     if (currentPreset.views.enabled !== false && plannedSchedule.views.length > 0) {
       plannedSchedule.views.forEach((viewQty, index) => {
-        const runNumber = index + 1;
-        const minuteOffset = index * currentPreset.views.interval;
-        const clockTime = formatBdTime(minuteOffset, planTimestamp);
-
-        // Check if any engagement waves land on or near this view batch
-        const likeInfo = likesMap.get(minuteOffset);
-        const saveInfo = savesMap.get(minuteOffset);
-        const shareInfo = sharesMap.get(minuteOffset);
-
-        let note = "";
-        if (runNumber === 1) {
-          note = "Instant Launch • View batch #1 dispatches immediately";
-        } else if (runNumber === Math.ceil(currentPreset.views.count * 0.25)) {
-          note = "Steady Momentum • Natural scheduled pacing active";
-        } else if (runNumber === currentPreset.views.count) {
-          note = "Final Views Batch • Campaign 100% Completed";
-        }
-
-        rows.push({
-          runNumber,
-          minuteOffset,
-          clockTime,
-          viewQty,
-          likeQty: likeInfo?.qty,
-          likeWave: likeInfo?.wave,
-          saveQty: saveInfo?.qty,
-          saveWave: saveInfo?.wave,
-          shareQty: shareInfo?.qty,
-          shareWave: shareInfo?.wave,
-          note,
-        });
-      });
-    } else {
-      // If views are turned off, create schedule purely from active engagement wave timestamps
-      const allOffsets = Array.from(
-        new Set([
-          ...Array.from(likesMap.keys()),
-          ...Array.from(savesMap.keys()),
-          ...Array.from(sharesMap.keys()),
-        ])
-      ).sort((a, b) => a - b);
-
-      allOffsets.forEach((minuteOffset, idx) => {
-        const runNumber = idx + 1;
-        const clockTime = formatBdTime(minuteOffset, planTimestamp);
-        const likeInfo = likesMap.get(minuteOffset);
-        const saveInfo = savesMap.get(minuteOffset);
-        const shareInfo = sharesMap.get(minuteOffset);
-
-        rows.push({
-          runNumber,
-          minuteOffset,
-          clockTime,
-          viewQty: 0,
-          likeQty: likeInfo?.qty,
-          likeWave: likeInfo?.wave,
-          saveQty: saveInfo?.qty,
-          saveWave: saveInfo?.wave,
-          shareQty: shareInfo?.qty,
-          shareWave: shareInfo?.wave,
-          note: runNumber === 1 ? "Instant Engagement Launch" : `Pacing Wave #${runNumber}`,
-        });
+        const offset = index * currentPreset.views.interval;
+        const entry = getOrCreate(offset);
+        entry.viewQty = viewQty;
       });
     }
 
-    return rows;
+    // 2. Likes (all waves mapped by offset)
+    if (currentPreset.likes.enabled !== false && plannedSchedule.likes.length > 0) {
+      currentPreset.likes.offsets.forEach((offset, idx) => {
+        if (plannedSchedule.likes[idx] !== undefined) {
+          const entry = getOrCreate(offset);
+          entry.likeQty = plannedSchedule.likes[idx];
+          entry.likeWave = idx + 1;
+          entry.totalLikeWaves = plannedSchedule.likes.length;
+        }
+      });
+    }
+
+    // 3. Saves (all waves mapped by offset)
+    if (currentPreset.saves?.enabled && plannedSchedule.saves.length > 0) {
+      currentPreset.saves.offsets.forEach((offset, idx) => {
+        if (plannedSchedule.saves[idx] !== undefined) {
+          const entry = getOrCreate(offset);
+          entry.saveQty = plannedSchedule.saves[idx];
+          entry.saveWave = idx + 1;
+          entry.totalSaveWaves = plannedSchedule.saves.length;
+        }
+      });
+    }
+
+    // 4. Shares (all waves mapped by offset)
+    if (currentPreset.shares?.enabled && plannedSchedule.shares.length > 0) {
+      currentPreset.shares.offsets.forEach((offset, idx) => {
+        if (plannedSchedule.shares[idx] !== undefined) {
+          const entry = getOrCreate(offset);
+          entry.shareQty = plannedSchedule.shares[idx];
+          entry.shareWave = idx + 1;
+          entry.totalShareWaves = plannedSchedule.shares.length;
+        }
+      });
+    }
+
+    // Sort chronologically so all batches and waves flow in perfect sequence
+    const sortedOffsets = Array.from(offsetMap.keys()).sort((a, b) => a - b);
+    const totalBatches = sortedOffsets.length;
+
+    return sortedOffsets.map((minuteOffset, idx) => {
+      const runNumber = idx + 1;
+      const clockTime = formatBdTime(minuteOffset, planTimestamp);
+      const data = offsetMap.get(minuteOffset)!;
+
+      let note = "";
+      if (runNumber === 1) {
+        note = "Instant Launch • View batch #1 dispatches immediately";
+      } else if (runNumber === Math.ceil(totalBatches * 0.25)) {
+        note = "Steady Momentum • Natural scheduled pacing active";
+      } else if (runNumber === totalBatches) {
+        note = "Final Batch • Campaign 100% Completed";
+      }
+
+      return {
+        runNumber,
+        minuteOffset,
+        clockTime,
+        viewQty: data.viewQty,
+        likeQty: data.likeQty,
+        likeWave: data.likeWave,
+        totalLikeWaves: data.totalLikeWaves,
+        saveQty: data.saveQty,
+        saveWave: data.saveWave,
+        totalSaveWaves: data.totalSaveWaves,
+        shareQty: data.shareQty,
+        shareWave: data.shareWave,
+        totalShareWaves: data.totalShareWaves,
+        note,
+      };
+    });
   }, [plannedSchedule, planTimestamp, currentPreset]);
 
   async function handleCreateOrder(e: React.FormEvent) {
@@ -919,7 +984,7 @@ export default function EngagementPage() {
 
           {/* Batches Table with Smart Expand */}
           <div className="border border-[#DEE0ED] rounded-2xl overflow-hidden bg-white">
-            <div className={`divide-y divide-[#DEE0ED]/60 overflow-y-auto ${showAllBatches ? "max-h-[420px]" : "max-h-[260px]"}`}>
+            <div className={`divide-y divide-[#DEE0ED]/60 ${showAllBatches ? "max-h-none" : "max-h-[300px] overflow-hidden"}`}>
               {(showAllBatches ? scheduleRows : scheduleRows.slice(0, 5)).map((row) => (
                 <div
                   key={row.runNumber}
@@ -946,19 +1011,40 @@ export default function EngagementPage() {
                     {row.likeQty && currentPreset.likes.enabled !== false && (
                       <span className="px-2 py-0.5 rounded-md text-[11px] font-bold font-mono bg-rose-50 text-rose-700 border border-rose-200/60 flex items-center gap-1">
                         <Heart className="w-2.5 h-2.5 fill-rose-500 text-rose-500" />
-                        <span>+{row.likeQty} likes</span>
+                        <span>
+                          {row.likeWave && row.totalLikeWaves ? (
+                            <span className="font-semibold text-rose-600/80 mr-1">
+                              Wave {row.likeWave}/{row.totalLikeWaves}:
+                            </span>
+                          ) : null}
+                          +{row.likeQty} likes
+                        </span>
                       </span>
                     )}
                     {row.saveQty && currentPreset.saves?.enabled && (
                       <span className="px-2 py-0.5 rounded-md text-[11px] font-bold font-mono bg-amber-50 text-amber-700 border border-amber-200/60 flex items-center gap-1">
                         <Bookmark className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
-                        <span>+{row.saveQty} saves</span>
+                        <span>
+                          {row.saveWave && row.totalSaveWaves ? (
+                            <span className="font-semibold text-amber-600/80 mr-1">
+                              Wave {row.saveWave}/{row.totalSaveWaves}:
+                            </span>
+                          ) : null}
+                          +{row.saveQty} saves
+                        </span>
                       </span>
                     )}
                     {row.shareQty && currentPreset.shares?.enabled && (
                       <span className="px-2 py-0.5 rounded-md text-[11px] font-bold font-mono bg-purple-50 text-purple-700 border border-purple-200/60 flex items-center gap-1">
                         <Share2 className="w-2.5 h-2.5 text-purple-600" />
-                        <span>+{row.shareQty} shares</span>
+                        <span>
+                          {row.shareWave && row.totalShareWaves ? (
+                            <span className="font-semibold text-purple-600/80 mr-1">
+                              Wave {row.shareWave}/{row.totalShareWaves}:
+                            </span>
+                          ) : null}
+                          +{row.shareQty} shares
+                        </span>
                       </span>
                     )}
                   </div>
@@ -966,23 +1052,50 @@ export default function EngagementPage() {
               ))}
             </div>
 
+            {/* Reconciliation Footer: Guarantees 100% Match Between Top & Table */}
+            <div className="px-3.5 py-2.5 bg-[#F8F9FD] border-t border-[#DEE0ED] flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-1.5 text-[#252943]/70 font-medium">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="font-bold text-[#252943]">Plan Matched:</span>
+                <span>{scheduleRows.length} batches total</span>
+              </div>
+              <div className="flex items-center gap-3 font-mono text-xs">
+                {currentPreset.views.enabled !== false && (
+                  <span className="text-blue-700 font-bold">{totalViews.toLocaleString()} views</span>
+                )}
+                {currentPreset.likes.enabled !== false && (
+                  <span className="text-rose-600 font-bold">
+                    {totalLikes} likes ({currentPreset.likes.count} waves)
+                  </span>
+                )}
+                {currentPreset.saves?.enabled && totalSaves > 0 && (
+                  <span className="text-amber-700 font-bold">{totalSaves} saves</span>
+                )}
+                {currentPreset.shares?.enabled && totalShares > 0 && (
+                  <span className="text-purple-700 font-bold">{totalShares} shares</span>
+                )}
+              </div>
+            </div>
+
             {/* Toggle Expand Button */}
             {scheduleRows.length > 5 && (
-              <div className="p-2 bg-[#F8F9FD] border-t border-[#DEE0ED] text-center">
+              <div className="p-2 bg-white border-t border-[#DEE0ED] text-center">
                 <button
                   type="button"
                   onClick={() => setShowAllBatches(!showAllBatches)}
-                  className="text-xs font-bold text-[#3A4EFB] hover:underline flex items-center justify-center gap-1 mx-auto cursor-pointer"
+                  className="text-xs font-bold text-[#3A4EFB] hover:underline flex items-center justify-center gap-1.5 mx-auto cursor-pointer py-1"
                 >
                   {showAllBatches ? (
                     <>
                       <ChevronUp className="w-3.5 h-3.5" />
-                      <span>Show Less</span>
+                      <span>Show Less (Show Top 5)</span>
                     </>
                   ) : (
                     <>
                       <ChevronDown className="w-3.5 h-3.5" />
-                      <span>View All {scheduleRows.length} Scheduled Batches</span>
+                      <span>
+                        View All {scheduleRows.length} Scheduled Batches ({currentPreset.likes.count} Like Waves Included)
+                      </span>
                     </>
                   )}
                 </button>
