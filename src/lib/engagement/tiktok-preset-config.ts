@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { prisma } from "../prisma";
 
 export interface MetricSpec {
   enabled: boolean;
@@ -261,7 +262,115 @@ function getTierPresetsFilePath(): string {
   return path.join(process.cwd(), "data", "tiktok-tier-presets.json");
 }
 
+const CACHE_TTL_MS = 20000;
 let cachedTierPresets: Record<string, TikTokTierPreset> | null = null;
+let lastTierPresetsFetch = 0;
+
+export async function getAllTikTokPresetsRecordAsync(force = false): Promise<Record<string, TikTokTierPreset>> {
+  const now = Date.now();
+  if (!force && cachedTierPresets && lastTierPresetsFetch + CACHE_TTL_MS > now) {
+    return cachedTierPresets;
+  }
+
+  try {
+    const log = await prisma.auditLog.findFirst({
+      where: { action: "TIKTOK_TIER_PRESETS" },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (log && log.details) {
+      const parsed = JSON.parse(log.details);
+      if (parsed && typeof parsed === "object") {
+        const merged: Record<string, TikTokTierPreset> = {
+          ...TIKTOK_TIER_PRESETS,
+          ...parsed,
+        };
+        cachedTierPresets = merged;
+        lastTierPresetsFetch = now;
+        return merged;
+      }
+    }
+  } catch (err) {
+    console.warn("[TIKTOK_PRESETS] Failed to read tier presets from database:", err);
+  }
+
+  const fallback = getAllTikTokPresetsRecord();
+  cachedTierPresets = fallback;
+  lastTierPresetsFetch = now;
+  return fallback;
+}
+
+export async function getAllTikTokPresetsAsync(force = false): Promise<TikTokTierPreset[]> {
+  const all = await getAllTikTokPresetsRecordAsync(force);
+  return Object.values(all);
+}
+
+export async function getTikTokPresetByIdAsync(presetId?: string): Promise<TikTokTierPreset> {
+  const all = await getAllTikTokPresetsRecordAsync();
+  if (presetId && all[presetId]) {
+    return all[presetId];
+  }
+  // Try matching by name
+  if (presetId) {
+    const found = Object.values(all).find(
+      (p) => p.name.toLowerCase() === presetId.toLowerCase() || p.id.toLowerCase() === presetId.toLowerCase()
+    );
+    if (found) return found;
+  }
+  return all.tiktok_2k || TIKTOK_TIER_PRESETS.tiktok_2k;
+}
+
+export async function saveAllTikTokPresetsAsync(
+  newPresets: Record<string, TikTokTierPreset>,
+  actor: string = "admin"
+): Promise<Record<string, TikTokTierPreset>> {
+  cachedTierPresets = { ...newPresets };
+  lastTierPresetsFetch = Date.now();
+
+  try {
+    await prisma.auditLog.create({
+      data: {
+        action: "TIKTOK_TIER_PRESETS",
+        actor,
+        details: JSON.stringify(newPresets),
+      },
+    });
+  } catch (err) {
+    console.error("[TIKTOK_PRESETS] Failed to persist tier presets to database:", err);
+  }
+
+  const filePath = getTierPresetsFilePath();
+  try {
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify(newPresets, null, 2), "utf-8");
+  } catch {}
+
+  return cachedTierPresets;
+}
+
+export async function saveTikTokPresetAsync(
+  presetId: string,
+  updates: Partial<TikTokTierPreset>,
+  actor: string = "admin"
+): Promise<TikTokTierPreset> {
+  const all = { ...(await getAllTikTokPresetsRecordAsync(true)) };
+  const current = all[presetId] || TIKTOK_TIER_PRESETS[presetId] || TIKTOK_TIER_PRESETS.tiktok_2k;
+
+  const updated: TikTokTierPreset = {
+    ...current,
+    ...updates,
+    views: { ...current.views, ...(updates.views || {}) },
+    likes: { ...current.likes, ...(updates.likes || {}) },
+    saves: updates.saves !== undefined ? (updates.saves ? { ...(current.saves || { enabled: false, providerName: "Engagement Engine", serviceId: "807", minQuantity: 10, maxQuantity: 12, runsCount: 4, waveOffsets: [240, 420, 600, 750] }), ...updates.saves } : undefined) : current.saves,
+    shares: updates.shares !== undefined ? (updates.shares ? { ...(current.shares || { enabled: false, providerName: "Engagement Engine", serviceId: "718", minQuantity: 10, maxQuantity: 12, runsCount: 2, waveOffsets: [360, 660] }), ...updates.shares } : undefined) : current.shares,
+    syncThreshold: { ...current.syncThreshold, ...(updates.syncThreshold || {}) },
+  };
+
+  all[presetId] = updated;
+  await saveAllTikTokPresetsAsync(all, actor);
+  return updated;
+}
 
 export function getAllTikTokPresetsRecord(): Record<string, TikTokTierPreset> {
   if (cachedTierPresets) {
@@ -324,6 +433,17 @@ export function saveTikTokPreset(presetId: string, updates: Partial<TikTokTierPr
 
   all[presetId] = updated;
   cachedTierPresets = all;
+  lastTierPresetsFetch = Date.now();
+
+  prisma.auditLog
+    .create({
+      data: {
+        action: "TIKTOK_TIER_PRESETS",
+        actor: "system",
+        details: JSON.stringify(all),
+      },
+    })
+    .catch((err) => console.error("[TIKTOK_PRESETS] Sync save DB error:", err));
 
   const filePath = getTierPresetsFilePath();
   try {
@@ -339,6 +459,18 @@ export function saveTikTokPreset(presetId: string, updates: Partial<TikTokTierPr
 
 export function saveAllTikTokPresets(newPresets: Record<string, TikTokTierPreset>): Record<string, TikTokTierPreset> {
   cachedTierPresets = { ...newPresets };
+  lastTierPresetsFetch = Date.now();
+
+  prisma.auditLog
+    .create({
+      data: {
+        action: "TIKTOK_TIER_PRESETS",
+        actor: "system",
+        details: JSON.stringify(newPresets),
+      },
+    })
+    .catch((err) => console.error("[TIKTOK_PRESETS] Sync save DB error:", err));
+
   const filePath = getTierPresetsFilePath();
   try {
     const dir = path.dirname(filePath);
@@ -436,9 +568,91 @@ export const DEFAULT_TIKTOK_ENGAGEMENT_CONFIG: TikTokEngagementPresetConfig = {
 };
 
 let cachedConfig: TikTokEngagementPresetConfig | null = null;
+let lastConfigFetch = 0;
 
 function getConfigPath(): string {
   return path.join(process.cwd(), "data", "tiktok-engagement-config.json");
+}
+
+export async function getTikTokEngagementConfigAsync(force = false): Promise<TikTokEngagementPresetConfig> {
+  const now = Date.now();
+  if (!force && cachedConfig && lastConfigFetch + CACHE_TTL_MS > now) {
+    return cachedConfig;
+  }
+
+  try {
+    const log = await prisma.auditLog.findFirst({
+      where: { action: "ENGAGEMENT_PRICING_CONFIG" },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (log && log.details) {
+      const parsed = JSON.parse(log.details);
+      const merged: TikTokEngagementPresetConfig = {
+        ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG,
+        ...parsed,
+        views: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.views, ...(parsed.views || {}) },
+        likes: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.likes, ...(parsed.likes || {}) },
+        saves: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.saves, ...(parsed.saves || {}) },
+        shares: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.shares, ...(parsed.shares || {}) },
+        pricing: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.pricing, ...(parsed.pricing || {}) },
+        syncThreshold: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.syncThreshold, ...(parsed.syncThreshold || {}) },
+      };
+      cachedConfig = merged;
+      lastConfigFetch = now;
+      return merged;
+    }
+  } catch (err) {
+    console.warn("[TIKTOK_CONFIG] Failed to read engagement config from database:", err);
+  }
+
+  const fallback = getTikTokEngagementConfig();
+  cachedConfig = fallback;
+  lastConfigFetch = now;
+  return fallback;
+}
+
+export async function saveTikTokEngagementConfigAsync(
+  newConfig: Partial<TikTokEngagementPresetConfig>,
+  actor: string = "admin"
+): Promise<TikTokEngagementPresetConfig> {
+  const current = await getTikTokEngagementConfigAsync(true);
+  const merged: TikTokEngagementPresetConfig = {
+    ...current,
+    ...newConfig,
+    views: { ...current.views, ...(newConfig.views || {}) },
+    likes: { ...current.likes, ...(newConfig.likes || {}) },
+    saves: { ...current.saves, ...(newConfig.saves || {}) },
+    shares: { ...current.shares, ...(newConfig.shares || {}) },
+    pricing: { ...current.pricing, ...(newConfig.pricing || {}) },
+    syncThreshold: { ...current.syncThreshold, ...(newConfig.syncThreshold || {}) },
+  };
+
+  cachedConfig = merged;
+  lastConfigFetch = Date.now();
+
+  try {
+    await prisma.auditLog.create({
+      data: {
+        action: "ENGAGEMENT_PRICING_CONFIG",
+        actor,
+        details: JSON.stringify(merged),
+      },
+    });
+  } catch (err) {
+    console.error("[TIKTOK_CONFIG] Failed to persist engagement config to database:", err);
+  }
+
+  const filePath = getConfigPath();
+  try {
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(filePath, JSON.stringify(merged, null, 2), "utf-8");
+  } catch {}
+
+  return merged;
 }
 
 export function getTikTokEngagementConfig(): TikTokEngagementPresetConfig {
@@ -485,6 +699,18 @@ export function saveTikTokEngagementConfig(newConfig: Partial<TikTokEngagementPr
   };
 
   cachedConfig = merged;
+  lastConfigFetch = Date.now();
+
+  prisma.auditLog
+    .create({
+      data: {
+        action: "ENGAGEMENT_PRICING_CONFIG",
+        actor: "system",
+        details: JSON.stringify(merged),
+      },
+    })
+    .catch((err) => console.error("[TIKTOK_CONFIG] Sync save DB error:", err));
+
   const filePath = getConfigPath();
   try {
     const dir = path.dirname(filePath);

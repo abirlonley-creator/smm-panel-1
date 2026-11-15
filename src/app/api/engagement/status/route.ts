@@ -4,9 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { decryptApiKey } from "@/lib/security/crypto";
 import { StandardSMMv2Provider, MockSMMProvider } from "@/lib/provider/adapter";
 import {
-  getTikTokEngagementConfig,
+  getTikTokEngagementConfigAsync,
   TIKTOK_TIER_PRESETS,
-  getAllTikTokPresets,
+  getAllTikTokPresetsAsync,
 } from "@/lib/engagement/tiktok-preset-config";
 import { getAdminViewsProvider, getAdminEngagementProvider } from "@/lib/provider/admin-provider";
 
@@ -20,7 +20,7 @@ export async function GET(request: Request) {
 
   const userId = session.user.id;
   const isAdmin = session.user.role === "ADMIN";
-  const config = getTikTokEngagementConfig();
+  const config = await getTikTokEngagementConfigAsync();
 
   // If engagement is globally disabled by admin
   if (!config.enabled) {
@@ -257,7 +257,8 @@ export async function GET(request: Request) {
   const commentsRate = config.pricing?.commentsUserRate ?? 15.00;
 
   // Calculate costs for all presets based on user retail rates
-  const presetsList = getAllTikTokPresets().map((preset) => {
+  const allPresets = await getAllTikTokPresetsAsync();
+  const presetsList = allPresets.map((preset) => {
     const vCost = Number(((preset.targetViews / 1000) * viewsRate).toFixed(4));
     const lCost = Number(((preset.targetLikes / 1000) * likesRate).toFixed(4));
     const sCost = preset.saves?.enabled ? Number(((preset.targetSaves / 1000) * savesRate).toFixed(4)) : 0;

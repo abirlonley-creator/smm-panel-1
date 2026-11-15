@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import {
-  getTikTokEngagementConfig,
-  saveTikTokEngagementConfig,
-  getAllTikTokPresetsRecord,
-  getAllTikTokPresets,
-  saveTikTokPreset,
-  saveAllTikTokPresets,
+  getTikTokEngagementConfigAsync,
+  saveTikTokEngagementConfigAsync,
+  getAllTikTokPresetsRecordAsync,
+  getAllTikTokPresetsAsync,
+  saveTikTokPresetAsync,
+  saveAllTikTokPresetsAsync,
   type TikTokTierPreset,
   type TikTokEngagementPresetConfig,
 } from "@/lib/engagement/tiktok-preset-config";
@@ -19,9 +19,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
   }
 
-  const config = getTikTokEngagementConfig();
-  const presets = getAllTikTokPresetsRecord();
-  const presetsList = getAllTikTokPresets();
+  const [config, presets, presetsList] = await Promise.all([
+    getTikTokEngagementConfigAsync(true),
+    getAllTikTokPresetsRecordAsync(true),
+    getAllTikTokPresetsAsync(true),
+  ]);
 
   // Resolve live wholesale provider rates
   let viewsOriginalRate = 2.23;
@@ -114,31 +116,38 @@ export async function PUT(request: Request) {
     return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
   }
 
+  const actor = session.user?.username || session.user?.email || "admin";
+
   try {
     const body = await request.json();
 
     // 1. Update individual preset if presetId and preset updates are provided
     if (body.presetId && body.preset) {
-      saveTikTokPreset(body.presetId, body.preset);
+      await saveTikTokPresetAsync(body.presetId, body.preset, actor);
     }
 
     // 2. Update all presets if presets record is provided
     if (body.presets && typeof body.presets === "object") {
-      saveAllTikTokPresets(body.presets);
+      await saveAllTikTokPresetsAsync(body.presets, actor);
     }
 
     // 3. Update global config/pricing if config or pricing is provided
-    let updatedConfig = getTikTokEngagementConfig();
+    let updatedConfig = await getTikTokEngagementConfigAsync(true);
     if (body.config || body.pricing || body.views || body.likes || body.saves || body.shares) {
       const configPayload = body.config || body;
-      updatedConfig = saveTikTokEngagementConfig(configPayload);
+      updatedConfig = await saveTikTokEngagementConfigAsync(configPayload, actor);
     }
+
+    const [presetsRecord, presetsList] = await Promise.all([
+      getAllTikTokPresetsRecordAsync(true),
+      getAllTikTokPresetsAsync(true),
+    ]);
 
     return NextResponse.json({
       success: true,
       config: updatedConfig,
-      presets: getAllTikTokPresetsRecord(),
-      presetsList: getAllTikTokPresets(),
+      presets: presetsRecord,
+      presetsList,
       message: "TikTok Engagement presets and pricing configuration saved successfully.",
     });
   } catch (error: any) {

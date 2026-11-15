@@ -41,6 +41,7 @@ import {
   Coins,
   MessageSquare,
   TrendingUp,
+  Save,
   Wrench,
   Hammer,
   LogOut,
@@ -389,8 +390,8 @@ export default function AdminPage() {
     }
   }
 
-  async function handleSaveTiktokConfig(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSaveTiktokConfig(e?: React.SyntheticEvent) {
+    if (e) e.preventDefault();
     if (!tiktokConfig) return;
     setSavingTiktokConfig(true);
     setActionMsg(null);
@@ -2040,6 +2041,19 @@ export default function AdminPage() {
                         </p>
                       </div>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => handleSaveTiktokConfig()}
+                      disabled={savingTiktokConfig}
+                      className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-subtle flex items-center gap-1.5 self-start sm:self-center shrink-0 cursor-pointer disabled:opacity-50"
+                    >
+                      {savingTiktokConfig ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Save className="w-3.5 h-3.5" />
+                      )}
+                      <span>Save Pricing & Profit Margins</span>
+                    </button>
                   </div>
 
                   {/* 5-Metric Pricing Cards */}
@@ -2481,6 +2495,26 @@ export default function AdminPage() {
                       </div>
                     );
                   })()}
+
+                  {/* Section 4 Save Actions Bar */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-emerald-200">
+                    <span className="text-[11px] text-emerald-950/70 font-medium">
+                      Rates and margins are persisted directly to the database and will charge users accurately on every new campaign order.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleSaveTiktokConfig()}
+                      disabled={savingTiktokConfig}
+                      className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-subtle flex items-center gap-2 self-start sm:self-center shrink-0 cursor-pointer disabled:opacity-50"
+                    >
+                      {savingTiktokConfig ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                      )}
+                      <span>Save Pricing & Margins</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Section 5: Delayed Likes Protection Synchronization Threshold */}

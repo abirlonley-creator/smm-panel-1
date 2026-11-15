@@ -4,8 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { decryptApiKey } from "@/lib/security/crypto";
 import { StandardSMMv2Provider, MockSMMProvider } from "@/lib/provider/adapter";
 import {
-  getTikTokEngagementConfig,
-  getTikTokPresetById,
+  getTikTokEngagementConfigAsync,
+  getTikTokPresetByIdAsync,
 } from "@/lib/engagement/tiktok-preset-config";
 import { getAdminViewsProvider, getAdminEngagementProvider } from "@/lib/provider/admin-provider";
 import { logOrderEvent } from "@/lib/engagement/event-logger";
@@ -124,7 +124,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const config = getTikTokEngagementConfig();
+    const config = await getTikTokEngagementConfigAsync();
     if (!config.enabled) {
       return NextResponse.json(
         { success: false, error: "TikTok Engagement system is currently disabled by administrator." },
@@ -132,7 +132,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const preset = getTikTokPresetById(parsed.presetId || parsed.presetName);
+    const preset = await getTikTokPresetByIdAsync(parsed.presetId || parsed.presetName);
 
     const userId = session.user.id;
     const user = await prisma.user.findUnique({
@@ -211,10 +211,10 @@ export async function POST(request: Request) {
 
     // 3. Build Batch Runs - Calculated with Admin Configured Selling Rates
     const now = Date.now();
-    const viewsRate = config.pricing?.viewsUserRate ?? (xmediaViewsService.ratePer1000 * 1.5);
-    const likesRate = config.pricing?.likesUserRate ?? (zeofameLikesService.ratePer1000 * 2.0);
-    const savesRate = config.pricing?.savesUserRate ?? ((zeofameSavesService?.ratePer1000 ?? 0.22) * 2.5);
-    const sharesRate = config.pricing?.sharesUserRate ?? ((zeofameSharesService?.ratePer1000 ?? 0.22) * 2.5);
+    const viewsRate = config.pricing?.viewsUserRate ?? (xmediaViewsService?.ratePer1000 ? xmediaViewsService.ratePer1000 * 1.5 : 4.50);
+    const likesRate = config.pricing?.likesUserRate ?? (zeofameLikesService?.ratePer1000 ? zeofameLikesService.ratePer1000 * 2.0 : 2.00);
+    const savesRate = config.pricing?.savesUserRate ?? (zeofameSavesService?.ratePer1000 ? zeofameSavesService.ratePer1000 * 2.5 : 0.80);
+    const sharesRate = config.pricing?.sharesUserRate ?? (zeofameSharesService?.ratePer1000 ? zeofameSharesService.ratePer1000 * 2.5 : 0.80);
 
     // A. Views Runs (if enabled)
     const viewsRuns: Array<{ runNumber: number; scheduledAt: Date; quantity: number; cost: number }> = [];
