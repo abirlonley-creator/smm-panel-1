@@ -26,12 +26,22 @@ export async function GET(request: Request) {
 
   try {
     const whereDate = startDate ? { createdAt: { gte: startDate } } : {};
+    // Strictly track registered customers/users only (exclude admin accounts & non-user orders)
+    const userOnlyFilter = {
+      user: {
+        role: "USER",
+      },
+    };
 
-    // 1. Fetch Engagement Orders and Runs
+    // 1. Fetch Engagement Orders and Runs (Users only)
     const [engOrders, orders, depositsVerified, depositsPending, userLiabilities] = await Promise.all([
       prisma.engagementOrder.findMany({
-        where: whereDate,
+        where: {
+          ...whereDate,
+          ...userOnlyFilter,
+        },
         include: {
+          user: { select: { username: true, role: true } },
           runs: {
             select: {
               id: true,
@@ -46,9 +56,12 @@ export async function GET(request: Request) {
         orderBy: { createdAt: "desc" },
       }),
 
-      // 2. Fetch Direct SMM Orders
+      // 2. Fetch Direct SMM Orders (Users only)
       prisma.order.findMany({
-        where: whereDate,
+        where: {
+          ...whereDate,
+          ...userOnlyFilter,
+        },
         select: {
           id: true,
           orderRef: true,
@@ -58,15 +71,17 @@ export async function GET(request: Request) {
           submittedQuantity: true,
           deliveredQuantity: true,
           createdAt: true,
+          user: { select: { username: true, role: true } },
           service: { select: { name: true, ratePer1000: true } },
         },
         orderBy: { createdAt: "desc" },
       }),
 
-      // 3. Binance Pay Deposits (Verified & Pending)
+      // 3. Binance Pay Deposits (Verified & Pending) - Users only
       prisma.paymentDeposit.aggregate({
         where: {
           status: "VERIFIED",
+          ...userOnlyFilter,
           ...(startDate ? { verifiedAt: { gte: startDate } } : {}),
         },
         _sum: { inrAmount: true, usdtAmount: true },
@@ -74,7 +89,10 @@ export async function GET(request: Request) {
       }),
 
       prisma.paymentDeposit.aggregate({
-        where: { status: "PENDING" },
+        where: {
+          status: "PENDING",
+          ...userOnlyFilter,
+        },
         _sum: { inrAmount: true, usdtAmount: true },
         _count: { id: true },
       }),
@@ -244,5 +262,45 @@ export async function GET(request: Request) {
       { success: false, error: err.message || "Failed to calculate financials" },
       { status: 500 }
     );
+  }
+}
+
+export async function POST(request: Request) {
+  const session = await getAdminSession(request);
+  if (!session.authenticated) {
+    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const body = await request.json().catch(() => ({}));
+    if (body.action === "reset") {
+      // 1. Delete scheduled steps & runs
+      await prisma.scheduledDeliveryStep.deleteMany({});
+      await prisma.dripFeedRun.deleteMany({});
+      await prisma.providerRequestRecord.deleteMany({});
+      // 2. Delete all orders & engagement runs/logs
+      await prisma.order.deleteMany({});
+      await prisma.engagementRun.deleteMany({});
+      await prisma.orderEventLog.deleteMany({});
+      await prisma.engagementOrder.deleteMany({});
+      // 3. Delete all payment deposits & transactions
+      await prisma.paymentDeposit.deleteMany({});
+      await prisma.walletTransaction.deleteMany({});
+      // 4. Reset user wallet balances to 0 for users
+      await prisma.user.updateMany({
+        where: { role: "USER" },
+        data: { walletBalance: 0 },
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: "Financial metrics, orders, and deposits have been successfully reset to 0.",
+      });
+    }
+
+    return NextResponse.json({ success: false, error: "Invalid action" }, { status: 400 });
+  } catch (err: any) {
+    console.error("[ADMIN_FINANCIALS_RESET_ERROR]", err);
+    return NextResponse.json({ success: false, error: err.message || "Reset failed" }, { status: 500 });
   }
 }

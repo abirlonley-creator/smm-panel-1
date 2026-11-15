@@ -16,6 +16,9 @@ import {
   Clock,
   Sparkles,
   Zap,
+  RotateCcw,
+  AlertTriangle,
+  CheckCircle2,
 } from "lucide-react";
 
 interface FinancialSummary {
@@ -64,6 +67,9 @@ export function RevenueProfitTab() {
     smmOrders: StreamBreakdown;
   } | null>(null);
   const [recentLedger, setRecentLedger] = useState<LedgerItem[]>([]);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [resetSuccess, setResetSuccess] = useState(false);
 
   async function loadFinancials(selectedRange = range, isRefresh = false) {
     if (isRefresh) setRefreshing(true);
@@ -82,6 +88,30 @@ export function RevenueProfitTab() {
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  }
+
+  async function handleResetFinancials() {
+    setResetting(true);
+    try {
+      const res = await fetch("/api/admin/financials", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reset" }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setResetSuccess(true);
+        setTimeout(() => {
+          setResetSuccess(false);
+          setShowResetConfirm(false);
+        }, 1200);
+        await loadFinancials(range, true);
+      }
+    } catch (err) {
+      console.error("Failed to reset financials:", err);
+    } finally {
+      setResetting(false);
     }
   }
 
@@ -110,18 +140,23 @@ export function RevenueProfitTab() {
               <TrendingUp className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-[#252943]">
-                Revenue, Wholesale Expenses & Net Profit
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-[#252943]">
+                  Revenue, Wholesale Expenses & Net Profit
+                </h2>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold border border-emerald-200">
+                  Customers Only
+                </span>
+              </div>
               <p className="text-xs text-[#252943]/60">
-                Live financial tracking of what users were charged vs what upstream providers billed us.
+                Live financial tracking of what users were charged vs upstream wholesale expenses (tracks registered customer activity only — admin accounts are excluded from metrics).
               </p>
             </div>
           </div>
         </div>
 
-        {/* Range Selector & Refresh */}
-        <div className="flex items-center gap-2">
+        {/* Range Selector, Reset & Refresh */}
+        <div className="flex items-center flex-wrap gap-2">
           <div className="flex items-center p-1 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED]">
             {(
               [
@@ -155,8 +190,74 @@ export function RevenueProfitTab() {
           >
             <RefreshCw className={`w-4 h-4 text-[#3A4EFB] ${refreshing ? "animate-spin" : ""}`} />
           </button>
+
+          <button
+            type="button"
+            onClick={() => setShowResetConfirm(true)}
+            className="px-3 py-2 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-subtle"
+            title="Reset All Metrics to 0"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Reset to 0</span>
+          </button>
         </div>
       </div>
+
+      {/* Confirmation Modal to Reset Financials to 0 */}
+      {showResetConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-sm text-[#252943]">
+                  Reset Financial Tracking to ₹0.00?
+                </h3>
+                <p className="text-[11px] text-[#252943]/60">
+                  Starting fresh for real customer orders
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-[#252943]/70 leading-relaxed bg-[#F8F9FD] p-3.5 rounded-2xl border border-[#DEE0ED]">
+              This will clear all previous test orders and deposits so that this financial page starts completely fresh at <strong>₹0.00</strong>. From now on, only genuine customer orders placed by regular users will be tracked.
+            </p>
+
+            {resetSuccess && (
+              <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>All metrics successfully reset to 0!</span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                disabled={resetting}
+                onClick={() => setShowResetConfirm(false)}
+                className="px-4 py-2 rounded-xl border border-[#DEE0ED] bg-white hover:bg-slate-50 text-xs font-bold text-[#252943]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={resetting}
+                onClick={handleResetFinancials}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all shadow-subtle flex items-center gap-1.5"
+              >
+                {resetting ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <RotateCcw className="w-3.5 h-3.5" />
+                )}
+                <span>{resetting ? "Resetting..." : "Confirm & Reset to 0"}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Hero 4 KPI Cards */}
       {summary && (
@@ -414,8 +515,16 @@ export function RevenueProfitTab() {
         </div>
 
         {recentLedger.length === 0 ? (
-          <div className="p-8 text-center text-xs text-gray-500">
-            No completed orders recorded yet for this period.
+          <div className="p-10 text-center space-y-2 bg-[#F8F9FD] rounded-2xl border border-[#DEE0ED]">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto border border-emerald-200">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+            <p className="text-xs font-bold text-[#252943]">
+              All metrics reset to ₹0.00 • Clean slate active
+            </p>
+            <p className="text-[11px] text-[#252943]/60 max-w-sm mx-auto">
+              Financial metrics now track registered customer orders and deposits only. Admin testing accounts are safely excluded.
+            </p>
           </div>
         ) : (
           <div className="overflow-x-auto">
