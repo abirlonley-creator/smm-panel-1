@@ -70,83 +70,11 @@ interface PasskeyData {
   };
 }
 
-interface DiagnosticsData {
-  systemStatus: {
-    backendStatus: string;
-    workerStatus: string;
-    lastWorkerHeartbeat: string | null;
-    activeWorkers: number;
-    lastHealthCheckAt: string;
-    lastSuccessfulProviderOp: {
-      action: string;
-      endpoint: string;
-      createdAt: string;
-      durationMs: number;
-    } | null;
-    pendingJobsCount: number;
-    processingJobsCount: number;
-    completedJobsCount: number;
-    failedJobsCount: number;
-    mostRecentError: {
-      message: string;
-      orderRef: string;
-      timestamp: string;
-    } | null;
-  };
-  orderProcessing: {
-    totalOrders: number;
-    processingOrders: number;
-    completedOrders: number;
-    awaitingExecution: number;
-    failedOrders: number;
-    cancelledOrders: number;
-    breakdownByStatus: Record<string, number>;
-  };
-  userStatistics: {
-    totalUsers: number;
-    activeUsers: number;
-    disabledUsers: number;
-    totalConfiguredProviders: number;
-    workingProviders: number;
-  };
-  providerHealth: {
-    systemConfig: any;
-    userProviders: Array<{
-      id: string;
-      username: string;
-      name: string;
-      apiUrl: string;
-      isMock: boolean;
-      balance: number | null;
-      currency: string;
-      lastSyncAt: string | null;
-      lastError: string | null;
-      status: string;
-    }>;
-  };
-  ordersNeedingAttention: Array<{
-    id: string;
-    orderRef: string;
-    status: string;
-    errorMessage?: string;
-    targetUrl: string;
-    service: { name: string };
-    user?: { username: string };
-  }>;
-  failedSteps: Array<{
-    id: string;
-    stepNumber: number;
-    errorMessage?: string;
-    order: { orderRef: string; targetUrl: string };
-  }>;
-  recentAuditLogs: Array<{
-    id: string;
-    action: string;
-    actor: string;
-    details: string;
-    createdAt: string;
-  }>;
-}
+export type AdminCategory = "customers" | "financials" | "operations" | "settings";
+export type CustomersSubTab = "directory" | "passkeys";
+export type FinancialsSubTab = "revenue" | "deposits";
+export type OperationsSubTab = "orders" | "alerts";
+export type SettingsSubTab = "engagement" | "provider";
 
 export default function AdminPage() {
   const [session, setSession] = useState<{ authenticated: boolean; label?: string; role?: string } | null>(null);
@@ -157,11 +85,15 @@ export default function AdminPage() {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loggingIn, setLoggingIn] = useState(false);
 
-  // Admin Data state
-  const [activeTab, setActiveTab] = useState<"users" | "revenue" | "keys" | "ordermonitor" | "monitoring" | "provider" | "audit" | "engagement" | "alerts" | "deposits">("users");
+  // 4 Unified Admin Categories & Sub-tabs state
+  const [category, setCategory] = useState<AdminCategory>("customers");
+  const [customersSubTab, setCustomersSubTab] = useState<CustomersSubTab>("directory");
+  const [financialsSubTab, setFinancialsSubTab] = useState<FinancialsSubTab>("revenue");
+  const [operationsSubTab, setOperationsSubTab] = useState<OperationsSubTab>("orders");
+  const [settingsSubTab, setSettingsSubTab] = useState<SettingsSubTab>("engagement");
+
   const [passkeys, setPasskeys] = useState<PasskeyData[]>([]);
   const [passkeySearchQuery, setPasskeySearchQuery] = useState("");
-  const [diagnostics, setDiagnostics] = useState<DiagnosticsData | null>(null);
   const [engagementProfiles, setEngagementProfiles] = useState<any[]>([]);
   const [engagementOrders, setEngagementOrders] = useState<any[]>([]);
   const [editingMapping, setEditingMapping] = useState<{ profileId: string; type: string; providerId: string; providerServiceId: string; name: string; minQuantity: number; maxQuantity: number; ratePer1000: number } | null>(null);
@@ -305,16 +237,28 @@ export default function AdminPage() {
     checkAuth();
   }, []);
 
-  // Auto-refresh diagnostics
+  // Direct Category & Sub-tab Navigator
+  const navigateTo = (target: "directory" | "passkeys" | "revenue" | "deposits" | "orders" | "alerts" | "engagement" | "provider") => {
+    if (target === "directory" || target === "passkeys") {
+      setCategory("customers");
+      setCustomersSubTab(target);
+    } else if (target === "revenue" || target === "deposits") {
+      setCategory("financials");
+      setFinancialsSubTab(target);
+    } else if (target === "orders" || target === "alerts") {
+      setCategory("operations");
+      setOperationsSubTab(target);
+      if (target === "alerts") loadAlerts();
+    } else if (target === "engagement" || target === "provider") {
+      setCategory("settings");
+      setSettingsSubTab(target);
+    }
+  };
+
+  // Auto-refresh alerts
   useEffect(() => {
     if (!autoRefresh || !session?.authenticated) return;
     const interval = setInterval(() => {
-      fetch("/api/admin/diagnostics")
-        .then((r) => r.json())
-        .then((data) => {
-          if (data.success) setDiagnostics(data);
-        })
-        .catch(() => { });
       loadAlerts();
     }, 15000);
     return () => clearInterval(interval);
@@ -399,9 +343,8 @@ export default function AdminPage() {
   async function loadAllAdminData() {
     setLoadingData(true);
     try {
-      const [keysRes, diagRes, provRes, engRes, alertsRes, engOrdersRes, tiktokRes, maintRes] = await Promise.all([
+      const [keysRes, provRes, engRes, alertsRes, engOrdersRes, tiktokRes, maintRes] = await Promise.all([
         fetch("/api/admin/keys").then((r) => r.json()),
-        fetch("/api/admin/diagnostics").then((r) => r.json()),
         fetch("/api/admin/provider").then((r) => r.json()),
         fetch("/api/admin/engagement-profiles").then((r) => r.json()).catch(() => ({ success: false })),
         fetch("/api/admin/alerts").then((r) => r.json()).catch(() => ({ success: false })),
@@ -417,7 +360,6 @@ export default function AdminPage() {
       }
 
       if (keysRes.success) setPasskeys(keysRes.keys);
-      if (diagRes.success) setDiagnostics(diagRes);
       if (engRes.success && engRes.profiles) setEngagementProfiles(engRes.profiles);
       if (engOrdersRes.success && Array.isArray(engOrdersRes.orders)) setEngagementOrders(engOrdersRes.orders);
       if (tiktokRes.success) {
@@ -827,10 +769,7 @@ export default function AdminPage() {
           {alertsMetrics?.openAlertsCount ? (
             <button
               type="button"
-              onClick={() => {
-                setActiveTab("alerts");
-                loadAlerts();
-              }}
+              onClick={() => navigateTo("alerts")}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-50 border border-rose-300 text-xs font-bold text-rose-800 hover:bg-rose-100 transition-all shadow-subtle press-scale animate-pulse"
             >
               <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
@@ -868,7 +807,7 @@ export default function AdminPage() {
 
           <button
             type="button"
-            onClick={() => setActiveTab("revenue")}
+            onClick={() => navigateTo("revenue")}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-800 hover:bg-emerald-100/70 transition-all shadow-subtle press-scale"
           >
             <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
@@ -987,10 +926,7 @@ export default function AdminPage() {
           </div>
           <button
             type="button"
-            onClick={() => {
-              setActiveTab("alerts");
-              loadAlerts();
-            }}
+            onClick={() => navigateTo("alerts")}
             className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black shrink-0 transition-all shadow-subtle press-scale flex items-center gap-1.5"
           >
             <span>Review Alerts</span>
@@ -1001,168 +937,298 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* Tabs Bar */}
-      <div className="flex items-center gap-2 border-b border-[#DEE0ED] pb-px overflow-x-auto">
-        <button
-          type="button"
-          onClick={() => setActiveTab("users")}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${activeTab === "users"
-            ? "border-[#3A4EFB] text-[#3A4EFB] bg-[#3A4EFB]/5"
-            : "border-transparent text-[#252943]/60 hover:text-[#252943]"
+      {/* =====================================================================
+          SIMPLIFIED 4-PILLAR CATEGORY NAVIGATION
+      ====================================================================== */}
+      <div className="space-y-4">
+        {/* Top 4 Primary Category Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Category 1: Customers & Access */}
+          <button
+            type="button"
+            onClick={() => setCategory("customers")}
+            className={`p-4 rounded-3xl border text-left transition-all relative overflow-hidden group ${
+              category === "customers"
+                ? "bg-white border-[#3A4EFB] shadow-md ring-2 ring-[#3A4EFB]/15"
+                : "bg-white/90 border-[#DEE0ED] hover:border-[#3A4EFB]/50 hover:bg-white shadow-subtle"
             }`}
-        >
-          <Users className="w-4 h-4 text-[#3A4EFB]" />
-          <span>Users & Live Activity</span>
-          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800">
-            Live
-          </span>
-        </button>
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div
+                className={`w-9 h-9 rounded-2xl flex items-center justify-center transition-colors ${
+                  category === "customers"
+                    ? "bg-[#3A4EFB] text-white shadow-xs"
+                    : "bg-blue-50 text-[#3A4EFB] group-hover:bg-[#3A4EFB]/10"
+                }`}
+              >
+                <Users className="w-4 h-4" />
+              </div>
+              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200/60 font-mono">
+                {passkeys.length} Passkeys
+              </span>
+            </div>
+            <div className="font-extrabold text-sm text-[#252943] tracking-tight">Customers & Access</div>
+            <div className="text-[11px] text-[#252943]/60 truncate mt-0.5">Directory, live situation & passkeys</div>
+            {category === "customers" && (
+              <div className="absolute bottom-0 left-0 right-0 h-1 bg-[#3A4EFB]" />
+            )}
+          </button>
 
-        <button
-          type="button"
-          onClick={() => setActiveTab("revenue")}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${activeTab === "revenue"
-            ? "border-emerald-600 text-emerald-800 bg-emerald-50/70"
-            : "border-transparent text-[#252943]/60 hover:text-[#252943]"
+          {/* Category 2: Finances & Capital */}
+          <button
+            type="button"
+            onClick={() => setCategory("financials")}
+            className={`p-4 rounded-3xl border text-left transition-all relative overflow-hidden group ${
+              category === "financials"
+                ? "bg-white border-emerald-600 shadow-md ring-2 ring-emerald-600/15"
+                : "bg-white/90 border-[#DEE0ED] hover:border-emerald-500/50 hover:bg-white shadow-subtle"
             }`}
-        >
-          <TrendingUp className="w-4 h-4 text-emerald-600" />
-          <span>Revenue & Profit</span>
-          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-            Profit
-          </span>
-        </button>
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div
+                className={`w-9 h-9 rounded-2xl flex items-center justify-center transition-colors ${
+                  category === "financials"
+                    ? "bg-emerald-600 text-white shadow-xs"
+                    : "bg-emerald-50 text-emerald-700 group-hover:bg-emerald-100/70"
+                }`}
+              >
+                <TrendingUp className="w-4 h-4" />
+              </div>
+              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200/60">
+                Real Profit
+              </span>
+            </div>
+            <div className="font-extrabold text-sm text-[#252943] tracking-tight">Finances & Capital</div>
+            <div className="text-[11px] text-[#252943]/60 truncate mt-0.5">Revenue, margins & Binance crypto</div>
+            {category === "financials" && (
+              <div className="absolute bottom-0 left-0 right-0 h-1 bg-emerald-600" />
+            )}
+          </button>
 
-        <button
-          type="button"
-          onClick={() => setActiveTab("keys")}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${activeTab === "keys"
-            ? "border-[#3A4EFB] text-[#3A4EFB] bg-[#3A4EFB]/5"
-            : "border-transparent text-[#252943]/60 hover:text-[#252943]"
+          {/* Category 3: Orders & Operations */}
+          <button
+            type="button"
+            onClick={() => setCategory("operations")}
+            className={`p-4 rounded-3xl border text-left transition-all relative overflow-hidden group ${
+              category === "operations"
+                ? "bg-white border-[#3A4EFB] shadow-md ring-2 ring-[#3A4EFB]/15"
+                : "bg-white/90 border-[#DEE0ED] hover:border-[#3A4EFB]/50 hover:bg-white shadow-subtle"
             }`}
-        >
-          <Key className="w-4 h-4" />
-          <span>Passkeys & Users ({passkeys.length})</span>
-        </button>
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div
+                className={`w-9 h-9 rounded-2xl flex items-center justify-center transition-colors ${
+                  category === "operations"
+                    ? "bg-[#3A4EFB] text-white shadow-xs"
+                    : "bg-indigo-50 text-[#3A4EFB] group-hover:bg-[#3A4EFB]/10"
+                }`}
+              >
+                <Layers className="w-4 h-4" />
+              </div>
+              {alertsMetrics?.openAlertsCount ? (
+                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-rose-600 text-white animate-pulse">
+                  {alertsMetrics.openAlertsCount} Alerts
+                </span>
+              ) : (
+                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+                  Healthy
+                </span>
+              )}
+            </div>
+            <div className="font-extrabold text-sm text-[#252943] tracking-tight">Orders & Operations</div>
+            <div className="text-[11px] text-[#252943]/60 truncate mt-0.5">Live execution, speed & health</div>
+            {category === "operations" && (
+              <div className="absolute bottom-0 left-0 right-0 h-1 bg-[#3A4EFB]" />
+            )}
+          </button>
 
-        <button
-          type="button"
-          onClick={() => setActiveTab("ordermonitor")}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${activeTab === "ordermonitor"
-            ? "border-[#3A4EFB] text-[#3A4EFB] bg-[#3A4EFB]/5"
-            : "border-transparent text-[#252943]/60 hover:text-[#252943]"
+          {/* Category 4: Services & Engine */}
+          <button
+            type="button"
+            onClick={() => setCategory("settings")}
+            className={`p-4 rounded-3xl border text-left transition-all relative overflow-hidden group ${
+              category === "settings"
+                ? "bg-white border-[#252943] shadow-md ring-2 ring-[#252943]/15"
+                : "bg-white/90 border-[#DEE0ED] hover:border-[#252943]/50 hover:bg-white shadow-subtle"
             }`}
-        >
-          <Layers className="w-4 h-4" />
-          <span>Order Monitor</span>
-        </button>
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div
+                className={`w-9 h-9 rounded-2xl flex items-center justify-center transition-colors ${
+                  category === "settings"
+                    ? "bg-[#252943] text-white shadow-xs"
+                    : "bg-slate-100 text-[#252943] group-hover:bg-slate-200/70"
+                }`}
+              >
+                <Sliders className="w-4 h-4" />
+              </div>
+              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200/60">
+                Presets & API
+              </span>
+            </div>
+            <div className="font-extrabold text-sm text-[#252943] tracking-tight">Services & Engine</div>
+            <div className="text-[11px] text-[#252943]/60 truncate mt-0.5">TikTok presets, curves & provider API</div>
+            {category === "settings" && (
+              <div className="absolute bottom-0 left-0 right-0 h-1 bg-[#252943]" />
+            )}
+          </button>
+        </div>
 
-        <button
-          type="button"
-          onClick={() => setActiveTab("monitoring")}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${activeTab === "monitoring"
-            ? "border-[#3A4EFB] text-[#3A4EFB] bg-[#3A4EFB]/5"
-            : "border-transparent text-[#252943]/60 hover:text-[#252943]"
-            }`}
-        >
-          <Activity className="w-4 h-4" />
-          <span>Live Backend Monitoring</span>
-        </button>
+        {/* Sub-navigation View Switcher for the Active Category */}
+        <div className="flex items-center justify-between gap-3 p-2 rounded-2xl bg-white border border-[#DEE0ED] shadow-subtle overflow-x-auto">
+          {category === "customers" && (
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setCustomersSubTab("directory")}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                  customersSubTab === "directory"
+                    ? "bg-[#3A4EFB] text-white shadow-subtle"
+                    : "text-[#252943]/70 hover:text-[#252943] hover:bg-slate-50"
+                }`}
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>Users & Live Activity</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                  customersSubTab === "directory" ? "bg-white/20 text-white" : "bg-blue-100 text-blue-800"
+                }`}>
+                  Live
+                </span>
+              </button>
 
-        <button
-          type="button"
-          onClick={() => setActiveTab("provider")}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${activeTab === "provider"
-            ? "border-[#3A4EFB] text-[#3A4EFB] bg-[#3A4EFB]/5"
-            : "border-transparent text-[#252943]/60 hover:text-[#252943]"
-            }`}
-        >
-          <Server className="w-4 h-4" />
-          <span>Fallback System Provider</span>
-        </button>
+              <button
+                type="button"
+                onClick={() => setCustomersSubTab("passkeys")}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                  customersSubTab === "passkeys"
+                    ? "bg-[#3A4EFB] text-white shadow-subtle"
+                    : "text-[#252943]/70 hover:text-[#252943] hover:bg-slate-50"
+                }`}
+              >
+                <Key className="w-3.5 h-3.5" />
+                <span>Passkeys & Credentials</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                  customersSubTab === "passkeys" ? "bg-white/20 text-white" : "bg-gray-100 text-gray-700"
+                }`}>
+                  {passkeys.length}
+                </span>
+              </button>
+            </div>
+          )}
 
-        <button
-          type="button"
-          onClick={() => setActiveTab("audit")}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${activeTab === "audit"
-            ? "border-[#3A4EFB] text-[#3A4EFB] bg-[#3A4EFB]/5"
-            : "border-transparent text-[#252943]/60 hover:text-[#252943]"
-            }`}
-        >
-          <FileText className="w-4 h-4" />
-          <span>Audit Log</span>
-        </button>
+          {category === "financials" && (
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setFinancialsSubTab("revenue")}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                  financialsSubTab === "revenue"
+                    ? "bg-emerald-600 text-white shadow-subtle"
+                    : "text-[#252943]/70 hover:text-[#252943] hover:bg-slate-50"
+                }`}
+              >
+                <TrendingUp className="w-3.5 h-3.5" />
+                <span>Revenue, Wholesale & Net Profit</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                  financialsSubTab === "revenue" ? "bg-white/20 text-white" : "bg-emerald-100 text-emerald-800"
+                }`}>
+                  Real Profit
+                </span>
+              </button>
 
-        <button
-          type="button"
-          onClick={() => setActiveTab("engagement")}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${activeTab === "engagement"
-            ? "border-[#3A4EFB] text-[#3A4EFB] bg-[#3A4EFB]/5"
-            : "border-transparent text-[#252943]/60 hover:text-[#252943]"
-            }`}
-        >
-          <Sliders className="w-4 h-4" />
-          <span>Full Engagement Profiles</span>
-        </button>
+              <button
+                type="button"
+                onClick={() => setFinancialsSubTab("deposits")}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                  financialsSubTab === "deposits"
+                    ? "bg-[#3A4EFB] text-white shadow-subtle"
+                    : "text-[#252943]/70 hover:text-[#252943] hover:bg-slate-50"
+                }`}
+              >
+                <CreditCard className="w-3.5 h-3.5" />
+                <span>Binance Crypto Deposits</span>
+              </button>
+            </div>
+          )}
 
-        <button
-          type="button"
-          onClick={() => {
-            setActiveTab("alerts");
-            loadAlerts();
-          }}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${activeTab === "alerts"
-            ? "border-[#3A4EFB] text-[#3A4EFB] bg-[#3A4EFB]/5"
-            : "border-transparent text-[#252943]/60 hover:text-[#252943]"
-            }`}
-        >
-          <AlertTriangle className="w-4 h-4" />
-          <span>Alerts & Delivery Health</span>
-          {alertsMetrics?.openAlertsCount ? (
-            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-rose-600 text-white animate-pulse">
-              {alertsMetrics.openAlertsCount}
-            </span>
-          ) : null}
-        </button>
+          {category === "operations" && (
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setOperationsSubTab("orders")}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                  operationsSubTab === "orders"
+                    ? "bg-[#3A4EFB] text-white shadow-subtle"
+                    : "text-[#252943]/70 hover:text-[#252943] hover:bg-slate-50"
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Order Execution Monitor</span>
+              </button>
 
-        <button
-          type="button"
-          onClick={() => setActiveTab("deposits")}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${activeTab === "deposits"
-            ? "border-[#3A4EFB] text-[#3A4EFB] bg-[#3A4EFB]/5"
-            : "border-transparent text-[#252943]/60 hover:text-[#252943]"
-            }`}
-        >
-          <CreditCard className="w-4 h-4" />
-          <span>Binance Deposits</span>
-        </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setOperationsSubTab("alerts");
+                  loadAlerts();
+                }}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                  operationsSubTab === "alerts"
+                    ? "bg-rose-600 text-white shadow-subtle"
+                    : "text-[#252943]/70 hover:text-[#252943] hover:bg-slate-50"
+                }`}
+              >
+                <AlertTriangle className="w-3.5 h-3.5" />
+                <span>Alerts & Delivery Health</span>
+                {alertsMetrics?.openAlertsCount ? (
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-rose-600 text-white animate-pulse">
+                    {alertsMetrics.openAlertsCount}
+                  </span>
+                ) : null}
+              </button>
+            </div>
+          )}
+
+          {category === "settings" && (
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setSettingsSubTab("engagement")}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                  settingsSubTab === "engagement"
+                    ? "bg-[#3A4EFB] text-white shadow-subtle"
+                    : "text-[#252943]/70 hover:text-[#252943] hover:bg-slate-50"
+                }`}
+              >
+                <Sliders className="w-3.5 h-3.5" />
+                <span>TikTok Organic Presets & Catalog</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSettingsSubTab("provider")}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                  settingsSubTab === "provider"
+                    ? "bg-[#252943] text-white shadow-subtle"
+                    : "text-[#252943]/70 hover:text-[#252943] hover:bg-slate-50"
+                }`}
+              >
+                <Server className="w-3.5 h-3.5" />
+                <span>Fallback System Provider API</span>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* =====================================================================
-          TAB: USERS & LIVE ACTIVITY (Inspection by Order ID / Username)
+          CATEGORY 1: CUSTOMERS & ACCESS
       ====================================================================== */}
-      {activeTab === "users" && (
-        <UsersLiveActivityTab />
-      )}
-
-      {/* =====================================================================
-          TAB: REVENUE & PROFIT ANALYTICS
-      ====================================================================== */}
-      {activeTab === "revenue" && (
-        <RevenueProfitTab />
-      )}
-
-      {/* =====================================================================
-          TAB 0: ORDER MONITOR (Change H)
-      ====================================================================== */}
-      {activeTab === "ordermonitor" && (
-        <OrderMonitorTab />
-      )}
-
-      {/* =====================================================================
-          TAB 1: PASSKEY & USER MANAGEMENT
-      ====================================================================== */}
-      {activeTab === "keys" && (
+      {category === "customers" && (
+        <div className="space-y-6 animate-fadeIn">
+          {customersSubTab === "directory" ? (
+            <UsersLiveActivityTab />
+          ) : (
         <div className="space-y-6 animate-fadeIn">
           {/* Summary Metric Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -1381,329 +1447,45 @@ export default function AdminPage() {
             </div>
           </div>
         </div>
+          )}
+        </div>
       )}
 
       {/* =====================================================================
-          TAB 2: LIVE BACKEND MONITORING
+          CATEGORY 2: FINANCES & CAPITAL
       ====================================================================== */}
-      {activeTab === "monitoring" && diagnostics && (
+      {category === "financials" && (
         <div className="space-y-6 animate-fadeIn">
-          {/* Header Controls */}
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-base font-bold text-[#252943]">Operational Monitoring Dashboard</h2>
-              <p className="text-xs text-[#252943]/60">
-                Real-time daemon, order queue, worker concurrency, and provider API diagnostics.
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <label className="flex items-center gap-2 text-xs font-bold text-[#252943]/70 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={autoRefresh}
-                  onChange={(e) => setAutoRefresh(e.target.checked)}
-                  className="rounded text-[#3A4EFB]"
-                />
-                <span>Auto-refresh (15s)</span>
-              </label>
-            </div>
-          </div>
-
-          {/* System Status Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED] shadow-subtle space-y-1">
-              <div className="flex items-center justify-between text-[11px] font-bold text-[#252943]/60 uppercase">
-                <span>Backend Service</span>
-                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-              </div>
-              <div className="text-xl font-extrabold text-[#252943]">
-                {diagnostics.systemStatus.backendStatus}
-              </div>
-              <span className="text-[11px] text-[#252943]/50 block">Node.js + SQLite Engine</span>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED] shadow-subtle space-y-1">
-              <div className="flex items-center justify-between text-[11px] font-bold text-[#252943]/60 uppercase">
-                <span>Background Worker</span>
-                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-              </div>
-              <div className="text-xl font-extrabold text-[#252943]">
-                {diagnostics.systemStatus.workerStatus}
-              </div>
-              <span className="text-[11px] text-[#252943]/50 block">
-                {diagnostics.systemStatus.lastWorkerHeartbeat
-                  ? `Heartbeat ${new Date(diagnostics.systemStatus.lastWorkerHeartbeat).toLocaleTimeString()}`
-                  : "Worker Daemon Running"}
-              </span>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED] shadow-subtle space-y-1">
-              <div className="flex items-center justify-between text-[11px] font-bold text-[#252943]/60 uppercase">
-                <span>Scheduled Jobs Queue</span>
-                <Clock className="w-3.5 h-3.5 text-[#3A4EFB]" />
-              </div>
-              <div className="text-xl font-extrabold text-[#252943]">
-                {diagnostics.systemStatus.pendingJobsCount} Pending
-              </div>
-              <span className="text-[11px] text-[#252943]/50 block">
-                {diagnostics.systemStatus.completedJobsCount} completed, {diagnostics.systemStatus.failedJobsCount} failed
-              </span>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED] shadow-subtle space-y-1">
-              <div className="flex items-center justify-between text-[11px] font-bold text-[#252943]/60 uppercase">
-                <span>Last Provider Op</span>
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-              </div>
-              <div className="text-base font-extrabold text-[#252943] truncate">
-                {diagnostics.systemStatus.lastSuccessfulProviderOp?.action || "Verified"}
-              </div>
-              <span className="text-[11px] text-[#252943]/50 block">
-                {diagnostics.systemStatus.lastSuccessfulProviderOp
-                  ? `${diagnostics.systemStatus.lastSuccessfulProviderOp.durationMs}ms latency`
-                  : "All endpoints operational"}
-              </span>
-            </div>
-          </div>
-
-          {/* Order Processing Metrics & User Statistics */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Order Processing Breakdown */}
-            <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 shadow-subtle space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
-                <h3 className="text-sm font-bold text-[#252943]">Order Processing Breakdown</h3>
-                <span className="text-xs font-extrabold text-[#3A4EFB]">
-                  {diagnostics.orderProcessing.totalOrders} Total Orders
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
-                <div className="p-3 rounded-xl bg-blue-50 border border-blue-100">
-                  <span className="text-[#3A4EFB] font-bold block mb-1">Processing</span>
-                  <span className="text-xl font-extrabold text-blue-900">
-                    {diagnostics.orderProcessing.processingOrders}
-                  </span>
-                </div>
-                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100">
-                  <span className="text-emerald-700 font-bold block mb-1">Completed</span>
-                  <span className="text-xl font-extrabold text-emerald-900">
-                    {diagnostics.orderProcessing.completedOrders}
-                  </span>
-                </div>
-                <div className="p-3 rounded-xl bg-amber-50 border border-amber-100">
-                  <span className="text-amber-700 font-bold block mb-1">Awaiting</span>
-                  <span className="text-xl font-extrabold text-amber-900">
-                    {diagnostics.orderProcessing.awaitingExecution}
-                  </span>
-                </div>
-                <div className="p-3 rounded-xl bg-red-50 border border-red-100">
-                  <span className="text-red-700 font-bold block mb-1">Failed</span>
-                  <span className="text-xl font-extrabold text-red-900">
-                    {diagnostics.orderProcessing.failedOrders}
-                  </span>
-                </div>
-                <div className="p-3 rounded-xl bg-gray-50 border border-gray-200">
-                  <span className="text-gray-600 font-bold block mb-1">Cancelled</span>
-                  <span className="text-xl font-extrabold text-gray-800">
-                    {diagnostics.orderProcessing.cancelledOrders}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* User Account Statistics */}
-            <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 shadow-subtle space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
-                <h3 className="text-sm font-bold text-[#252943]">User & Provider Isolation Stats</h3>
-                <span className="text-xs font-extrabold text-emerald-600">
-                  {diagnostics.userStatistics.workingProviders} Live Connected Providers
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="p-3.5 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED]">
-                  <span className="text-[#252943]/60 font-semibold block mb-1">Registered Users</span>
-                  <span className="text-2xl font-black text-[#252943]">
-                    {diagnostics.userStatistics.totalUsers}
-                  </span>
-                </div>
-                <div className="p-3.5 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED]">
-                  <span className="text-[#252943]/60 font-semibold block mb-1">Active Accounts</span>
-                  <span className="text-2xl font-black text-emerald-600">
-                    {diagnostics.userStatistics.activeUsers}
-                  </span>
-                </div>
-                <div className="p-3.5 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED]">
-                  <span className="text-[#252943]/60 font-semibold block mb-1">Configured Provider APIs</span>
-                  <span className="text-2xl font-black text-[#3A4EFB]">
-                    {diagnostics.userStatistics.totalConfiguredProviders}
-                  </span>
-                </div>
-                <div className="p-3.5 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED]">
-                  <span className="text-[#252943]/60 font-semibold block mb-1">Disabled Accounts</span>
-                  <span className="text-2xl font-black text-amber-700">
-                    {diagnostics.userStatistics.disabledUsers}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* User Provider Isolated Connections Table */}
-          <div className="bg-white rounded-3xl border border-[#DEE0ED] shadow-subtle p-6 space-y-4">
-            <h3 className="text-sm font-bold text-[#252943]">User Provider API Connections</h3>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-[#F8F9FD] text-[#252943]/60 uppercase text-[10px] font-bold border-b border-[#DEE0ED]">
-                  <tr>
-                    <th className="px-4 py-3">Account</th>
-                    <th className="px-4 py-3">Provider Name</th>
-                    <th className="px-4 py-3">API Endpoint</th>
-                    <th className="px-4 py-3">Mode</th>
-                    <th className="px-4 py-3">Balance</th>
-                    <th className="px-4 py-3">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#DEE0ED]/60 font-medium">
-                  {diagnostics.providerHealth.userProviders.map((up) => (
-                    <tr key={up.id}>
-                      <td className="px-4 py-2.5 font-bold text-[#252943]">{up.username}</td>
-                      <td className="px-4 py-2.5">{up.name}</td>
-                      <td className="px-4 py-2.5 font-mono text-[11px] text-[#252943]/70">{up.apiUrl}</td>
-                      <td className="px-4 py-2.5">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${up.isMock ? "bg-amber-50 text-amber-800" : "bg-emerald-50 text-emerald-800"}`}>
-                          {up.isMock ? "Mock" : "Live"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5 font-extrabold text-[#252943]">
-                        {formatProviderBalance(up.balance, up.currency)}
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${up.status === "Connected" ? "bg-emerald-100 text-emerald-800" : up.status === "Error" ? "bg-red-100 text-red-800" : "bg-gray-100 text-gray-700"}`}>
-                          {up.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                  {diagnostics.providerHealth.userProviders.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="text-center py-6 text-[#252943]/50">
-                        No active user provider configurations.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          {financialsSubTab === "revenue" ? (
+            <RevenueProfitTab />
+          ) : (
+            <BinanceDepositsTab />
+          )}
         </div>
       )}
 
       {/* =====================================================================
-          TAB 3: SYSTEM PROVIDER FALLBACK
+          CATEGORY 3: ORDERS & OPERATIONS
       ====================================================================== */}
-      {activeTab === "provider" && (
-        <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 sm:p-8 shadow-subtle space-y-6 animate-fadeIn">
-          <div>
-            <h2 className="text-base font-bold text-[#252943]">Fallback System Provider Configuration</h2>
-            <p className="text-xs text-[#252943]/60">
-              Used as a fallback for background tasks and automated tests when no specific user configuration is supplied.
-            </p>
-          </div>
-
-          <form onSubmit={handleSaveSystemProvider} className="space-y-4 max-w-xl">
-            <div>
-              <label className="block text-xs font-bold text-[#252943] mb-1">Provider Label</label>
-              <input
-                type="text"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3.5 py-2.5 text-xs font-semibold text-[#252943]"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-[#252943] mb-1">API Endpoint URL</label>
-              <input
-                type="url"
-                value={editApiUrl}
-                onChange={(e) => setEditApiUrl(e.target.value)}
-                className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3.5 py-2.5 text-xs font-mono font-semibold text-[#252943]"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-[#252943] mb-1">API Key</label>
-              <input
-                type="password"
-                value={editApiKey}
-                onChange={(e) => setEditApiKey(e.target.value)}
-                placeholder="Enter new key to replace existing"
-                className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3.5 py-2.5 text-xs font-mono text-[#252943]"
-              />
-            </div>
-
-            <div className="p-3 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED] flex items-center justify-between">
-              <span className="text-xs font-bold text-[#252943]">System Mock Mode</span>
-              <input
-                type="checkbox"
-                checked={editIsMock}
-                onChange={(e) => setEditIsMock(e.target.checked)}
-                className="rounded text-[#3A4EFB]"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={savingProvider}
-              className="px-6 py-2.5 rounded-xl bg-[#252943] text-white text-xs font-bold shadow-subtle hover:bg-[#1A1D31]"
-            >
-              {savingProvider ? "Saving..." : "Save System Config"}
-            </button>
-          </form>
-        </div>
-      )}
-
-      {/* =====================================================================
-          TAB 4: AUDIT LOG
-      ====================================================================== */}
-      {activeTab === "audit" && diagnostics && (
-        <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 shadow-subtle space-y-4 animate-fadeIn">
-          <h2 className="text-base font-bold text-[#252943]">Administrative Audit Trail</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-[#F8F9FD] text-[#252943]/60 uppercase text-[10px] font-bold border-b border-[#DEE0ED]">
-                <tr>
-                  <th className="px-4 py-3">Timestamp</th>
-                  <th className="px-4 py-3">Action</th>
-                  <th className="px-4 py-3">Actor</th>
-                  <th className="px-4 py-3">Details</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#DEE0ED]/60 font-medium">
-                {diagnostics.recentAuditLogs.map((log) => (
-                  <tr key={log.id}>
-                    <td className="px-4 py-2.5 text-[11px] text-[#252943]/50">
-                      {new Date(log.createdAt).toLocaleString()}
-                    </td>
-                    <td className="px-4 py-2.5 font-bold text-[#3A4EFB]">{log.action}</td>
-                    <td className="px-4 py-2.5">{log.actor}</td>
-                    <td className="px-4 py-2.5 text-[#252943]/80">{log.details}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* =====================================================================
-          TAB 5: FULL ENGAGEMENT PROFILES & SERVICE MAPPINGS
-      ====================================================================== */}
-      {activeTab === "engagement" && (
+      {category === "operations" && (
         <div className="space-y-6 animate-fadeIn">
-          {/* TikTok Organic Engagement System Admin Configuration (Section 8) */}
-          <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 sm:p-8 shadow-subtle space-y-6">
+          {operationsSubTab === "orders" ? (
+            <OrderMonitorTab />
+          ) : (
+            <AlertsHealthTab />
+          )}
+        </div>
+      )}
+
+      {/* =====================================================================
+          CATEGORY 4: SERVICES & ENGINE
+      ====================================================================== */}
+      {category === "settings" && (
+        <div className="space-y-6 animate-fadeIn">
+          {settingsSubTab === "engagement" ? (
+            <div className="space-y-6 animate-fadeIn">
+              {/* TikTok Organic Engagement System Admin Configuration (Section 8) */}
+              <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 sm:p-8 shadow-subtle space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[#DEE0ED]">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
@@ -3185,20 +2967,80 @@ export default function AdminPage() {
             </div>
           </div>
         </div>
-      )}
+      ) : (
+            <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 sm:p-8 shadow-subtle space-y-6 animate-fadeIn">
+              <div className="pb-4 border-b border-[#DEE0ED]">
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="w-8 h-8 rounded-xl bg-[#252943] text-white flex items-center justify-center font-bold">
+                    <Server className="w-4 h-4" />
+                  </div>
+                  <h2 className="text-base font-black text-[#252943]">
+                    Fallback System Provider Configuration
+                  </h2>
+                </div>
+                <p className="text-xs text-[#252943]/60 max-w-2xl">
+                  Used as the primary upstream connection for background tasks and automated orders.
+                </p>
+              </div>
 
-      {/* =====================================================================
-          TAB 6: ALERTS & DELIVERY HEALTH (Change J)
-      ====================================================================== */}
-      {activeTab === "alerts" && (
-        <AlertsHealthTab />
-      )}
+              <form onSubmit={handleSaveSystemProvider} className="space-y-4 max-w-xl">
+                <div>
+                  <label className="block text-xs font-bold text-[#252943] mb-1">Provider Label</label>
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3.5 py-2.5 text-xs font-semibold text-[#252943] outline-none focus:border-[#3A4EFB]"
+                    placeholder="e.g. Standard SMM Provider"
+                  />
+                </div>
 
-      {/* =====================================================================
-          TAB 7: BINANCE PAY DEPOSITS
-      ====================================================================== */}
-      {activeTab === "deposits" && (
-        <BinanceDepositsTab />
+                <div>
+                  <label className="block text-xs font-bold text-[#252943] mb-1">API Endpoint URL</label>
+                  <input
+                    type="url"
+                    value={editApiUrl}
+                    onChange={(e) => setEditApiUrl(e.target.value)}
+                    className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3.5 py-2.5 text-xs font-mono font-semibold text-[#252943] outline-none focus:border-[#3A4EFB]"
+                    placeholder="https://provider-api.com/api/v2"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-[#252943] mb-1">API Key</label>
+                  <input
+                    type="password"
+                    value={editApiKey}
+                    onChange={(e) => setEditApiKey(e.target.value)}
+                    placeholder="Enter new key to replace existing secret"
+                    className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3.5 py-2.5 text-xs font-mono text-[#252943] outline-none focus:border-[#3A4EFB]"
+                  />
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-[#252943] block">System Mock Mode</span>
+                    <span className="text-[11px] text-[#252943]/60">Deliver simulated orders in staging/development</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={editIsMock}
+                    onChange={(e) => setEditIsMock(e.target.checked)}
+                    className="rounded text-[#3A4EFB] w-4 h-4 cursor-pointer"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={savingProvider}
+                  className="px-6 py-2.5 rounded-xl bg-[#252943] text-white text-xs font-bold shadow-subtle hover:bg-[#1A1D31] transition-all press-scale disabled:opacity-50"
+                >
+                  {savingProvider ? "Saving..." : "Save System Config"}
+                </button>
+              </form>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Remap Service Modal */}
