@@ -101,7 +101,7 @@ const PRESET_OPTIONS: Record<string, PresetOption> = {
     targetSaves: 0,
     targetShares: 0,
     views: { enabled: true, count: 16, min: 150, max: 220, interval: 20 },
-    likes: { enabled: true, count: 3, min: 12, max: 16, offsets: [120, 200, 280] },
+    likes: { enabled: true, count: 3, min: 10, max: 20, offsets: [120, 200, 280] },
     syncThreshold: { minViews: 500, maxViews: 700 },
   },
   tiktok_5k: {
@@ -115,16 +115,16 @@ const PRESET_OPTIONS: Record<string, PresetOption> = {
     targetLikes: 170,
     targetSaves: 44,
     targetShares: 22,
-    views: { enabled: true, count: 20, min: 230, max: 280, interval: 45 },
+    views: { enabled: true, count: 20, min: 200, max: 310, interval: 45 },
     likes: {
       enabled: true,
       count: 14,
-      min: 11,
-      max: 14,
+      min: 10,
+      max: 18,
       offsets: [45, 105, 165, 225, 285, 345, 405, 465, 525, 585, 645, 705, 765, 810],
     },
-    saves: { enabled: true, count: 4, min: 10, max: 12, offsets: [240, 420, 600, 750] },
-    shares: { enabled: true, count: 2, min: 10, max: 12, offsets: [360, 660] },
+    saves: { enabled: true, count: 4, min: 10, max: 14, offsets: [240, 420, 600, 750] },
+    shares: { enabled: true, count: 2, min: 10, max: 14, offsets: [360, 660] },
     syncThreshold: { minViews: 1000, maxViews: 1500 },
   },
   tiktok_10k: {
@@ -138,18 +138,18 @@ const PRESET_OPTIONS: Record<string, PresetOption> = {
     targetLikes: 384,
     targetSaves: 90,
     targetShares: 44,
-    views: { enabled: true, count: 26, min: 380, max: 430, interval: 48 },
+    views: { enabled: true, count: 26, min: 340, max: 460, interval: 48 },
     likes: {
       enabled: true,
       count: 24,
-      min: 14,
-      max: 18,
+      min: 10,
+      max: 24,
       offsets: [
         48, 96, 144, 192, 240, 288, 336, 384, 432, 480, 528, 576, 624, 672, 720, 768, 816, 864, 912, 960, 1008, 1056, 1104, 1152,
       ],
     },
-    saves: { enabled: true, count: 8, min: 10, max: 13, offsets: [192, 336, 480, 624, 768, 912, 1008, 1104] },
-    shares: { enabled: true, count: 4, min: 10, max: 12, offsets: [336, 576, 816, 1056] },
+    saves: { enabled: true, count: 8, min: 10, max: 15, offsets: [192, 336, 480, 624, 768, 912, 1008, 1104] },
+    shares: { enabled: true, count: 4, min: 10, max: 14, offsets: [336, 576, 816, 1056] },
     syncThreshold: { minViews: 2000, maxViews: 3000 },
   },
   tiktok_50k: {
@@ -163,12 +163,12 @@ const PRESET_OPTIONS: Record<string, PresetOption> = {
     targetLikes: 2000,
     targetSaves: 450,
     targetShares: 180,
-    views: { enabled: true, count: 44, min: 1050, max: 1250, interval: 62 },
+    views: { enabled: true, count: 44, min: 900, max: 1350, interval: 62 },
     likes: {
       enabled: true,
       count: 40,
-      min: 45,
-      max: 55,
+      min: 30,
+      max: 70,
       offsets: [
         62, 124, 186, 248, 310, 372, 434, 496, 558, 620, 682, 744, 806, 868, 930, 992, 1054, 1116, 1178, 1240,
         1302, 1364, 1426, 1488, 1550, 1612, 1674, 1736, 1798, 1860, 1922, 1984, 2046, 2108, 2170, 2232, 2294, 2356, 2418, 2480,
@@ -197,49 +197,91 @@ const PRESET_OPTIONS: Record<string, PresetOption> = {
   },
 };
 
-function distributeTargetWithJitter(target: number, count: number, min: number, max: number): number[] {
+function generateOrganicRandomDistribution(
+  target: number,
+  count: number,
+  minBound: number,
+  maxBound: number
+): number[] {
   if (count <= 0) return [];
-  if (count === 1) return [target];
+  if (count === 1) return [Math.max(minBound, target)];
 
-  const base = Math.floor(target / count);
-  const result: number[] = new Array(count).fill(base);
-  let remainder = target - base * count;
+  let min = Math.max(1, minBound);
+  let max = Math.max(min + 1, maxBound);
 
-  // Add natural pacing jitter (+/- 1-2) while keeping exact total and staying within bounds
-  for (let i = 0; i < count - 1; i += 2) {
-    const maxJitter = Math.min(2, Math.floor((max - min) / 3));
-    if (maxJitter > 0) {
-      const jitter = Math.floor(Math.random() * (maxJitter * 2 + 1)) - maxJitter;
-      if (
-        result[i] + jitter <= max &&
-        result[i] + jitter >= min &&
-        result[i + 1] - jitter <= max &&
-        result[i + 1] - jitter >= min
-      ) {
-        result[i] += jitter;
-        result[i + 1] -= jitter;
-      }
+  // If the bounds range is too tight compared to average, dynamically give room for realistic waves
+  const avg = target / count;
+  if (max - min < 10 && avg > 10) {
+    min = Math.max(minBound, Math.floor(avg * 0.7));
+    max = Math.max(maxBound, Math.ceil(avg * 1.35));
+  }
+
+  // Ensure target can be reached within bounds
+  const clampedTarget = Math.max(count * min, Math.min(count * max, target));
+
+  // Generate initial random values spanning the entire [min, max] range
+  const items: number[] = [];
+  for (let i = 0; i < count; i++) {
+    items.push(Math.floor(Math.random() * (max - min + 1)) + min);
+  }
+
+  // Distribute difference randomly so total equals clampedTarget 100%
+  let currentSum = items.reduce((a, b) => a + b, 0);
+  let diff = clampedTarget - currentSum;
+  let attempts = 0;
+
+  while (diff !== 0 && attempts < 8000) {
+    attempts++;
+    const idx = Math.floor(Math.random() * count);
+    if (diff > 0 && items[idx] < max) {
+      const room = max - items[idx];
+      const step = Math.min(diff, Math.max(1, Math.floor(Math.random() * Math.min(room, 12)) + 1));
+      items[idx] += step;
+      diff -= step;
+    } else if (diff < 0 && items[idx] > min) {
+      const room = items[idx] - min;
+      const step = Math.min(-diff, Math.max(1, Math.floor(Math.random() * Math.min(room, 12)) + 1));
+      items[idx] -= step;
+      diff += step;
     }
   }
 
-  // Distribute remainder so the sum matches target 100% exactly
-  let idx = 0;
-  while (remainder > 0) {
-    if (result[idx % count] < max) {
-      result[idx % count]++;
-      remainder--;
+  // If after attempts there is still a small remainder, distribute 1 by 1
+  let guard = 0;
+  while (diff > 0 && guard < count * 2) {
+    const idx = guard % count;
+    if (items[idx] < max) {
+      items[idx]++;
+      diff--;
     }
-    idx++;
+    guard++;
+  }
+  guard = 0;
+  while (diff < 0 && guard < count * 2) {
+    const idx = guard % count;
+    if (items[idx] > min) {
+      items[idx]--;
+      diff++;
+    }
+    guard++;
   }
 
-  return result;
+  // Fisher-Yates shuffle so high and low batches are organically dispersed
+  for (let i = items.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const temp = items[i];
+    items[i] = items[j];
+    items[j] = temp;
+  }
+
+  return items;
 }
 
 function generatePlanForPreset(p: PresetOption) {
   const views: number[] = [];
   if (p.views.enabled !== false) {
     if (p.targetViews && p.views.count > 0) {
-      views.push(...distributeTargetWithJitter(p.targetViews, p.views.count, p.views.min, p.views.max));
+      views.push(...generateOrganicRandomDistribution(p.targetViews, p.views.count, p.views.min, p.views.max));
     } else {
       for (let i = 0; i < p.views.count; i++) {
         views.push(Math.floor(Math.random() * (p.views.max - p.views.min + 1)) + p.views.min);
@@ -250,7 +292,9 @@ function generatePlanForPreset(p: PresetOption) {
   const likes: number[] = [];
   if (p.likes.enabled !== false) {
     if (p.targetLikes && p.likes.count > 0) {
-      likes.push(...distributeTargetWithJitter(p.targetLikes, p.likes.count, p.likes.min, p.likes.max));
+      const effectiveMin = Math.min(p.likes.min, 10);
+      const effectiveMax = Math.max(p.likes.max, Math.round((p.targetLikes / p.likes.count) * 1.45));
+      likes.push(...generateOrganicRandomDistribution(p.targetLikes, p.likes.count, effectiveMin, effectiveMax));
     } else {
       for (let i = 0; i < p.likes.count; i++) {
         likes.push(Math.floor(Math.random() * (p.likes.max - p.likes.min + 1)) + p.likes.min);
@@ -261,7 +305,7 @@ function generatePlanForPreset(p: PresetOption) {
   const saves: number[] = [];
   if (p.saves && p.saves.enabled !== false) {
     if (p.targetSaves && p.saves.count > 0) {
-      saves.push(...distributeTargetWithJitter(p.targetSaves, p.saves.count, p.saves.min, p.saves.max));
+      saves.push(...generateOrganicRandomDistribution(p.targetSaves, p.saves.count, p.saves.min, p.saves.max));
     } else {
       for (let i = 0; i < p.saves.count; i++) {
         saves.push(Math.floor(Math.random() * (p.saves.max - p.saves.min + 1)) + p.saves.min);
@@ -272,7 +316,7 @@ function generatePlanForPreset(p: PresetOption) {
   const shares: number[] = [];
   if (p.shares && p.shares.enabled !== false) {
     if (p.targetShares && p.shares.count > 0) {
-      shares.push(...distributeTargetWithJitter(p.targetShares, p.shares.count, p.shares.min, p.shares.max));
+      shares.push(...generateOrganicRandomDistribution(p.targetShares, p.shares.count, p.shares.min, p.shares.max));
     } else {
       for (let i = 0; i < p.shares.count; i++) {
         shares.push(Math.floor(Math.random() * (p.shares.max - p.shares.min + 1)) + p.shares.min);
@@ -371,6 +415,7 @@ export default function EngagementPage() {
   }>(() => generatePlanForPreset(PRESET_OPTIONS.tiktok_2k));
 
   const [planTimestamp, setPlanTimestamp] = useState<Date>(new Date());
+  const [shuffling, setShuffling] = useState(false);
 
   // Re-generate plan when preset changes
   function switchPreset(presetId: string) {
@@ -382,8 +427,10 @@ export default function EngagementPage() {
   }
 
   function rerollPlan() {
+    setShuffling(true);
     setPlannedSchedule(generatePlanForPreset(currentPreset));
     setPlanTimestamp(new Date());
+    setTimeout(() => setShuffling(false), 300);
   }
 
   useEffect(() => {
@@ -800,20 +847,18 @@ export default function EngagementPage() {
                 key={preset.id}
                 type="button"
                 onClick={() => switchPreset(preset.id)}
-                className={`p-4 rounded-2xl border text-left transition-all relative flex flex-col justify-between cursor-pointer press-scale ${
-                  isSelected
-                    ? "bg-[#3A4EFB]/5 border-[#3A4EFB] shadow-sm ring-1 ring-[#3A4EFB]"
-                    : "bg-[#F8F9FD] border-[#DEE0ED] hover:bg-white hover:border-[#3A4EFB]/40"
-                }`}
+                className={`p-4 rounded-2xl border text-left transition-all relative flex flex-col justify-between cursor-pointer press-scale ${isSelected
+                  ? "bg-[#3A4EFB]/5 border-[#3A4EFB] shadow-sm ring-1 ring-[#3A4EFB]"
+                  : "bg-[#F8F9FD] border-[#DEE0ED] hover:bg-white hover:border-[#3A4EFB]/40"
+                  }`}
               >
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-[#252943]">
                       {preset.name}
                     </span>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                      isSelected ? "bg-[#3A4EFB] text-white" : "bg-gray-200/80 text-gray-700"
-                    }`}>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${isSelected ? "bg-[#3A4EFB] text-white" : "bg-gray-200/80 text-gray-700"
+                      }`}>
                       {preset.badge}
                     </span>
                   </div>
@@ -923,11 +968,12 @@ export default function EngagementPage() {
             <button
               type="button"
               onClick={rerollPlan}
-              className="px-3 py-1.5 rounded-xl bg-[#F8F9FD] hover:bg-[#EEF1FB] border border-[#DEE0ED] text-xs font-bold text-[#3A4EFB] transition-all flex items-center gap-1.5 cursor-pointer press-scale"
+              disabled={shuffling}
+              className="px-3 py-1.5 rounded-xl bg-[#F8F9FD] hover:bg-[#EEF1FB] border border-[#DEE0ED] text-xs font-bold text-[#3A4EFB] transition-all flex items-center gap-1.5 cursor-pointer press-scale disabled:opacity-60"
               title="Shuffle randomized quantities"
             >
-              <Dices className="w-3.5 h-3.5 text-[#3A4EFB]" />
-              <span>Shuffle Plan</span>
+              <Dices className={`w-3.5 h-3.5 text-[#3A4EFB] ${shuffling ? "animate-spin" : ""}`} />
+              <span>{shuffling ? "Shuffling..." : "Shuffle Plan"}</span>
             </button>
           </div>
 
@@ -988,9 +1034,8 @@ export default function EngagementPage() {
               {(showAllBatches ? scheduleRows : scheduleRows.slice(0, 5)).map((row) => (
                 <div
                   key={row.runNumber}
-                  className={`p-2.5 sm:px-3 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 transition-colors ${
-                    row.likeQty ? "bg-rose-50/30 hover:bg-rose-50/60" : "hover:bg-[#F8F9FD]"
-                  }`}
+                  className={`p-2.5 sm:px-3 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 transition-colors ${row.likeQty ? "bg-rose-50/30 hover:bg-rose-50/60" : "hover:bg-[#F8F9FD]"
+                    }`}
                 >
                   <div className="flex items-center gap-2.5">
                     <span className="w-6 h-6 rounded-md bg-gray-100 text-[#252943] font-bold text-[10px] flex items-center justify-center shrink-0">
@@ -1140,9 +1185,8 @@ export default function EngagementPage() {
                 <span className={`text-sm font-black font-mono ${hasSufficientFunds ? "text-emerald-700" : "text-rose-600"}`}>
                   ₹{walletBalance.toFixed(2)}
                 </span>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                  hasSufficientFunds ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"
-                }`}>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${hasSufficientFunds ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"
+                  }`}>
                   {hasSufficientFunds ? "Sufficient" : "Add Funds"}
                 </span>
               </div>
@@ -1154,11 +1198,10 @@ export default function EngagementPage() {
             <button
               type="submit"
               disabled={submitting}
-              className={`w-full py-3.5 rounded-2xl text-sm font-bold tracking-wide transition-all shadow-subtle flex items-center justify-center gap-2 cursor-pointer press-scale ${
-                submitting
-                  ? "bg-gray-200 text-gray-500 cursor-not-allowed"
-                  : "bg-[#3A4EFB] hover:bg-[#2C3FE0] text-white shadow-md shadow-[#3A4EFB]/20"
-              }`}
+              className={`w-full py-3.5 rounded-2xl text-sm font-bold tracking-wide transition-all shadow-subtle flex items-center justify-center gap-2 cursor-pointer press-scale ${submitting
+                ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+                : "bg-[#3A4EFB] hover:bg-[#2C3FE0] text-white shadow-md shadow-[#3A4EFB]/20"
+                }`}
             >
               {submitting ? (
                 <>

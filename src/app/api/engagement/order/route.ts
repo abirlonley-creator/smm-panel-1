@@ -229,8 +229,7 @@ export async function POST(request: Request) {
         if (
           parsed.plannedViews &&
           typeof parsed.plannedViews[i] === "number" &&
-          parsed.plannedViews[i] >= minV &&
-          parsed.plannedViews[i] <= maxV
+          parsed.plannedViews[i] >= Math.min(minV, 100)
         ) {
           qty = parsed.plannedViews[i];
         } else {
@@ -259,8 +258,7 @@ export async function POST(request: Request) {
         if (
           parsed.plannedLikes &&
           typeof parsed.plannedLikes[i] === "number" &&
-          parsed.plannedLikes[i] >= minL &&
-          parsed.plannedLikes[i] <= maxL
+          parsed.plannedLikes[i] >= Math.min(minL, 10)
         ) {
           qty = parsed.plannedLikes[i];
         } else {
@@ -290,8 +288,7 @@ export async function POST(request: Request) {
         if (
           parsed.plannedSaves &&
           typeof parsed.plannedSaves[i] === "number" &&
-          parsed.plannedSaves[i] >= minS &&
-          parsed.plannedSaves[i] <= maxS
+          parsed.plannedSaves[i] >= Math.min(minS, 10)
         ) {
           qty = parsed.plannedSaves[i];
         } else {
@@ -321,8 +318,7 @@ export async function POST(request: Request) {
         if (
           parsed.plannedShares &&
           typeof parsed.plannedShares[i] === "number" &&
-          parsed.plannedShares[i] >= minR &&
-          parsed.plannedShares[i] <= maxR
+          parsed.plannedShares[i] >= Math.min(minR, 5)
         ) {
           qty = parsed.plannedShares[i];
         } else {
