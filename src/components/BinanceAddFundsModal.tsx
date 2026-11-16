@@ -507,10 +507,13 @@ export function BinanceAddFundsModal({
                   type="text"
                   value={txnId}
                   onChange={(e) => setTxnId(e.target.value)}
-                  placeholder="e.g. 2198401928301928"
+                  placeholder="e.g. 465805925807284224 or P_A25P..."
                   className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/20 bg-white text-xs font-mono font-bold text-gray-900 outline-none transition-all shadow-xs"
                   required
                 />
+                <p className="text-[11px] text-gray-500">
+                  Paste the 18-digit Order ID or Transaction ID from your Binance Pay payment details.
+                </p>
               </div>
 
               {/* Receipt Visual Guidance Mockup (Screenshot 1) */}

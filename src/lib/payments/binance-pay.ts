@@ -77,6 +77,74 @@ export async function createBinanceDeposit({
   return deposit;
 }
 
+export function extractBinanceIdentifiers(input: string): {
+  normalized: string;
+  extractedOrderId?: string;
+  extractedTxnId?: string;
+  extractedBinanceId?: string;
+} {
+  const raw = String(input || "").trim();
+  // Strip common label prefixes like "Order ID:", "Order:", "Txn ID:", "ID:", "Hash:"
+  const stripped = raw
+    .replace(/^(?:order\s*id|order|transaction\s*id|txn\s*id|payment\s*id|id|hash)\s*[:#-]?\s*/i, "")
+    .trim();
+
+  // Remove internal spaces and dashes
+  const noSpaces = stripped.replace(/[\s-]+/g, "");
+
+  // 1. Check for 16-22 digit numeric Order ID
+  const orderIdMatch = noSpaces.match(/\d{16,22}/);
+  const extractedOrderId = orderIdMatch ? orderIdMatch[0] : undefined;
+
+  // 2. Check for P_... Transaction ID (e.g. P_A25P1G3T2W171114 or A25P1G3T2W171114)
+  const txnIdMatch = noSpaces.match(/(?:P_)?[A-Za-z0-9]{12,25}/i);
+  const extractedTxnId = txnIdMatch ? txnIdMatch[0] : undefined;
+
+  // 3. Check for 7-12 digit numeric Binance ID / Pay ID
+  const binanceIdMatch = noSpaces.match(/^\d{7,12}$/);
+  const extractedBinanceId = binanceIdMatch ? binanceIdMatch[0] : undefined;
+
+  return {
+    normalized: noSpaces,
+    extractedOrderId,
+    extractedTxnId,
+    extractedBinanceId,
+  };
+}
+
+async function fetchBinancePayTransactions(params: Record<string, any> = {}): Promise<any[]> {
+  const apiKey = process.env.BINANCE_API_KEY || process.env.BINANCE_PAY_API_KEY;
+  const apiSecret = process.env.BINANCE_API_SECRET || process.env.BINANCE_PAY_SECRET_KEY;
+
+  if (!apiKey || !apiSecret) return [];
+
+  const timestamp = Date.now();
+  const recvWindow = 50000;
+  const allParams = { ...params, timestamp, recvWindow, limit: 100 };
+  const queryString = Object.entries(allParams)
+    .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
+    .join("&");
+  const signature = crypto.createHmac("sha256", apiSecret).update(queryString).digest("hex");
+  const endpoint = `https://api.binance.com/sapi/v1/pay/transactions?${queryString}&signature=${signature}`;
+
+  const res = await fetch(endpoint, {
+    method: "GET",
+    headers: { "X-MBX-APIKEY": apiKey },
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    console.warn("[BINANCE_API] Query error HTTP", res.status, await res.text());
+    return [];
+  }
+
+  const data = await res.json();
+  if (data?.code === "000000" && Array.isArray(data.data)) {
+    return data.data;
+  }
+  return [];
+}
+
 /**
  * Live verification using Binance SAPI Pay Transactions API.
  * Uses official Binance API with read-only permissions and HMAC-SHA256 signature.
@@ -106,64 +174,68 @@ async function queryBinanceApiPayTransaction(orderOrTxnId: string): Promise<{
   }
 
   try {
+    const idInfo = extractBinanceIdentifiers(orderOrTxnId);
+    const searchKeys = new Set<string>();
+    if (idInfo.normalized) searchKeys.add(idInfo.normalized.toLowerCase());
+    if (idInfo.extractedOrderId) searchKeys.add(idInfo.extractedOrderId.toLowerCase());
+    if (idInfo.extractedTxnId) {
+      searchKeys.add(idInfo.extractedTxnId.toLowerCase());
+      if (idInfo.extractedTxnId.toLowerCase().startsWith("p_")) {
+        searchKeys.add(idInfo.extractedTxnId.slice(2).toLowerCase());
+      } else {
+        searchKeys.add(`p_${idInfo.extractedTxnId.toLowerCase()}`);
+      }
+    }
+    if (idInfo.extractedBinanceId) searchKeys.add(idInfo.extractedBinanceId.toLowerCase());
+
     const timestamp = Date.now();
-    const recvWindow = 50000;
-    // Query transactions from the last 30 days
     const startTimestamp = timestamp - 30 * 24 * 60 * 60 * 1000;
-    const queryString = `startTimestamp=${startTimestamp}&timestamp=${timestamp}&recvWindow=${recvWindow}`;
-    const signature = crypto
-      .createHmac("sha256", apiSecret)
-      .update(queryString)
-      .digest("hex");
 
-    const endpoint = `https://api.binance.com/sapi/v1/pay/transactions?${queryString}&signature=${signature}`;
-
-    const res = await fetch(endpoint, {
-      method: "GET",
-      headers: {
-        "X-MBX-APIKEY": apiKey,
-      },
-      cache: "no-store",
-    });
-
-    if (!res.ok) {
-      console.warn("[BINANCE_API] Query error HTTP", res.status, await res.text());
-      return { verified: false, statusText: `Binance API error HTTP ${res.status}` };
+    // First attempt: with startTimestamp and limit=100
+    let transactions = await fetchBinancePayTransactions({ startTimestamp });
+    // Second attempt if empty: without startTimestamp
+    if (!transactions.length) {
+      transactions = await fetchBinancePayTransactions({});
     }
 
-    const data = await res.json();
-    if (data?.code === "000000" && Array.isArray(data.data)) {
-      const cleanSearch = orderOrTxnId.trim().replace(/^#\s*/, "").toLowerCase();
-      const match = data.data.find((tx: any) => {
-        const orderMatch = tx.orderId && String(tx.orderId).trim().toLowerCase() === cleanSearch;
-        const txnMatch = tx.transactionId && String(tx.transactionId).trim().toLowerCase() === cleanSearch;
-        return orderMatch || txnMatch;
-      });
+    const match = transactions.find((tx: any) => {
+      const txOrderId = tx.orderId ? String(tx.orderId).trim().toLowerCase() : "";
+      const txTxnId = tx.transactionId ? String(tx.transactionId).trim().toLowerCase() : "";
+      const txPayerId = tx.payerInfo?.binanceId ? String(tx.payerInfo.binanceId).trim().toLowerCase() : "";
+      const txCounterpartyId = tx.counterpartyId ? String(tx.counterpartyId).trim().toLowerCase() : "";
 
-      if (match) {
-        const parsedAmount = parseFloat(match.amount);
-        const isIncoming = parsedAmount > 0;
-
-        return {
-          verified: true,
-          orderId: String(match.orderId),
-          transactionId: String(match.transactionId),
-          amount: parsedAmount,
-          currency: match.currency,
-          isIncoming,
-          senderUid: match.payerInfo?.binanceId
-            ? String(match.payerInfo.binanceId)
-            : match.counterpartyId
-              ? String(match.counterpartyId)
-              : undefined,
-          senderName: match.payerInfo?.name || undefined,
-          receiverUid: match.receiverInfo?.binanceId
-            ? String(match.receiverInfo.binanceId)
-            : String(match.uid),
-          transactionTime: match.transactionTime,
-          raw: match,
-        };
+      if (searchKeys.has(txOrderId)) return true;
+      if (searchKeys.has(txTxnId)) return true;
+      if (txTxnId.startsWith("p_") && searchKeys.has(txTxnId.slice(2))) return true;
+      if (idInfo.extractedBinanceId && (searchKeys.has(txPayerId) || searchKeys.has(txCounterpartyId))) {
+        return true;
       }
+      return false;
+    });
+
+    if (match) {
+      const parsedAmount = parseFloat(match.amount);
+      const isIncoming = parsedAmount > 0;
+
+      return {
+        verified: true,
+        orderId: String(match.orderId),
+        transactionId: String(match.transactionId),
+        amount: parsedAmount,
+        currency: match.currency,
+        isIncoming,
+        senderUid: match.payerInfo?.binanceId
+          ? String(match.payerInfo.binanceId)
+          : match.counterpartyId
+            ? String(match.counterpartyId)
+            : undefined,
+        senderName: match.payerInfo?.name || undefined,
+        receiverUid: match.receiverInfo?.binanceId
+          ? String(match.receiverInfo.binanceId)
+          : String(match.uid),
+        transactionTime: match.transactionTime,
+        raw: match,
+      };
     }
 
     return { verified: false, statusText: "Transaction not found on Binance Pay records" };
@@ -194,38 +266,46 @@ export async function verifyAndCreditDeposit({
     );
   }
 
-  const cleanTxnId = txnId.trim().replace(/^#\s*/, "");
+  const idInfo = extractBinanceIdentifiers(txnId);
+  const cleanTxnId = idInfo.normalized;
   if (!cleanTxnId) {
     throw new Error("Please enter your Binance Order ID.");
   }
 
-  // Permissive alphanumeric check for Binance Order IDs or Transaction IDs (numeric 6-30 digits or alphanumeric P_...)
-  if (!/^[A-Za-z0-9_#-]{6,45}$/.test(cleanTxnId)) {
+  // Permissive check: at least 5 alphanumeric characters
+  if (cleanTxnId.length < 5) {
     throw new Error(
       "Invalid Binance Order ID format. Enter the numeric Order ID or Transaction ID from your Binance Pay receipt."
     );
   }
 
   // 1. Initial unique check: Prevent duplicate claims
+  const searchTxnConditions: any[] = [{ txnId: cleanTxnId }];
+  if (idInfo.extractedOrderId) searchTxnConditions.push({ txnId: idInfo.extractedOrderId });
+  if (idInfo.extractedTxnId) searchTxnConditions.push({ txnId: idInfo.extractedTxnId });
+
   const duplicateTxn = await prisma.paymentDeposit.findFirst({
     where: {
-      txnId: cleanTxnId,
       status: "VERIFIED",
+      OR: searchTxnConditions,
     },
   });
 
   if (duplicateTxn) {
     const user = await prisma.user.findUnique({ where: { id: userId }, select: { walletBalance: true } });
+    const isSameUser = duplicateTxn.userId === userId;
     return {
       success: true,
       alreadyCredited: true,
       newBalance: user?.walletBalance ?? duplicateTxn.inrAmount,
       deposit: duplicateTxn,
-      message: "This Binance Order ID has already been credited to wallet balance.",
+      message: isSameUser
+        ? `This Binance payment (₹${duplicateTxn.inrAmount.toFixed(2)}) has already been credited to your wallet.`
+        : "This Binance Order ID has already been claimed by another account.",
     };
   }
 
-  // 2. Retrieve deposit and ensure user ownership
+  // 2. Retrieve deposit or create on the fly
   let deposit = depositId
     ? await prisma.paymentDeposit.findUnique({
       where: { id: depositId },
@@ -236,6 +316,17 @@ export async function verifyAndCreditDeposit({
       orderBy: { createdAt: "desc" },
       include: { user: { select: { id: true, username: true, walletBalance: true } } },
     });
+
+  if (!deposit) {
+    const created = await createBinanceDeposit({
+      userId,
+      inrAmount: 100,
+    });
+    deposit = await prisma.paymentDeposit.findUnique({
+      where: { id: created.id },
+      include: { user: { select: { id: true, username: true, walletBalance: true } } },
+    });
+  }
 
   if (!deposit) {
     throw new Error("Deposit order not found. Please initiate a new payment request.");
@@ -302,11 +393,10 @@ export async function verifyAndCreditDeposit({
       if (receiverUidStr && receiverUidStr !== adminUid) {
         failureReason = `Recipient mismatch: Transferred to Binance ID ${receiverUidStr}, not official ID ${adminUid}`;
       } else {
-        // Amount verification
-        const requiredUsdt = deposit.usdtAmount;
+        // Dynamic amount matching: whatever USDT was received on Binance gets credited at official exchange rate!
         const receivedUsdt = verificationResult.amount || 0;
-        if (receivedUsdt < requiredUsdt * 0.98) {
-          failureReason = `Underpayment: Required ${requiredUsdt} USDT, but received ${receivedUsdt} USDT on Binance`;
+        if (receivedUsdt <= 0) {
+          failureReason = "Transaction amount is 0 or invalid on Binance Pay";
         } else {
           automatedMatchSuccess = true;
         }
@@ -318,13 +408,8 @@ export async function verifyAndCreditDeposit({
     // =========================================================================
     if (automatedMatchSuccess) {
       const receivedUsdt = verificationResult.amount || deposit.usdtAmount;
-      const requiredUsdt = deposit.usdtAmount;
-
-      // Credit amount: if user sent more USDT, credit them fairly for the higher amount
-      const creditInr =
-        receivedUsdt > requiredUsdt
-          ? Number((receivedUsdt * deposit.exchangeRate).toFixed(2))
-          : deposit.inrAmount;
+      // Dynamically calculate credited INR based on the exact USDT confirmed by Binance API
+      const creditInr = Math.max(1, Number((receivedUsdt * deposit.exchangeRate).toFixed(2)));
 
       const orderIdToLock = verificationResult.orderId || cleanTxnId;
       const txnIdToLock = verificationResult.transactionId || cleanTxnId;
