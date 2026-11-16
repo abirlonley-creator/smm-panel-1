@@ -10,6 +10,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  Coins,
   Download,
   ExternalLink,
   Eye,
@@ -1050,6 +1051,8 @@ export function OrderMonitorTab() {
                     className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase ${
                       detailData.order.status === "COMPLETED"
                         ? "bg-emerald-100 text-emerald-800"
+                        : detailData.order.status === "REFUNDED" || detailData.order.status === "CANCELLED"
+                        ? "bg-rose-100 text-rose-800 border border-rose-200"
                         : "bg-blue-100 text-blue-800"
                     }`}
                   >
@@ -1113,6 +1116,55 @@ export function OrderMonitorTab() {
                     </div>
                   )}
 
+                  {/* Order Overview & Financial Strip */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3.5 rounded-2xl bg-gradient-to-r from-[#F8F9FD] to-white border border-[#DEE0ED]">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-[#252943]/50 block">Customer</span>
+                      <div className="font-extrabold text-[#252943] truncate text-xs">
+                        {detailData.order.user}
+                      </div>
+                      <span className="text-[10px] text-gray-500 font-mono">
+                        Wallet: ₹{Number(detailData.order.walletBalance ?? 0).toFixed(2)}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-[#252943]/50 block">Order Charge</span>
+                      <div className="text-sm font-black text-[#252943] font-mono">
+                        ₹{Number(detailData.order.totalCost || 0).toFixed(2)}
+                      </div>
+                      <span className="text-[10px] text-gray-500 font-medium">
+                        {detailData.order.platform}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-[#252943]/50 block">Refund Status</span>
+                      <div className="font-mono font-bold text-xs">
+                        {(detailData.order.refundedAmount || 0) > 0 ? (
+                          <span className="text-rose-600 font-black">
+                            ₹{Number(detailData.order.refundedAmount).toFixed(2)} Refunded
+                          </span>
+                        ) : (
+                          <span className="text-emerald-600">₹0.00 (Unrefunded)</span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-gray-500">
+                        Status: <strong className="uppercase">{detailData.order.status}</strong>
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-[#252943]/50 block">Remaining Refundable</span>
+                      <div className="text-sm font-black text-[#3A4EFB] font-mono">
+                        ₹{Math.max(0, Number((detailData.order.totalCost || 0) - (detailData.order.refundedAmount || 0))).toFixed(2)}
+                      </div>
+                      <span className="text-[10px] text-gray-500 truncate block" title={detailData.order.targetUrl}>
+                        {detailData.order.targetUrl?.slice(0, 24)}...
+                      </span>
+                    </div>
+                  </div>
+
                   {/* Admin Order Actions Bar */}
                   <div className="p-3.5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] flex flex-wrap items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
@@ -1131,6 +1183,48 @@ export function OrderMonitorTab() {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
+                      {/* Main Full Order Refund Button */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const totalCost = Number((detailData.order.totalCost || 0).toFixed(2));
+                          const alreadyRefunded = Number((detailData.order.refundedAmount || 0).toFixed(2));
+                          const remainingRefundable = Math.max(0, Number((totalCost - alreadyRefunded).toFixed(2)));
+                          const refundTarget = remainingRefundable > 0 ? remainingRefundable : totalCost;
+
+                          if (totalCost > 0 && alreadyRefunded >= totalCost) {
+                            alert(`Order #${detailData.order.orderRef} is already fully refunded (₹${alreadyRefunded.toFixed(2)} credited).`);
+                            return;
+                          }
+
+                          const confirmMsg = `Are you sure you want to refund ₹${refundTarget.toFixed(2)} to ${detailData.order.user} for order #${detailData.order.orderRef}?\n\nThis will immediately credit ₹${refundTarget.toFixed(2)} into their wallet balance and mark this order as Refunded.`;
+                          if (window.confirm(confirmMsg)) {
+                            handleOrderAction("refund_order", { amount: refundTarget });
+                          }
+                        }}
+                        disabled={
+                          actionLoading !== null ||
+                          (detailData.order.totalCost > 0 && (detailData.order.refundedAmount || 0) >= detailData.order.totalCost)
+                        }
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-600 text-white font-bold hover:bg-rose-700 disabled:opacity-50 disabled:bg-gray-300 disabled:cursor-not-allowed shadow-xs transition-all"
+                        title={
+                          (detailData.order.refundedAmount || 0) >= detailData.order.totalCost && detailData.order.totalCost > 0
+                            ? "Order is already fully refunded"
+                            : `Refund the order amount (₹${Math.max(0, (detailData.order.totalCost || 0) - (detailData.order.refundedAmount || 0)).toFixed(2)}) to user wallet`
+                        }
+                      >
+                        {actionLoading === "refund_order" ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Coins className="w-3.5 h-3.5" />
+                        )}
+                        <span>
+                          {(detailData.order.refundedAmount || 0) >= detailData.order.totalCost && detailData.order.totalCost > 0
+                            ? `Refunded (₹${(detailData.order.refundedAmount || 0).toFixed(2)})`
+                            : `Refund Order (₹${Math.max(0, (detailData.order.totalCost || 0) - (detailData.order.refundedAmount || 0)).toFixed(2)})`}
+                        </span>
+                      </button>
+
                       <button
                         type="button"
                         onClick={() => handleOrderAction("replan_remaining")}
@@ -1149,14 +1243,15 @@ export function OrderMonitorTab() {
                         type="button"
                         onClick={() => handleOrderAction("refund_undelivered")}
                         disabled={actionLoading !== null}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-rose-600 text-white font-bold hover:bg-rose-700 disabled:opacity-50"
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 font-bold hover:bg-rose-100 disabled:opacity-50"
+                        title="Only refund unexecuted batches"
                       >
                         {actionLoading === "refund_undelivered" ? (
                           <Loader2 className="w-3.5 h-3.5 animate-spin" />
                         ) : (
                           <XCircle className="w-3.5 h-3.5" />
                         )}
-                        <span>Refund Undelivered</span>
+                        <span>Refund Undelivered Only</span>
                       </button>
 
                       <button

@@ -46,7 +46,67 @@ export async function GET(
     });
 
     if (!order) {
-      return NextResponse.json({ success: false, error: "Order not found" }, { status: 404 });
+      const stdOrder = await prisma.order.findFirst({
+        where: { OR: [{ id }, { orderRef: id }] },
+        include: {
+          user: { select: { id: true, username: true, walletBalance: true } },
+          service: { select: { id: true, name: true, externalId: true, provider: { select: { id: true, name: true } } } },
+          provider: { select: { id: true, name: true } },
+          steps: true,
+        },
+      });
+
+      if (!stdOrder) {
+        return NextResponse.json({ success: false, error: "Order not found" }, { status: 404 });
+      }
+
+      return NextResponse.json({
+        success: true,
+        order: {
+          id: stdOrder.id,
+          orderRef: stdOrder.orderRef,
+          userId: stdOrder.userId,
+          user: stdOrder.user?.username || "Guest",
+          walletBalance: stdOrder.user?.walletBalance ?? 0,
+          targetUrl: stdOrder.targetUrl,
+          platform: "SMM Service",
+          profileId: null,
+          presetKey: stdOrder.scheduleMode || "Standard",
+          durationHours: 24,
+          status: stdOrder.status,
+          totalCost: stdOrder.totalCost,
+          refundedAmount: stdOrder.refundedAmount,
+          createdAt: stdOrder.createdAt.toISOString(),
+          updatedAt: stdOrder.updatedAt.toISOString(),
+          deviationStatus: "on_track",
+          behindSince: null,
+          replanCount: 0,
+          lastReplanReason: null,
+          planParams: null,
+          expectedCurve: [],
+          statusSamples: [],
+        },
+        perTypeSummary: {},
+        runs: (stdOrder.steps || []).map((s, idx) => ({
+          id: s.id,
+          runNumber: s.stepNumber || idx + 1,
+          engagementType: "delivery",
+          serviceName: stdOrder.service?.name || "Service",
+          providerName: stdOrder.provider?.name || "Provider",
+          scheduledAt: s.scheduledTime.toISOString(),
+          sentAt: s.executedAt ? s.executedAt.toISOString() : null,
+          quantity: s.quantity,
+          deliveredQuantity: s.status === "COMPLETED" ? s.quantity : 0,
+          status: s.status,
+          latenessSeconds: 0,
+          timeToStartMs: null,
+          timeToConfirmMs: null,
+          cost: 0,
+          errorMessage: s.errorMessage,
+        })),
+        eventLogs: [],
+        alerts: [],
+      });
     }
 
     // Parse stored JSON curves and plans
