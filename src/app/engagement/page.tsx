@@ -202,7 +202,8 @@ function generateOrganicRandomDistribution(
   target: number,
   count: number,
   minBound: number,
-  maxBound: number
+  maxBound: number,
+  allowVariance: boolean = true
 ): number[] {
   if (count <= 0) return [];
   if (count === 1) return [Math.max(minBound, target)];
@@ -217,8 +218,17 @@ function generateOrganicRandomDistribution(
     max = Math.max(maxBound, Math.ceil(avg * 1.35));
   }
 
+  // When shuffling or generating, allow slight natural organic variance around the target (±2.5%)
+  // so every plan has its own unique, realistic total that visibly updates the header and metric card!
+  let effectiveTarget = target;
+  if (allowVariance && count > 1) {
+    const varianceSpread = Math.max(2, Math.round(target * 0.025));
+    const randomShift = Math.floor((Math.random() * 2 - 1) * varianceSpread);
+    effectiveTarget = target + randomShift;
+  }
+
   // Ensure target can be reached within bounds
-  const clampedTarget = Math.max(count * min, Math.min(count * max, target));
+  const clampedTarget = Math.max(count * min, Math.min(count * max, effectiveTarget));
 
   // Generate initial random values spanning the entire [min, max] range
   const items: number[] = [];
@@ -282,7 +292,7 @@ function generatePlanForPreset(p: PresetOption) {
   const views: number[] = [];
   if (p.views.enabled !== false) {
     if (p.targetViews && p.views.count > 0) {
-      views.push(...generateOrganicRandomDistribution(p.targetViews, p.views.count, p.views.min, p.views.max));
+      views.push(...generateOrganicRandomDistribution(p.targetViews, p.views.count, p.views.min, p.views.max, true));
     } else {
       for (let i = 0; i < p.views.count; i++) {
         views.push(Math.floor(Math.random() * (p.views.max - p.views.min + 1)) + p.views.min);
@@ -295,7 +305,7 @@ function generatePlanForPreset(p: PresetOption) {
     if (p.targetLikes && p.likes.count > 0) {
       const effectiveMin = Math.min(p.likes.min, 10);
       const effectiveMax = Math.max(p.likes.max, Math.round((p.targetLikes / p.likes.count) * 1.45));
-      likes.push(...generateOrganicRandomDistribution(p.targetLikes, p.likes.count, effectiveMin, effectiveMax));
+      likes.push(...generateOrganicRandomDistribution(p.targetLikes, p.likes.count, effectiveMin, effectiveMax, true));
     } else {
       for (let i = 0; i < p.likes.count; i++) {
         likes.push(Math.floor(Math.random() * (p.likes.max - p.likes.min + 1)) + p.likes.min);
@@ -306,7 +316,7 @@ function generatePlanForPreset(p: PresetOption) {
   const saves: number[] = [];
   if (p.saves && p.saves.enabled !== false) {
     if (p.targetSaves && p.saves.count > 0) {
-      saves.push(...generateOrganicRandomDistribution(p.targetSaves, p.saves.count, p.saves.min, p.saves.max));
+      saves.push(...generateOrganicRandomDistribution(p.targetSaves, p.saves.count, p.saves.min, p.saves.max, true));
     } else {
       for (let i = 0; i < p.saves.count; i++) {
         saves.push(Math.floor(Math.random() * (p.saves.max - p.saves.min + 1)) + p.saves.min);
@@ -317,7 +327,7 @@ function generatePlanForPreset(p: PresetOption) {
   const shares: number[] = [];
   if (p.shares && p.shares.enabled !== false) {
     if (p.targetShares && p.shares.count > 0) {
-      shares.push(...generateOrganicRandomDistribution(p.targetShares, p.shares.count, p.shares.min, p.shares.max));
+      shares.push(...generateOrganicRandomDistribution(p.targetShares, p.shares.count, p.shares.min, p.shares.max, true));
     } else {
       for (let i = 0; i < p.shares.count; i++) {
         shares.push(Math.floor(Math.random() * (p.shares.max - p.shares.min + 1)) + p.shares.min);
@@ -1010,17 +1020,40 @@ export default function EngagementPage() {
 
         {/* STEP 2: DELIVERY BREAKDOWN */}
         <div className="bg-white rounded-3xl border border-[#DEE0ED] p-5 sm:p-6 shadow-subtle space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
+          <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED] flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <span className="w-6 h-6 rounded-lg bg-[#3A4EFB] text-white text-xs font-black flex items-center justify-center">
                 2
               </span>
               <div>
-                <h2 className="text-sm font-bold text-[#252943]">
-                  Schedule & Delivery Breakdown ({currentPreset.name})
-                </h2>
-                <p className="text-[11px] text-[#252943]/50">
-                  Organic randomized pacing across {currentPreset.durationLabel}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-sm font-bold text-[#252943]">
+                    Schedule & Delivery Breakdown ({currentPreset.name})
+                  </h2>
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-extrabold bg-blue-100 text-blue-800 border border-blue-200 flex items-center gap-1 shadow-sm">
+                    <Eye className="w-3.5 h-3.5 text-blue-600" />
+                    <span>{currentPreset.views.enabled !== false ? `${totalViews.toLocaleString()} Total Views` : "Views Off"}</span>
+                  </span>
+                  {currentPreset.likes.enabled !== false && totalLikes > 0 && (
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-extrabold bg-rose-100 text-rose-800 border border-rose-200 flex items-center gap-1 shadow-sm">
+                      <Heart className="w-3.5 h-3.5 text-rose-600 fill-rose-600" />
+                      <span>{totalLikes} Likes</span>
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-[#252943]/60 flex items-center gap-1.5 flex-wrap pt-0.5">
+                  <span>Organic randomized pacing across {currentPreset.durationLabel}</span>
+                  <span>•</span>
+                  <span>Total Campaign: <strong className="text-blue-700 font-mono font-bold">{totalViews.toLocaleString()} Views</strong> ({currentPreset.views.count} batches)</span>
+                  {currentPreset.likes.enabled !== false && totalLikes > 0 && (
+                    <span>• <strong className="text-rose-600 font-mono font-bold">{totalLikes} Likes</strong> ({currentPreset.likes.count} waves)</span>
+                  )}
+                  {currentPreset.saves?.enabled && totalSaves > 0 && (
+                    <span>• <strong className="text-amber-600 font-mono font-bold">{totalSaves} Saves</strong></span>
+                  )}
+                  {currentPreset.shares?.enabled && totalShares > 0 && (
+                    <span>• <strong className="text-purple-600 font-mono font-bold">{totalShares} Reposts</strong></span>
+                  )}
                 </p>
               </div>
             </div>
@@ -1029,7 +1062,7 @@ export default function EngagementPage() {
               type="button"
               onClick={rerollPlan}
               disabled={shuffling}
-              className="px-3 py-1.5 rounded-xl bg-[#F8F9FD] hover:bg-[#EEF1FB] border border-[#DEE0ED] text-xs font-bold text-[#3A4EFB] transition-all flex items-center gap-1.5 cursor-pointer press-scale disabled:opacity-60"
+              className="px-3 py-1.5 rounded-xl bg-[#F8F9FD] hover:bg-[#EEF1FB] border border-[#DEE0ED] text-xs font-bold text-[#3A4EFB] transition-all flex items-center gap-1.5 cursor-pointer press-scale disabled:opacity-60 shadow-xs"
               title="Shuffle randomized quantities"
             >
               <Dices className={`w-3.5 h-3.5 text-[#3A4EFB] ${shuffling ? "animate-spin" : ""}`} />
@@ -1039,49 +1072,55 @@ export default function EngagementPage() {
 
           {/* Clean 5-Metric Strip */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 p-3 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED]/80">
-            <div className="p-2">
-              <span className="text-[10px] uppercase font-bold text-[#252943]/40 block leading-tight">Views</span>
-              <span className="text-base font-black text-blue-700 font-mono">
-                {currentPreset.views.enabled !== false ? totalViews.toLocaleString() : "—"}
+            <div className="p-2.5 rounded-xl bg-white/80 border border-blue-100 shadow-sm transition-all">
+              <span className="text-[10px] uppercase font-black text-blue-900/60 block leading-tight flex items-center justify-between">
+                <span>Total Views</span>
+                <span className={`w-2 h-2 rounded-full bg-blue-500 ${shuffling ? "animate-ping" : "animate-pulse"}`} title="Dynamic Batch Sum"></span>
               </span>
-              <span className="text-[10px] text-[#252943]/50 block font-medium">
-                {currentPreset.views.enabled !== false ? `${currentPreset.views.count} batches` : "Turned Off"}
+              <span className="text-base font-black text-blue-700 font-mono block">
+                {currentPreset.views.enabled !== false ? `${totalViews.toLocaleString()}` : "—"}
+              </span>
+              <span className="text-[10px] text-[#252943]/60 block font-medium">
+                {currentPreset.views.enabled !== false ? `${currentPreset.views.count} batches • Dynamic Sum` : "Turned Off"}
               </span>
             </div>
 
-            <div className="p-2">
-              <span className="text-[10px] uppercase font-bold text-[#252943]/40 block leading-tight">Likes</span>
-              <span className="text-base font-black text-rose-600 font-mono">
+            <div className="p-2.5 rounded-xl bg-white/80 border border-rose-100 shadow-sm transition-all">
+              <span className="text-[10px] uppercase font-black text-rose-900/60 block leading-tight flex items-center justify-between">
+                <span>Total Likes</span>
+                {currentPreset.likes.enabled !== false && <Heart className="w-2.5 h-2.5 text-rose-500 fill-rose-500" />}
+              </span>
+              <span className="text-base font-black text-rose-600 font-mono block">
                 {currentPreset.likes.enabled !== false ? totalLikes : "—"}
               </span>
-              <span className="text-[10px] text-[#252943]/50 block font-medium">
-                {currentPreset.likes.enabled !== false ? `${currentPreset.likes.count} waves` : "Turned Off"}
+              <span className="text-[10px] text-[#252943]/60 block font-medium">
+                {currentPreset.likes.enabled !== false ? `${currentPreset.likes.count} waves (${currentPreset.likes.min}-${currentPreset.likes.max}/wave)` : "Turned Off"}
               </span>
             </div>
 
-            <div className="p-2">
-              <span className="text-[10px] uppercase font-bold text-[#252943]/40 block leading-tight">Saves</span>
-              <span className="text-base font-black text-amber-700 font-mono">
+            <div className="p-2.5 rounded-xl bg-white/80 border border-amber-100 shadow-sm transition-all">
+              <span className="text-[10px] uppercase font-black text-amber-900/60 block leading-tight">Total Saves</span>
+              <span className="text-base font-black text-amber-700 font-mono block">
                 {currentPreset.saves?.enabled && totalSaves > 0 ? totalSaves : "—"}
               </span>
-              <span className="text-[10px] text-[#252943]/50 block font-medium">
+              <span className="text-[10px] text-[#252943]/60 block font-medium">
                 {currentPreset.saves?.enabled ? `${currentPreset.saves.count} waves` : "Turned Off"}
               </span>
             </div>
 
-            <div className="p-2">
-              <span className="text-[10px] uppercase font-bold text-[#252943]/40 block leading-tight">Reposts</span>
-              <span className="text-base font-black text-purple-700 font-mono">
+            <div className="p-2.5 rounded-xl bg-white/80 border border-purple-100 shadow-sm transition-all">
+              <span className="text-[10px] uppercase font-black text-purple-900/60 block leading-tight">Total Reposts</span>
+              <span className="text-base font-black text-purple-700 font-mono block">
                 {currentPreset.shares?.enabled && totalShares > 0 ? totalShares : "—"}
               </span>
-              <span className="text-[10px] text-[#252943]/50 block font-medium">
+              <span className="text-[10px] text-[#252943]/60 block font-medium">
                 {currentPreset.shares?.enabled ? `${currentPreset.shares.count} waves` : "Turned Off"}
               </span>
             </div>
 
-            <div className="p-2 col-span-2 sm:col-span-1">
-              <span className="text-[10px] uppercase font-bold text-[#252943]/40 block leading-tight">Duration</span>
-              <span className="text-base font-black text-emerald-700 font-mono">
+            <div className="p-2.5 rounded-xl bg-white/80 border border-emerald-100 shadow-sm transition-all col-span-2 sm:col-span-1">
+              <span className="text-[10px] uppercase font-black text-emerald-900/60 block leading-tight">Total Duration</span>
+              <span className="text-base font-black text-emerald-700 font-mono block">
                 {currentPreset.durationLabel}
               </span>
               <span className="text-[10px] text-emerald-800/70 font-medium block">Human Pacing</span>

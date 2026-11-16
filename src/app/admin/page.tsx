@@ -1660,6 +1660,22 @@ export default function AdminPage() {
                                 required
                               />
                             </div>
+                            <div className="col-span-2 pt-2 border-t border-[#DEE0ED]/60 flex items-center justify-between gap-3">
+                              <div className="flex-1">
+                                <label className="block font-bold text-[#252943]/80 mb-1">Target Total Views (Planned)</label>
+                                <input
+                                  type="number"
+                                  value={activePreset.targetViews ?? (activePreset.views?.runsCount ? activePreset.views.runsCount * Math.round(((activePreset.views?.minQuantity || 150) + (activePreset.views?.maxQuantity || 220)) / 2) : 2960)}
+                                  onChange={(e) => updateActiveField("targetViews", Number(e.target.value))}
+                                  className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-mono font-bold text-blue-700"
+                                  min={100}
+                                  required
+                                />
+                              </div>
+                              <div className="text-[11px] text-[#252943]/60 self-end pb-2 font-mono">
+                                ~{activePreset.views?.runsCount ? Math.round((activePreset.targetViews || 2960) / activePreset.views.runsCount) : 185} views/run
+                              </div>
+                            </div>
                           </div>
                         </div>
 
@@ -1777,6 +1793,22 @@ export default function AdminPage() {
                                 min={1}
                                 required
                               />
+                            </div>
+                            <div className="col-span-2 pt-2 border-t border-[#DEE0ED]/60 flex items-center justify-between gap-3">
+                              <div className="flex-1">
+                                <label className="block font-bold text-[#252943]/80 mb-1">Target Total Likes (Planned)</label>
+                                <input
+                                  type="number"
+                                  value={activePreset.targetLikes ?? (activePreset.likes?.runsCount ? activePreset.likes.runsCount * Math.round(((activePreset.likes?.minQuantity || 10) + (activePreset.likes?.maxQuantity || 20)) / 2) : 42)}
+                                  onChange={(e) => updateActiveField("targetLikes", Number(e.target.value))}
+                                  className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-mono font-bold text-rose-600"
+                                  min={1}
+                                  required
+                                />
+                              </div>
+                              <div className="text-[11px] text-[#252943]/60 self-end pb-2 font-mono">
+                                ~{activePreset.likes?.runsCount ? Math.round((activePreset.targetLikes || 42) / activePreset.likes.runsCount) : 14} likes/wave
+                              </div>
                             </div>
                           </div>
                         </div>
