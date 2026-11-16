@@ -268,7 +268,7 @@ export interface BinanceVerificationResult {
   status: "VERIFIED" | "INVALID" | "NOT_FOUND" | "API_ERROR" | "NOT_CONFIGURED";
   reason?: string;
   apiError?: string;
-  matchedBy?: "ORDER_ID" | "TRANSACTION_ID" | "SENDER_UID" | "AMOUNT";
+  matchedBy?: "ORDER_ID" | "TRANSACTION_ID";
   payment?: BinancePayment;
 }
 
@@ -310,7 +310,10 @@ function validateIncomingPayment(payment: BinancePayment): string | null {
 
   const adminUid = normalizeBinanceId(ADMIN_BINANCE_UID);
   const receiverUid = normalizeBinanceId(payment.receiverUid);
-  if (receiverUid && adminUid && receiverUid !== adminUid) {
+  if (!receiverUid) {
+    return "Binance did not report a recipient for this transaction, so it cannot be auto-approved";
+  }
+  if (adminUid && receiverUid !== adminUid) {
     return `Payment was sent to Binance ID ${payment.receiverUid}, not the official deposit Binance ID ${ADMIN_BINANCE_UID}`;
   }
 
@@ -318,24 +321,17 @@ function validateIncomingPayment(payment: BinancePayment): string | null {
 }
 
 /**
- * Verifies a customer payment against the live Binance Pay records.
+ * Live verification against the receiving Binance Pay account.
  *
- * Matching order:
- *  1. Exact Order ID / Transaction ID match (primary).
- *  2. Sender Binance UID + exact amount (when the customer supplied their UID).
- *  3. A single unclaimed incoming payment of the exact expected USDT amount made
- *     after the deposit was created (only when unambiguous).
+ * The ONLY thing that can match a payment is the Binance Order ID / Transaction ID
+ * that the payer received in their Binance receipt. Amount-only or sender-only
+ * fallbacks are intentionally NOT allowed: they would let somebody claim another
+ * customer's payment by guessing an amount or a public UID.
  */
 export async function queryBinanceIncomingPayment({
   searchInput,
-  expectedUsdt,
-  senderUid,
-  notBeforeMs,
 }: {
   searchInput: string;
-  expectedUsdt?: number;
-  senderUid?: string;
-  notBeforeMs?: number;
 }): Promise<BinanceVerificationResult> {
   if (!getBinanceApiCredentials()) {
     return {
@@ -366,86 +362,21 @@ export async function queryBinanceIncomingPayment({
     };
   }
 
-  const transactions = feed.transactions;
-  const payments = transactions.map(toBinancePayment);
+  const payments = feed.transactions.map(toBinancePayment);
 
-  // ---------------------------------------------------------------------
-  // 1. Exact Order ID / Transaction ID match
-  // ---------------------------------------------------------------------
   for (const payment of payments) {
     const orderKey = normalizeBinanceId(payment.orderId);
     const txnKey = normalizeBinanceId(payment.transactionId);
 
     if ((orderKey && searchKeys.has(orderKey)) || (txnKey && searchKeys.has(txnKey))) {
       const invalidReason = validateIncomingPayment(payment);
-      if (invalidReason) return { status: "INVALID", reason: invalidReason, payment, matchedBy: "ORDER_ID" };
+      if (invalidReason) {
+        return { status: "INVALID", reason: invalidReason, payment, matchedBy: "ORDER_ID" };
+      }
       return {
         status: "VERIFIED",
         matchedBy: orderKey && searchKeys.has(orderKey) ? "ORDER_ID" : "TRANSACTION_ID",
         payment,
-      };
-    }
-  }
-
-  const expected = Number(expectedUsdt || 0);
-  const notBefore = notBeforeMs ?? 0;
-
-  // ---------------------------------------------------------------------
-  // 2. Sender Binance UID + expected amount
-  // ---------------------------------------------------------------------
-  const normalizedSender = normalizeBinanceId(senderUid);
-  if (normalizedSender && expected > 0) {
-    const senderCandidates = payments
-      .filter((payment) => {
-        if ((payment.amount || 0) <= 0) return false;
-        if (normalizeBinanceId(payment.senderUid) !== normalizedSender) return false;
-        if (Math.abs((payment.amount || 0) - expected) > 0.02) return false;
-        if (notBefore && payment.transactionTime && payment.transactionTime < notBefore) return false;
-        return !validateIncomingPayment(payment);
-      })
-      .sort((a, b) => (b.transactionTime || 0) - (a.transactionTime || 0));
-
-    if (senderCandidates.length > 0) {
-      return { status: "VERIFIED", matchedBy: "SENDER_UID", payment: senderCandidates[0] };
-    }
-  }
-
-  // ---------------------------------------------------------------------
-  // 3. Unique amount fallback (only when it cannot be ambiguous)
-  // ---------------------------------------------------------------------
-  if (expected > 0) {
-    const amountCandidates = payments
-      .filter((payment) => {
-        if ((payment.amount || 0) <= 0) return false;
-        if (Math.abs((payment.amount || 0) - expected) > 0.02) return false;
-        if (notBefore && payment.transactionTime && payment.transactionTime < notBefore) return false;
-        return !validateIncomingPayment(payment);
-      })
-      .sort((a, b) => (b.transactionTime || 0) - (a.transactionTime || 0));
-
-    if (amountCandidates.length === 1) {
-      const candidate = amountCandidates[0];
-      const claimedDeposits = await prisma.paymentDeposit.findMany({
-        where: { status: "VERIFIED", txnId: { not: null } },
-        select: { txnId: true },
-        take: 5000,
-        orderBy: { createdAt: "desc" },
-      });
-      const claimedKeys = new Set(
-        claimedDeposits.map((deposit) => normalizeBinanceId(deposit.txnId)).filter(Boolean)
-      );
-
-      const orderKey = normalizeBinanceId(candidate.orderId);
-      const txnKey = normalizeBinanceId(candidate.transactionId);
-      const alreadyClaimed = claimedKeys.has(orderKey) || claimedKeys.has(txnKey);
-
-      if (!alreadyClaimed) {
-        return { status: "VERIFIED", matchedBy: "AMOUNT", payment: candidate };
-      }
-    } else if (amountCandidates.length > 1) {
-      return {
-        status: "NOT_FOUND",
-        reason: `${amountCandidates.length} different payments of ${expected} USDT were found, so this one cannot be auto-matched safely`,
       };
     }
   }
@@ -463,7 +394,7 @@ export interface DepositVerificationOutcome {
   verified?: boolean;
   alreadyCredited?: boolean;
   requiresAdminReview?: boolean;
-  autoVerifyStatus?: BinanceVerificationResult["status"];
+  autoVerifyStatus?: BinanceVerificationResult["status"] | "ALREADY_CLAIMED";
   newBalance?: number;
   deposit: any;
   message: string;
@@ -515,29 +446,7 @@ export async function verifyAndCreditDeposit({
   addVariant(idInfo.extractedTxnId);
   const variantList = Array.from(txnIdVariants);
 
-  // 1. Initial unique check: Prevent duplicate claims
-  const duplicateTxn = await prisma.paymentDeposit.findFirst({
-    where: {
-      status: "VERIFIED",
-      txnId: { in: variantList },
-    },
-  });
-
-  if (duplicateTxn) {
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { walletBalance: true } });
-    const isSameUser = duplicateTxn.userId === userId;
-    return {
-      success: true,
-      alreadyCredited: true,
-      newBalance: user?.walletBalance ?? duplicateTxn.inrAmount,
-      deposit: duplicateTxn,
-      message: isSameUser
-        ? `This Binance payment (₹${duplicateTxn.inrAmount.toFixed(2)}) has already been credited to your wallet.`
-        : "This Binance Order ID has already been claimed by another account.",
-    };
-  }
-
-  // 2. Retrieve deposit or create on the fly
+  // 1. Resolve the deposit being verified and enforce ownership before anything else.
   let deposit = depositId
     ? await prisma.paymentDeposit.findUnique({
       where: { id: depositId },
@@ -549,6 +458,56 @@ export async function verifyAndCreditDeposit({
       include: { user: { select: { id: true, username: true, walletBalance: true } } },
     });
 
+  if (deposit && deposit.userId !== userId) {
+    throw new Error("Unauthorized: Deposit belongs to another user.");
+  }
+
+  if (deposit && deposit.status === "VERIFIED") {
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { walletBalance: true } });
+    return {
+      success: true,
+      alreadyCredited: true,
+      newBalance: user?.walletBalance ?? deposit.inrAmount,
+      deposit,
+      message: "This deposit has already been credited to your wallet balance.",
+    };
+  }
+
+  // 2. An Order ID may only ever be credited ONCE - to the account that claimed it.
+  const duplicateTxn = await prisma.paymentDeposit.findFirst({
+    where: {
+      status: "VERIFIED",
+      txnId: { in: variantList },
+    },
+  });
+
+  if (duplicateTxn) {
+    if (duplicateTxn.userId === userId) {
+      const user = await prisma.user.findUnique({ where: { id: userId }, select: { walletBalance: true } });
+      return {
+        success: true,
+        alreadyCredited: true,
+        newBalance: user?.walletBalance ?? duplicateTxn.inrAmount,
+        deposit: duplicateTxn,
+        message: `This Binance payment (₹${duplicateTxn.inrAmount.toFixed(2)}) has already been credited to your wallet.`,
+      };
+    }
+
+    // Do not leak another account's deposit details.
+    return {
+      success: false,
+      requiresAdminReview: false,
+      autoVerifyStatus: "ALREADY_CLAIMED",
+      error:
+        "This Binance Order ID has already been claimed by another account. If you believe this is a mistake, contact support with your Binance receipt.",
+      message:
+        "This Binance Order ID has already been claimed by another account. If you believe this is a mistake, contact support with your Binance receipt.",
+      deposit: null,
+      failureReason: "Order ID already claimed by another account",
+    };
+  }
+
+  // 3. Create a pending deposit on the fly if the customer never created one.
   if (!deposit) {
     const created = await createBinanceDeposit({
       userId,
@@ -564,42 +523,65 @@ export async function verifyAndCreditDeposit({
     throw new Error("Deposit order not found. Please initiate a new payment request.");
   }
 
-  if (deposit.userId !== userId) {
-    throw new Error("Unauthorized: Deposit belongs to another user.");
-  }
-
-  if (deposit.status === "VERIFIED") {
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { walletBalance: true } });
-    return {
-      success: true,
-      alreadyCredited: true,
-      newBalance: user?.walletBalance ?? deposit.inrAmount,
-      deposit,
-      message: "This deposit has already been credited to your wallet balance.",
-    };
-  }
-
-  // Check for uniqueness: if another unverified deposit has this txnId, clear it so current deposit can use it
-  const existingTxnDeposit = await prisma.paymentDeposit.findFirst({
-    where: { txnId: { in: variantList } },
+  // 4. An Order ID can only ever belong to ONE account.
+  const conflictingDeposits = await prisma.paymentDeposit.findMany({
+    where: { txnId: { in: variantList }, id: { not: deposit.id } },
+    orderBy: { createdAt: "desc" },
   });
 
-  if (existingTxnDeposit && existingTxnDeposit.id !== deposit.id) {
-    if (existingTxnDeposit.status === "VERIFIED") {
-      const user = await prisma.user.findUnique({ where: { id: userId }, select: { walletBalance: true } });
+  for (const conflicting of conflictingDeposits) {
+    if (conflicting.status === "VERIFIED") {
+      if (conflicting.userId === userId) {
+        const user = await prisma.user.findUnique({ where: { id: userId }, select: { walletBalance: true } });
+        return {
+          success: true,
+          alreadyCredited: true,
+          newBalance: user?.walletBalance ?? conflicting.inrAmount,
+          deposit: conflicting,
+          message: `This Binance payment (₹${conflicting.inrAmount.toFixed(2)}) has already been credited to your wallet.`,
+        };
+      }
+
       return {
-        success: true,
-        alreadyCredited: true,
-        newBalance: user?.walletBalance ?? existingTxnDeposit.inrAmount,
-        deposit: existingTxnDeposit,
-        message: "This Binance Order ID has already been credited to wallet balance.",
+        success: false,
+        requiresAdminReview: false,
+        autoVerifyStatus: "ALREADY_CLAIMED",
+        error:
+          "This Binance Order ID has already been claimed by another account. If you believe this is a mistake, contact support with your Binance receipt.",
+        message:
+          "This Binance Order ID has already been claimed by another account. If you believe this is a mistake, contact support with your Binance receipt.",
+        deposit: null,
+        failureReason: "Order ID already claimed by another account",
       };
-    } else {
-      await prisma.paymentDeposit.update({
-        where: { id: existingTxnDeposit.id },
-        data: { txnId: null },
-      });
     }
+
+    // Never release an Order ID that another account already submitted - that would
+    // let someone hijack a queued deposit by racing the real payer for it.
+    if (conflicting.userId !== userId && conflicting.status !== "REJECTED") {
+      return {
+        success: false,
+        requiresAdminReview: true,
+        autoVerifyStatus: "ALREADY_CLAIMED",
+        error:
+          "This Order ID is already linked to another account's deposit. If you believe this is a mistake, contact support with your Binance receipt.",
+        message:
+          "This Order ID is already linked to another account's deposit. If you believe this is a mistake, contact support with your Binance receipt.",
+        deposit,
+        failureReason: "Order ID is already attached to another account's deposit",
+      };
+    }
+  }
+
+  // Same account re-submitting the same Order ID: release the stale record so the
+  // unique constraint cannot block this attempt.
+  const sameUserStale = conflictingDeposits.find(
+    (existing) => existing.userId === userId && existing.status !== "REJECTED"
+  );
+  if (sameUserStale) {
+    await prisma.paymentDeposit.update({
+      where: { id: sameUserStale.id },
+      data: { txnId: null },
+    });
   }
 
   // 3. Automated Binance Verification
@@ -640,29 +622,16 @@ export async function verifyAndCreditDeposit({
     };
   }
 
-  const expectedUsdt = deposit.usdtAmount > 0 ? deposit.usdtAmount : 0;
-  const notBeforeMs = deposit.createdAt.getTime() - 10 * 60 * 1000; // small clock-skew allowance
-
   // Binance Pay history can lag a few seconds behind the payment confirmation,
   // so retry briefly before queuing the deposit for manual review.
-  let verification = await queryBinanceIncomingPayment({
-    searchInput: cleanTxnId,
-    expectedUsdt,
-    senderUid: senderBinanceId,
-    notBeforeMs,
-  });
+  let verification = await queryBinanceIncomingPayment({ searchInput: cleanTxnId });
 
   for (let attempt = 1; attempt <= 2; attempt++) {
     // Only "not found yet" is worth re-checking: Binance history can lag behind the
     // payment confirmation. Auth/network errors were already retried across hosts.
     if (verification.status !== "NOT_FOUND") break;
     await sleep(1500);
-    verification = await queryBinanceIncomingPayment({
-      searchInput: cleanTxnId,
-      expectedUsdt,
-      senderUid: senderBinanceId,
-      notBeforeMs,
-    });
+    verification = await queryBinanceIncomingPayment({ searchInput: cleanTxnId });
   }
 
   const failureReason = verification.reason || "Payment could not be matched on Binance";
@@ -673,88 +642,127 @@ export async function verifyAndCreditDeposit({
   if (verification.status === "VERIFIED" && verification.payment) {
     const payment = verification.payment;
     const receivedUsdt = payment.amount || 0;
-    // Dynamically calculate credited INR based on the exact USDT confirmed by Binance API
-    const creditInr = Math.max(1, Number((receivedUsdt * deposit.exchangeRate).toFixed(2)));
+    if (receivedUsdt <= 0) {
+      throw new Error("Binance reported an invalid amount for this payment.");
+    }
+
+    // The credited INR is derived from the USDT that Binance actually confirms was
+    // received, at the rate stored on the deposit. It can never be inflated by the client.
+    const creditInr = Math.max(0.01, Number((receivedUsdt * deposit.exchangeRate).toFixed(2)));
+
+    const requestedUsdt = deposit.usdtAmount || 0;
+    const amountTolerance = Math.max(0.02, requestedUsdt * 0.01);
+    const amountMatches =
+      requestedUsdt > 0 && Math.abs(receivedUsdt - requestedUsdt) <= amountTolerance;
 
     const orderIdToLock = payment.orderId || cleanTxnId;
     const txnIdToLock = payment.transactionId || cleanTxnId;
     const lockIds = Array.from(new Set([cleanTxnId, orderIdToLock, txnIdToLock]));
 
-    const result = await prisma.$transaction(async (tx) => {
-      // Re-verify inside lock
-      const concurrentCheck = await tx.paymentDeposit.findFirst({
-        where: {
-          status: "VERIFIED",
-          txnId: { in: lockIds },
-        },
+    let result: { updatedDeposit: any; newBalance: number };
+    try {
+      result = await prisma.$transaction(async (tx) => {
+        // Re-verify inside the transaction: no other account may already own this payment.
+        const concurrentCheck = await tx.paymentDeposit.findFirst({
+          where: {
+            status: "VERIFIED",
+            txnId: { in: lockIds },
+          },
+        });
+        if (concurrentCheck) {
+          throw new Error("This Binance Order ID has already been claimed.");
+        }
+
+        // Release identifiers from this account's own stale records only. Another
+        // account's claim is never released (it would allow payment hijacking).
+        await tx.paymentDeposit.updateMany({
+          where: {
+            id: { not: deposit.id },
+            userId,
+            status: { not: "VERIFIED" },
+            txnId: { in: lockIds },
+          },
+          data: { txnId: null },
+        });
+
+        // A. Update deposit status to VERIFIED
+        const updatedDeposit = await tx.paymentDeposit.update({
+          where: { id: deposit.id },
+          data: {
+            status: "VERIFIED",
+            txnId: orderIdToLock,
+            senderBinanceId: payment.senderUid || senderBinanceId?.trim() || null,
+            inrAmount: creditInr,
+            usdtAmount: receivedUsdt,
+            verifiedAt: new Date(),
+            rejectionReason: null,
+            rawVerification: JSON.stringify({
+              verifiedAt: new Date().toISOString(),
+              matchedBy: verification.matchedBy,
+              orderId: payment.orderId,
+              transactionId: payment.transactionId,
+              receivedUsdt,
+              requestedUsdt,
+              amountMatches,
+              exchangeRate: deposit.exchangeRate,
+              creditedInr: creditInr,
+              currency: payment.currency,
+              senderUid: payment.senderUid,
+              receiverUid: payment.receiverUid,
+              transactionTime: payment.transactionTime,
+            }),
+          },
+        });
+
+        // B. Increment wallet balance
+        const updatedUser = await tx.user.update({
+          where: { id: userId },
+          data: {
+            walletBalance: { increment: creditInr },
+          },
+          select: { id: true, walletBalance: true },
+        });
+
+        // C. Create immutable audit record
+        await tx.walletTransaction.create({
+          data: {
+            userId,
+            type: "CREDIT",
+            amount: creditInr,
+            balanceAfter: updatedUser.walletBalance,
+            referenceId: deposit.depositRef,
+            description: `Binance Pay Auto-Verified: ₹${creditInr} (${receivedUsdt} USDT @ ₹${deposit.exchangeRate}) - Order ID: ${orderIdToLock}`,
+          },
+        });
+
+        return {
+          updatedDeposit,
+          newBalance: updatedUser.walletBalance,
+        };
       });
-      if (concurrentCheck) {
-        throw new Error("This Binance Order ID has already been claimed.");
+    } catch (err: any) {
+      // Unique constraint on txnId: another account won the race for this payment.
+      if (err?.code === "P2002" || /already been claimed/i.test(err?.message || "")) {
+        return {
+          success: false,
+          requiresAdminReview: true,
+          autoVerifyStatus: "ALREADY_CLAIMED",
+          error:
+            "This Order ID has already been claimed by another account. If you believe this is a mistake, contact support with your Binance receipt.",
+          message:
+            "This Order ID has already been claimed by another account. If you believe this is a mistake, contact support with your Binance receipt.",
+          deposit,
+          failureReason: "Duplicate claim detected",
+        };
       }
+      throw err;
+    }
 
-      // Release the identifiers from other unverified records so the unique
-      // constraint on txnId does not block this genuine credit.
-      await tx.paymentDeposit.updateMany({
-        where: {
-          id: { not: deposit.id },
-          status: { not: "VERIFIED" },
-          txnId: { in: lockIds },
-        },
-        data: { txnId: null },
-      });
-
-      // A. Update deposit status to VERIFIED
-      const updatedDeposit = await tx.paymentDeposit.update({
-        where: { id: deposit.id },
-        data: {
-          status: "VERIFIED",
-          txnId: orderIdToLock,
-          senderBinanceId: payment.senderUid || senderBinanceId?.trim() || null,
-          inrAmount: creditInr,
-          usdtAmount: receivedUsdt,
-          verifiedAt: new Date(),
-          rejectionReason: null,
-          rawVerification: JSON.stringify({
-            verifiedAt: new Date().toISOString(),
-            matchedBy: verification.matchedBy,
-            orderId: payment.orderId,
-            transactionId: payment.transactionId,
-            amount: receivedUsdt,
-            currency: payment.currency,
-            senderUid: payment.senderUid,
-            receiverUid: payment.receiverUid,
-            transactionTime: payment.transactionTime,
-          }),
-        },
-      });
-
-      // B. Increment wallet balance
-      const updatedUser = await tx.user.update({
-        where: { id: userId },
-        data: {
-          walletBalance: { increment: creditInr },
-        },
-        select: { id: true, walletBalance: true },
-      });
-
-      // C. Create immutable audit record
-      const auditRecord = await tx.walletTransaction.create({
-        data: {
-          userId,
-          type: "CREDIT",
-          amount: creditInr,
-          balanceAfter: updatedUser.walletBalance,
-          referenceId: deposit.depositRef,
-          description: `Binance Pay Auto-Verified: ₹${creditInr} (${receivedUsdt} USDT @ ₹${deposit.exchangeRate}) - Order ID: ${orderIdToLock}`,
-        },
-      });
-
-      return {
-        updatedDeposit,
-        newBalance: updatedUser.walletBalance,
-        auditRecord,
-      };
-    });
+    const amountNote = amountMatches
+      ? ""
+      : ` Binance confirmed ${receivedUsdt.toFixed(2)} USDT instead of the requested ${requestedUsdt.toFixed(
+          2
+        )} USDT, so the credit reflects the amount actually received.`;
 
     return {
       success: true,
@@ -762,7 +770,7 @@ export async function verifyAndCreditDeposit({
       autoVerifyStatus: "VERIFIED" as const,
       newBalance: result.newBalance,
       deposit: result.updatedDeposit,
-      message: `Payment verified instantly! ₹${creditInr.toFixed(2)} has been credited to your wallet.`,
+      message: `Payment verified instantly! ₹${creditInr.toFixed(2)} has been credited to your wallet.${amountNote}`,
     };
   }
 

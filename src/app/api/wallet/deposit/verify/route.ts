@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
 import { verifyAndCreditDeposit } from "@/lib/payments/binance-pay";
+import { checkVerifyRateLimit } from "@/lib/payments/verify-rate-limit";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +16,17 @@ export async function POST(request: Request) {
   const session = await getAuthSession(request);
   if (!session.authenticated || !session.user) {
     return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  }
+
+  const limit = checkVerifyRateLimit(session.user.id);
+  if (!limit.allowed) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: `Too many verification attempts. Please wait ${limit.retryAfterSeconds} seconds and try again.`,
+      },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds) } }
+    );
   }
 
   try {

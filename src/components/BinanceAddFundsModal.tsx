@@ -602,7 +602,7 @@ export function BinanceAddFundsModal({
               {/* Optional Sender Binance UID */}
               <div className="space-y-1">
                 <label className="block text-[11px] text-gray-500">
-                  Your Binance UID (Optional for faster matching)
+                  Your Binance UID (optional, saved on the deposit for support)
                 </label>
                 <input
                   type="text"
