@@ -3,6 +3,7 @@ import { getAdminSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { replanRemainingEngagementRuns } from "@/lib/engagement/worker";
 import { logOrderEvent } from "@/lib/engagement/event-logger";
+import { getAdminViewsProvider, getAdminEngagementProvider } from "@/lib/provider/admin-provider";
 
 export const dynamic = "force-dynamic";
 
@@ -116,6 +117,59 @@ export async function POST(
         return NextResponse.json({ success: false, error: "Run not found" }, { status: 404 });
       }
 
+      // Safeguard against duplicate orders: If this run ALREADY has an upstream provider order ID,
+      // poll the provider status first instead of creating another duplicate order!
+      if (run.providerOrderId && !body.forceNewOrder) {
+        try {
+          const adminProv = run.engagementType === "views"
+            ? await getAdminViewsProvider()
+            : await getAdminEngagementProvider();
+
+          if (adminProv && !adminProv.isMock) {
+            const statusRes = await adminProv.adapter.getOrderStatus(run.providerOrderId);
+            if (statusRes && statusRes.status && statusRes.status !== "REQUIRES_RECONCILIATION") {
+              const rawStat = (statusRes.status || "").toUpperCase();
+              const isComplete = rawStat.includes("COMPLET");
+              const isCanceled = rawStat.includes("CANCEL") || rawStat.includes("FAIL");
+
+              if (!isCanceled) {
+                // Active or Completed upstream! Reconcile status without re-ordering.
+                const deliveredQty = isComplete
+                  ? run.quantity
+                  : statusRes.remains !== undefined
+                  ? Math.max(0, run.quantity - Number(statusRes.remains))
+                  : run.deliveredQuantity ?? 0;
+
+                await prisma.engagementRun.update({
+                  where: { id: run.id },
+                  data: {
+                    status: isComplete ? "confirmed" : "sent",
+                    confirmedAt: isComplete ? now : null,
+                    deliveredQuantity: deliveredQty,
+                    errorMessage: null,
+                    errorType: null,
+                  },
+                });
+
+                await logOrderEvent({
+                  orderId: order.id,
+                  runId: run.id,
+                  eventType: "STATE_CHANGE",
+                  message: `Admin checked run #${run.runNumber}: linked upstream order #${run.providerOrderId} is ${rawStat}. Synchronized without double-ordering.`,
+                });
+
+                return NextResponse.json({
+                  success: true,
+                  message: `Run #${run.runNumber} is already tracked upstream (Order #${run.providerOrderId}: ${rawStat}). Status synchronized without duplicate order.`,
+                });
+              }
+            }
+          }
+        } catch (syncErr: any) {
+          console.warn("[ADMIN-ACTIONS] Provider status check failed on retry_run:", syncErr?.message);
+        }
+      }
+
       await prisma.engagementRun.update({
         where: { id: run.id },
         data: {
@@ -124,6 +178,7 @@ export async function POST(
           attempts: 0,
           errorMessage: null,
           errorType: null,
+          providerOrderId: body.forceNewOrder ? null : run.providerOrderId,
         },
       });
 

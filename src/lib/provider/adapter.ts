@@ -343,7 +343,10 @@ export class StandardSMMv2Provider implements SMMProviderAdapter {
 
     const startTime = Date.now();
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 12000); // 12s timeout
+    // Adaptive provider timeout: order placement ("add") requires up to 45s to avoid
+    // premature aborts where upstream provider creates order while our client aborts and retries.
+    const timeoutMs = action === "add" ? 45000 : action === "services" ? 30000 : 20000;
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
     const bodyParams = new URLSearchParams({
       key: this.apiKey,
@@ -423,6 +426,8 @@ export class StandardSMMv2Provider implements SMMProviderAdapter {
       }).catch(() => {});
 
       throw new Error(`Provider connection failed: ${errorMessage}`);
+    } finally {
+      clearTimeout(timeout);
     }
   }
 

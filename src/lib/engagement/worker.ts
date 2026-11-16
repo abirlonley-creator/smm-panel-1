@@ -395,7 +395,30 @@ function isFatalProviderError(errMsg: string): boolean {
  * - Sent run status polling to confirm upstream completion.
  * - Safe partial failure: refunds only undelivered amount, keeping remaining types active.
  */
+let isTickRunning = false;
+
 export async function runEngagementTick(): Promise<EngagementTickResult> {
+  if (isTickRunning) {
+    return {
+      processedRuns: 0,
+      successfulRuns: 0,
+      delayedRuns: 0,
+      failedRuns: 0,
+      refundedRuns: 0,
+      syncedSentRuns: 0,
+      ordersCompleted: 0,
+    };
+  }
+
+  isTickRunning = true;
+  try {
+    return await executeEngagementTick();
+  } finally {
+    isTickRunning = false;
+  }
+}
+
+async function executeEngagementTick(): Promise<EngagementTickResult> {
   const now = new Date();
 
   // 1. Worker Heartbeat: update singleton worker heartbeat timestamp every cycle
@@ -560,9 +583,10 @@ export async function runEngagementTick(): Promise<EngagementTickResult> {
       });
     }
 
+    let adapter: SMMProviderAdapter | null = null;
+
     try {
       // 5. Provider resolution with concurrency isolation
-      let adapter: SMMProviderAdapter | null = null;
       let targetServiceExtId: string = run.providerServiceId || "101";
 
       if (effectiveProviderId) {
@@ -605,6 +629,28 @@ export async function runEngagementTick(): Promise<EngagementTickResult> {
             finalTargetUrl = resolvedUrl.normalizedUrl;
           }
         } catch {}
+      }
+
+      // IDEMPOTENCY / DOUBLE-DISPATCH GUARD:
+      // Re-fetch the current DB state of this run to ensure no other tick, watchdog, or prior attempt
+      // already submitted this order or assigned a providerOrderId!
+      const freshRun = await prisma.engagementRun.findUnique({
+        where: { id: run.id },
+        select: { status: true, providerOrderId: true },
+      });
+
+      if (
+        freshRun &&
+        (freshRun.status === "sent" ||
+          freshRun.status === "confirmed" ||
+          freshRun.status === "completed" ||
+          Boolean(freshRun.providerOrderId))
+      ) {
+        console.warn(
+          `[ENGAGEMENT-WORKER] Run #${run.runNumber} (${run.engagementType}) already has providerOrderId ${freshRun.providerOrderId} (status: ${freshRun.status}). Skipping duplicate submission.`
+        );
+        successfulRuns++;
+        continue;
       }
 
       const callStart = Date.now();
@@ -666,6 +712,28 @@ export async function runEngagementTick(): Promise<EngagementTickResult> {
       }
     } catch (err: any) {
       const errMsg = err instanceof Error ? err.message : String(err);
+
+      // STALE ERROR GUARD: Check if another worker instance, recovery watchdog, or previous attempt
+      // already successfully transitioned this run to "sent" or "confirmed".
+      const currentRunState = await prisma.engagementRun.findUnique({
+        where: { id: run.id },
+        select: { status: true, providerOrderId: true },
+      });
+
+      if (
+        currentRunState &&
+        (currentRunState.status === "sent" ||
+          currentRunState.status === "confirmed" ||
+          currentRunState.status === "completed" ||
+          Boolean(currentRunState.providerOrderId))
+      ) {
+        console.warn(
+          `[ENGAGEMENT-WORKER] Stale error caught for run #${run.runNumber} (${run.engagementType}), but run is already settled upstream (status: ${currentRunState.status}, providerOrderId: ${currentRunState.providerOrderId}). Ignoring stale error to prevent duplicate orders.`
+        );
+        successfulRuns++;
+        continue;
+      }
+
       const classified = classifyProviderError(errMsg);
       const isFatal = classified.isFatal || isFatalProviderError(errMsg);
       const isMaxAttempts = currentAttempt >= MAX_RUN_ATTEMPTS;
@@ -685,16 +753,41 @@ export async function runEngagementTick(): Promise<EngagementTickResult> {
         delayedRuns++;
         const nextScheduled = new Date(now.getTime() + 4 * 60 * 1000);
 
+        // Check if an earlier run on the same order is sent and poll its status
+        try {
+          const earlierRun = await prisma.engagementRun.findFirst({
+            where: {
+              engagementOrderId: run.engagementOrderId,
+              engagementType: run.engagementType,
+              providerOrderId: { not: null },
+              status: "sent",
+            },
+          });
+          if (earlierRun?.providerOrderId && adapter) {
+            const statusCheck = await adapter.getOrderStatus(earlierRun.providerOrderId);
+            const rawStat = String(statusCheck?.status || "").toLowerCase();
+            if (rawStat.includes("complete")) {
+              await prisma.engagementRun.update({
+                where: { id: earlierRun.id },
+                data: { status: "confirmed", confirmedAt: now },
+              });
+            }
+          }
+        } catch {}
+
+        const isMaxConflict = run.attempts >= 10;
         await prisma.engagementRun.update({
           where: { id: run.id },
           data: {
-            status: "delayed",
-            scheduledAt: nextScheduled,
+            status: isMaxConflict ? "delayed" : "delayed",
+            scheduledAt: isMaxConflict ? new Date(now.getTime() + 15 * 60 * 1000) : nextScheduled,
             errorType: classified.errorType,
             httpStatus: classified.httpStatus,
-            errorMessage: "Active upstream batch in progress. Auto-waiting 4m for provider to complete.",
+            errorMessage: isMaxConflict
+              ? "Active order conflict on provider link exceeded 40m. Extended backoff active."
+              : "Active upstream batch in progress. Auto-waiting 4m for provider to complete.",
             rawResponse: sanitizeProviderResponse(errMsg),
-            attempts: { decrement: 1 }, // do NOT penalize attempt count for upstream completion wait
+            attempts: isMaxConflict ? run.attempts : { decrement: 1 }, // do NOT penalize attempt count for normal waiting
           },
         });
 

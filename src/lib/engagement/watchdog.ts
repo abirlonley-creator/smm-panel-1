@@ -100,12 +100,58 @@ export async function runWatchdogCycle(): Promise<WatchdogResult> {
       });
       stuckRecovered++;
     } else {
-      // No order ID yet: safely transition to 'delayed' with backoff to prevent double-send
+      // No order ID yet on the run record: check audit logs in providerRequestRecord
+      // before resetting to avoid re-ordering if the provider already accepted the batch!
+      let recoveredOrderId: string | null = null;
+      if (run.engagementOrder?.targetUrl) {
+        try {
+          const recentReq = await prisma.providerRequestRecord.findFirst({
+            where: {
+              action: "add",
+              success: true,
+              createdAt: { gte: new Date(now.getTime() - 15 * 60 * 1000) },
+              requestPayload: { contains: run.engagementOrder.targetUrl },
+            },
+            orderBy: { createdAt: "desc" },
+          });
+
+          if (recentReq?.responsePayload) {
+            const parsed = JSON.parse(recentReq.responsePayload);
+            if (parsed && (parsed.order || parsed.orderId)) {
+              recoveredOrderId = String(parsed.order || parsed.orderId);
+            }
+          }
+        } catch {}
+      }
+
+      if (recoveredOrderId) {
+        // Successfully recovered provider order ID from provider logs! Transition safely to sent
+        await prisma.engagementRun.update({
+          where: { id: run.id },
+          data: {
+            status: "sent",
+            sentAt: now,
+            providerOrderId: recoveredOrderId,
+            errorMessage: null,
+          },
+        });
+
+        await logOrderEvent({
+          orderId: run.engagementOrderId,
+          runId: run.id,
+          eventType: "WATCHDOG",
+          message: `Watchdog recovered stuck run #${run.runNumber}: retrieved existing provider order ID #${recoveredOrderId} from audit logs. Prevented duplicate order.`,
+        });
+        stuckRecovered++;
+        continue;
+      }
+
+      // No order ID found in logs: safely transition to 'delayed' with backoff (60s, NOT 15s) to prevent double-send
       await prisma.engagementRun.update({
         where: { id: run.id },
         data: {
           status: "delayed",
-          scheduledAt: new Date(now.getTime() + 15 * 1000), // Retry in 15 seconds
+          scheduledAt: new Date(now.getTime() + 60 * 1000), // Retry in 60 seconds
           errorMessage: "Watchdog recovered run from interrupted send cycle.",
         },
       });
