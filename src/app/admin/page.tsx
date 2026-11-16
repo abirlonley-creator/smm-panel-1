@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { EngagementServicesManager } from "@/components/admin/EngagementServicesManager";
 import {
   ShieldCheck,
   Key,
@@ -2516,6 +2517,9 @@ export default function AdminPage() {
                     </button>
                   </div>
                 </div>
+
+                {/* Section 4b: Universal Engagement Services & API Catalog Manager */}
+                <EngagementServicesManager />
 
                 {/* Section 5: Delayed Likes Protection Synchronization Threshold */}
                 <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-300 space-y-3">

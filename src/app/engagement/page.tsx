@@ -65,6 +65,7 @@ interface EngagementStatusResponse {
     sharesRate: number;
   };
   presets?: any[];
+  services?: any[];
   config: any;
   pricing: any;
 }
@@ -919,6 +920,65 @@ export default function EngagementPage() {
           })}
         </div>
       </div>
+
+      {/* 2b. ACTIVE ENGAGEMENT SERVICES (API v2 COMPATIBLE) */}
+      {statusData?.services && statusData.services.length > 0 && (
+        <div className="bg-white rounded-3xl border border-[#DEE0ED] p-5 sm:p-6 shadow-subtle space-y-3.5">
+          <div className="flex items-center justify-between pb-2 border-b border-[#DEE0ED]/80">
+            <div className="flex items-center gap-2">
+              <Layers className="w-4 h-4 text-[#3A4EFB]" />
+              <h2 className="text-sm font-bold text-[#252943]">
+                Engagement Services ({statusData.services.length})
+              </h2>
+            </div>
+            <Link
+              href="/api-docs"
+              className="text-[11px] text-[#3A4EFB] hover:underline font-semibold flex items-center gap-1"
+            >
+              <span>API v2 Reference</span>
+              <ArrowRight className="w-3 h-3" />
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {statusData.services.map((srv: any) => (
+              <div
+                key={srv.service}
+                className="p-3.5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] space-y-2 hover:bg-white transition-all shadow-subtle"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="px-2 py-0.5 rounded-md bg-[#252943] text-white text-[10px] font-mono font-bold">
+                    #{srv.service}
+                  </span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
+                      srv.active ? "bg-emerald-100 text-emerald-800" : "bg-gray-200 text-gray-700"
+                    }`}
+                  >
+                    {srv.active ? "Active" : "Inactive"}
+                  </span>
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold text-[#252943] truncate" title={srv.name}>
+                    {srv.name}
+                  </h3>
+                  <span className="text-[10px] text-[#252943]/60">
+                    {srv.platform} • {srv.type}
+                  </span>
+                </div>
+                <div className="pt-2 border-t border-[#DEE0ED]/60 flex items-center justify-between text-[11px]">
+                  <span className="font-bold text-[#3A4EFB] font-mono">
+                    ₹{Number(srv.rate).toFixed(2)}/1k
+                  </span>
+                  <span className="text-[10px] text-[#252943]/50 font-mono">
+                    {srv.min?.toLocaleString()} - {srv.max?.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 3. THREE-STEP WORKSPACE */}
       <form onSubmit={handleCreateOrder} className="space-y-5">

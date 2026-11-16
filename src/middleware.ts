@@ -27,12 +27,16 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Allow health check, maintenance status, and scheduler tick endpoints for monitoring & automated crons
+  // Allow health check, maintenance status, scheduler tick, and Universal API v2 / public docs
   if (
     pathname === "/api/health" ||
     pathname === "/api/scheduler/tick" ||
     pathname === "/api/system/maintenance" ||
-    pathname === "/maintenance"
+    pathname === "/maintenance" ||
+    pathname === "/api-docs" ||
+    pathname === "/api/openapi.json" ||
+    pathname === "/api/v2" ||
+    pathname.startsWith("/api/v2/")
   ) {
     return NextResponse.next();
   }
@@ -41,7 +45,11 @@ export function middleware(request: NextRequest) {
   const sessionToken = request.cookies.get("smm_session_token")?.value;
   const adminCookie = request.cookies.get("smm_admin_auth")?.value;
   const authHeader = request.headers.get("authorization");
-  const adminHeader = request.headers.get("x-admin-key") || request.headers.get("x-passkey") || request.headers.get("x-session-token");
+  const adminHeader =
+    request.headers.get("x-admin-key") ||
+    request.headers.get("x-passkey") ||
+    request.headers.get("x-session-token") ||
+    request.headers.get("x-api-key");
 
   const hasCredential = Boolean(sessionToken || adminCookie || authHeader || adminHeader);
 

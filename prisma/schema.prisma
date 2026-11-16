@@ -27,6 +27,7 @@ model Provider {
 
 model Service {
   id                  String                  @id @default(cuid())
+  numericId           Int?
   externalId          String
   name                String
   type                String                  @default("Default")
@@ -59,6 +60,7 @@ model Service {
   updatedAt           DateTime                @updatedAt
 
   @@index([providerEndpoint, active])
+  @@index([numericId])
   @@index([externalId])
   @@index([providerId])
   @@index([userProviderId])
@@ -68,6 +70,7 @@ model Service {
 
 model Order {
   id                String                  @id @default(cuid())
+  numericId         Int?
   orderRef          String                  @unique
   serviceId         String
   service           Service                 @relation(fields: [serviceId], references: [id])
@@ -106,6 +109,7 @@ model Order {
   updatedAt         DateTime                @updatedAt
 
   @@index([userId])
+  @@index([numericId])
   @@index([providerId])
 }
 
@@ -164,6 +168,8 @@ model User {
   combos             Combo[]
   comboExecutions    ComboExecution[]
   bulkBatches        BulkBatch[]
+  apiKeys            UserApiKey[]
+  apiLogs            UserApiLog[]
   createdAt          DateTime                @default(now())
   updatedAt          DateTime                @updatedAt
 }
@@ -728,4 +734,51 @@ model DripFeedRun {
 
   @@index([status, scheduledAt])
   @@index([orderId])
+}
+
+// =====================================================================
+// Universal Developer API Keys & Telemetry Logs
+// =====================================================================
+
+model UserApiKey {
+  id            String       @id @default(cuid())
+  userId        String
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  keyPrefix     String
+  keySuffix     String
+  keyHash       String       @unique
+  permission    String       @default("FULL_ACCESS") // "FULL_ACCESS" | "READ_ONLY"
+  status        String       @default("ACTIVE") // "ACTIVE" | "REVOKED"
+  lastUsedAt    DateTime?
+  totalOrders   Int          @default(0)
+  totalRequests Int          @default(0)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  logs          UserApiLog[]
+
+  @@index([userId, status])
+  @@index([keyHash])
+  @@map("user_api_keys")
+}
+
+model UserApiLog {
+  id         String      @id @default(cuid())
+  apiKeyId   String?
+  apiKey     UserApiKey? @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
+  userId     String
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  keyName    String
+  endpoint   String
+  method     String      @default("GET")
+  statusCode Int
+  ipAddress  String?
+  durationMs Int         @default(0)
+  success    Boolean     @default(true)
+  error      String?
+  createdAt  DateTime    @default(now())
+
+  @@index([userId, createdAt])
+  @@index([apiKeyId, createdAt])
+  @@map("user_api_logs")
 }

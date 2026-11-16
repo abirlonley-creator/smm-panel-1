@@ -17,6 +17,8 @@ import {
   ShieldCheck,
   Zap,
   LogOut,
+  LayoutDashboard,
+  FileCode2,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { DEFAULT_PROVIDER_BALANCE_REFRESH_INTERVAL_MS } from "@/lib/provider/balance";
@@ -24,12 +26,13 @@ import { formatProviderBalance } from "@/lib/currency";
 import { ProviderBalanceSwitcher } from "@/components/ProviderBalanceSwitcher";
 
 const ALL_NAV_ITEMS = [
-  { href: "/order", label: "New Order", icon: PlusCircle, adminOnly: true },
+  { href: "/order", label: "Dashboard", icon: LayoutDashboard, adminOnly: false },
   { href: "/engagement", label: "Engagement", icon: Zap, adminOnly: false },
-  { href: "/services", label: "Services", icon: ListTree, adminOnly: true },
   { href: "/orders", label: "Orders", icon: Layers, adminOnly: false },
+  { href: "/api-keys", label: "API Keys", icon: KeyRound, adminOnly: false },
+  { href: "/api-docs", label: "API Docs", icon: FileCode2, adminOnly: false },
   { href: "/wallet", label: "Add Funds", icon: Wallet, adminOnly: false },
-  { href: "/api-key", label: "API Key", icon: KeyRound, adminOnly: true },
+  { href: "/services", label: "Services", icon: ListTree, adminOnly: true },
   { href: "/admin", label: "Admin Panel", icon: ShieldCheck, adminOnly: true },
 ];
 

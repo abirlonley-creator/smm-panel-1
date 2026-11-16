@@ -136,6 +136,38 @@ export async function PUT(request: Request) {
     if (body.config || body.pricing || body.views || body.likes || body.saves || body.shares) {
       const configPayload = body.config || body;
       updatedConfig = await saveTikTokEngagementConfigAsync(configPayload, actor);
+
+      // Automatically synchronize retail rates and limits to catalog services in DB for API v2
+      try {
+        if (updatedConfig.pricing) {
+          if (typeof updatedConfig.pricing.viewsUserRate === "number") {
+            await prisma.service.updateMany({
+              where: { numericId: 101 },
+              data: { ratePer1000: updatedConfig.pricing.viewsUserRate },
+            });
+          }
+          if (typeof updatedConfig.pricing.likesUserRate === "number") {
+            await prisma.service.updateMany({
+              where: { numericId: 102 },
+              data: { ratePer1000: updatedConfig.pricing.likesUserRate },
+            });
+          }
+          if (typeof updatedConfig.pricing.savesUserRate === "number") {
+            await prisma.service.updateMany({
+              where: { numericId: 103 },
+              data: { ratePer1000: updatedConfig.pricing.savesUserRate },
+            });
+          }
+          if (typeof updatedConfig.pricing.sharesUserRate === "number") {
+            await prisma.service.updateMany({
+              where: { numericId: 104 },
+              data: { ratePer1000: updatedConfig.pricing.sharesUserRate },
+            });
+          }
+        }
+      } catch (syncErr) {
+        console.warn("Failed to sync pricing to catalog services:", syncErr);
+      }
     }
 
     const [presetsRecord, presetsList] = await Promise.all([

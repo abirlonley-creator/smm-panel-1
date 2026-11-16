@@ -280,6 +280,25 @@ export async function GET(request: Request) {
   const defaultPreset = presetsList[0];
   const readyToOrder = Boolean(zeofameConn && xmediaConn);
 
+  // Fetch all Engagement catalog services from DB (universal API source)
+  const catalogServices = await prisma.service.findMany({
+    where: { category: { equals: "Engagement", mode: "insensitive" } },
+    orderBy: [{ numericId: "asc" }, { createdAt: "asc" }],
+  });
+
+  const formattedCatalogServices = catalogServices.map((s) => ({
+    service: s.numericId || (!isNaN(Number(s.externalId)) ? Number(s.externalId) : s.id),
+    category: s.category,
+    name: s.name,
+    platform: s.platform,
+    type: s.type,
+    rate: s.ratePer1000,
+    min: s.minQuantity,
+    max: s.maxQuantity,
+    description: s.description,
+    active: s.active,
+  }));
+
   return NextResponse.json({
     success: true,
     enabled: true,
@@ -287,6 +306,7 @@ export async function GET(request: Request) {
     readyToOrder,
     zeofame: zeofameStatus,
     xmedia: xmediaStatus,
+    services: formattedCatalogServices,
     rates: {
       viewsRate,
       likesRate,
