@@ -40,6 +40,7 @@ export function BinanceAddFundsModal({
   const [inrAmount, setInrAmount] = useState<number>(() => (initialAmount && initialAmount > 0 ? initialAmount : 100));
   const [exchangeRate, setExchangeRate] = useState<number>(90.0);
   const [binanceUid, setBinanceUid] = useState<string>("1161493552");
+  const [apiConfigured, setApiConfigured] = useState<boolean>(true);
 
   // Created deposit record
   const [deposit, setDeposit] = useState<any>(null);
@@ -49,6 +50,7 @@ export function BinanceAddFundsModal({
   const [txnId, setTxnId] = useState("");
   const [senderBinanceId, setSenderBinanceId] = useState("");
   const [verifying, setVerifying] = useState(false);
+  const [verifyAttempt, setVerifyAttempt] = useState(0);
 
   // Clipboard & feedback
   const [copiedUid, setCopiedUid] = useState(false);
@@ -92,6 +94,7 @@ export function BinanceAddFundsModal({
         if (data.success && data.config) {
           if (data.config.exchangeRate) setExchangeRate(data.config.exchangeRate);
           if (data.config.binanceUid) setBinanceUid(data.config.binanceUid);
+          setApiConfigured(Boolean(data.config.isApiConfigured));
         }
       } catch (err) {
         console.warn("Could not load Binance payment config:", err);
@@ -149,7 +152,9 @@ export function BinanceAddFundsModal({
     }
   }
 
-  // Handle Step 2 -> "Verify payment" with Order ID
+  // Handle Step 2 -> "Verify payment" with Order ID.
+  // Binance Pay history can lag a few seconds behind the payment, so the order ID is
+  // re-checked automatically before we give up and queue it for admin review.
   async function handleVerifyPayment(e: React.FormEvent) {
     e.preventDefault();
     setErrorMessage(null);
@@ -159,44 +164,65 @@ export function BinanceAddFundsModal({
       return;
     }
 
+    const MAX_ATTEMPTS = 3;
+    const RETRY_DELAY_MS = 4000;
+
     setVerifying(true);
     try {
       const depositId = deposit?.id;
-      const res = await fetch("/api/wallet/deposit/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          depositId,
-          txnId: txnId.trim(),
-          senderBinanceId: senderBinanceId.trim() || undefined,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Payment verification failed.");
+      let lastPayload: any = null;
+
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        setVerifyAttempt(attempt);
+
+        const res = await fetch("/api/wallet/deposit/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            depositId,
+            txnId: txnId.trim(),
+            senderBinanceId: senderBinanceId.trim() || undefined,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || "Payment verification failed.");
+        }
+        lastPayload = data;
+
+        if (data.success) {
+          // Success branch:
+          setSuccessMessage(data.message || `₹${inrAmount.toFixed(2)} credited successfully!`);
+
+          // Only notify balance state if actually credited
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("balance-updated"));
+          }
+          if (onSuccess && typeof data.newBalance === "number") {
+            onSuccess(data.newBalance);
+          }
+
+          setStep("success");
+          return;
+        }
+
+        // Only "not found yet" / temporary API issues are worth retrying automatically.
+        const status = data.autoVerifyStatus;
+        const isRetryable = status === "NOT_FOUND" || status === "API_ERROR";
+        if (!isRetryable || attempt === MAX_ATTEMPTS) break;
+
+        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
       }
 
-      if (!data.success) {
-        setErrorMessage(data.error || "Payment not found. Queued for Admin Review. Check your Binance Order ID.");
-        return;
-      }
-
-      // Success branch:
-      setSuccessMessage(data.message || `₹${inrAmount.toFixed(2)} credited successfully!`);
-
-      // Only notify balance state if actually credited
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent("balance-updated"));
-      }
-      if (onSuccess && typeof data.newBalance === "number") {
-        onSuccess(data.newBalance);
-      }
-
-      setStep("success");
+      setErrorMessage(
+        lastPayload?.error ||
+          "Payment not found yet. If you just paid, wait a minute and tap Verify payment again."
+      );
     } catch (err: any) {
       setErrorMessage(err.message || "Failed to verify transaction.");
     } finally {
       setVerifying(false);
+      setVerifyAttempt(0);
     }
   }
 
@@ -464,6 +490,16 @@ export function BinanceAddFundsModal({
                 </div>
               )}
 
+              {!apiConfigured && (
+                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-[11px] font-semibold text-amber-800 flex items-center gap-2 animate-fadeIn">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
+                  <span>
+                    Instant auto-credit is temporarily unavailable. Submit your Order ID and our team will
+                    verify and credit your wallet shortly.
+                  </span>
+                </div>
+              )}
+
               {/* Summary Bar: Amount & Send to Binance ID (Screenshot 1) */}
               <div className="p-3 rounded-xl bg-[#F3F4F6] border border-gray-200/80 flex items-center justify-between">
                 <div>
@@ -512,7 +548,8 @@ export function BinanceAddFundsModal({
                   required
                 />
                 <p className="text-[11px] text-gray-500">
-                  Paste the 18-digit Order ID or Transaction ID from your Binance Pay payment details.
+                  Paste the 18-digit Order ID or Transaction ID from your Binance Pay payment details. We check
+                  Binance automatically and credit your wallet instantly once the payment is found.
                 </p>
               </div>
 
@@ -592,7 +629,13 @@ export function BinanceAddFundsModal({
                   className="flex-1 py-3 px-4 rounded-xl bg-[#2563EB] hover:bg-[#1D4ED8] disabled:opacity-50 text-white text-xs font-bold shadow-sm transition-all press-scale flex items-center justify-center gap-2"
                 >
                   {verifying ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span className="inline-flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>
+                        Checking Binance
+                        {verifyAttempt > 1 ? ` (${verifyAttempt}/3)` : "…"}
+                      </span>
+                    </span>
                   ) : (
                     <span>Verify payment</span>
                   )}

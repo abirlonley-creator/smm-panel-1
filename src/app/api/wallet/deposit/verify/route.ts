@@ -33,6 +33,7 @@ export async function POST(request: Request) {
         {
           success: false,
           requiresAdminReview: Boolean(result.requiresAdminReview),
+          autoVerifyStatus: result.autoVerifyStatus,
           error: result.error || "Payment not found. Queued for Admin Review. Check your Binance Order ID.",
           message: result.message,
           failureReason: result.failureReason,
@@ -46,6 +47,7 @@ export async function POST(request: Request) {
       success: true,
       verified: Boolean(result.verified),
       alreadyCredited: Boolean(result.alreadyCredited),
+      autoVerifyStatus: result.autoVerifyStatus,
       newBalance: result.newBalance,
       deposit: result.deposit,
       message: result.message,

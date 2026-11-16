@@ -70,6 +70,33 @@ export function BinanceDepositsTab() {
     loadDeposits();
   }, []);
 
+  async function handleAutoVerify(depositId: string) {
+    setActionLoadingId(depositId);
+    setActionMsg(null);
+    try {
+      const res = await fetch(`/api/admin/deposits/${depositId}/verify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        const detail = data.failureReason || data.apiError;
+        throw new Error(
+          data.error
+            ? `${data.error}${detail ? ` — ${detail}` : ""}`
+            : "Auto-verification failed"
+        );
+      }
+
+      setActionMsg({ text: data.message || "Payment auto-verified and credited.", type: "success" });
+      await loadDeposits();
+    } catch (err: any) {
+      setActionMsg({ text: err.message, type: "error" });
+    } finally {
+      setActionLoadingId(null);
+    }
+  }
+
   async function handleAction(depositId: string, action: "APPROVE" | "REJECT") {
     setActionLoadingId(depositId);
     setActionMsg(null);
@@ -321,6 +348,24 @@ export function BinanceDepositsTab() {
                     <td className="px-5 py-3 text-right">
                       {d.status === "PENDING" ? (
                         <div className="flex items-center justify-end gap-1.5">
+                          {d.txnId && (
+                            <button
+                              type="button"
+                              onClick={() => handleAutoVerify(d.id)}
+                              disabled={actionLoadingId === d.id}
+                              title="Re-run Binance auto-verification for this Order ID"
+                              className="px-2.5 py-1 rounded-lg bg-[#3A4EFB] hover:bg-[#2F40D8] text-white text-[11px] font-bold shadow-subtle transition-all flex items-center gap-1 disabled:opacity-60"
+                            >
+                              {actionLoadingId === d.id ? (
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <>
+                                  <RefreshCw className="w-3 h-3" />
+                                  <span>Verify</span>
+                                </>
+                              )}
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => handleAction(d.id, "APPROVE")}

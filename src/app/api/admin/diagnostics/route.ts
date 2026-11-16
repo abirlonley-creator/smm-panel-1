@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
+import { getBinanceConfig } from "@/lib/payments/binance-pay";
 
 export const dynamic = "force-dynamic";
 
@@ -113,6 +114,11 @@ export async function GET(request: Request) {
     const cancelledOrders = orderStatsMap["CANCELLED"] || 0;
     const awaitingExecution = (jobStatsMap["SCHEDULED"] || 0) + (jobStatsMap["QUEUED"] || 0);
 
+    const binanceConfig = getBinanceConfig();
+    const pendingBinanceDeposits = await prisma.paymentDeposit.count({
+      where: { method: "BINANCE_PAY", status: "PENDING", txnId: { not: null } },
+    });
+
     return NextResponse.json({
       success: true,
       systemStatus: {
@@ -156,6 +162,15 @@ export async function GET(request: Request) {
         disabledUsers,
         totalConfiguredProviders,
         workingProviders,
+      },
+      paymentVerification: {
+        binanceAutoVerifyConfigured: binanceConfig.isApiConfigured,
+        receiveBinanceUid: binanceConfig.binanceUid,
+        exchangeRate: binanceConfig.exchangeRate,
+        pendingBinanceDeposits,
+        hint: binanceConfig.isApiConfigured
+          ? null
+          : "Set BINANCE_API_KEY and BINANCE_API_SECRET in the deployment environment to enable instant auto-credit.",
       },
       providerHealth: {
         systemConfig: systemProviderConfig
