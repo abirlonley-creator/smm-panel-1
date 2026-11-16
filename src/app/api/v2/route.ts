@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { authenticateApiRequest, logApiCall } from "@/lib/api-v2/auth";
+import {
+  getEngagementServicesCatalog,
+  createEngagementOrderInternal,
+  getEngagementOrderDetails,
+} from "@/lib/engagement/order-service";
 
 export const dynamic = "force-dynamic";
 
@@ -13,27 +18,13 @@ function isValidUrl(stringUrl: string): boolean {
   }
 }
 
-function mapToV2Status(dbStatus: string): "pending" | "in_progress" | "completed" | "cancelled" | "failed" {
-  const s = (dbStatus || "").toUpperCase();
-  switch (s) {
-    case "PENDING":
-    case "DRAFT":
-    case "SCHEDULED":
-      return "pending";
-    case "PROCESSING":
-    case "SUBMITTED":
-    case "PAUSED":
-    case "IN_PROGRESS":
-      return "in_progress";
-    case "COMPLETED":
-      return "completed";
-    case "CANCELLED":
-      return "cancelled";
-    case "FAILED":
-    case "PARTIAL":
-    default:
-      return "failed";
-  }
+function mapToClassicStatus(status: string): string {
+  const s = status.toLowerCase();
+  if (s.includes("complet")) return "Completed";
+  if (s.includes("progress") || s.includes("process")) return "In progress";
+  if (s.includes("cancel")) return "Canceled";
+  if (s.includes("fail")) return "Fail";
+  return "Pending";
 }
 
 export async function POST(request: Request) {
@@ -62,7 +53,6 @@ export async function POST(request: Request) {
       payload = {};
     }
   } else {
-    // Attempt URL-encoded fallback
     try {
       const text = await request.text();
       const params = new URLSearchParams(text);
@@ -89,26 +79,7 @@ export async function POST(request: Request) {
   // 1. ACTION: services
   if (action === "services") {
     try {
-      const services = await prisma.service.findMany({
-        where: {
-          category: { equals: "Engagement", mode: "insensitive" },
-          active: true,
-        },
-        orderBy: [{ numericId: "asc" }, { createdAt: "asc" }],
-      });
-
-      const formatted = services.map((s) => ({
-        service: s.numericId || (!isNaN(Number(s.externalId)) ? Number(s.externalId) : s.id),
-        category: s.category,
-        name: s.name,
-        platform: s.platform.toLowerCase(),
-        type: s.type.toLowerCase(),
-        rate: s.ratePer1000.toFixed(2),
-        min: s.minQuantity,
-        max: s.maxQuantity,
-        description: s.description || `${s.name} on ${s.platform}`,
-        status: s.active ? "active" : "inactive",
-      }));
+      const catalog = await getEngagementServicesCatalog();
 
       await logApiCall({
         apiKeyId: auth.apiKey.id,
@@ -121,7 +92,7 @@ export async function POST(request: Request) {
         success: true,
       });
 
-      return NextResponse.json(formatted);
+      return NextResponse.json(catalog);
     } catch (err: any) {
       return NextResponse.json({ error: "Failed to fetch services" }, { status: 500 });
     }
@@ -149,7 +120,7 @@ export async function POST(request: Request) {
 
       return NextResponse.json({
         balance: bal.toFixed(2),
-        currency: "USD",
+        currency: "INR",
       });
     } catch (err: any) {
       return NextResponse.json({ error: "Failed to fetch balance" }, { status: 500 });
@@ -179,110 +150,41 @@ export async function POST(request: Request) {
 
     const service = payload.service;
     const link = payload.link;
-    const quantity = payload.quantity;
+    const quantity = payload.quantity ? Number(payload.quantity) : undefined;
+    const shuffle = payload.shuffle !== false;
 
-    if (!service) return NextResponse.json({ error: "Missing required field: service" }, { status: 400 });
+    if (!service) {
+      return NextResponse.json({ error: "Missing required parameter: service (e.g. '2k', '5k', '10k', '15k')" }, { status: 400 });
+    }
     if (!link || typeof link !== "string" || !isValidUrl(link.trim())) {
-      return NextResponse.json({ error: "Invalid link URL" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid link URL. Must be a valid TikTok video URL." }, { status: 400 });
     }
     const cleanLink = link.trim();
 
-    const parsedQty = Number.parseInt(String(quantity), 10);
-    if (!Number.isFinite(parsedQty) || parsedQty <= 0) {
-      return NextResponse.json({ error: "Invalid quantity" }, { status: 400 });
-    }
-
-    const serviceSearchCond: any[] = [];
-    const numService = Number(service);
-    if (!isNaN(numService)) {
-      serviceSearchCond.push({ numericId: numService });
-      serviceSearchCond.push({ externalId: String(numService) });
-    }
-    if (typeof service === "string") {
-      serviceSearchCond.push({ id: service });
-      serviceSearchCond.push({ externalId: service });
-    }
-
-    const targetService = await prisma.service.findFirst({
-      where: { OR: serviceSearchCond },
+    const orderRes = await createEngagementOrderInternal({
+      userId: auth.user.id,
+      targetUrl: cleanLink,
+      serviceOrPreset: service,
+      quantity,
+      shuffle,
+      apiKeyId: auth.apiKey.id,
     });
 
-    if (!targetService || !targetService.active) {
-      return NextResponse.json({ error: `Service '${service}' not found or inactive` }, { status: 400 });
+    if (!orderRes.success) {
+      await logApiCall({
+        apiKeyId: auth.apiKey.id,
+        userId: auth.user.id,
+        keyName: auth.apiKey.name,
+        endpoint: "/api/v2?action=add",
+        method: "POST",
+        statusCode: orderRes.statusCode || 400,
+        durationMs: Date.now() - startTime,
+        success: false,
+        error: orderRes.error,
+      });
+
+      return NextResponse.json({ error: orderRes.error }, { status: orderRes.statusCode || 400 });
     }
-
-    if (parsedQty < targetService.minQuantity || parsedQty > targetService.maxQuantity) {
-      return NextResponse.json(
-        { error: `Quantity must be between ${targetService.minQuantity} and ${targetService.maxQuantity}` },
-        { status: 400 }
-      );
-    }
-
-    const charge = Number(((parsedQty / 1000) * targetService.ratePer1000).toFixed(2));
-
-    const freshUser = await prisma.user.findUnique({
-      where: { id: auth.user.id },
-      select: { id: true, walletBalance: true },
-    });
-
-    if (!freshUser || freshUser.walletBalance < charge) {
-      return NextResponse.json(
-        { error: `Insufficient balance. Required: $${charge.toFixed(2)}, Available: $${freshUser?.walletBalance?.toFixed(2) ?? "0.00"}` },
-        { status: 400 }
-      );
-    }
-
-    const lastOrder = await prisma.order.findFirst({
-      where: { numericId: { not: null } },
-      orderBy: { numericId: "desc" },
-      select: { numericId: true },
-    });
-
-    const nextNumericId =
-      lastOrder && typeof lastOrder.numericId === "number" && lastOrder.numericId >= 90000
-        ? lastOrder.numericId + 1
-        : 90000 + Math.floor(Math.random() * 8000) + 1;
-
-    const orderRef = `ORD-${nextNumericId}`;
-
-    const [updatedUser, newOrder] = await prisma.$transaction([
-      prisma.user.update({
-        where: { id: freshUser.id },
-        data: { walletBalance: { decrement: charge } },
-        select: { walletBalance: true },
-      }),
-      prisma.order.create({
-        data: {
-          numericId: nextNumericId,
-          orderRef,
-          serviceId: targetService.id,
-          userId: freshUser.id,
-          targetUrl: cleanLink,
-          requestedQuantity: parsedQty,
-          submittedQuantity: parsedQty,
-          remainingQuantity: parsedQty,
-          deliveredQuantity: 0,
-          failedQuantity: 0,
-          unitCost: targetService.ratePer1000,
-          totalCost: charge,
-          status: "PROCESSING",
-        },
-      }),
-      prisma.walletTransaction.create({
-        data: {
-          userId: freshUser.id,
-          type: "DEBIT",
-          amount: charge,
-          balanceAfter: freshUser.walletBalance - charge,
-          referenceId: orderRef,
-          description: `API Order #${nextNumericId} - ${targetService.name} (Qty: ${parsedQty})`,
-        },
-      }),
-      prisma.userApiKey.update({
-        where: { id: auth.apiKey.id },
-        data: { totalOrders: { increment: 1 } },
-      }),
-    ]);
 
     await logApiCall({
       apiKeyId: auth.apiKey.id,
@@ -296,44 +198,29 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({
-      order: newOrder.numericId || nextNumericId,
-      charge: charge.toFixed(2),
-      currency: "USD",
+      order: orderRes.numericOrder,
+      order_ref: orderRes.orderRef,
+      preset: orderRes.preset,
+      charge: orderRes.charge,
+      currency: orderRes.currency,
       status: "processing",
     });
   }
 
-  // 4. ACTION: status
+  // 4. ACTION: status (check single order)
   if (action === "status") {
-    const orderParam = payload.order;
-    if (!orderParam) {
-      return NextResponse.json({ error: "Missing required field: order" }, { status: 400 });
+    const orderId = payload.order;
+    if (!orderId) {
+      return NextResponse.json({ error: "Missing required parameter: order" }, { status: 400 });
     }
 
-    const searchCond: any[] = [];
-    const numId = Number.parseInt(String(orderParam), 10);
-    if (!isNaN(numId)) {
-      searchCond.push({ numericId: numId });
+    const details = await getEngagementOrderDetails(String(orderId), auth.user.id);
+    if (!details) {
+      return NextResponse.json({ error: `Order #${orderId} not found` }, { status: 404 });
     }
-    searchCond.push({ id: String(orderParam) });
-    searchCond.push({ orderRef: String(orderParam) });
-
-    const order = await prisma.order.findFirst({
-      where: { OR: searchCond },
-      include: { service: true },
-    });
-
-    if (!order || order.userId !== auth.user.id) {
-      return NextResponse.json({ error: `Order #${orderParam} not found` }, { status: 404 });
+    if ((details as any).unauthorized) {
+      return NextResponse.json({ error: "Unauthorized to view this order" }, { status: 403 });
     }
-
-    const serviceIdentifier =
-      order.service?.numericId ||
-      (!isNaN(Number(order.service?.externalId))
-        ? Number(order.service?.externalId)
-        : order.serviceId);
-
-    const formattedStatus = mapToV2Status(order.status);
 
     await logApiCall({
       apiKeyId: auth.apiKey.id,
@@ -347,16 +234,58 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({
-      order: order.numericId || order.orderRef,
-      service: serviceIdentifier,
-      link: order.targetUrl,
-      quantity: order.requestedQuantity,
-      status: formattedStatus,
+      charge: details.charge,
       start_count: 0,
-      remains: Math.max(0, order.remainingQuantity || order.requestedQuantity - order.deliveredQuantity),
-      charge: order.totalCost.toFixed(2),
+      status: mapToClassicStatus(details.status),
+      remains: details.remains,
+      currency: details.currency || "INR",
     });
   }
 
-  return NextResponse.json({ error: "Incorrect request: unknown action" }, { status: 400 });
+  // 5. ACTION: orders (multiple orders status)
+  if (action === "orders") {
+    const ordersParam = payload.orders;
+    if (!ordersParam) {
+      return NextResponse.json({ error: "Missing required parameter: orders" }, { status: 400 });
+    }
+
+    const orderIdList = String(ordersParam)
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean);
+
+    const results: Record<string, any> = {};
+    for (const ord of orderIdList) {
+      const d = await getEngagementOrderDetails(ord, auth.user.id);
+      if (d && !(d as any).unauthorized) {
+        results[ord] = {
+          charge: d.charge,
+          start_count: 0,
+          status: mapToClassicStatus(d.status),
+          remains: d.remains,
+          currency: d.currency || "INR",
+        };
+      } else {
+        results[ord] = { error: "Incorrect order ID" };
+      }
+    }
+
+    await logApiCall({
+      apiKeyId: auth.apiKey.id,
+      userId: auth.user.id,
+      keyName: auth.apiKey.name,
+      endpoint: "/api/v2?action=orders",
+      method: "POST",
+      statusCode: 200,
+      durationMs: Date.now() - startTime,
+      success: true,
+    });
+
+    return NextResponse.json(results);
+  }
+
+  return NextResponse.json(
+    { error: "Unknown action. Valid actions: services, balance, add, status, orders" },
+    { status: 400 }
+  );
 }

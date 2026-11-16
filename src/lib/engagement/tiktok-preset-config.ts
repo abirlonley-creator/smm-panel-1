@@ -196,6 +196,61 @@ export const TIKTOK_TIER_PRESETS: Record<string, TikTokTierPreset> = {
     },
   },
 
+  tiktok_15k: {
+    id: "tiktok_15k",
+    name: "TikTok FYP Acceleration 15K",
+    tagline: "24-Hour Co-Delivered Momentum with Natural Organic Delivery Curve",
+    badge: "1 Day (24h)",
+    targetViews: 15200,
+    targetLikes: 550,
+    targetSaves: 120,
+    targetShares: 60,
+    durationHours: 24.0,
+    totalDurationMinutes: 1440,
+    views: {
+      enabled: true,
+      providerName: "Views Engine",
+      serviceId: "897",
+      minQuantity: 440,
+      maxQuantity: 580,
+      runsCount: 30,
+      intervalMinutes: 48,
+    },
+    likes: {
+      enabled: true,
+      providerName: "Engagement Engine",
+      serviceId: "1123",
+      minQuantity: 15,
+      maxQuantity: 28,
+      runsCount: 26,
+      waveOffsets: [
+        48, 96, 144, 192, 240, 288, 336, 384, 432, 480, 528, 576, 624, 672, 720, 768, 816, 864, 912, 960, 1008, 1056, 1104, 1152, 1200, 1248,
+      ],
+    },
+    saves: {
+      enabled: true,
+      providerName: "Engagement Engine",
+      serviceId: "807",
+      minQuantity: 10,
+      maxQuantity: 15,
+      runsCount: 10,
+      waveOffsets: [192, 336, 480, 624, 768, 912, 1008, 1104, 1200, 1296],
+    },
+    shares: {
+      enabled: true,
+      providerName: "Engagement Engine",
+      serviceId: "718",
+      minQuantity: 8,
+      maxQuantity: 12,
+      runsCount: 6,
+      waveOffsets: [336, 576, 816, 1056, 1200, 1344],
+    },
+    syncThreshold: {
+      minViews: 3000,
+      maxViews: 5000,
+    },
+  },
+
   tiktok_50k: {
     id: "tiktok_50k",
     name: "TikTok Viral Mega 50K",
@@ -307,16 +362,47 @@ export async function getAllTikTokPresetsAsync(force = false): Promise<TikTokTie
 
 export async function getTikTokPresetByIdAsync(presetId?: string): Promise<TikTokTierPreset> {
   const all = await getAllTikTokPresetsRecordAsync();
-  if (presetId && all[presetId]) {
-    return all[presetId];
+  if (!presetId) {
+    return all.tiktok_2k || TIKTOK_TIER_PRESETS.tiktok_2k;
   }
-  // Try matching by name
-  if (presetId) {
-    const found = Object.values(all).find(
-      (p) => p.name.toLowerCase() === presetId.toLowerCase() || p.id.toLowerCase() === presetId.toLowerCase()
-    );
-    if (found) return found;
+  const clean = String(presetId).trim().toLowerCase();
+
+  // 1. Direct ID matching: "tiktok_2k", "tiktok_5k", etc.
+  if (all[clean]) return all[clean];
+
+  // 2. Shorthand matching: "2k", "5k", "10k", "15k", "50k"
+  if (all[`tiktok_${clean}`]) return all[`tiktok_${clean}`];
+
+  // 3. Numeric ID matching:
+  // 101/1 -> 2k, 102/2 -> 5k, 103/3 -> 10k, 104/4 -> 15k, or view counts (2000, 5000, 10000, 15000)
+  const num = parseInt(clean, 10);
+  if (!isNaN(num)) {
+    if (num === 1 || num === 101 || num === 2000 || (num > 100 && num <= 3000)) {
+      return all.tiktok_2k || TIKTOK_TIER_PRESETS.tiktok_2k;
+    }
+    if (num === 2 || num === 102 || num === 5000 || (num > 3000 && num <= 7500)) {
+      return all.tiktok_5k || TIKTOK_TIER_PRESETS.tiktok_5k;
+    }
+    if (num === 3 || num === 103 || num === 10000 || (num > 7500 && num <= 12500)) {
+      return all.tiktok_10k || TIKTOK_TIER_PRESETS.tiktok_10k;
+    }
+    if (num === 4 || num === 104 || num === 15000 || (num > 12500 && num <= 25000)) {
+      return all.tiktok_15k || TIKTOK_TIER_PRESETS.tiktok_15k;
+    }
+    if (num === 5 || num === 50000 || num > 25000) {
+      return all.tiktok_50k || TIKTOK_TIER_PRESETS.tiktok_50k;
+    }
   }
+
+  // 4. Try matching by name or partial text
+  const found = Object.values(all).find(
+    (p) =>
+      p.name.toLowerCase() === clean ||
+      p.id.toLowerCase() === clean ||
+      p.name.toLowerCase().includes(clean)
+  );
+  if (found) return found;
+
   return all.tiktok_2k || TIKTOK_TIER_PRESETS.tiktok_2k;
 }
 
@@ -404,16 +490,47 @@ export function getAllTikTokPresets(): TikTokTierPreset[] {
 
 export function getTikTokPresetById(presetId?: string): TikTokTierPreset {
   const all = getAllTikTokPresetsRecord();
-  if (presetId && all[presetId]) {
-    return all[presetId];
+  if (!presetId) {
+    return all.tiktok_2k || TIKTOK_TIER_PRESETS.tiktok_2k;
   }
-  // Try matching by name
-  if (presetId) {
-    const found = Object.values(all).find(
-      (p) => p.name.toLowerCase() === presetId.toLowerCase() || p.id.toLowerCase() === presetId.toLowerCase()
-    );
-    if (found) return found;
+  const clean = String(presetId).trim().toLowerCase();
+
+  // 1. Direct ID matching: "tiktok_2k", "tiktok_5k", etc.
+  if (all[clean]) return all[clean];
+
+  // 2. Shorthand matching: "2k", "5k", "10k", "15k", "50k"
+  if (all[`tiktok_${clean}`]) return all[`tiktok_${clean}`];
+
+  // 3. Numeric ID matching:
+  // 101/1 -> 2k, 102/2 -> 5k, 103/3 -> 10k, 104/4 -> 15k, or view counts
+  const num = parseInt(clean, 10);
+  if (!isNaN(num)) {
+    if (num === 1 || num === 101 || num === 2000 || (num > 100 && num <= 3000)) {
+      return all.tiktok_2k || TIKTOK_TIER_PRESETS.tiktok_2k;
+    }
+    if (num === 2 || num === 102 || num === 5000 || (num > 3000 && num <= 7500)) {
+      return all.tiktok_5k || TIKTOK_TIER_PRESETS.tiktok_5k;
+    }
+    if (num === 3 || num === 103 || num === 10000 || (num > 7500 && num <= 12500)) {
+      return all.tiktok_10k || TIKTOK_TIER_PRESETS.tiktok_10k;
+    }
+    if (num === 4 || num === 104 || num === 15000 || (num > 12500 && num <= 25000)) {
+      return all.tiktok_15k || TIKTOK_TIER_PRESETS.tiktok_15k;
+    }
+    if (num === 5 || num === 50000 || num > 25000) {
+      return all.tiktok_50k || TIKTOK_TIER_PRESETS.tiktok_50k;
+    }
   }
+
+  // 4. Try matching by name or partial text
+  const found = Object.values(all).find(
+    (p) =>
+      p.name.toLowerCase() === clean ||
+      p.id.toLowerCase() === clean ||
+      p.name.toLowerCase().includes(clean)
+  );
+  if (found) return found;
+
   return all.tiktok_2k || TIKTOK_TIER_PRESETS.tiktok_2k;
 }
 

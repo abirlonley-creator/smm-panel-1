@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { authenticateApiRequest, logApiCall } from "@/lib/api-v2/auth";
+import { createEngagementOrderInternal } from "@/lib/engagement/order-service";
 
 export const dynamic = "force-dynamic";
 
@@ -52,146 +52,53 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid JSON request body" }, { status: 400 });
     }
 
-    const { service, link, quantity } = body || {};
+    const { service, link, quantity, shuffle } = body || {};
 
     // 1. Validate service parameter
     if (service === undefined || service === null || service === "") {
-      return NextResponse.json({ error: "Missing required field: service" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Missing required field: service. Valid values: '2k', '5k', '10k', '15k' (or numeric IDs 101, 102, 103, 104)." },
+        { status: 400 }
+      );
     }
 
     // 2. Validate link
     if (!link || typeof link !== "string" || !isValidUrl(link.trim())) {
       return NextResponse.json(
-        { error: "Invalid link URL. Must be a valid HTTP or HTTPS URL." },
+        { error: "Invalid link URL. Must be a valid public TikTok video URL." },
         { status: 400 }
       );
     }
     const cleanLink = link.trim();
 
-    // 3. Validate quantity
-    const parsedQty = Number.parseInt(String(quantity), 10);
-    if (!Number.isFinite(parsedQty) || parsedQty <= 0) {
-      return NextResponse.json(
-        { error: "Invalid quantity. Must be a positive integer." },
-        { status: 400 }
-      );
-    }
-
-    // 4. Resolve service from database
-    const serviceSearchCond: any[] = [];
-    const numService = Number(service);
-    if (!isNaN(numService)) {
-      serviceSearchCond.push({ numericId: numService });
-      serviceSearchCond.push({ externalId: String(numService) });
-    }
-    if (typeof service === "string") {
-      serviceSearchCond.push({ id: service });
-      serviceSearchCond.push({ externalId: service });
-    }
-
-    const targetService = await prisma.service.findFirst({
-      where: {
-        OR: serviceSearchCond,
-      },
+    // 3. Place Engagement Campaign Order (Supports dynamic organic batch shuffling)
+    const result = await createEngagementOrderInternal({
+      userId: auth.user.id,
+      targetUrl: cleanLink,
+      serviceOrPreset: service,
+      quantity: quantity ? Number(quantity) : undefined,
+      shuffle: shuffle !== false, // Defaults to true (organic dynamic shuffling enabled)
+      apiKeyId: auth.apiKey.id,
     });
 
-    if (!targetService || !targetService.active) {
+    if (!result.success) {
+      await logApiCall({
+        apiKeyId: auth.apiKey.id,
+        userId: auth.user.id,
+        keyName: auth.apiKey.name,
+        endpoint: "/api/v2/orders",
+        method: "POST",
+        statusCode: result.statusCode || 400,
+        durationMs: Date.now() - startTime,
+        success: false,
+        error: result.error,
+      });
+
       return NextResponse.json(
-        { error: `Service '${service}' does not exist or is currently inactive.` },
-        { status: 400 }
+        { error: result.error || "Failed to place engagement order." },
+        { status: result.statusCode || 400 }
       );
     }
-
-    // 5. Validate quantity against service min / max
-    if (parsedQty < targetService.minQuantity || parsedQty > targetService.maxQuantity) {
-      return NextResponse.json(
-        {
-          error: `Quantity ${parsedQty} is out of bounds for service '${targetService.name}'. Must be between ${targetService.minQuantity} and ${targetService.maxQuantity}.`,
-        },
-        { status: 400 }
-      );
-    }
-
-    // 6. Calculate charge
-    const charge = Number(((parsedQty / 1000) * targetService.ratePer1000).toFixed(2));
-
-    // 7. Balance check & atomic deduction
-    const freshUser = await prisma.user.findUnique({
-      where: { id: auth.user.id },
-      select: { id: true, walletBalance: true },
-    });
-
-    if (!freshUser) {
-      return NextResponse.json({ error: "User account not found" }, { status: 404 });
-    }
-
-    if (freshUser.walletBalance < charge) {
-      return NextResponse.json(
-        {
-          error: `Insufficient balance. Required: $${charge.toFixed(2)}, Available balance: $${freshUser.walletBalance.toFixed(2)}.`,
-        },
-        { status: 400 }
-      );
-    }
-
-    // 8. Generate sequential / unique numeric order ID (e.g. 5-digit number starting at 90000 or timestamp-based)
-    // Find highest numericId or use a high offset
-    const lastOrder = await prisma.order.findFirst({
-      where: { numericId: { not: null } },
-      orderBy: { numericId: "desc" },
-      select: { numericId: true },
-    });
-
-    const nextNumericId =
-      lastOrder && typeof lastOrder.numericId === "number" && lastOrder.numericId >= 90000
-        ? lastOrder.numericId + 1
-        : 90000 + Math.floor(Math.random() * 8000) + 1;
-
-    const orderRef = `ORD-${nextNumericId}`;
-
-    // Perform atomic transaction: deduct balance, log transaction, create order
-    const [updatedUser, newOrder] = await prisma.$transaction([
-      prisma.user.update({
-        where: { id: freshUser.id },
-        data: {
-          walletBalance: { decrement: charge },
-        },
-        select: { walletBalance: true },
-      }),
-      prisma.order.create({
-        data: {
-          numericId: nextNumericId,
-          orderRef,
-          serviceId: targetService.id,
-          userId: freshUser.id,
-          targetUrl: cleanLink,
-          requestedQuantity: parsedQty,
-          submittedQuantity: parsedQty,
-          remainingQuantity: parsedQty,
-          deliveredQuantity: 0,
-          failedQuantity: 0,
-          unitCost: targetService.ratePer1000,
-          totalCost: charge,
-          status: "PROCESSING",
-        },
-      }),
-      prisma.walletTransaction.create({
-        data: {
-          userId: freshUser.id,
-          type: "DEBIT",
-          amount: charge,
-          balanceAfter: freshUser.walletBalance - charge,
-          referenceId: orderRef,
-          description: `API Order #${nextNumericId} - ${targetService.name} (Qty: ${parsedQty})`,
-        },
-      }),
-      prisma.userApiKey.update({
-        where: { id: auth.apiKey.id },
-        data: {
-          totalOrders: { increment: 1 },
-        },
-      }),
-    ]);
 
     const duration = Date.now() - startTime;
     await logApiCall({
@@ -207,9 +114,18 @@ export async function POST(request: Request) {
 
     return NextResponse.json(
       {
-        order: newOrder.numericId || nextNumericId,
-        charge: charge.toFixed(2),
-        currency: "USD",
+        order: result.numericOrder,
+        order_ref: result.orderRef,
+        service: result.service,
+        preset: result.preset,
+        name: result.name,
+        link: cleanLink,
+        target_views: result.targetViews,
+        target_likes: result.targetLikes,
+        batches: result.batchesCount,
+        duration: `${result.durationHours} Hours`,
+        charge: result.charge,
+        currency: result.currency || "INR",
         status: "processing",
       },
       {
@@ -235,7 +151,7 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json(
-      { error: error.message || "Failed to process order" },
+      { error: error.message || "Failed to process engagement order" },
       { status: 500 }
     );
   }

@@ -6,10 +6,10 @@ export async function GET() {
   const spec = {
     openapi: "3.0.0",
     info: {
-      title: "Aura SMM Universal API",
+      title: "Aura SMM Universal Engagement API",
       version: "2.0.0",
       description:
-        "Standard Universal REST API for Aura SMM. Enables AI assistants (Muse, ChatGPT, Gemini, Claude) and automated clients to list live engagement services, check balance, place orders, and track order execution seamlessly.",
+        "Standard Universal REST API for Aura SMM TikTok Engagement Campaigns. Enables AI assistants (Muse, ChatGPT, Gemini, Claude) and developers to list engagement packages (2k, 5k, 10k, 15k), check balance, place orders with dynamic organic batch shuffling, and track multi-wave delivery progress.",
       contact: {
         name: "Aura SMM Support",
         url: "https://t.me/Ghostfinds",
@@ -37,61 +37,109 @@ export async function GET() {
         },
       },
       schemas: {
-        Service: {
+        EngagementService: {
           type: "object",
           properties: {
             service: { type: "integer", example: 101 },
-            category: { type: "string", example: "Engagement" },
-            name: { type: "string", example: "TikTok Views" },
+            alias: { type: "string", example: "2k" },
+            category: { type: "string", example: "TikTok Engagement" },
+            name: { type: "string", example: "2k" },
+            display_name: { type: "string", example: "TikTok Engagement 2K" },
             platform: { type: "string", example: "tiktok" },
-            type: { type: "string", example: "views" },
-            rate: { type: "string", example: "5.70" },
-            min: { type: "integer", example: 100 },
-            max: { type: "integer", example: 10000000 },
-            description: { type: "string", example: "Organic views for TikTok videos" },
+            type: { type: "string", example: "engagement_campaign" },
+            rate: { type: "string", example: "16.91" },
+            min: { type: "integer", example: 2000 },
+            max: { type: "integer", example: 2000 },
+            duration: { type: "string", example: "5 Hours" },
+            target_views: { type: "integer", example: 2960 },
+            target_likes: { type: "integer", example: 42 },
+            target_saves: { type: "integer", example: 0 },
+            target_shares: { type: "integer", example: 0 },
+            shuffle_supported: { type: "boolean", example: true },
+            description: {
+              type: "string",
+              example: "Organic 5-hour pacing with 16 randomized view batches and 3 synchronized like waves. Dynamic shuffle supported.",
+            },
             status: { type: "string", enum: ["active", "inactive"], example: "active" },
           },
         },
         BalanceResponse: {
           type: "object",
           properties: {
-            balance: { type: "string", example: "125.50" },
-            currency: { type: "string", example: "USD" },
+            balance: { type: "string", example: "206.12" },
+            currency: { type: "string", example: "INR" },
           },
         },
         OrderRequest: {
           type: "object",
-          required: ["service", "link", "quantity"],
+          required: ["service", "link"],
           properties: {
-            service: { type: "integer", example: 101 },
-            link: { type: "string", format: "uri", example: "https://www.tiktok.com/@user/video/123" },
-            quantity: { type: "integer", example: 2000 },
+            service: {
+              type: "string",
+              description: "Package tier name ('2k', '5k', '10k', '15k') or numeric service ID (101, 102, 103, 104)",
+              example: "2k",
+            },
+            link: {
+              type: "string",
+              format: "uri",
+              description: "Public TikTok video URL",
+              example: "https://www.tiktok.com/@username/video/7708743540372671752",
+            },
+            quantity: {
+              type: "integer",
+              description: "Optional quantity corresponding to the tier (2000, 5000, 10000, 15000)",
+              example: 2000,
+            },
+            shuffle: {
+              type: "boolean",
+              description: "Whether to generate unique randomized organic batch variance (defaults to true)",
+              example: true,
+            },
           },
         },
         OrderResponse: {
           type: "object",
           properties: {
-            order: { type: "integer", example: 98765 },
-            charge: { type: "string", example: "1.50" },
-            currency: { type: "string", example: "USD" },
+            order: { type: "integer", example: 836239 },
+            order_ref: { type: "string", example: "ENG-836239" },
+            service: { type: "integer", example: 101 },
+            preset: { type: "string", example: "2k" },
+            name: { type: "string", example: "2k" },
+            link: { type: "string", example: "https://www.tiktok.com/@username/video/..." },
+            target_views: { type: "integer", example: 2960 },
+            target_likes: { type: "integer", example: 42 },
+            batches: { type: "integer", example: 16 },
+            duration: { type: "string", example: "5 Hours" },
+            charge: { type: "string", example: "16.91" },
+            currency: { type: "string", example: "INR" },
             status: { type: "string", example: "processing" },
           },
         },
         OrderStatusResponse: {
           type: "object",
           properties: {
-            order: { type: "integer", example: 98765 },
+            order: { type: "integer", example: 836239 },
+            order_ref: { type: "string", example: "ENG-836239" },
             service: { type: "integer", example: 101 },
-            link: { type: "string", example: "https://www.tiktok.com/@user/video/123" },
-            quantity: { type: "integer", example: 2000 },
+            preset: { type: "string", example: "2k" },
+            name: { type: "string", example: "2k" },
+            link: { type: "string", example: "https://www.tiktok.com/@username/video/..." },
             status: {
               type: "string",
               enum: ["pending", "in_progress", "completed", "cancelled", "failed"],
               example: "in_progress",
             },
-            start_count: { type: "integer", example: 0 },
-            remains: { type: "integer", example: 1500 },
-            charge: { type: "string", example: "1.50" },
+            duration_hours: { type: "integer", example: 5 },
+            planned_views: { type: "integer", example: 2960 },
+            delivered_views: { type: "integer", example: 184 },
+            planned_likes: { type: "integer", example: 42 },
+            delivered_likes: { type: "integer", example: 12 },
+            remains: { type: "integer", example: 2776 },
+            total_batches: { type: "integer", example: 16 },
+            completed_batches: { type: "integer", example: 1 },
+            charge: { type: "string", example: "16.91" },
+            currency: { type: "string", example: "INR" },
+            created_at: { type: "string", format: "date-time" },
           },
         },
         ErrorResponse: {
@@ -102,38 +150,45 @@ export async function GET() {
         },
       },
     },
-    security: [{ BearerAuth: [] }, { ApiKeyAuth: [] }],
+    security: [
+      { BearerAuth: [] },
+      { ApiKeyAuth: [] },
+    ],
     paths: {
       "/services": {
         get: {
-          summary: "List all active services",
-          description: "Returns every active service currently available in the Engagement Tab.",
+          summary: "List Engagement Packages",
+          description: "Returns the 4 active TikTok Engagement packages (2k, 5k, 10k, 15k) with targets, durations, and rates.",
           responses: {
             "200": {
-              description: "List of active services",
+              description: "Array of available engagement packages",
               content: {
                 "application/json": {
                   schema: {
                     type: "array",
-                    items: { $ref: "#/components/schemas/Service" },
+                    items: { $ref: "#/components/schemas/EngagementService" },
                   },
                 },
               },
             },
             "401": {
-              description: "Unauthorized",
-              content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+              description: "Missing or invalid API key",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
             },
           },
         },
       },
       "/balance": {
         get: {
-          summary: "Check account wallet balance",
-          description: "Returns the available balance and currency for the authenticated account.",
+          summary: "Check Account Balance",
+          description: "Returns the current authenticated user's wallet balance.",
           responses: {
             "200": {
-              description: "Account balance",
+              description: "Balance information",
               content: {
                 "application/json": {
                   schema: { $ref: "#/components/schemas/BalanceResponse" },
@@ -142,15 +197,19 @@ export async function GET() {
             },
             "401": {
               description: "Unauthorized",
-              content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
             },
           },
         },
       },
       "/orders": {
         post: {
-          summary: "Place a new order",
-          description: "Submits a new order using the specified service ID, target URL, and quantity.",
+          summary: "Place Engagement Campaign Order",
+          description: "Places a multi-batch organic TikTok engagement order (2k, 5k, 10k, or 15k) with dynamic batch shuffling.",
           requestBody: {
             required: true,
             content: {
@@ -161,7 +220,7 @@ export async function GET() {
           },
           responses: {
             "200": {
-              description: "Order created successfully",
+              description: "Order placed successfully",
               content: {
                 "application/json": {
                   schema: { $ref: "#/components/schemas/OrderResponse" },
@@ -169,36 +228,40 @@ export async function GET() {
               },
             },
             "400": {
-              description: "Validation error (out of bounds, invalid URL, or insufficient balance)",
-              content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
-            },
-            "401": {
-              description: "Unauthorized",
-              content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+              description: "Invalid input or insufficient funds",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
             },
             "403": {
-              description: "Forbidden (READ_ONLY API Key)",
-              content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+              description: "API key does not have order permission",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
             },
           },
         },
       },
       "/orders/{id}": {
         get: {
-          summary: "Get order status",
-          description: "Fetches live status and delivery telemetry for an existing order by ID.",
+          summary: "Get Engagement Order Status",
+          description: "Returns live delivery progress, delivered counts, and remaining amounts for a campaign.",
           parameters: [
             {
               name: "id",
               in: "path",
               required: true,
-              description: "The numeric or reference order ID",
-              schema: { type: "string", example: "98765" },
+              description: "Order ID (e.g. 836239 or ENG-836239)",
+              schema: { type: "string" },
             },
           ],
           responses: {
             "200": {
-              description: "Order status details",
+              description: "Order tracking status",
               content: {
                 "application/json": {
                   schema: { $ref: "#/components/schemas/OrderStatusResponse" },
@@ -207,35 +270,12 @@ export async function GET() {
             },
             "404": {
               description: "Order not found",
-              content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
-            },
-          },
-        },
-      },
-      "/": {
-        post: {
-          summary: "Classic SMM Single-Endpoint Compatibility",
-          description:
-            "Standard single-endpoint API supporting action=services, action=balance, action=add, action=status via application/x-www-form-urlencoded or application/json.",
-          requestBody: {
-            content: {
-              "application/x-www-form-urlencoded": {
-                schema: {
-                  type: "object",
-                  properties: {
-                    key: { type: "string" },
-                    action: { type: "string", enum: ["services", "balance", "add", "status"] },
-                    service: { type: "integer" },
-                    link: { type: "string" },
-                    quantity: { type: "integer" },
-                    order: { type: "integer" },
-                  },
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
                 },
               },
             },
-          },
-          responses: {
-            "200": { description: "Action response matching REST outputs" },
           },
         },
       },
@@ -245,8 +285,8 @@ export async function GET() {
   return NextResponse.json(spec, {
     status: 200,
     headers: {
-      "Access-Control-Allow-Origin": "*",
       "Content-Type": "application/json",
+      "Cache-Control": "public, max-age=300",
     },
   });
 }

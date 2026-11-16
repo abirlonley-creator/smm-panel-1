@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { authenticateApiRequest, logApiCall } from "@/lib/api-v2/auth";
+import { getEngagementOrderDetails } from "@/lib/engagement/order-service";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +48,39 @@ export async function GET(
   }
 
   try {
+    // 1. Check Engagement Orders
+    const engOrderDetails = await getEngagementOrderDetails(orderIdParam, auth.user.id);
+
+    if (engOrderDetails) {
+      if ((engOrderDetails as any).unauthorized) {
+        return NextResponse.json(
+          { error: `Unauthorized to view order #${orderIdParam}.` },
+          { status: 403 }
+        );
+      }
+
+      const duration = Date.now() - startTime;
+      await logApiCall({
+        apiKeyId: auth.apiKey.id,
+        userId: auth.user.id,
+        keyName: auth.apiKey.name,
+        endpoint: `/api/v2/orders/${orderIdParam}`,
+        method: "GET",
+        statusCode: 200,
+        durationMs: duration,
+        success: true,
+      });
+
+      return NextResponse.json(engOrderDetails, {
+        status: 200,
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+          "Content-Type": "application/json",
+        },
+      });
+    }
+
+    // 2. Fallback check standard Order table
     const searchCond: any[] = [];
     const numId = Number.parseInt(orderIdParam, 10);
     if (!isNaN(numId)) {
@@ -64,7 +98,6 @@ export async function GET(
       },
     });
 
-    // Security check: Key can only view its own user's orders!
     if (!order || order.userId !== auth.user.id) {
       await logApiCall({
         apiKeyId: auth.apiKey.id,
@@ -101,6 +134,7 @@ export async function GET(
       start_count: 0,
       remains: Math.max(0, order.remainingQuantity || order.requestedQuantity - order.deliveredQuantity),
       charge: order.totalCost.toFixed(2),
+      currency: "INR",
     };
 
     const duration = Date.now() - startTime;

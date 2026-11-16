@@ -228,6 +228,64 @@
       "maxViews": 3000
     }
   },
+  "tiktok_15k": {
+    "id": "tiktok_15k",
+    "name": "TikTok FYP Acceleration 15K",
+    "tagline": "24-Hour Co-Delivered Momentum with Natural Organic Delivery Curve",
+    "badge": "1 Day (24h)",
+    "targetViews": 15200,
+    "targetLikes": 550,
+    "targetSaves": 120,
+    "targetShares": 60,
+    "durationHours": 24,
+    "totalDurationMinutes": 1440,
+    "views": {
+      "enabled": true,
+      "providerName": "Views Engine",
+      "serviceId": "897",
+      "minQuantity": 440,
+      "maxQuantity": 580,
+      "runsCount": 30,
+      "intervalMinutes": 48
+    },
+    "likes": {
+      "enabled": true,
+      "providerName": "Engagement Engine",
+      "serviceId": "1123",
+      "minQuantity": 15,
+      "maxQuantity": 28,
+      "runsCount": 26,
+      "waveOffsets": [
+        48, 96, 144, 192, 240, 288, 336, 384, 432, 480, 528, 576, 624, 672, 720, 768, 816, 864, 912, 960, 1008, 1056, 1104, 1152, 1200, 1248
+      ]
+    },
+    "saves": {
+      "enabled": true,
+      "providerName": "Engagement Engine",
+      "serviceId": "807",
+      "minQuantity": 10,
+      "maxQuantity": 15,
+      "runsCount": 10,
+      "waveOffsets": [
+        192, 336, 480, 624, 768, 912, 1008, 1104, 1200, 1296
+      ]
+    },
+    "shares": {
+      "enabled": true,
+      "providerName": "Engagement Engine",
+      "serviceId": "718",
+      "minQuantity": 8,
+      "maxQuantity": 12,
+      "runsCount": 6,
+      "waveOffsets": [
+        336, 576, 816, 1056, 1200, 1344
+      ]
+    },
+    "syncThreshold": {
+      "minViews": 3000,
+      "maxViews": 5000
+    }
+  },
   "tiktok_50k": {
     "id": "tiktok_50k",
     "name": "TikTok Viral Mega 50K",
