@@ -131,6 +131,73 @@ export function generateOrganicRandomDistribution(
   return items;
 }
 
+/**
+ * Generates an organic S-Curve delivery schedule with natural jittered checkpoints
+ * and non-repeating batch quantities mimicking real social algorithm distribution.
+ */
+export function generateOrganicSCurvePlan(
+  target: number,
+  runsCount: number,
+  durationMinutes: number,
+  minBound: number,
+  maxBound: number
+): { quantities: number[]; minuteOffsets: number[] } {
+  if (runsCount <= 1) {
+    return { quantities: [target], minuteOffsets: [0] };
+  }
+
+  const baseWeights: number[] = [];
+  for (let i = 0; i < runsCount; i++) {
+    const t = i / (runsCount - 1);
+    const sigmoid = 1 / (1 + Math.exp(-6 * (t - 0.45)));
+    const prevSigmoid = i === 0 ? 0 : 1 / (1 + Math.exp(-6 * ((i - 0.5) / (runsCount - 1) - 0.45)));
+    const sliceWeight = Math.max(0.015, sigmoid - prevSigmoid);
+    baseWeights.push(sliceWeight);
+  }
+
+  const sumWeights = baseWeights.reduce((a, b) => a + b, 0);
+  const normalizedWeights = baseWeights.map((w) => w / sumWeights);
+
+  const quantities = normalizedWeights.map((w) => {
+    const rawVal = target * w;
+    const variance = Math.random() * 0.4 - 0.2; // ±20%
+    const varied = Math.round(rawVal * (1 + variance));
+    return Math.max(minBound, Math.min(maxBound, varied));
+  });
+
+  // Conservation pass (Ke adjustment) ensuring exact sum equals target
+  let currentSum = quantities.reduce((a, b) => a + b, 0);
+  let diff = target - currentSum;
+  let attempts = 0;
+
+  while (diff !== 0 && attempts < 5000) {
+    attempts++;
+    const idx = Math.floor(Math.random() * runsCount);
+    if (diff > 0 && quantities[idx] < maxBound) {
+      const step = Math.min(diff, Math.max(1, Math.floor(Math.random() * 8) + 1));
+      quantities[idx] += step;
+      diff -= step;
+    } else if (diff < 0 && quantities[idx] > minBound) {
+      const step = Math.min(-diff, Math.max(1, Math.floor(Math.random() * 8) + 1));
+      quantities[idx] -= step;
+      diff += step;
+    }
+  }
+
+  // Jittered minute offsets
+  const avgInterval = durationMinutes / (runsCount - 1);
+  const minuteOffsets: number[] = [0];
+
+  for (let i = 1; i < runsCount; i++) {
+    const idealMinute = Math.round(i * avgInterval);
+    const jitter = Math.round((Math.random() * 0.5 - 0.25) * avgInterval);
+    const minute = Math.max(minuteOffsets[i - 1] + 5, Math.min(durationMinutes, idealMinute + jitter));
+    minuteOffsets.push(minute);
+  }
+
+  return { quantities, minuteOffsets };
+}
+
 // Helper to resolve or import a service
 async function resolveService(userProviderId: string, targetExtId: string, adapter: any, defaults: any) {
   let srv = await prisma.service.findFirst({
@@ -423,22 +490,24 @@ export async function createEngagementOrderInternal(
     const minV = Math.min(preset.views.minQuantity, preset.views.maxQuantity);
     const maxV = Math.max(preset.views.minQuantity, preset.views.maxQuantity);
     const targetV = preset.targetViews || matchedTier.targetViews;
+    const durationMinutes = (preset.durationHours || 5) * 60;
 
-    const randomizedViews = shouldShuffle
-      ? generateOrganicRandomDistribution(targetV, preset.views.runsCount, minV, maxV, true)
-      : [];
+    const sCurvePlan = shouldShuffle
+      ? generateOrganicSCurvePlan(targetV, preset.views.runsCount, durationMinutes, minV, maxV)
+      : null;
 
     for (let i = 0; i < preset.views.runsCount; i++) {
       let qty: number;
       if (params.plannedViews && typeof params.plannedViews[i] === "number" && params.plannedViews[i] >= Math.min(minV, 100)) {
         qty = params.plannedViews[i];
-      } else if (randomizedViews[i]) {
-        qty = randomizedViews[i];
+      } else if (sCurvePlan?.quantities[i]) {
+        qty = sCurvePlan.quantities[i];
       } else {
         qty = Math.floor(Math.random() * (maxV - minV + 1)) + minV;
       }
 
-      const scheduledAt = new Date(now + i * preset.views.intervalMinutes * 60 * 1000);
+      const offsetMinutes = sCurvePlan?.minuteOffsets[i] ?? (i * preset.views.intervalMinutes);
+      const scheduledAt = new Date(now + offsetMinutes * 60 * 1000);
       const runCost = Number(((qty / 1000) * viewsRate).toFixed(4));
 
       totalPlannedViews += qty;

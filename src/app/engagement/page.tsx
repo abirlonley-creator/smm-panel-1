@@ -313,14 +313,87 @@ function generateOrganicRandomDistribution(
   return items;
 }
 
+function generateOrganicSCurvePlan(
+  target: number,
+  runsCount: number,
+  durationMinutes: number,
+  minBound: number,
+  maxBound: number
+): { quantities: number[]; minuteOffsets: number[] } {
+  if (runsCount <= 1) {
+    return { quantities: [target], minuteOffsets: [0] };
+  }
+
+  const baseWeights: number[] = [];
+  for (let i = 0; i < runsCount; i++) {
+    const t = i / (runsCount - 1);
+    const sigmoid = 1 / (1 + Math.exp(-6 * (t - 0.45)));
+    const prevSigmoid = i === 0 ? 0 : 1 / (1 + Math.exp(-6 * ((i - 0.5) / (runsCount - 1) - 0.45)));
+    const sliceWeight = Math.max(0.015, sigmoid - prevSigmoid);
+    baseWeights.push(sliceWeight);
+  }
+
+  const sumWeights = baseWeights.reduce((a, b) => a + b, 0);
+  const normalizedWeights = baseWeights.map((w) => w / sumWeights);
+
+  const quantities = normalizedWeights.map((w) => {
+    const rawVal = target * w;
+    const variance = Math.random() * 0.4 - 0.2; // ±20%
+    const varied = Math.round(rawVal * (1 + variance));
+    return Math.max(minBound, Math.min(maxBound, varied));
+  });
+
+  let currentSum = quantities.reduce((a, b) => a + b, 0);
+  let diff = target - currentSum;
+  let attempts = 0;
+
+  while (diff !== 0 && attempts < 5000) {
+    attempts++;
+    const idx = Math.floor(Math.random() * runsCount);
+    if (diff > 0 && quantities[idx] < maxBound) {
+      const step = Math.min(diff, Math.max(1, Math.floor(Math.random() * 8) + 1));
+      quantities[idx] += step;
+      diff -= step;
+    } else if (diff < 0 && quantities[idx] > minBound) {
+      const step = Math.min(-diff, Math.max(1, Math.floor(Math.random() * 8) + 1));
+      quantities[idx] -= step;
+      diff += step;
+    }
+  }
+
+  const avgInterval = durationMinutes / (runsCount - 1);
+  const minuteOffsets: number[] = [0];
+
+  for (let i = 1; i < runsCount; i++) {
+    const idealMinute = Math.round(i * avgInterval);
+    const jitter = Math.round((Math.random() * 0.5 - 0.25) * avgInterval);
+    const minute = Math.max(minuteOffsets[i - 1] + 5, Math.min(durationMinutes, idealMinute + jitter));
+    minuteOffsets.push(minute);
+  }
+
+  return { quantities, minuteOffsets };
+}
+
 function generatePlanForPreset(p: PresetOption) {
-  const views: number[] = [];
+  const durationMinutes = (p.durationHours || 5) * 60;
+  let views: number[] = [];
+  let viewOffsets: number[] = [];
+
   if (p.views.enabled !== false) {
     if (p.targetViews && p.views.count > 0) {
-      views.push(...generateOrganicRandomDistribution(p.targetViews, p.views.count, p.views.min, p.views.max, true));
+      const sCurve = generateOrganicSCurvePlan(
+        p.targetViews,
+        p.views.count,
+        durationMinutes,
+        p.views.min,
+        p.views.max
+      );
+      views = sCurve.quantities;
+      viewOffsets = sCurve.minuteOffsets;
     } else {
       for (let i = 0; i < p.views.count; i++) {
         views.push(Math.floor(Math.random() * (p.views.max - p.views.min + 1)) + p.views.min);
+        viewOffsets.push(i * p.views.interval);
       }
     }
   }
@@ -360,7 +433,7 @@ function generatePlanForPreset(p: PresetOption) {
     }
   }
 
-  return { views, likes, saves, shares };
+  return { views, viewOffsets, likes, saves, shares };
 }
 
 function formatBdTime(offsetMinutes: number, baseDate: Date): string {
@@ -445,6 +518,7 @@ export default function EngagementPage() {
 
   const [plannedSchedule, setPlannedSchedule] = useState<{
     views: number[];
+    viewOffsets?: number[];
     likes: number[];
     saves: number[];
     shares: number[];
@@ -574,7 +648,7 @@ export default function EngagementPage() {
     // 1. Views
     if (currentPreset.views.enabled !== false && plannedSchedule.views.length > 0) {
       plannedSchedule.views.forEach((viewQty, index) => {
-        const offset = index * currentPreset.views.interval;
+        const offset = plannedSchedule.viewOffsets?.[index] ?? (index * currentPreset.views.interval);
         const entry = getOrCreate(offset);
         entry.viewQty = viewQty;
       });

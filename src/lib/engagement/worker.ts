@@ -159,7 +159,7 @@ export async function syncOrderDeliveryAndDeviation(orderId: string, now: Date) 
   let curvePoints: any[] = [];
   try {
     curvePoints = order.expectedCurve ? JSON.parse(order.expectedCurve) : [];
-  } catch {}
+  } catch { }
 
   const expectedAtNow = interpolateExpectedCurve(curvePoints, elapsedMinutes);
 
@@ -178,7 +178,7 @@ export async function syncOrderDeliveryAndDeviation(orderId: string, now: Date) 
   let enabledList: string[] = ["views", "likes", "saves", "shares", "comments"];
   try {
     if (order.enabledTypes) enabledList = JSON.parse(order.enabledTypes);
-  } catch {}
+  } catch { }
 
   for (const t of types) {
     if (!enabledList.includes(t) || plannedTotals[t] <= 0) {
@@ -428,7 +428,7 @@ async function executeEngagementTick(): Promise<EngagementTickResult> {
       update: { lastHeartbeatAt: now, status: "RUNNING" },
       create: { id: "singleton", lastHeartbeatAt: now, status: "RUNNING" },
     });
-  } catch {}
+  } catch { }
 
   // 2. Watchdog: check heartbeat age, recover runs stuck > 2m, and catch missed runs
   try {
@@ -470,14 +470,14 @@ async function executeEngagementTick(): Promise<EngagementTickResult> {
 
   const dueRuns = dueRunIds.length > 0
     ? await prisma.engagementRun.findMany({
-        where: { id: { in: dueRunIds } },
-        include: {
-          engagementOrder: { include: { user: true } },
-          service: { include: { userProvider: true, provider: true } },
-          provider: true,
-        },
-        orderBy: { scheduledAt: "asc" },
-      })
+      where: { id: { in: dueRunIds } },
+      include: {
+        engagementOrder: { include: { user: true } },
+        service: { include: { userProvider: true, provider: true } },
+        provider: true,
+      },
+      orderBy: { scheduledAt: "asc" },
+    })
     : [];
 
   let processedRuns = 0;
@@ -553,6 +553,46 @@ async function executeEngagementTick(): Promise<EngagementTickResult> {
       continue;
     }
 
+    // VIEWS-FIRST GATE: Ensure auxiliary engagement (likes, saves, shares, comments)
+    // is never sent before the views that justify it have actually been confirmed & delivered!
+    if (run.engagementType !== "views") {
+      const deliveredViews = order.deliveredViews || 0;
+      const targetViews = order.plannedViews || order.baseViews || 2000;
+      const targetMetric =
+        run.engagementType === "likes"
+          ? order.plannedLikes || 42
+          : run.engagementType === "saves"
+          ? order.plannedSaves || 10
+          : run.engagementType === "shares"
+          ? order.plannedShares || 5
+          : order.plannedComments || 2;
+
+      // Allow a baseline of at least 15 auxiliary units or proportional to views delivered so far
+      const allowedAuxiliary = Math.max(15, Math.floor((deliveredViews / targetViews) * targetMetric * 1.35));
+      const alreadySentAuxiliary =
+        run.engagementType === "likes"
+          ? order.deliveredLikes || 0
+          : run.engagementType === "saves"
+          ? order.deliveredSaves || 0
+          : run.engagementType === "shares"
+          ? order.deliveredShares || 0
+          : order.deliveredComments || 0;
+
+      if (alreadySentAuxiliary + run.quantity > allowedAuxiliary && deliveredViews < targetViews * 0.25) {
+        // Postpone this auxiliary wave by 5 minutes to wait for views batches to confirm
+        await prisma.engagementRun.update({
+          where: { id: run.id },
+          data: {
+            status: "scheduled",
+            scheduledAt: new Date(now.getTime() + 5 * 60 * 1000),
+            claimedAt: null,
+            attempts: { decrement: 1 },
+          },
+        });
+        continue;
+      }
+    }
+
     // Immediately transition to sending
     await prisma.engagementRun.update({
       where: { id: run.id },
@@ -583,10 +623,9 @@ async function executeEngagementTick(): Promise<EngagementTickResult> {
       });
     }
 
-    let adapter: SMMProviderAdapter | null = null;
-
     try {
       // 5. Provider resolution with concurrency isolation
+      let adapter: SMMProviderAdapter | null = null;
       let targetServiceExtId: string = run.providerServiceId || "101";
 
       if (effectiveProviderId) {
@@ -595,7 +634,7 @@ async function executeEngagementTick(): Promise<EngagementTickResult> {
           if (resolved.provider.active !== false && !resolved.provider.isMock) {
             adapter = resolved.adapter;
           }
-        } catch {}
+        } catch { }
       }
 
       if (!adapter && run.serviceId) {
@@ -605,7 +644,7 @@ async function executeEngagementTick(): Promise<EngagementTickResult> {
             adapter = routing.adapter;
             targetServiceExtId = routing.providerServiceId || targetServiceExtId;
           }
-        } catch {}
+        } catch { }
       }
 
       // If not yet resolved to a live provider, route directly to Administrator's live provider
@@ -628,7 +667,7 @@ async function executeEngagementTick(): Promise<EngagementTickResult> {
           if (resolvedUrl?.normalizedUrl) {
             finalTargetUrl = resolvedUrl.normalizedUrl;
           }
-        } catch {}
+        } catch { }
       }
 
       // IDEMPOTENCY / DOUBLE-DISPATCH GUARD:
@@ -693,12 +732,12 @@ async function executeEngagementTick(): Promise<EngagementTickResult> {
           run.engagementType === "views"
             ? "deliveredViews"
             : run.engagementType === "likes"
-            ? "deliveredLikes"
-            : run.engagementType === "shares"
-            ? "deliveredShares"
-            : run.engagementType === "saves"
-            ? "deliveredSaves"
-            : "deliveredComments";
+              ? "deliveredLikes"
+              : run.engagementType === "shares"
+                ? "deliveredShares"
+                : run.engagementType === "saves"
+                  ? "deliveredSaves"
+                  : "deliveredComments";
 
         await prisma.engagementOrder.update({
           where: { id: order.id },
@@ -773,7 +812,7 @@ async function executeEngagementTick(): Promise<EngagementTickResult> {
               });
             }
           }
-        } catch {}
+        } catch { }
 
         const isMaxConflict = run.attempts >= 10;
         await prisma.engagementRun.update({
@@ -796,7 +835,7 @@ async function executeEngagementTick(): Promise<EngagementTickResult> {
           runId: run.id,
           eventType: "PROVIDER_CALL",
           message: `Run #${run.runNumber} (${run.engagementType}) waiting: Upstream provider has an active order running for this video link. Automatically waiting 4 minutes before next attempt.`,
-        }).catch(() => {});
+        }).catch(() => { });
 
         continue;
       }
@@ -953,7 +992,7 @@ async function executeEngagementTick(): Promise<EngagementTickResult> {
           if (!res.provider.isMock) {
             adapter = res.adapter;
           }
-        } catch {}
+        } catch { }
       }
       if (!adapter && sRun.serviceId) {
         try {
@@ -961,7 +1000,7 @@ async function executeEngagementTick(): Promise<EngagementTickResult> {
           if (!routing.provider.isMock) {
             adapter = routing.adapter;
           }
-        } catch {}
+        } catch { }
       }
       if (!adapter) {
         const adminProv = sRun.engagementType === "views"
