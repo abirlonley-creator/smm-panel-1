@@ -986,56 +986,6 @@ export default function EngagementPage() {
         </Link>
       </div>
 
-      {/* 1. Sleek Modern Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-3xl bg-white border border-[#DEE0ED] shadow-subtle">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-xl sm:text-2xl font-black text-[#252943] tracking-tight">
-              TikTok Engagement
-            </h1>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Algorithmic FYP Pacing
-            </span>
-          </div>
-          <p className="text-xs text-[#252943]/60 font-normal">
-            Coordinated views, likes, saves & reposts paced for maximum retention.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2.5 self-start sm:self-auto shrink-0">
-          {/* Wallet Balance Pill */}
-          <div className="px-3.5 py-2 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] flex items-center gap-2.5">
-            <Wallet className="w-4 h-4 text-[#3A4EFB]" />
-            <div>
-              <span className="text-[9px] uppercase font-bold text-[#252943]/40 block leading-tight">Wallet</span>
-              <span className="text-xs font-black text-[#252943] font-mono leading-tight">
-                ₹{walletBalance.toFixed(2)}
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={() => fetchStatus(true)}
-              disabled={refreshing}
-              className="p-1 text-[#252943]/40 hover:text-[#3A4EFB] transition-colors"
-              title="Refresh Balance"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin text-[#3A4EFB]" : ""}`} />
-            </button>
-          </div>
-
-          {/* Quick Add Funds Action */}
-          <button
-            type="button"
-            onClick={() => setShowAddFundsModal(true)}
-            className="px-3.5 py-2.5 rounded-2xl bg-[#F0B90B] hover:bg-[#e0a800] text-[#1E2329] text-xs font-black shadow-subtle flex items-center gap-1.5 transition-all press-scale"
-          >
-            <Zap className="w-3.5 h-3.5 fill-[#1E2329]" />
-            <span>Add Funds</span>
-          </button>
-        </div>
-      </div>
-
       {/* Success Notification */}
       {successReceipt && (
         <div className="p-4 sm:p-5 rounded-3xl bg-emerald-50 border-2 border-emerald-300 text-emerald-950 space-y-3 animate-fadeIn shadow-subtle">
@@ -1495,10 +1445,20 @@ export default function EngagementPage() {
                   <span>Sufficient Funds</span>
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 text-rose-800 border border-rose-200 text-xs font-bold">
-                  <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
-                  <span>Need ₹{(exactTotalCost - walletBalance).toFixed(2)} More</span>
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 text-rose-800 border border-rose-200 text-xs font-bold">
+                    <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                    <span>Need ₹{(exactTotalCost - walletBalance).toFixed(2)} More</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddFundsModal(true)}
+                    className="px-3 py-1.5 rounded-xl bg-[#F0B90B] hover:bg-[#e0a800] text-[#1E2329] text-xs font-black shadow-subtle flex items-center gap-1 transition-all press-scale cursor-pointer"
+                  >
+                    <Zap className="w-3 h-3 fill-[#1E2329]" />
+                    <span>Add Funds</span>
+                  </button>
+                </div>
               )}
             </div>
           </div>
