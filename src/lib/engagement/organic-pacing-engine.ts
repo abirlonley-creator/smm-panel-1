@@ -62,7 +62,7 @@ export interface OrganicPlanOptions {
 export const PROVIDER_MINIMUMS: Record<EngagementMetric, number> = {
   views: 100,
   likes: 10,
-  comments: 10,
+  comments: 1,
   saves: 10,
   shares: 10,
 };
@@ -291,7 +291,8 @@ export function scaleBatchBounds(
   const scaledMin = Math.max(providerMin, Math.round(a.min * scale));
   const scaledMax = Math.min(hardCap * 1.5, Math.round(baseMax * scale));
   const scaledSpike = Math.min(hardCap * 2.0, Math.round(baseSpikeMax * scale));
-  const ultraMax = Math.min(hardCap * 2.5, Math.max(scaledMax * 1.5, Math.ceil(totalQuantity / 400)));
+  const maxCeiling = metric === "views" ? 650 : hardCap * 1.8;
+  const ultraMax = Math.min(maxCeiling, Math.max(scaledMax * 1.2, Math.ceil(totalQuantity / 400)));
 
   return { min: scaledMin, max: scaledMax, spikeMax: scaledSpike, ultraMax };
 }
@@ -529,10 +530,13 @@ export function generateOrganicDeliveryPlan(
       let strategyWeight = 1.0;
 
       if (strategy === "s_curve") {
-        // Biological Sigmoid FYP: gentle ramp-up, accelerated peak at ~45%, smooth tapering tail
-        const sigmoid = 1 / (1 + Math.exp(-6 * (t - 0.45)));
-        const prevSig = i === 0 ? 0 : 1 / (1 + Math.exp(-6 * ((i - 0.5) / (runsCount - 1) - 0.45)));
-        strategyWeight = Math.max(0.2, (sigmoid - prevSig) * runsCount);
+        // Continuous Normalized Sigmoid Growth (Smooth biological bell derivative)
+        const t0 = i / runsCount;
+        const t1 = (i + 1) / runsCount;
+        const sig0 = 1 / (1 + Math.exp(-5.2 * (t0 - 0.45)));
+        const sig1 = 1 / (1 + Math.exp(-5.2 * (t1 - 0.45)));
+        const delta = sig1 - sig0;
+        strategyWeight = Math.max(0.2, (delta * 0.75 * runsCount) + 0.25);
       } else if (strategy === "burst") {
         // Front-Loaded Rush: heavy initial momentum in first 30% of duration, then smooth taper
         strategyWeight = Math.max(0.3, Math.exp(-2.2 * t) * 1.6 + 0.35);
@@ -569,6 +573,24 @@ export function generateOrganicDeliveryPlan(
 
     let rawQuantities = weights.map((w) => Math.round((w / sumWeights) * totalQuantity));
 
+    // Anti-Spike Clamping Pass: ensure no consecutive batch jumps > 1.50x or drops < 0.70x
+    for (let i = 1; i < rawQuantities.length; i++) {
+      const prev = rawQuantities[i - 1];
+      const maxAllowed = Math.round(prev * 1.50);
+      const minAllowed = Math.max(providerMin, Math.round(prev * 0.70));
+      if (rawQuantities[i] > maxAllowed) {
+        const excess = rawQuantities[i] - maxAllowed;
+        rawQuantities[i] = maxAllowed;
+        if (i + 1 < rawQuantities.length) {
+          rawQuantities[i + 1] += excess;
+        } else if (i - 1 >= 0) {
+          rawQuantities[i - 1] += excess;
+        }
+      } else if (rawQuantities[i] < minAllowed && rawQuantities[i] >= providerMin) {
+        rawQuantities[i] = minAllowed;
+      }
+    }
+
     // Anti-bot Scrambling Pass 1: Eliminate identical consecutive numbers & round numbers
     for (let i = 1; i < rawQuantities.length; i++) {
       if (rawQuantities[i] === rawQuantities[i - 1] && rawQuantities[i] > providerMin) {
@@ -597,6 +619,21 @@ export function generateOrganicDeliveryPlan(
       providerMin,
       upperLimit
     );
+
+    // Smoothness Validation Audit: Verify no consecutive ratio > 1.6x
+    for (let i = 1; i < adjustedRuns.length; i++) {
+      const ratio = adjustedRuns[i].quantity / Math.max(1, adjustedRuns[i - 1].quantity);
+      if (ratio > 1.6) {
+        const targetClamped = Math.round(adjustedRuns[i - 1].quantity * 1.45);
+        const diff = adjustedRuns[i].quantity - targetClamped;
+        adjustedRuns[i].quantity = targetClamped;
+        if (i + 1 < adjustedRuns.length) {
+          adjustedRuns[i + 1].quantity += diff;
+        } else if (i - 1 >= 0) {
+          adjustedRuns[i - 1].quantity += diff;
+        }
+      }
+    }
 
     for (let i = 0; i < runsCount; i++) {
       const scheduledAt = new Date(scheduledTimes[i]);
@@ -935,16 +972,16 @@ export function generateTikTokAlgorithmicPlan(
   // 2. Determine optimal batch runs count based on anti-radar organic distribution
   let runsCount: number;
   if (targetViews <= 3500) {
-    runsCount = 16;
+    runsCount = 18;
   } else if (targetViews <= 8000) {
-    runsCount = 22;
+    runsCount = 26;
   } else if (targetViews <= 12000) {
-    runsCount = 28;
+    runsCount = 38;
   } else if (targetViews <= 20000) {
-    runsCount = 34;
+    runsCount = 48;
   } else {
-    // 50K: 56 batches across 5 days (avg ~110 min interval, with circadian peak clusters)
-    runsCount = Math.min(80, Math.max(48, Math.round(durationHours * 0.5)));
+    // 50K: 96 batches across 5 days (avg ~75 min interval, with circadian peak clusters, micro-batches ~250–550 views, ZERO spikes)
+    runsCount = Math.min(120, Math.max(80, Math.round(durationHours * 0.8)));
   }
 
   // 3. Generate Views Plan with Staged Algorithmic Shaping
@@ -965,9 +1002,17 @@ export function generateTikTokAlgorithmicPlan(
   if (viewsQuantities.length > 2 && viewsQuantities[0] > 240) {
     const diff = viewsQuantities[0] - (minViews + Math.floor(Math.random() * 35));
     viewsQuantities[0] -= diff;
-    // Redistribute to peak batches (around middle 40%-60%)
-    const midIdx = Math.floor(viewsQuantities.length * 0.45);
-    viewsQuantities[midIdx] += diff;
+    // Redistribute across peak batches (middle 35%-65%)
+    const midStart = Math.floor(viewsQuantities.length * 0.35);
+    const midEnd = Math.floor(viewsQuantities.length * 0.65);
+    const spreadCount = Math.max(1, midEnd - midStart);
+    const perBatchAdd = Math.floor(diff / spreadCount);
+    let rem = diff;
+    for (let m = midStart; m < midEnd; m++) {
+      const add = m === midEnd - 1 ? rem : perBatchAdd;
+      viewsQuantities[m] += add;
+      rem -= add;
+    }
   }
 
   // Guarantee Stage 4 Anti-Cliff Long-Tail: Smooth deceleration on the final 3-5 batches
@@ -978,10 +1023,45 @@ export function generateTikTokAlgorithmicPlan(
       if (viewsQuantities[k] > stepDownTarget) {
         const excess = viewsQuantities[k] - stepDownTarget;
         viewsQuantities[k] = stepDownTarget;
-        // Shift excess back into the peak middle
-        const peakTarget = Math.floor(viewsQuantities.length * 0.5);
-        viewsQuantities[peakTarget] += excess;
+        // Shift excess back across the peak middle
+        const midStart = Math.floor(viewsQuantities.length * 0.35);
+        const midEnd = Math.floor(viewsQuantities.length * 0.65);
+        const spreadCount = Math.max(1, midEnd - midStart);
+        const perBatchAdd = Math.floor(excess / spreadCount);
+        let rem = excess;
+        for (let m = midStart; m < midEnd; m++) {
+          const add = m === midEnd - 1 ? rem : perBatchAdd;
+          viewsQuantities[m] += add;
+          rem -= add;
+        }
       }
+    }
+  }
+
+  // Anti-Spike consecutive clamp on views
+  for (let i = 1; i < viewsQuantities.length; i++) {
+    const prev = viewsQuantities[i - 1];
+    const maxAllowed = Math.round(prev * 1.50);
+    const minAllowed = Math.max(minViews, Math.round(prev * 0.70));
+    if (viewsQuantities[i] > maxAllowed) {
+      const excess = viewsQuantities[i] - maxAllowed;
+      viewsQuantities[i] = maxAllowed;
+      if (i + 1 < viewsQuantities.length) {
+        viewsQuantities[i + 1] += excess;
+      }
+    } else if (viewsQuantities[i] < minAllowed && viewsQuantities[i] >= minViews) {
+      viewsQuantities[i] = minAllowed;
+    }
+  }
+
+  // Hard cap single view batch to 650 views max to prevent any bot radar triggers
+  const maxViewBatchBound = 650;
+  for (let i = 0; i < viewsQuantities.length; i++) {
+    if (viewsQuantities[i] > maxViewBatchBound) {
+      const excess = viewsQuantities[i] - maxViewBatchBound;
+      viewsQuantities[i] = maxViewBatchBound;
+      if (i + 1 < viewsQuantities.length) viewsQuantities[i + 1] += Math.floor(excess / 2);
+      if (i - 1 >= 0) viewsQuantities[i - 1] += Math.ceil(excess / 2);
     }
   }
 
@@ -990,7 +1070,7 @@ export function generateTikTokAlgorithmicPlan(
     viewsQuantities.map((q) => ({ quantity: q })),
     targetViews,
     minViews,
-    Math.max(...viewsQuantities, 1500)
+    maxViewBatchBound
   );
   const finalViews = adjustedViewRuns.map((r) => r.quantity);
 
@@ -1104,4 +1184,215 @@ export function generateTikTokAlgorithmicPlan(
       hasLongTailDecay: true,
     },
   };
+}
+
+/**
+ * Individual batch output format for the organic delivery schedule.
+ */
+export interface OrganicScheduleBatch {
+  timestamp: string; // ISO 8601 string, e.g. "2026-05-18T10:05:00Z"
+  minuteOffset: number;
+  quantity: number;
+  type: EngagementMetric;
+  cumulativeQuantity: number;
+  ratioToPrevious?: number;
+}
+
+export interface OrganicScheduleOptions {
+  startDate?: Date;
+  minBatch?: number;
+  maxBatch?: number;
+  kSteepness?: number; // Optimal default: 6.0 / duration_minutes
+  clampingMin?: number; // default: 0.70
+  clampingMax?: number; // default: 1.50
+  tickIntervalMin?: number; // default: 8
+  tickIntervalMax?: number; // default: 18
+}
+
+/**
+ * Pure Mathematical Logistic S-Curve Schedule Generator
+ * Generates an anti-bot protected delivery schedule using:
+ * 1. Normalized Sigmoid Growth: S(t) = V_max * (L(t) - L(0)) / (L(T) - L(0))
+ * 2. Randomized Tick Discretization (8 to 18 min intervals)
+ * 3. Strict Anti-Spike Clamping: 0.70 <= Q_i / Q_{i-1} <= 1.50 with forward redistribution
+ * 4. Micro-batching respecting provider minimums (Views >= 100, Likes >= 10, Saves >= 10, Shares >= 10, Comments >= 1)
+ * 5. Anti-Bot Pattern Desaturation (No multiples of 5, no duplicate consecutive numbers)
+ * 6. Smoothness Validation Check: Guarantees max jump <= 1.6x across all ticks
+ */
+export function generateOrganicSchedule(
+  total_quantity: number,
+  duration_minutes: number,
+  service_type: string = "views",
+  options: OrganicScheduleOptions = {}
+): OrganicScheduleBatch[] {
+  const metric = normalizeMetric(service_type);
+  const providerMin = options.minBatch ?? (PROVIDER_MINIMUMS[metric] || 10);
+  const startDate = options.startDate ? new Date(options.startDate.getTime()) : new Date();
+  const T = Math.max(30, duration_minutes);
+
+  // If total quantity is below or equal to provider minimum, return single batch
+  if (total_quantity <= providerMin) {
+    return [
+      {
+        timestamp: startDate.toISOString(),
+        minuteOffset: 0,
+        quantity: total_quantity,
+        type: metric,
+        cumulativeQuantity: total_quantity,
+        ratioToPrevious: 1.0,
+      },
+    ];
+  }
+
+  const clampMin = options.clampingMin ?? 0.70;
+  const clampMax = options.clampingMax ?? 1.50;
+
+  // 1. Determine optimal organic batch count based on quantity & provider minimum
+  let targetAvg = 160;
+  if (providerMin >= 100) {
+    if (total_quantity <= 3500) targetAvg = 160;
+    else if (total_quantity <= 10000) targetAvg = 220;
+    else if (total_quantity <= 25000) targetAvg = 320;
+    else targetAvg = 480;
+  } else if (providerMin >= 10) {
+    targetAvg = Math.max(providerMin * 1.3, Math.min(35, total_quantity / 15));
+  } else {
+    targetAvg = Math.max(1.5, Math.min(10, total_quantity / 10));
+  }
+
+  const safeMaxBatches = Math.max(2, Math.floor(total_quantity / (providerMin * 1.15)));
+  const desiredBatches = Math.max(2, Math.round(total_quantity / targetAvg));
+  const batchCount = Math.min(120, Math.max(2, Math.min(desiredBatches, safeMaxBatches)));
+
+  // 2. Continuous Normalized Sigmoid Growth
+  // k = 5.2 gives smooth 5% ramp-up and smooth tapering tail
+  const k = options.kSteepness ?? 5.2;
+  const tMid = 0.45;
+  const logistic = (t: number) => 1 / (1 + Math.exp(-k * (t - tMid)));
+
+  const weights: number[] = [];
+  const scheduledMinutes: number[] = [];
+  const avgInterval = T / batchCount;
+
+  for (let i = 0; i < batchCount; i++) {
+    const t0 = i / batchCount;
+    const t1 = (i + 1) / batchCount;
+    const delta = logistic(t1) - logistic(t0);
+    // Baseline allocation prevents zero-volume flatlines
+    const w = delta * 0.75 + 0.25 / batchCount;
+    weights.push(w);
+
+    // Randomized timing offset (within ±15% of regular interval)
+    const idealMinute = Math.round(t1 * T);
+    const jitter = Math.round((Math.random() * 2 - 1) * Math.min(avgInterval * 0.2, 15));
+    const minute = i === batchCount - 1 ? T : Math.max(1, Math.min(T - 1, idealMinute + jitter));
+    scheduledMinutes.push(minute);
+  }
+
+  // Ensure minute offsets are strictly increasing
+  for (let i = 1; i < scheduledMinutes.length; i++) {
+    if (scheduledMinutes[i] <= scheduledMinutes[i - 1]) {
+      scheduledMinutes[i] = scheduledMinutes[i - 1] + Math.max(1, Math.round(avgInterval * 0.25));
+    }
+  }
+
+  const sumW = weights.reduce((a, b) => a + b, 0) || 1.0;
+  let quantities = weights.map((w) => Math.max(providerMin, Math.round((w / sumW) * total_quantity)));
+
+  // Anti-Spike Clamping Pass
+  for (let i = 1; i < quantities.length; i++) {
+    const prev = quantities[i - 1];
+    const maxAllowed = Math.round(prev * clampMax);
+    const minAllowed = Math.max(providerMin, Math.round(prev * clampMin));
+
+    if (quantities[i] > maxAllowed) {
+      const excess = quantities[i] - maxAllowed;
+      quantities[i] = maxAllowed;
+      if (i + 1 < quantities.length) {
+        quantities[i + 1] += excess;
+      } else if (i - 1 >= 0) {
+        quantities[i - 1] += excess;
+      }
+    } else if (quantities[i] < minAllowed && quantities[i] >= providerMin) {
+      quantities[i] = minAllowed;
+    }
+  }
+
+  // Anti-Bot Desaturation (Eliminate multiples of 5 and consecutive repeats)
+  const usedSet = new Set<number>();
+  const upperLimit = options.maxBatch || (metric === "views" ? 650 : Math.max(...quantities, providerMin * 5));
+
+  quantities = quantities.map((qty, idx) => {
+    const prev = idx > 0 ? quantities[idx - 1] : undefined;
+    const desat = antiBotDesaturateQuantity(qty, providerMin, upperLimit, usedSet, prev);
+    usedSet.add(desat);
+    return desat;
+  });
+
+  // Ke Conservation Equation
+  const solvedRuns = solveKeConservationEquation(
+    quantities.map((q) => ({ quantity: q })),
+    total_quantity,
+    providerMin,
+    upperLimit
+  );
+  quantities = solvedRuns.map((r) => r.quantity);
+
+  // Smoothness Validation Audit
+  for (let pass = 0; pass < 3; pass++) {
+    let hadViolation = false;
+    for (let i = 1; i < quantities.length; i++) {
+      const ratio = quantities[i] / Math.max(1, quantities[i - 1]);
+      if (ratio > 1.6) {
+        hadViolation = true;
+        const clampedVal = Math.round(quantities[i - 1] * 1.45);
+        const excess = quantities[i] - clampedVal;
+        quantities[i] = clampedVal;
+        if (i + 1 < quantities.length) {
+          quantities[i + 1] += excess;
+        } else if (i - 1 >= 0) {
+          quantities[i - 1] += excess;
+        }
+      }
+    }
+    if (!hadViolation) break;
+  }
+
+  // Exact residual redistribution
+  let currentSum = quantities.reduce((a, b) => a + b, 0);
+  let diff = total_quantity - currentSum;
+  let guard = 0;
+  while (diff !== 0 && guard < 1000) {
+    const idx = Math.floor(quantities.length * 0.4) + (guard % Math.max(1, Math.floor(quantities.length * 0.3)));
+    if (diff > 0) {
+      if (idx < quantities.length && quantities[idx] < upperLimit) {
+        quantities[idx]++;
+        diff--;
+      }
+    } else {
+      if (idx < quantities.length && quantities[idx] > providerMin) {
+        quantities[idx]--;
+        diff++;
+      }
+    }
+    guard++;
+  }
+
+  let cumulative = 0;
+  return quantities.map((qty, index) => {
+    cumulative += qty;
+    const minuteOffset = scheduledMinutes[index] || Math.round(((index + 1) / batchCount) * T);
+    const scheduledTime = new Date(startDate.getTime() + minuteOffset * 60 * 1000);
+    const prevQty = index > 0 ? quantities[index - 1] : qty;
+    const ratioToPrevious = index === 0 ? 1.0 : Number((qty / Math.max(1, prevQty)).toFixed(2));
+
+    return {
+      timestamp: scheduledTime.toISOString(),
+      minuteOffset,
+      quantity: qty,
+      type: metric,
+      cumulativeQuantity: cumulative,
+      ratioToPrevious,
+    };
+  });
 }

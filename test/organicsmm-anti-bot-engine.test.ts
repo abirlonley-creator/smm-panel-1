@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   generateOrganicDeliveryPlan,
   generateTikTokAlgorithmicPlan,
+  generateOrganicSchedule,
   calculateHumanBehaviorScore,
   antiBotDesaturateQuantity,
   solveKeConservationEquation,
@@ -237,5 +238,46 @@ describe("OrganicSMM Anti-Bot Delivery & View Pacing Engine", () => {
     const peakBatch = Math.max(...algo.views.quantities);
     const lastBatch = algo.views.quantities[algo.views.quantities.length - 1];
     assert.ok(lastBatch < peakBatch, `Last batch (${lastBatch}) must be smaller than peak batch (${peakBatch}) to prevent cliff`);
+
+    // Must NOT have massive 1,000+ view chunks (anti-radar micro-batching)
+    assert.ok(peakBatch <= 650, `Peak view batch (${peakBatch}) must be <= 650 to prevent radar spike`);
+  });
+
+  it("generates organic schedule using pure mathematical logistic S-curve with anti-spike clamping", () => {
+    // 1. 2K views over 6 hours (360 mins)
+    const schedule2k = generateOrganicSchedule(2000, 360, "views");
+    assert.ok(schedule2k.length >= 8, `Expected >= 8 batches, got ${schedule2k.length}`);
+    const sum2k = schedule2k.reduce((a, b) => a + b.quantity, 0);
+    assert.equal(sum2k, 2000, `Sum must strictly equal 2000, got ${sum2k}`);
+
+    schedule2k.forEach((b, idx) => {
+      assert.ok(b.quantity >= 100, `Batch #${idx} quantity ${b.quantity} must be >= 100 (provider min)`);
+      if (idx > 0) {
+        assert.ok(b.minuteOffset > schedule2k[idx - 1].minuteOffset, "Minute offsets must be strictly increasing");
+        const ratio = b.quantity / schedule2k[idx - 1].quantity;
+        assert.ok(ratio <= 1.65, `Batch #${idx} jump ratio ${ratio.toFixed(2)} exceeds 1.65x`);
+      }
+    });
+
+    // 2. 50K views over 120 hours (7200 mins) - Anti-radar micro-batching test
+    const schedule50k = generateOrganicSchedule(50000, 7200, "views");
+    const sum50k = schedule50k.reduce((a, b) => a + b.quantity, 0);
+    assert.equal(sum50k, 50000, `Sum must strictly equal 50000, got ${sum50k}`);
+    const peak50k = Math.max(...schedule50k.map((b) => b.quantity));
+    assert.ok(peak50k <= 650, `Peak batch in 50k (${peak50k}) must be <= 650 to prevent bot radar triggers`);
+
+    // Check no massive jumps in 50K
+    for (let i = 1; i < schedule50k.length; i++) {
+      const ratio = schedule50k[i].quantity / schedule50k[i - 1].quantity;
+      assert.ok(ratio <= 1.65, `Batch #${i} jump ratio in 50k (${ratio.toFixed(2)}) exceeds 1.65x`);
+    }
+
+    // 3. Comments provider minimum test (min = 1)
+    const commentsSchedule = generateOrganicSchedule(15, 360, "comments");
+    const sumComments = commentsSchedule.reduce((a, b) => a + b.quantity, 0);
+    assert.equal(sumComments, 15);
+    commentsSchedule.forEach((c) => {
+      assert.ok(c.quantity >= 1, `Comment quantity ${c.quantity} must be >= 1`);
+    });
   });
 });
