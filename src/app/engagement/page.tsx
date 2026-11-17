@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import {
   Zap,
@@ -32,6 +32,7 @@ import {
   Sliders,
   Activity,
   Moon,
+  Link2,
 } from "lucide-react";
 import { BinanceAddFundsModal } from "@/components/BinanceAddFundsModal";
 import { AdminOutOfBalanceBanner } from "@/components/AdminOutOfBalanceBanner";
@@ -556,6 +557,7 @@ export default function EngagementPage() {
 
   const [planTimestamp, setPlanTimestamp] = useState<Date>(new Date());
   const [shuffling, setShuffling] = useState(false);
+  const [showTimeline, setShowTimeline] = useState(false);
 
   // Re-generate plan when preset changes
   function switchPreset(presetId: string) {
@@ -653,6 +655,22 @@ export default function EngagementPage() {
   const exactSavesCost = totalSaves > 0 ? Number(((totalSaves / 1000) * savesRate).toFixed(4)) : 0;
   const exactSharesCost = totalShares > 0 ? Number(((totalShares / 1000) * sharesRate).toFixed(4)) : 0;
   const exactTotalCost = Number((exactViewsCost + exactLikesCost + exactSavesCost + exactSharesCost).toFixed(2));
+
+  // Upfront estimated price per package
+  const getPresetPrice = useCallback(
+    (p: PresetOption) => {
+      const estViews = p.targetViews || (p.views.count * ((p.views.min + p.views.max) / 2));
+      const estLikes = p.targetLikes || (p.likes.count * ((p.likes.min + p.likes.max) / 2));
+      const estSaves = p.targetSaves || (p.saves ? p.saves.count * ((p.saves.min + p.saves.max) / 2) : 0);
+      const estShares = p.targetShares || (p.shares ? p.shares.count * ((p.shares.min + p.shares.max) / 2) : 0);
+      const vCost = (estViews / 1000) * viewsRate;
+      const lCost = (estLikes / 1000) * likesRate;
+      const sCost = (estSaves / 1000) * savesRate;
+      const rCost = (estShares / 1000) * sharesRate;
+      return Number((vCost + lCost + sCost + rCost).toFixed(2));
+    },
+    [viewsRate, likesRate, savesRate, sharesRate]
+  );
 
   const walletBalance = statusData?.walletBalance ?? 0;
   const zeofame = statusData?.zeofame;
@@ -991,526 +1009,400 @@ export default function EngagementPage() {
         </div>
       )}
 
-      {/* 2. PRESET TIER SELECTOR */}
-      <div className="bg-white rounded-3xl border border-[#DEE0ED] p-5 sm:p-6 shadow-subtle space-y-3.5">
-        <div className="flex items-center justify-between pb-2 border-b border-[#DEE0ED]/80">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-[#3A4EFB]" />
-            <h2 className="text-sm font-bold text-[#252943]">
-              Choose Growth Tier
-            </h2>
-          </div>
-          <span className="text-[11px] text-[#252943]/50 font-medium">Safe algorithmic pacing</span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {Object.values(activePresets).map((preset) => {
-            const isSelected = selectedPresetId === preset.id;
-            const viewsEnabled = preset.views.enabled !== false;
-            const likesEnabled = preset.likes.enabled !== false;
-            const savesEnabled = Boolean(preset.saves?.enabled);
-            const sharesEnabled = Boolean(preset.shares?.enabled);
-
-            const estViews = preset.targetViews || (preset.id === "tiktok_2k" ? 2000 : preset.id === "tiktok_5k" ? 5000 : preset.id === "tiktok_10k" ? 10000 : 50000);
-
-            return (
-              <button
-                key={preset.id}
-                type="button"
-                onClick={() => switchPreset(preset.id)}
-                className={`p-4 rounded-2xl border text-left transition-all relative flex flex-col justify-between cursor-pointer press-scale card-hover ${isSelected
-                  ? "bg-white border-[#3A4EFB] shadow-md ring-2 ring-[#3A4EFB]/25 -translate-y-0.5"
-                  : "bg-[#F8F9FD] border-[#DEE0ED] hover:bg-white hover:border-[#3A4EFB]/40"
-                  }`}
-              >
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-[#252943]">
-                      {preset.name}
-                    </span>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${isSelected ? "bg-[#3A4EFB] text-white" : "bg-gray-200/80 text-gray-700"
-                      }`}>
-                      {preset.badge}
-                    </span>
-                  </div>
-
-                  <p className="text-[11px] text-[#252943]/60 leading-snug">
-                    {preset.tagline}
-                  </p>
-
-                  {/* Active Service Indicators on Card */}
-                  <div className="flex items-center flex-wrap gap-1 pt-1">
-                    {viewsEnabled && (
-                      <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[9px] font-bold border border-blue-200/60">
-                        Views
-                      </span>
-                    )}
-                    {likesEnabled && (
-                      <span className="px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 text-[9px] font-bold border border-rose-200/60">
-                        Likes
-                      </span>
-                    )}
-                    {savesEnabled && (
-                      <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 text-[9px] font-bold border border-amber-200/60">
-                        Saves
-                      </span>
-                    )}
-                    {sharesEnabled && (
-                      <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 text-[9px] font-bold border border-purple-200/60">
-                        Reposts
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="pt-2.5 mt-2.5 border-t border-[#DEE0ED]/60 flex items-center justify-between text-[11px]">
-                  {viewsEnabled ? (
-                    <>
-                      <span className="font-bold text-blue-700 font-mono">
-                        ~{estViews.toLocaleString()} Views
-                      </span>
-                      <span className="text-[10px] text-[#252943]/50 font-medium">
-                        {preset.views.count} Batches
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="font-bold text-rose-700 font-mono flex items-center gap-1">
-                        <Heart className="w-3 h-3 fill-rose-500" />
-                        <span>{likesEnabled ? `${preset.likes.count} Likes Waves` : "Custom Pacing"}</span>
-                      </span>
-                      <span className="text-[10px] text-amber-800 font-bold bg-amber-100/70 px-1.5 py-0.5 rounded border border-amber-200">
-                        Views Off
-                      </span>
-                    </>
-                  )}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-
-      {/* 3. THREE-STEP WORKSPACE */}
-      <form onSubmit={handleCreateOrder} className="space-y-5">
-        {/* STEP 1: VIDEO LINK */}
-        <div className="bg-white rounded-3xl border border-[#DEE0ED] p-5 sm:p-6 shadow-subtle space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="w-6 h-6 rounded-lg bg-[#3A4EFB] text-white text-xs font-black flex items-center justify-center">
+      {/* MAIN GUIDED CAMPAIGN WORKSPACE (4-STEP STREAMLINED FLOW) */}
+      <form onSubmit={handleCreateOrder} className="space-y-6">
+        {/* STEP 1: CHOOSE GROWTH PACKAGE */}
+        <div className="bg-white rounded-3xl border border-[#DEE0ED] p-5 sm:p-6 shadow-subtle space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
+            <div className="flex items-center gap-2.5">
+              <span className="w-7 h-7 rounded-xl bg-[#3A4EFB] text-white text-xs font-black flex items-center justify-center shadow-xs">
                 1
               </span>
-              <h2 className="text-sm font-bold text-[#252943]">
-                TikTok Video URL
-              </h2>
+              <div>
+                <h2 className="text-sm font-bold text-[#1A1D31]">
+                  Choose Growth Package
+                </h2>
+                <p className="text-[11px] text-[#64748B]">
+                  Select your target video reach — all packages deliver organic, human-paced engagement
+                </p>
+              </div>
             </div>
-            <span className="text-[11px] text-[#252943]/50">Public post link</span>
+            <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200/80 hidden sm:inline-flex items-center gap-1">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Anti-Bot Protected</span>
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {Object.values(activePresets).map((preset) => {
+              const isSelected = selectedPresetId === preset.id;
+              const viewsEnabled = preset.views.enabled !== false;
+              const likesEnabled = preset.likes.enabled !== false;
+              const estViews = preset.targetViews || (preset.views.count * ((preset.views.min + preset.views.max) / 2));
+              const estLikes = preset.targetLikes || (preset.likes.count * ((preset.likes.min + preset.likes.max) / 2));
+              const basePrice = getPresetPrice(preset);
+
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => switchPreset(preset.id)}
+                  className={`p-4 rounded-2xl border text-left transition-all relative flex flex-col justify-between cursor-pointer press-scale card-hover ${
+                    isSelected
+                      ? "bg-white border-[#3A4EFB] shadow-md ring-2 ring-[#3A4EFB]/25 -translate-y-0.5"
+                      : "bg-[#F8F9FD] border-[#DEE0ED] hover:bg-white hover:border-[#3A4EFB]/40"
+                  }`}
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-extrabold text-[#1A1D31]">
+                        {preset.name}
+                      </span>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                          isSelected ? "bg-[#3A4EFB] text-white" : "bg-gray-200/70 text-gray-700"
+                        }`}
+                      >
+                        {preset.durationLabel}
+                      </span>
+                    </div>
+
+                    {/* Views & Metrics */}
+                    <div className="pt-1">
+                      <div className="text-xl font-black text-[#1A1D31] font-mono tracking-tight">
+                        ~{Math.round(estViews).toLocaleString()}{" "}
+                        <span className="text-xs font-bold text-[#3A4EFB]">Views</span>
+                      </div>
+                      <div className="flex items-center flex-wrap gap-1.5 mt-1 text-[11px] font-semibold text-[#64748B]">
+                        {likesEnabled && (
+                          <span className="flex items-center gap-1 text-rose-600 font-mono font-bold">
+                            <Heart className="w-3 h-3 fill-rose-500 text-rose-500" />
+                            <span>+{Math.round(estLikes)} Likes</span>
+                          </span>
+                        )}
+                        {preset.saves?.enabled && (
+                          <span className="text-amber-600 font-mono font-bold">
+                            • +{preset.targetSaves || preset.saves.count * 10} Saves
+                          </span>
+                        )}
+                        {preset.shares?.enabled && (
+                          <span className="text-purple-600 font-mono font-bold">
+                            • +{preset.targetShares || preset.shares.count * 10} Reposts
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-[#64748B] leading-snug line-clamp-2 pt-0.5">
+                      {preset.tagline}
+                    </p>
+                  </div>
+
+                  {/* Price Tag & Active Check Indicator */}
+                  <div className="pt-3 mt-3 border-t border-[#DEE0ED]/60 flex items-center justify-between">
+                    <div>
+                      <span className="text-[9px] uppercase font-bold text-[#64748B] block leading-none">Price</span>
+                      <span className="text-sm font-black text-[#1A1D31] font-mono">
+                        ₹{basePrice.toFixed(2)}
+                      </span>
+                    </div>
+
+                    <div
+                      className={`w-5 h-5 rounded-full flex items-center justify-center border transition-all ${
+                        isSelected
+                          ? "bg-[#3A4EFB] border-[#3A4EFB] text-white shadow-xs"
+                          : "border-[#DEE0ED] bg-white text-transparent"
+                      }`}
+                    >
+                      <Check className="w-3 h-3 stroke-[3]" />
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* STEP 2: VIDEO LINK */}
+        <div className="bg-white rounded-3xl border border-[#DEE0ED] p-5 sm:p-6 shadow-subtle space-y-3">
+          <div className="flex items-center justify-between pb-2 border-b border-[#DEE0ED]">
+            <div className="flex items-center gap-2.5">
+              <span className="w-7 h-7 rounded-xl bg-[#3A4EFB] text-white text-xs font-black flex items-center justify-center shadow-xs">
+                2
+              </span>
+              <div>
+                <h2 className="text-sm font-bold text-[#1A1D31]">
+                  TikTok Post URL
+                </h2>
+                <p className="text-[11px] text-[#64748B]">
+                  Paste your public TikTok video or carousel link
+                </p>
+              </div>
+            </div>
+
+            {targetUrl.toLowerCase().includes("tiktok.com") ? (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <Check className="w-3 h-3 stroke-[3]" />
+                <span>Link Ready</span>
+              </span>
+            ) : (
+              <span className="text-[11px] text-[#64748B] font-medium hidden sm:inline">
+                Supports video, photo carousel & sound links
+              </span>
+            )}
           </div>
 
           <div className="relative">
             <input
               type="url"
               required
-              placeholder="https://www.tiktok.com/@username/video/..."
+              placeholder="https://www.tiktok.com/@username/video/1234567890..."
               value={targetUrl}
               onChange={(e) => setTargetUrl(e.target.value)}
-              className="w-full px-4 py-3 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] text-xs sm:text-sm font-medium text-[#252943] placeholder-[#252943]/40 focus:outline-none focus:border-[#3A4EFB] focus:bg-white transition-all shadow-inner font-mono"
+              className="w-full pl-11 pr-4 py-3.5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] text-xs sm:text-sm font-semibold text-[#1A1D31] placeholder-[#64748B]/50 focus:outline-none focus:border-[#3A4EFB] focus:bg-white focus:ring-2 focus:ring-[#3A4EFB]/15 transition-all shadow-inner font-mono"
             />
+            <Link2 className="w-4 h-4 text-[#64748B] absolute left-4 top-1/2 -translate-y-1/2" />
           </div>
         </div>
 
-        {/* STEP 2: DELIVERY BREAKDOWN */}
+        {/* STEP 3: DELIVERY PACING */}
         <div className="bg-white rounded-3xl border border-[#DEE0ED] p-5 sm:p-6 shadow-subtle space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED] flex-wrap gap-2">
-            <div className="flex items-center gap-2">
-              <span className="w-6 h-6 rounded-lg bg-[#3A4EFB] text-white text-xs font-black flex items-center justify-center">
-                2
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#DEE0ED]">
+            <div className="flex items-center gap-2.5">
+              <span className="w-7 h-7 rounded-xl bg-[#3A4EFB] text-white text-xs font-black flex items-center justify-center shadow-xs">
+                3
               </span>
               <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className="text-sm font-bold text-[#252943]">
-                    Schedule & Delivery Breakdown ({currentPreset.name})
-                  </h2>
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-extrabold bg-blue-100 text-blue-800 border border-blue-200 flex items-center gap-1 shadow-sm">
-                    <Eye className="w-3.5 h-3.5 text-blue-600" />
-                    <span>{currentPreset.views.enabled !== false ? `${totalViews.toLocaleString()} Total Views` : "Views Off"}</span>
-                  </span>
-                  {currentPreset.likes.enabled !== false && totalLikes > 0 && (
-                    <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-extrabold bg-rose-100 text-rose-800 border border-rose-200 flex items-center gap-1 shadow-sm">
-                      <Heart className="w-3.5 h-3.5 text-rose-600 fill-rose-600" />
-                      <span>{totalLikes} Likes</span>
-                    </span>
-                  )}
-                </div>
-                <p className="text-[11px] text-[#252943]/60 flex items-center gap-1.5 flex-wrap pt-0.5">
-                  <span>Organic randomized pacing across {currentPreset.durationLabel}</span>
-                  <span>•</span>
-                  <span>Total Campaign: <strong className="text-blue-700 font-mono font-bold">{totalViews.toLocaleString()} Views</strong> ({currentPreset.views.count} batches)</span>
-                  {currentPreset.likes.enabled !== false && totalLikes > 0 && (
-                    <span>• <strong className="text-rose-600 font-mono font-bold">{totalLikes} Likes</strong> ({currentPreset.likes.count} waves)</span>
-                  )}
-                  {currentPreset.saves?.enabled && totalSaves > 0 && (
-                    <span>• <strong className="text-amber-600 font-mono font-bold">{totalSaves} Saves</strong></span>
-                  )}
-                  {currentPreset.shares?.enabled && totalShares > 0 && (
-                    <span>• <strong className="text-purple-600 font-mono font-bold">{totalShares} Reposts</strong></span>
-                  )}
+                <h2 className="text-sm font-bold text-[#1A1D31]">
+                  Delivery Pacing & Protection
+                </h2>
+                <p className="text-[11px] text-[#64748B]">
+                  Paced organically across {currentPreset.durationLabel} to simulate authentic viewer arrival
                 </p>
               </div>
             </div>
 
             <button
               type="button"
-              onClick={rerollPlan}
-              disabled={shuffling}
-              className="px-3 py-1.5 rounded-xl bg-[#F8F9FD] hover:bg-[#EEF1FB] border border-[#DEE0ED] text-xs font-bold text-[#3A4EFB] transition-all flex items-center gap-1.5 cursor-pointer press-scale disabled:opacity-60 shadow-xs"
-              title="Shuffle randomized quantities"
+              onClick={togglePeakHours}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border self-start sm:self-auto press-scale ${
+                peakHoursEnabled
+                  ? "bg-amber-500/10 text-amber-900 border-amber-300 shadow-2xs"
+                  : "bg-white text-[#64748B] border-[#DEE0ED] hover:bg-gray-50"
+              }`}
+              title="Prioritizes heavier delivery between 18:00 and 22:00"
             >
-              <Dices className={`w-3.5 h-3.5 text-[#3A4EFB] ${shuffling ? "animate-spin" : ""}`} />
-              <span>{shuffling ? "Shuffling..." : "Shuffle Plan"}</span>
+              <Moon className={`w-3.5 h-3.5 ${peakHoursEnabled ? "text-amber-600 fill-amber-500" : "text-gray-400"}`} />
+              <span>Prime Evening (18–22h): {peakHoursEnabled ? "On" : "Off"}</span>
             </button>
           </div>
 
-          {/* Anti-Bot Evasion Status Card */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3.5 rounded-2xl bg-gradient-to-r from-emerald-50/90 via-teal-50/80 to-blue-50/80 border border-emerald-200/80 text-xs">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-emerald-600/10 border border-emerald-600/20 flex items-center justify-center shrink-0">
-                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+          {/* Strategy Selection Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-5 gap-2">
+            {STRATEGY_OPTIONS.map((opt) => {
+              const isSelected = selectedStrategy === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => selectStrategy(opt.id)}
+                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer relative flex flex-col justify-between group press-scale card-hover ${
+                    isSelected
+                      ? "bg-white border-[#3A4EFB] shadow-md ring-2 ring-[#3A4EFB]/25 -translate-y-0.5"
+                      : "bg-[#F8F9FD] hover:bg-white border-[#DEE0ED] hover:border-[#3A4EFB]/40"
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="p-1 rounded-lg bg-white border border-[#DEE0ED]/80">
+                        {opt.icon === "fire" && <Flame className="w-3.5 h-3.5 text-amber-500" />}
+                        {opt.icon === "zap" && <Zap className="w-3.5 h-3.5 text-indigo-500" />}
+                        {opt.icon === "activity" && <Activity className="w-3.5 h-3.5 text-emerald-500" />}
+                        {opt.icon === "moon" && <Moon className="w-3.5 h-3.5 text-purple-500" />}
+                        {opt.icon === "shield" && <ShieldCheck className="w-3.5 h-3.5 text-blue-500" />}
+                      </div>
+                      <span
+                        className={`text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-full ${
+                          isSelected ? "bg-[#3A4EFB] text-white" : "bg-gray-200/70 text-[#475569]"
+                        }`}
+                      >
+                        {opt.badge}
+                      </span>
+                    </div>
+
+                    <div className="font-bold text-xs text-[#1A1D31] flex items-center gap-1">
+                      <span>{opt.name}</span>
+                      {isSelected && <Check className="w-3 h-3 text-[#3A4EFB] stroke-[3]" />}
+                    </div>
+
+                    <p className="text-[10px] text-[#64748B] mt-1 line-clamp-2 leading-tight">
+                      {opt.description}
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Quick Metrics & Human Behavior Score Strip */}
+          <div className="p-3.5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="flex items-center flex-wrap gap-2 sm:gap-3 font-mono">
+              <span className="px-2.5 py-1 rounded-xl bg-white border border-blue-200 font-bold text-blue-800 flex items-center gap-1 shadow-2xs">
+                <Eye className="w-3.5 h-3.5 text-blue-600" />
+                <span>{totalViews.toLocaleString()} Views</span>
+              </span>
+              {currentPreset.likes.enabled !== false && totalLikes > 0 && (
+                <span className="px-2.5 py-1 rounded-xl bg-white border border-rose-200 font-bold text-rose-800 flex items-center gap-1 shadow-2xs">
+                  <Heart className="w-3.5 h-3.5 text-rose-600 fill-rose-600" />
+                  <span>{totalLikes} Likes</span>
+                </span>
+              )}
+              {currentPreset.saves?.enabled && totalSaves > 0 && (
+                <span className="px-2.5 py-1 rounded-xl bg-white border border-amber-200 font-bold text-amber-800 shadow-2xs">
+                  +{totalSaves} Saves
+                </span>
+              )}
+              {currentPreset.shares?.enabled && totalShares > 0 && (
+                <span className="px-2.5 py-1 rounded-xl bg-white border border-purple-200 font-bold text-purple-800 shadow-2xs">
+                  +{totalShares} Reposts
+                </span>
+              )}
+              <span className="px-2.5 py-1 rounded-xl bg-white border border-emerald-200 font-bold text-emerald-800 shadow-2xs">
+                🛡️ {plannedSchedule.viewsPlan?.avgHumanScore ?? 84}/100 Human Score
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={rerollPlan}
+                disabled={shuffling}
+                className="px-2.5 py-1 rounded-xl bg-white hover:bg-gray-50 border border-[#DEE0ED] text-[11px] font-bold text-[#3A4EFB] transition-all flex items-center gap-1 cursor-pointer press-scale shadow-2xs"
+                title="Shuffle batch distributions"
+              >
+                <Dices className={`w-3.5 h-3.5 ${shuffling ? "animate-spin" : ""}`} />
+                <span>{shuffling ? "..." : "Shuffle"}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowTimeline(!showTimeline)}
+                className="px-3 py-1 rounded-xl bg-white hover:bg-gray-50 border border-[#DEE0ED] text-[11px] font-bold text-[#1A1D31] transition-all flex items-center gap-1 cursor-pointer press-scale shadow-2xs"
+              >
+                <span>{showTimeline ? "Hide Schedule" : `View ${scheduleRows.length} Batches`}</span>
+                {showTimeline ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+          </div>
+
+          {/* Collapsible Detailed Timeline Accordion */}
+          {showTimeline && (
+            <div className="border border-[#DEE0ED] rounded-2xl overflow-hidden bg-white animate-fadeIn">
+              <div className="p-3 bg-[#F8F9FD] border-b border-[#DEE0ED] flex items-center justify-between text-xs">
+                <span className="font-bold text-[#1A1D31]">Complete Batch Distribution</span>
+                <span className="text-[11px] text-[#64748B]">Non-round quantities, zero multiples of 5</span>
               </div>
+              <div className="divide-y divide-[#DEE0ED]/60 max-h-[320px] overflow-y-auto">
+                {scheduleRows.map((row) => (
+                  <div
+                    key={row.runNumber}
+                    className={`p-2.5 sm:px-3 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 transition-colors ${
+                      row.likeQty ? "bg-rose-50/20 hover:bg-rose-50/50" : "hover:bg-[#F8F9FD]"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-md bg-gray-100 text-[#1A1D31] font-bold text-[10px] flex items-center justify-center shrink-0">
+                        #{row.runNumber}
+                      </span>
+                      <span className="font-semibold text-[#1A1D31]">+{row.minuteOffset}m</span>
+                      <span className="text-[10px] text-[#64748B] font-mono">({row.clockTime})</span>
+                      {row.sessionType && (
+                        <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-gray-100 text-gray-700">
+                          {row.sessionType === "burst" ? "⚡ Burst" : row.sessionType === "peak" ? "🔥 Peak" : row.sessionType === "slow" ? "🌙 Slow" : "🌊 Normal"}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center flex-wrap gap-1.5 self-end sm:self-auto shrink-0 font-mono text-[11px]">
+                      {row.viewQty > 0 && currentPreset.views.enabled !== false && (
+                        <span className="px-2 py-0.5 rounded-md font-bold bg-blue-50 text-blue-700 border border-blue-200/60">
+                          {row.viewQty} views
+                        </span>
+                      )}
+                      {row.likeQty && (
+                        <span className="px-2 py-0.5 rounded-md font-bold bg-rose-50 text-rose-700 border border-rose-200/60 flex items-center gap-1">
+                          <Heart className="w-2.5 h-2.5 fill-rose-500 text-rose-500" />
+                          <span>+{row.likeQty} likes</span>
+                        </span>
+                      )}
+                      {row.saveQty && (
+                        <span className="px-2 py-0.5 rounded-md font-bold bg-amber-50 text-amber-700 border border-amber-200/60">
+                          +{row.saveQty} saves
+                        </span>
+                      )}
+                      {row.shareQty && (
+                        <span className="px-2 py-0.5 rounded-md font-bold bg-purple-50 text-purple-700 border border-purple-200/60">
+                          +{row.shareQty} shares
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* STEP 4: CONFIRM & LAUNCH */}
+        <div className="bg-white rounded-3xl border border-[#DEE0ED] p-5 sm:p-6 shadow-subtle space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
+            <div className="flex items-center gap-2.5">
+              <span className="w-7 h-7 rounded-xl bg-[#3A4EFB] text-white text-xs font-black flex items-center justify-center shadow-xs">
+                4
+              </span>
               <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-emerald-950 text-sm">Anti-Bot Evasion Engine Active</span>
-                  <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-600 text-white shadow-2xs">Protected</span>
-                </div>
-                <p className="text-[11px] text-[#252943]/70 pt-0.5">
-                  {selectedStrategy === "s_curve" ? "Biological S-Curve" : selectedStrategy === "burst" ? "Viral Launch Burst" : selectedStrategy === "normal" ? "Steady Human Pace" : selectedStrategy === "peak_hours" ? "Prime Peak Hours (18–22h)" : "Stealth Trickle"} • Zero round multiples of 5 • Periodicity disruption • Views-First Gated
+                <h2 className="text-sm font-bold text-[#1A1D31]">
+                  Review & Launch
+                </h2>
+                <p className="text-[11px] text-[#64748B]">
+                  Instant processing with automatic upstream fulfillment
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto font-mono">
-              <span className="px-2.5 py-1 rounded-xl bg-white/95 border border-emerald-200 font-bold text-emerald-800 text-[11px] shadow-2xs">
-                🛡️ Avg Human Score: {plannedSchedule.viewsPlan?.avgHumanScore ?? 84}/100
+
+            <div className="text-right">
+              <span className="text-[10px] uppercase font-bold text-[#64748B] block leading-none">Your Balance</span>
+              <span className="text-sm font-bold font-mono text-[#1A1D31]">
+                ₹{walletBalance.toFixed(2)}
               </span>
             </div>
           </div>
 
-          {/* PACING STRATEGY SELECTOR */}
-          <div className="p-4 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-[#DEE0ED]/60">
-              <div className="flex items-center gap-2">
-                <Sliders className="w-4 h-4 text-[#3A4EFB]" />
-                <div>
-                  <span className="text-xs font-bold text-[#252943] uppercase tracking-wider block">
-                    Delivery Pacing Strategy
-                  </span>
-                  <span className="text-[11px] text-[#252943]/60">
-                    Choose how views and interactions arrive over time to match your post goals
-                  </span>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={togglePeakHours}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
-                  peakHoursEnabled
-                    ? "bg-amber-500/10 text-amber-900 border-amber-300 shadow-2xs"
-                    : "bg-white text-[#252943]/60 border-[#DEE0ED] hover:bg-gray-50"
-                }`}
-                title="Boost delivery weight during prime viewing hours (18:00–22:00 IST/BST)"
-              >
-                <Moon className={`w-3.5 h-3.5 ${peakHoursEnabled ? "text-amber-600 fill-amber-500" : "text-gray-400"}`} />
-                <span>Prime Evening (18–22h): {peakHoursEnabled ? "Active" : "Off"}</span>
-              </button>
-            </div>
-
-            {/* 5 Interactive Strategy Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-5 gap-2.5">
-              {STRATEGY_OPTIONS.map((opt) => {
-                const isSelected = selectedStrategy === opt.id;
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => selectStrategy(opt.id)}
-                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer relative flex flex-col justify-between group press-scale card-hover ${
-                      isSelected
-                        ? "bg-white border-[#3A4EFB] shadow-md ring-2 ring-[#3A4EFB]/25 -translate-y-0.5"
-                        : "bg-white/80 hover:bg-white border-[#DEE0ED] hover:border-[#3A4EFB]/40"
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <div className="p-1.5 rounded-lg bg-[#F8F9FD] border border-[#DEE0ED]/80 group-hover:scale-105 transition-transform">
-                          {opt.icon === "fire" && <Flame className="w-4 h-4 text-amber-500" />}
-                          {opt.icon === "zap" && <Zap className="w-4 h-4 text-indigo-500" />}
-                          {opt.icon === "activity" && <Activity className="w-4 h-4 text-emerald-500" />}
-                          {opt.icon === "moon" && <Moon className="w-4 h-4 text-purple-500" />}
-                          {opt.icon === "shield" && <ShieldCheck className="w-4 h-4 text-blue-500" />}
-                        </div>
-                        <span
-                          className={`text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-full ${
-                            isSelected
-                              ? "bg-[#3A4EFB] text-white"
-                              : "bg-gray-100 text-[#252943]/70"
-                          }`}
-                        >
-                          {opt.badge}
-                        </span>
-                      </div>
-                      <div className="font-bold text-xs text-[#252943] flex items-center gap-1">
-                        <span>{opt.name}</span>
-                        {isSelected && <Check className="w-3.5 h-3.5 text-[#3A4EFB] stroke-[3]" />}
-                      </div>
-                      <p className="text-[10px] text-[#252943]/70 mt-1 line-clamp-2 leading-tight">
-                        {opt.description}
-                      </p>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Clean 5-Metric Strip */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 p-3 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED]/80">
-            <div className="p-2.5 rounded-xl bg-white/80 border border-blue-100 shadow-sm transition-all">
-              <span className="text-[10px] uppercase font-black text-blue-900/60 block leading-tight flex items-center justify-between">
-                <span>Total Views</span>
-                <span className={`w-2 h-2 rounded-full bg-blue-500 ${shuffling ? "animate-ping" : "animate-pulse"}`} title="Dynamic Batch Sum"></span>
-              </span>
-              <span className="text-base font-black text-blue-700 font-mono block">
-                {currentPreset.views.enabled !== false ? `${totalViews.toLocaleString()}` : "—"}
-              </span>
-              <span className="text-[10px] text-[#252943]/60 block font-medium">
-                {currentPreset.views.enabled !== false ? `${currentPreset.views.count} batches • Dynamic Sum` : "Turned Off"}
-              </span>
-            </div>
-
-            <div className="p-2.5 rounded-xl bg-white/80 border border-rose-100 shadow-sm transition-all">
-              <span className="text-[10px] uppercase font-black text-rose-900/60 block leading-tight flex items-center justify-between">
-                <span>Total Likes</span>
-                {currentPreset.likes.enabled !== false && <Heart className="w-2.5 h-2.5 text-rose-500 fill-rose-500" />}
-              </span>
-              <span className="text-base font-black text-rose-600 font-mono block">
-                {currentPreset.likes.enabled !== false ? totalLikes : "—"}
-              </span>
-              <span className="text-[10px] text-[#252943]/60 block font-medium">
-                {currentPreset.likes.enabled !== false ? `${currentPreset.likes.count} waves (${currentPreset.likes.min}-${currentPreset.likes.max}/wave)` : "Turned Off"}
-              </span>
-            </div>
-
-            <div className="p-2.5 rounded-xl bg-white/80 border border-amber-100 shadow-sm transition-all">
-              <span className="text-[10px] uppercase font-black text-amber-900/60 block leading-tight">Total Saves</span>
-              <span className="text-base font-black text-amber-700 font-mono block">
-                {currentPreset.saves?.enabled && totalSaves > 0 ? totalSaves : "—"}
-              </span>
-              <span className="text-[10px] text-[#252943]/60 block font-medium">
-                {currentPreset.saves?.enabled ? `${currentPreset.saves.count} waves` : "Turned Off"}
-              </span>
-            </div>
-
-            <div className="p-2.5 rounded-xl bg-white/80 border border-purple-100 shadow-sm transition-all">
-              <span className="text-[10px] uppercase font-black text-purple-900/60 block leading-tight">Total Reposts</span>
-              <span className="text-base font-black text-purple-700 font-mono block">
-                {currentPreset.shares?.enabled && totalShares > 0 ? totalShares : "—"}
-              </span>
-              <span className="text-[10px] text-[#252943]/60 block font-medium">
-                {currentPreset.shares?.enabled ? `${currentPreset.shares.count} waves` : "Turned Off"}
-              </span>
-            </div>
-
-            <div className="p-2.5 rounded-xl bg-white/80 border border-emerald-100 shadow-sm transition-all col-span-2 sm:col-span-1">
-              <span className="text-[10px] uppercase font-black text-emerald-900/60 block leading-tight">Total Duration</span>
-              <span className="text-base font-black text-emerald-700 font-mono block">
-                {currentPreset.durationLabel}
-              </span>
-              <span className="text-[10px] text-emerald-800/70 font-medium block">Human Pacing</span>
-            </div>
-          </div>
-
-          {/* Batches Table with Smart Expand */}
-          <div className="border border-[#DEE0ED] rounded-2xl overflow-hidden bg-white">
-            <div className={`divide-y divide-[#DEE0ED]/60 ${showAllBatches ? "max-h-none" : "max-h-[300px] overflow-hidden"}`}>
-              {(showAllBatches ? scheduleRows : scheduleRows.slice(0, 5)).map((row) => (
-                <div
-                  key={row.runNumber}
-                  className={`p-2.5 sm:px-3 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 transition-colors ${row.likeQty ? "bg-rose-50/30 hover:bg-rose-50/60" : "hover:bg-[#F8F9FD]"
-                    }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="w-6 h-6 rounded-md bg-gray-100 text-[#252943] font-bold text-[10px] flex items-center justify-center shrink-0">
-                      #{row.runNumber}
-                    </span>
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="font-semibold text-[#252943]">+{row.minuteOffset}m</span>
-                      <span className="text-[10px] text-[#252943]/50 font-mono">({row.clockTime})</span>
-                      {row.timeOfDayLabel && (
-                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-50 text-amber-800 border border-amber-200/50">
-                          {row.timeOfDayLabel}
-                        </span>
-                      )}
-                      {row.sessionType && (
-                        <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-gray-100 text-gray-700">
-                          {row.sessionType === "burst" ? "⚡ Burst" : row.sessionType === "peak" ? "🔥 Peak" : row.sessionType === "slow" ? "🌙 Slow" : row.sessionType === "pause" ? "⏸️ Pause" : "🌊 Normal"}
-                        </span>
-                      )}
-                      {row.patternBreaker && (
-                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200/60" title="Anti-Pattern Harmonic Disruption">
-                          🎲 Breaker
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center flex-wrap gap-1.5 self-end sm:self-auto shrink-0">
-                    {row.viewQty > 0 && currentPreset.views.enabled !== false && (
-                      <span className="px-2 py-0.5 rounded-md text-[11px] font-bold font-mono bg-blue-50 text-blue-700 border border-blue-200/60 flex items-center gap-1">
-                        <span>{row.viewQty} views</span>
-                        {row.humanScore ? (
-                          <span className="text-[9px] font-normal text-blue-900/60 pl-1 border-l border-blue-200" title="Human Behavior Score">
-                            🛡️ {row.humanScore}%
-                          </span>
-                        ) : null}
-                      </span>
-                    )}
-                    {row.likeQty && currentPreset.likes.enabled !== false && (
-                      <span className="px-2 py-0.5 rounded-md text-[11px] font-bold font-mono bg-rose-50 text-rose-700 border border-rose-200/60 flex items-center gap-1">
-                        <Heart className="w-2.5 h-2.5 fill-rose-500 text-rose-500" />
-                        <span>
-                          {row.likeWave && row.totalLikeWaves ? (
-                            <span className="font-semibold text-rose-600/80 mr-1">
-                              Wave {row.likeWave}/{row.totalLikeWaves}:
-                            </span>
-                          ) : null}
-                          +{row.likeQty} likes
-                        </span>
-                      </span>
-                    )}
-                    {row.saveQty && currentPreset.saves?.enabled && (
-                      <span className="px-2 py-0.5 rounded-md text-[11px] font-bold font-mono bg-amber-50 text-amber-700 border border-amber-200/60 flex items-center gap-1">
-                        <Bookmark className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
-                        <span>
-                          {row.saveWave && row.totalSaveWaves ? (
-                            <span className="font-semibold text-amber-600/80 mr-1">
-                              Wave {row.saveWave}/{row.totalSaveWaves}:
-                            </span>
-                          ) : null}
-                          +{row.saveQty} saves
-                        </span>
-                      </span>
-                    )}
-                    {row.shareQty && currentPreset.shares?.enabled && (
-                      <span className="px-2 py-0.5 rounded-md text-[11px] font-bold font-mono bg-purple-50 text-purple-700 border border-purple-200/60 flex items-center gap-1">
-                        <Share2 className="w-2.5 h-2.5 text-purple-600" />
-                        <span>
-                          {row.shareWave && row.totalShareWaves ? (
-                            <span className="font-semibold text-purple-600/80 mr-1">
-                              Wave {row.shareWave}/{row.totalShareWaves}:
-                            </span>
-                          ) : null}
-                          +{row.shareQty} shares
-                        </span>
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Reconciliation Footer: Guarantees 100% Match Between Top & Table */}
-            <div className="px-3.5 py-2.5 bg-[#F8F9FD] border-t border-[#DEE0ED] flex flex-wrap items-center justify-between gap-2 text-xs">
-              <div className="flex items-center gap-1.5 text-[#252943]/70 font-medium">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                <span className="font-bold text-[#252943]">Plan Matched:</span>
-                <span>{scheduleRows.length} batches total</span>
-              </div>
-              <div className="flex items-center gap-3 font-mono text-xs">
-                {currentPreset.views.enabled !== false && (
-                  <span className="text-blue-700 font-bold">{totalViews.toLocaleString()} views</span>
-                )}
-                {currentPreset.likes.enabled !== false && (
-                  <span className="text-rose-600 font-bold">
-                    {totalLikes} likes ({currentPreset.likes.count} waves)
-                  </span>
-                )}
-                {currentPreset.saves?.enabled && totalSaves > 0 && (
-                  <span className="text-amber-700 font-bold">{totalSaves} saves</span>
-                )}
-                {currentPreset.shares?.enabled && totalShares > 0 && (
-                  <span className="text-purple-700 font-bold">{totalShares} shares</span>
-                )}
-              </div>
-            </div>
-
-            {/* Toggle Expand Button */}
-            {scheduleRows.length > 5 && (
-              <div className="p-2 bg-white border-t border-[#DEE0ED] text-center">
-                <button
-                  type="button"
-                  onClick={() => setShowAllBatches(!showAllBatches)}
-                  className="text-xs font-bold text-[#3A4EFB] hover:underline flex items-center justify-center gap-1.5 mx-auto cursor-pointer py-1"
-                >
-                  {showAllBatches ? (
-                    <>
-                      <ChevronUp className="w-3.5 h-3.5" />
-                      <span>Show Less (Show Top 5)</span>
-                    </>
-                  ) : (
-                    <>
-                      <ChevronDown className="w-3.5 h-3.5" />
-                      <span>
-                        View All {scheduleRows.length} Scheduled Batches ({currentPreset.likes.count} Like Waves Included)
-                      </span>
-                    </>
-                  )}
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* STEP 3: PRICE & LAUNCH */}
-        <div className="bg-white rounded-3xl border border-[#DEE0ED] p-5 sm:p-6 shadow-subtle space-y-4">
-          <div className="flex items-center gap-2 pb-2 border-b border-[#DEE0ED]">
-            <span className="w-6 h-6 rounded-lg bg-[#3A4EFB] text-white text-xs font-black flex items-center justify-center">
-              3
-            </span>
-            <h2 className="text-sm font-bold text-[#252943]">
-              Confirm & Launch
-            </h2>
-          </div>
-
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED]">
-            <div className="space-y-0.5">
-              <span className="text-[10px] uppercase font-bold text-[#252943]/40 block">Campaign Price</span>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED]">
+            <div className="space-y-1">
+              <span className="text-[10px] uppercase font-bold text-[#64748B] block">Total Campaign Price</span>
               <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-black text-[#3A4EFB] font-mono">
+                <span className="text-2xl sm:text-3xl font-black text-[#1A1D31] font-mono tracking-tight">
                   ₹{exactTotalCost.toFixed(2)}
                 </span>
-                <span className="text-[11px] text-[#252943]/50">
-                  ({[
-                    currentPreset.views.enabled !== false ? `₹${exactViewsCost.toFixed(2)} views` : null,
-                    currentPreset.likes.enabled !== false ? `₹${exactLikesCost.toFixed(2)} likes` : null,
-                    currentPreset.saves?.enabled && exactSavesCost > 0 ? `₹${exactSavesCost.toFixed(2)} saves` : null,
-                    currentPreset.shares?.enabled && exactSharesCost > 0 ? `₹${exactSharesCost.toFixed(2)} reposts` : null,
-                  ].filter(Boolean).join(" • ") || "₹0.00"}
-                  )
+                <span className="text-xs text-[#64748B]">
+                  ({currentPreset.name} • {currentPreset.durationLabel})
                 </span>
               </div>
             </div>
 
-            <div className="text-left sm:text-right space-y-0.5">
-              <span className="text-[10px] uppercase font-bold text-[#252943]/40 block">Your Wallet</span>
-              <div className="flex items-center sm:justify-end gap-1.5">
-                <span className={`text-sm font-black font-mono ${hasSufficientFunds ? "text-emerald-700" : "text-rose-600"}`}>
-                  ₹{walletBalance.toFixed(2)}
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              {hasSufficientFunds ? (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold">
+                  <Check className="w-3.5 h-3.5 stroke-[3] text-emerald-600" />
+                  <span>Sufficient Funds</span>
                 </span>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${hasSufficientFunds ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"
-                  }`}>
-                  {hasSufficientFunds ? "Sufficient" : "Add Funds"}
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 text-rose-800 border border-rose-200 text-xs font-bold">
+                  <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                  <span>Need ₹{(exactTotalCost - walletBalance).toFixed(2)} More</span>
                 </span>
-              </div>
+              )}
             </div>
           </div>
 
@@ -1519,10 +1411,11 @@ export default function EngagementPage() {
             <button
               type="submit"
               disabled={submitting}
-              className={`w-full py-3.5 rounded-2xl text-sm font-bold tracking-wide transition-all shadow-subtle flex items-center justify-center gap-2 cursor-pointer press-scale ${submitting
-                ? "bg-gray-200 text-gray-500 cursor-not-allowed"
-                : "bg-[#3A4EFB] hover:bg-[#2C3FE0] text-white shadow-md shadow-[#3A4EFB]/20"
-                }`}
+              className={`w-full py-4 rounded-2xl text-sm font-black tracking-wide transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer press-scale ${
+                submitting
+                  ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+                  : "bg-[#3A4EFB] hover:bg-[#2C3FE0] text-white shadow-[#3A4EFB]/25 active:scale-[0.98]"
+              }`}
             >
               {submitting ? (
                 <>
@@ -1540,12 +1433,22 @@ export default function EngagementPage() {
             <button
               type="button"
               onClick={() => setShowAddFundsModal(true)}
-              className="w-full py-3.5 rounded-2xl text-sm font-bold tracking-wide bg-[#F0B90B] hover:bg-[#e0a800] text-[#1E2329] shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 transition-all press-scale cursor-pointer"
+              className="w-full py-4 rounded-2xl text-sm font-black tracking-wide bg-[#F0B90B] hover:bg-[#e0a800] text-[#1E2329] shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 transition-all press-scale cursor-pointer active:scale-[0.98]"
             >
               <Zap className="w-4 h-4 fill-[#1E2329]" />
               <span>Add Funds (Need ₹{(exactTotalCost - walletBalance).toFixed(2)})</span>
             </button>
           )}
+
+          <div className="pt-2 text-center text-xs text-[#64748B] flex items-center justify-center gap-3">
+            <span>✓ Anti-Bot Protected</span>
+            <span>•</span>
+            <span>✓ Views-First Synchronized</span>
+            <span>•</span>
+            <a href="https://t.me/Ghostfinds" target="_blank" rel="noopener noreferrer" className="text-[#3A4EFB] hover:underline font-bold">
+              24/7 Telegram Support
+            </a>
+          </div>
         </div>
       </form>
 
