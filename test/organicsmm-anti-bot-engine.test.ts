@@ -239,8 +239,8 @@ describe("OrganicSMM Anti-Bot Delivery & View Pacing Engine", () => {
     const lastBatch = algo.views.quantities[algo.views.quantities.length - 1];
     assert.ok(lastBatch < peakBatch, `Last batch (${lastBatch}) must be smaller than peak batch (${peakBatch}) to prevent cliff`);
 
-    // Must NOT have massive 1,000+ view chunks (anti-radar micro-batching)
-    assert.ok(peakBatch <= 650, `Peak view batch (${peakBatch}) must be <= 650 to prevent radar spike`);
+    // Must NOT have massive view chunks (anti-radar micro-batching capped at 400)
+    assert.ok(peakBatch <= 400, `Peak view batch (${peakBatch}) must be <= 400 to prevent radar spike`);
   });
 
   it("generates organic schedule using pure mathematical logistic S-curve with anti-spike clamping", () => {

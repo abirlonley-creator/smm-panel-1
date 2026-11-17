@@ -348,24 +348,39 @@ export function solveKeConservationEquation<T extends { quantity: number; baseQu
 ): T[] {
   if (runs.length <= 1) return runs;
 
-  const result = runs.map((r) => ({ ...r }));
+  const result = runs.map((r, idx) => ({ ...r, idx }));
   const upperBound = Math.max(minBound, maxBound);
   const usedSet = new Set<number>();
+  const isLargePlan = result.length > 20;
+  const recentWindow: number[] = [];
+  const windowSize = Math.min(12, Math.max(4, Math.floor(result.length * 0.1)));
 
   result.forEach((run, idx) => {
     const prevQty = idx > 0 ? result[idx - 1].quantity : undefined;
-    run.quantity = antiBotDesaturateQuantity(run.quantity, minBound, upperBound, usedSet, prevQty);
-    usedSet.add(run.quantity);
+    const lookupSet = isLargePlan ? new Set(recentWindow) : usedSet;
+    run.quantity = antiBotDesaturateQuantity(run.quantity, minBound, upperBound, lookupSet, prevQty);
+    if (isLargePlan) {
+      recentWindow.push(run.quantity);
+      if (recentWindow.length > windowSize) recentWindow.shift();
+    } else {
+      usedSet.add(run.quantity);
+    }
   });
 
   let remainder = targetQuantity - result.reduce((sum, r) => sum + r.quantity, 0);
   let iterations = 0;
 
+  const midStart = result.length >= 8 ? Math.floor(result.length * 0.15) : 0;
+  const midEnd = result.length >= 8 ? Math.floor(result.length * 0.85) : result.length;
+
   while (remainder !== 0 && iterations < 10000) {
     let changed = false;
     const sortedIndices = result
-      .map((r, i) => ({ index: i, quantity: r.quantity }))
-      .sort((a, b) => (remainder > 0 ? a.quantity - b.quantity : b.quantity - a.quantity))
+      .map((r, i) => ({ index: i, quantity: r.quantity, isMid: i >= midStart && i < midEnd }))
+      .sort((a, b) => {
+        if (a.isMid !== b.isMid) return a.isMid ? -1 : 1;
+        return remainder > 0 ? a.quantity - b.quantity : b.quantity - a.quantity;
+      })
       .map((item) => item.index);
 
     for (const idx of sortedIndices) {
@@ -374,7 +389,9 @@ export function solveKeConservationEquation<T extends { quantity: number; baseQu
       const prevQty = idx > 0 ? result[idx - 1].quantity : undefined;
 
       const isWithinBounds = candidate >= minBound && candidate <= upperBound;
-      const isDuplicate = result.some((r, i) => i !== idx && r.quantity === candidate);
+      const isDuplicate = isLargePlan
+        ? result.some((r, i) => i !== idx && Math.abs(i - idx) <= windowSize && r.quantity === candidate)
+        : result.some((r, i) => i !== idx && r.quantity === candidate);
       const isCloseToPrev = prevQty != null && Math.abs(candidate - prevQty) < 2;
 
       if (isWithinBounds && !isDuplicate && !isCloseToPrev) {
@@ -393,12 +410,26 @@ export function solveKeConservationEquation<T extends { quantity: number; baseQu
   let guard = 0;
   while (remainder !== 0 && guard < result.length * 20) {
     if (remainder > 0) {
-      const candidates = result.filter((r) => r.quantity < upperBound).sort((a, b) => a.quantity - b.quantity);
+      const candidates = result
+        .filter((r) => r.quantity < upperBound)
+        .sort((a, b) => {
+          const aMid = a.idx >= midStart && a.idx < midEnd;
+          const bMid = b.idx >= midStart && b.idx < midEnd;
+          if (aMid !== bMid) return aMid ? -1 : 1;
+          return a.quantity - b.quantity;
+        });
       if (candidates.length === 0) break;
       candidates[0].quantity++;
       remainder--;
     } else {
-      const candidates = result.filter((r) => r.quantity > minBound).sort((a, b) => b.quantity - a.quantity);
+      const candidates = result
+        .filter((r) => r.quantity > minBound)
+        .sort((a, b) => {
+          const aMid = a.idx >= midStart && a.idx < midEnd;
+          const bMid = b.idx >= midStart && b.idx < midEnd;
+          if (aMid !== bMid) return aMid ? -1 : 1;
+          return b.quantity - a.quantity;
+        });
       if (candidates.length === 0) break;
       candidates[0].quantity--;
       remainder++;
@@ -969,19 +1000,19 @@ export function generateTikTokAlgorithmicPlan(
 
   const durationMinutes = durationHours * 60;
 
-  // 2. Determine optimal batch runs count based on anti-radar organic distribution
+  // 2. Determine optimal batch runs count — MORE batches = SMALLER sizes = smoother curve
   let runsCount: number;
   if (targetViews <= 3500) {
-    runsCount = 18;
+    runsCount = 24; // avg ~123 views per batch, ~15 min intervals
   } else if (targetViews <= 8000) {
-    runsCount = 26;
+    runsCount = 42; // avg ~121 views per batch, ~34 min intervals
   } else if (targetViews <= 12000) {
-    runsCount = 38;
+    runsCount = 72; // avg ~146 views per batch, ~40 min intervals
   } else if (targetViews <= 20000) {
-    runsCount = 48;
+    runsCount = 96; // avg ~158 views per batch, ~45 min intervals
   } else {
-    // 50K: 96 batches across 5 days (avg ~75 min interval, with circadian peak clusters, micro-batches ~250–550 views, ZERO spikes)
-    runsCount = Math.min(120, Math.max(80, Math.round(durationHours * 0.8)));
+    // 50K: 240 batches across 5 days (avg ~211 views, ~30 min intervals, micro-batches, ZERO spikes)
+    runsCount = Math.min(300, Math.max(180, Math.round(durationHours * 2.0)));
   }
 
   // 3. Generate Views Plan with Staged Algorithmic Shaping
@@ -998,11 +1029,10 @@ export function generateTikTokAlgorithmicPlan(
   const viewsQuantities = viewsPlan.runs.map((r) => r.quantity);
   const viewsOffsets = viewsPlan.runs.map((r) => r.minuteOffset);
 
-  // Guarantee Stage 1 Seed Pool: Batch #1 is kept strictly between 100 and 220 views
-  if (viewsQuantities.length > 2 && viewsQuantities[0] > 240) {
-    const diff = viewsQuantities[0] - (minViews + Math.floor(Math.random() * 35));
+  // Guarantee Stage 1 Seed Pool: Batch #1 is kept strictly between 100 and 180 views
+  if (viewsQuantities.length > 2 && viewsQuantities[0] > 190) {
+    const diff = viewsQuantities[0] - (minViews + Math.floor(Math.random() * 25));
     viewsQuantities[0] -= diff;
-    // Redistribute across peak batches (middle 35%-65%)
     const midStart = Math.floor(viewsQuantities.length * 0.35);
     const midEnd = Math.floor(viewsQuantities.length * 0.65);
     const spreadCount = Math.max(1, midEnd - midStart);
@@ -1015,15 +1045,14 @@ export function generateTikTokAlgorithmicPlan(
     }
   }
 
-  // Guarantee Stage 4 Anti-Cliff Long-Tail: Smooth deceleration on the final 3-5 batches
+  // Guarantee Stage 4 Anti-Cliff Long-Tail: Smooth deceleration on the final 5-8% batches
   if (viewsQuantities.length >= 8) {
-    const tailCount = Math.min(4, Math.floor(viewsQuantities.length * 0.15));
+    const tailCount = Math.min(8, Math.floor(viewsQuantities.length * 0.08));
     for (let k = viewsQuantities.length - tailCount; k < viewsQuantities.length; k++) {
-      const stepDownTarget = Math.max(minViews + 12, Math.round(viewsQuantities[k] * 0.65));
+      const stepDownTarget = Math.max(minViews + 2, Math.round(viewsQuantities[k] * 0.70));
       if (viewsQuantities[k] > stepDownTarget) {
         const excess = viewsQuantities[k] - stepDownTarget;
         viewsQuantities[k] = stepDownTarget;
-        // Shift excess back across the peak middle
         const midStart = Math.floor(viewsQuantities.length * 0.35);
         const midEnd = Math.floor(viewsQuantities.length * 0.65);
         const spreadCount = Math.max(1, midEnd - midStart);
@@ -1054,14 +1083,25 @@ export function generateTikTokAlgorithmicPlan(
     }
   }
 
-  // Hard cap single view batch to 650 views max to prevent any bot radar triggers
-  const maxViewBatchBound = 650;
+  // Hard cap single view batch to 400 views max (smaller = smoother = safer)
+  const maxViewBatchBound = 400;
   for (let i = 0; i < viewsQuantities.length; i++) {
     if (viewsQuantities[i] > maxViewBatchBound) {
       const excess = viewsQuantities[i] - maxViewBatchBound;
       viewsQuantities[i] = maxViewBatchBound;
-      if (i + 1 < viewsQuantities.length) viewsQuantities[i + 1] += Math.floor(excess / 2);
-      if (i - 1 >= 0) viewsQuantities[i - 1] += Math.ceil(excess / 2);
+      // Spread excess across next 3 batches
+      const spread = Math.min(3, viewsQuantities.length - 1 - i);
+      if (spread > 0) {
+        const per = Math.floor(excess / spread);
+        let r = excess;
+        for (let j = 1; j <= spread; j++) {
+          const a = j === spread ? r : per;
+          viewsQuantities[i + j] += a;
+          r -= a;
+        }
+      } else if (i > 0) {
+        viewsQuantities[i - 1] += excess;
+      }
     }
   }
 
@@ -1074,87 +1114,130 @@ export function generateTikTokAlgorithmicPlan(
   );
   const finalViews = adjustedViewRuns.map((r) => r.quantity);
 
-  // 4. Staged Auxiliary Engagement: Synchronized Likes, Saves, Shares
-  // Calculate natural proportional targets if not supplied
-  const defaultLikes = options.targetLikes || Math.round(targetViews * 0.052); // ~5.2% like ratio
+  // Stage 4 Anti-Cliff Long-Tail Enforcement: Ensure last batch is strictly smaller than peak
+  const peakViewQty = Math.max(...finalViews);
+  if (finalViews.length >= 4 && finalViews[finalViews.length - 1] >= peakViewQty) {
+    const targetTail = Math.max(minViews + 2, Math.round(peakViewQty * 0.65));
+    const excess = finalViews[finalViews.length - 1] - targetTail;
+    finalViews[finalViews.length - 1] = targetTail;
+    const midIdx = Math.floor(finalViews.length * 0.5);
+    finalViews[midIdx] += excess;
+  }
+
+  // 4. Views-Proportional Engagement Distribution
+  // Likes/Saves/Shares fire ONLY when cumulative views cross milestone thresholds
+  // This prevents "likes in batch with low views" — engagement tracks the view curve
+
+  const defaultLikes = options.targetLikes || Math.round(targetViews * 0.022); // ~2.2% (17-25 likes per 1K views)
   const defaultSaves = options.targetSaves || Math.round(targetViews * 0.012); // ~1.2% save ratio
   const defaultShares = options.targetShares || Math.round(targetViews * 0.005); // ~0.5% share ratio
 
-  // A. LIKES: Interleaved waves gated after views arrive
-  // Real TikTok algorithm: initial like wave lands at ~25-45m after batch 1 views are watched
-  const likesWaveCount = Math.max(
-    3,
-    Math.min(50, Math.round(finalViews.length * 0.55))
-  );
+  // Build cumulative view milestones
+  const cumViews: number[] = [];
+  let runningViews = 0;
+  for (const v of finalViews) {
+    runningViews += v;
+    cumViews.push(runningViews);
+  }
+
+  // A. LIKES — fire every ~1K cumulative views (17-25 likes per 1K)
+  const likesPerThousandViews = defaultLikes / (targetViews / 1000);
+  const likesMilestoneGap = Math.max(800, Math.min(2000, Math.round(1000 + (Math.random() * 400 - 200))));
   const likesOffsets: number[] = [];
   const likesRaw: number[] = [];
+  let nextLikeMilestone = likesMilestoneGap;
 
-  // Likes wave offsets: gated right behind view batches
-  for (let i = 0; i < likesWaveCount; i++) {
-    const progress = (i + 1) / (likesWaveCount + 1);
-    // Align with view batch timing + 15 to 30 min realistic viewing delay
-    const viewBatchIdx = Math.min(finalViews.length - 1, Math.floor(progress * finalViews.length));
-    const baseOffset = viewsOffsets[viewBatchIdx] || Math.round(progress * durationMinutes);
-    const waveOffset = Math.max(25, Math.min(durationMinutes - 15, baseOffset + 15 + Math.floor(Math.random() * 20)));
-    likesOffsets.push(waveOffset);
+  for (let i = 0; i < finalViews.length; i++) {
+    if (cumViews[i] >= nextLikeMilestone && likesRaw.length < Math.floor(defaultLikes / minLikes)) {
+      // Deliver likes 15-35 minutes after this view batch
+      const delay = 15 + Math.floor(Math.random() * 20);
+      const likeOffset = Math.min(durationMinutes - 10, viewsOffsets[i] + delay);
+      likesOffsets.push(likeOffset);
 
-    // Initial like wave is small (10-18 likes to escape viewjail)
-    if (i === 0) {
-      likesRaw.push(minLikes + Math.floor(Math.random() * 8));
-    } else {
-      likesRaw.push(minLikes + 5);
+      // Organic like quantity: 17-25 per 1K views with jitter
+      const baseLikes = Math.round(likesPerThousandViews * (1 + (Math.random() * 0.3 - 0.15)));
+      likesRaw.push(Math.max(minLikes, baseLikes));
+
+      nextLikeMilestone = cumViews[i] + likesMilestoneGap + Math.floor(Math.random() * 300 - 150);
     }
   }
+
+  // Ensure at least one like wave (viewjail escape)
+  if (likesRaw.length === 0) {
+    likesOffsets.push(Math.min(durationMinutes - 10, viewsOffsets[Math.min(2, finalViews.length - 1)] + 25));
+    likesRaw.push(minLikes + Math.floor(Math.random() * 8));
+  }
+
   likesOffsets.sort((a, b) => a - b);
 
-  // Distribute likes with realistic non-round numbers (e.g. 12, 17, 21, 26, 31 likes)
+  // Ke conservation on likes
   const likesAdjusted = solveKeConservationEquation(
     likesRaw.map((q) => ({ quantity: q })),
-    Math.max(minLikes * likesWaveCount, defaultLikes),
+    Math.max(minLikes * likesRaw.length, defaultLikes),
     minLikes,
-    Math.max(minLikes * 4, Math.ceil((defaultLikes / likesWaveCount) * 2.2))
+    Math.max(minLikes * 4, Math.ceil((defaultLikes / Math.max(1, likesRaw.length)) * 2.5))
   );
   const finalLikes = likesAdjusted.map((r) => r.quantity);
 
-  // B. SAVES: Interleaved algorithm booster waves (saves trigger FYP promotion)
-  const savesWaveCount = Math.max(2, Math.min(30, Math.round(likesWaveCount * 0.5)));
+  // B. SAVES — fire every ~3K cumulative views
+  const savesMilestoneGap = Math.max(2000, Math.min(5000, Math.round(3000 + (Math.random() * 600 - 300))));
   const savesOffsets: number[] = [];
   const savesRaw: number[] = [];
+  let nextSaveMilestone = savesMilestoneGap;
 
-  for (let i = 0; i < savesWaveCount; i++) {
-    const progress = (i + 1) / (savesWaveCount + 1);
-    const saveOffset = Math.max(45, Math.min(durationMinutes - 20, Math.round(progress * durationMinutes)));
-    savesOffsets.push(saveOffset);
-    savesRaw.push(minSaves + Math.floor(Math.random() * 5));
+  for (let i = 0; i < finalViews.length; i++) {
+    if (cumViews[i] >= nextSaveMilestone && savesRaw.length < Math.floor(defaultSaves / minSaves)) {
+      const delay = 30 + Math.floor(Math.random() * 40);
+      const saveOffset = Math.min(durationMinutes - 15, viewsOffsets[i] + delay);
+      savesOffsets.push(saveOffset);
+      savesRaw.push(minSaves + Math.floor(Math.random() * 5));
+      nextSaveMilestone = cumViews[i] + savesMilestoneGap + Math.floor(Math.random() * 500 - 250);
+    }
   }
+
+  if (savesRaw.length === 0 && defaultSaves >= minSaves) {
+    savesOffsets.push(Math.min(durationMinutes - 15, viewsOffsets[Math.min(4, finalViews.length - 1)] + 45));
+    savesRaw.push(minSaves);
+  }
+
   savesOffsets.sort((a, b) => a - b);
 
   const savesAdjusted = solveKeConservationEquation(
     savesRaw.map((q) => ({ quantity: q })),
-    Math.max(minSaves * savesWaveCount, defaultSaves),
+    Math.max(minSaves * savesRaw.length, defaultSaves),
     minSaves,
-    Math.max(minSaves * 3, Math.ceil((defaultSaves / savesWaveCount) * 2.0))
+    Math.max(minSaves * 3, Math.ceil((defaultSaves / Math.max(1, savesRaw.length)) * 2.0))
   );
   const finalSaves = savesAdjusted.map((r) => r.quantity);
 
-  // C. SHARES: Virality repost waves (spread across peak hours)
-  const sharesWaveCount = Math.max(2, Math.min(20, Math.round(savesWaveCount * 0.6)));
+  // C. SHARES — fire every ~5K cumulative views
+  const sharesMilestoneGap = Math.max(3000, Math.min(8000, Math.round(5000 + (Math.random() * 1000 - 500))));
   const sharesOffsets: number[] = [];
   const sharesRaw: number[] = [];
+  let nextShareMilestone = sharesMilestoneGap;
 
-  for (let i = 0; i < sharesWaveCount; i++) {
-    const progress = (i + 1) / (sharesWaveCount + 1);
-    const shareOffset = Math.max(60, Math.min(durationMinutes - 25, Math.round(progress * durationMinutes)));
-    sharesOffsets.push(shareOffset);
-    sharesRaw.push(minShares + Math.floor(Math.random() * 4));
+  for (let i = 0; i < finalViews.length; i++) {
+    if (cumViews[i] >= nextShareMilestone && sharesRaw.length < Math.floor(defaultShares / minShares)) {
+      const delay = 45 + Math.floor(Math.random() * 50);
+      const shareOffset = Math.min(durationMinutes - 20, viewsOffsets[i] + delay);
+      sharesOffsets.push(shareOffset);
+      sharesRaw.push(minShares + Math.floor(Math.random() * 4));
+      nextShareMilestone = cumViews[i] + sharesMilestoneGap + Math.floor(Math.random() * 800 - 400);
+    }
   }
+
+  if (sharesRaw.length === 0 && defaultShares >= minShares) {
+    sharesOffsets.push(Math.min(durationMinutes - 20, viewsOffsets[Math.min(6, finalViews.length - 1)] + 60));
+    sharesRaw.push(minShares);
+  }
+
   sharesOffsets.sort((a, b) => a - b);
 
   const sharesAdjusted = solveKeConservationEquation(
     sharesRaw.map((q) => ({ quantity: q })),
-    Math.max(minShares * sharesWaveCount, defaultShares),
+    Math.max(minShares * sharesRaw.length, defaultShares),
     minShares,
-    Math.max(minShares * 3, Math.ceil((defaultShares / sharesWaveCount) * 2.0))
+    Math.max(minShares * 3, Math.ceil((defaultShares / Math.max(1, sharesRaw.length)) * 2.0))
   );
   const finalShares = sharesAdjusted.map((r) => r.quantity);
 
