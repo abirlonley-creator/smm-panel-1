@@ -19,6 +19,10 @@ export default function LoginPage() {
     fetch("/api/system/maintenance", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => {
+        if (data.isAdmin) {
+          router.push("/engagement");
+          return;
+        }
         if (data.underMaintenance) {
           setUnderMaintenance(true);
           setMaintInfo({
@@ -29,7 +33,7 @@ export default function LoginPage() {
         }
       })
       .catch(() => {});
-  }, []);
+  }, [router]);
 
   if (underMaintenance) {
     return (

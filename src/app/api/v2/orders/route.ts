@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { authenticateApiRequest, logApiCall } from "@/lib/api-v2/auth";
 import { createEngagementOrderInternal } from "@/lib/engagement/order-service";
+import { getMaintenanceState } from "@/lib/maintenance/maintenance-service";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +42,27 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: "Forbidden: This API key has READ_ONLY permissions and cannot place orders." },
       { status: 403 }
+    );
+  }
+
+  // Under Update (Maintenance) check: non-admin API keys are paused during updates
+  const maintenance = await getMaintenanceState();
+  if (maintenance.enabled && auth.user.role !== "ADMIN") {
+    await logApiCall({
+      apiKeyId: auth.apiKey.id,
+      userId: auth.user.id,
+      keyName: auth.apiKey.name,
+      endpoint: "/api/v2/orders",
+      method: "POST",
+      statusCode: 503,
+      durationMs: Date.now() - startTime,
+      success: false,
+      error: "Service under maintenance",
+    });
+
+    return NextResponse.json(
+      { error: "Currently we're updating the platform. Standard API orders are paused during updates." },
+      { status: 503 }
     );
   }
 

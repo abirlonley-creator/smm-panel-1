@@ -212,7 +212,7 @@ export default function AdminPage() {
       setActionMsg({
         type: "success",
         text: nextEnabled
-          ? "Website is now in Under Update mode. Regular users are blocked, but all backend order deliveries continue active."
+          ? "Website is now in Under Update mode. Regular users are blocked, but administrator has full access to all panels and backend order deliveries continue active."
           : "Website is now LIVE! User access has been fully restored.",
       });
     } catch (err: any) {
@@ -3589,7 +3589,7 @@ export default function AdminPage() {
                   </span>
                   <span className="text-[11px] opacity-80">
                     {maintenance.enabled
-                      ? "Users are locked out and see the update window. No passkey section shown."
+                      ? "Standard users are locked out and see the update window. As administrator, you have full access to the admin panel and every other panel (Engagement, Orders, Wallet, Services, etc.)."
                       : "All users can login and access the panel normally."}
                   </span>
                 </div>

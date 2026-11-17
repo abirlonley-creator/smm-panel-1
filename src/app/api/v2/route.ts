@@ -18,7 +18,8 @@ function isValidUrl(stringUrl: string): boolean {
   }
 }
 
-function mapToClassicStatus(status: string): string {
+function mapToClassicStatus(status?: string): string {
+  if (!status) return "Pending";
   const s = status.toLowerCase();
   if (s.includes("complet")) return "Completed";
   if (s.includes("progress") || s.includes("process")) return "In progress";
