@@ -13,6 +13,7 @@ import {
   generateOrganicDeliveryPlan,
   OrganicBatch,
   OrganicPlanResult,
+  PacingStrategy,
 } from "./organic-pacing-engine";
 
 export interface CreateEngagementOrderParams {
@@ -22,9 +23,12 @@ export interface CreateEngagementOrderParams {
   quantity?: number;
   shuffle?: boolean;
   plannedViews?: number[];
+  viewOffsets?: number[];
   plannedLikes?: number[];
   plannedSaves?: number[];
   plannedShares?: number[];
+  pacingStrategy?: PacingStrategy;
+  peakHoursEnabled?: boolean;
   apiKeyId?: string;
 }
 
@@ -146,7 +150,9 @@ export function generateOrganicSCurvePlan(
   runsCount: number,
   durationMinutes: number,
   minBound: number,
-  maxBound: number
+  maxBound: number,
+  pacingStrategy?: PacingStrategy,
+  peakHoursEnabled?: boolean
 ): { quantities: number[]; minuteOffsets: number[]; plan: OrganicPlanResult } {
   if (runsCount <= 1) {
     const singlePlan = generateOrganicDeliveryPlan("views", target, {
@@ -154,6 +160,8 @@ export function generateOrganicSCurvePlan(
       runsCount: 1,
       providerMinimum: minBound,
       applyInitialDelay: false,
+      pacingStrategy: pacingStrategy || "s_curve",
+      peakHoursEnabled: peakHoursEnabled ?? true,
     });
     return { quantities: [target], minuteOffsets: [0], plan: singlePlan };
   }
@@ -163,6 +171,8 @@ export function generateOrganicSCurvePlan(
     runsCount,
     providerMinimum: minBound,
     applyInitialDelay: false,
+    pacingStrategy: pacingStrategy || "s_curve",
+    peakHoursEnabled: peakHoursEnabled ?? true,
   });
 
   return {
@@ -468,7 +478,15 @@ export async function createEngagementOrderInternal(
     const durationMinutes = (preset.durationHours || 5) * 60;
 
     sCurvePlan = shouldShuffle
-      ? generateOrganicSCurvePlan(targetV, preset.views.runsCount, durationMinutes, minV, maxV)
+      ? generateOrganicSCurvePlan(
+          targetV,
+          preset.views.runsCount,
+          durationMinutes,
+          minV,
+          maxV,
+          params.pacingStrategy,
+          params.peakHoursEnabled
+        )
       : null;
 
     for (let i = 0; i < preset.views.runsCount; i++) {
@@ -712,6 +730,8 @@ export async function createEngagementOrderInternal(
         planParams: JSON.stringify({
           version: "organicsmm_v2",
           pacingEngine: "organic_anti_bot_v2",
+          pacingStrategy: params.pacingStrategy || "s_curve",
+          peakHoursEnabled: params.peakHoursEnabled ?? true,
           avgHumanScore: sCurvePlan?.plan?.avgHumanScore ?? 84,
           varietyIndex: sCurvePlan?.plan?.varietyIndex ?? 42,
           patternBreakCount: sCurvePlan?.plan?.patternBreakCount ?? 0,

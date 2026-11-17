@@ -149,4 +149,40 @@ describe("OrganicSMM Anti-Bot Delivery & View Pacing Engine", () => {
     assert.ok(normalCount > slowCount, "Normal session should be more common than slow");
     assert.ok(normalCount >= 180, `Expected at least 180 normals out of 500, got ${normalCount}`);
   });
+
+  it("supports user-selected pacing strategies: s_curve, burst, normal, peak_hours, stealth", () => {
+    const strategies = ["s_curve", "burst", "normal", "peak_hours", "stealth"] as const;
+    const target = 5100;
+
+    strategies.forEach((strat) => {
+      const plan = generateOrganicDeliveryPlan("views", target, {
+        durationHours: 16,
+        runsCount: 20,
+        providerMinimum: 100,
+        pacingStrategy: strat,
+        peakHoursEnabled: true,
+      });
+
+      assert.equal(plan.totalQuantity, target, `Strategy ${strat} must strictly conserve target quantity ${target}`);
+      assert.equal(plan.runs.length, 20, `Strategy ${strat} must produce 20 runs`);
+      assert.ok(plan.avgHumanScore >= 60, `Strategy ${strat} avgHumanScore ${plan.avgHumanScore} should be >= 60`);
+
+      const sum = plan.runs.reduce((a, b) => a + b.quantity, 0);
+      assert.equal(sum, target, `Strategy ${strat} sum must equal ${target}`);
+      plan.runs.forEach((r) => {
+        assert.ok(r.quantity >= 100, `Strategy ${strat} batch ${r.runNumber} quantity ${r.quantity} should be >= 100`);
+      });
+    });
+
+    // Verify burst strategy is front-loaded
+    const burstPlan = generateOrganicDeliveryPlan("views", target, {
+      durationHours: 16,
+      runsCount: 20,
+      providerMinimum: 100,
+      pacingStrategy: "burst",
+    });
+    const earlySum = burstPlan.runs.slice(0, 5).reduce((a, b) => a + b.quantity, 0);
+    const lateSum = burstPlan.runs.slice(15, 20).reduce((a, b) => a + b.quantity, 0);
+    assert.ok(earlySum > lateSum, `Burst strategy should front-load early runs: early ${earlySum} vs late ${lateSum}`);
+  });
 });

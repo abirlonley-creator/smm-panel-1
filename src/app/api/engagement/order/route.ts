@@ -26,6 +26,8 @@ const createEngagementOrderSchema = z.object({
   plannedLikes: z.array(z.number().int()).optional(),
   plannedSaves: z.array(z.number().int()).optional(),
   plannedShares: z.array(z.number().int()).optional(),
+  pacingStrategy: z.enum(["s_curve", "burst", "normal", "peak_hours", "stealth"]).optional().default("s_curve"),
+  peakHoursEnabled: z.boolean().optional().default(true),
 });
 
 // Helper to resolve or import a service
@@ -235,6 +237,8 @@ export async function POST(request: Request) {
           runsCount: preset.views.runsCount,
           providerMinimum: minV,
           applyInitialDelay: false,
+          pacingStrategy: parsed.pacingStrategy,
+          peakHoursEnabled: parsed.peakHoursEnabled,
         });
       }
 
@@ -476,6 +480,8 @@ export async function POST(request: Request) {
           planParams: JSON.stringify({
             version: "organicsmm_v2",
             pacingEngine: "organic_anti_bot_v2",
+            pacingStrategy: parsed.pacingStrategy || "s_curve",
+            peakHoursEnabled: parsed.peakHoursEnabled ?? true,
             avgHumanScore: fallbackViewsPlan?.avgHumanScore ?? 84,
             varietyIndex: fallbackViewsPlan?.varietyIndex ?? 42,
             patternBreakCount: fallbackViewsPlan?.patternBreakCount ?? 0,

@@ -18,6 +18,8 @@ export type SessionType = "megaBurst" | "burst" | "normal" | "slow" | "pause" | 
 
 export type TimeOfDayLabel = "🔥 Peak" | "☀️ Morning" | "🌙 Night" | "📊 Normal";
 
+export type PacingStrategy = "s_curve" | "burst" | "normal" | "peak_hours" | "stealth";
+
 export interface OrganicBatch {
   runNumber: number;
   scheduledAt: Date;
@@ -53,6 +55,7 @@ export interface OrganicPlanOptions {
   providerMinimum?: number;
   startDate?: Date;
   applyInitialDelay?: boolean; // default true
+  pacingStrategy?: PacingStrategy; // "s_curve" | "burst" | "normal" | "peak_hours" | "stealth"
 }
 
 // 1. Provider minimums per metric
@@ -504,6 +507,8 @@ export function generateOrganicDeliveryPlan(
     const scheduledTimes: number[] = [];
     let lastTime = effectiveStartTime.getTime();
 
+    const strategy: PacingStrategy = options.pacingStrategy || "s_curve";
+
     for (let i = 0; i < runsCount; i++) {
       const idealTime = effectiveStartTime.getTime() + i * avgStepMs;
       const jitter = (Math.random() * 2 - 1) * maxJitterMs;
@@ -519,8 +524,32 @@ export function generateOrganicDeliveryPlan(
       const hour = istDate.getUTCHours();
       const day = istDate.getUTCDay();
 
-      let weight = 1.0;
-      if (peakHoursEnabled) {
+      // Shape strategy weight across progression [0..1]
+      const t = runsCount > 1 ? i / (runsCount - 1) : 0.5;
+      let strategyWeight = 1.0;
+
+      if (strategy === "s_curve") {
+        // Biological Sigmoid FYP: gentle ramp-up, accelerated peak at ~45%, smooth tapering tail
+        const sigmoid = 1 / (1 + Math.exp(-6 * (t - 0.45)));
+        const prevSig = i === 0 ? 0 : 1 / (1 + Math.exp(-6 * ((i - 0.5) / (runsCount - 1) - 0.45)));
+        strategyWeight = Math.max(0.15, (sigmoid - prevSig) * runsCount);
+      } else if (strategy === "burst") {
+        // Front-Loaded Rush: heavy initial momentum in first 35% of duration, then smooth taper
+        strategyWeight = Math.max(0.25, Math.exp(-2.2 * t) * 1.8 + 0.25);
+      } else if (strategy === "normal") {
+        // Steady Human Pace: balanced arrival rate with organic subtle variation
+        strategyWeight = 1.0 + (Math.random() * 0.16 - 0.08);
+      } else if (strategy === "peak_hours") {
+        // Circadian Prime-Time Amplification: boost 18h-22h window by 1.8x, suppress night
+        const hourMult = hourMultipliers[hour] || 1.0;
+        strategyWeight = Math.pow(hourMult, 1.5);
+      } else if (strategy === "stealth") {
+        // Stealth Trickle: lower velocity with extended intervals
+        strategyWeight = 0.85 + (Math.random() * 0.2 - 0.1);
+      }
+
+      let weight = strategyWeight;
+      if (peakHoursEnabled && strategy !== "peak_hours") {
         weight *= (hourMultipliers[hour] || 1.0) * (dayMultipliers[day] || 1.0);
       }
 
@@ -580,7 +609,18 @@ export function generateOrganicDeliveryPlan(
       const isPatternBreaker = Math.random() < 0.18;
       if (isPatternBreaker) patternBreakCount++;
 
-      const sessionType = i === 0 ? "burst" : pickSessionType(metric);
+      let sessionType: SessionType;
+      if (strategy === "burst") {
+        sessionType = i < Math.ceil(runsCount * 0.35) ? (i === 0 ? "megaBurst" : "burst") : (Math.random() > 0.4 ? "normal" : "slow");
+      } else if (strategy === "stealth") {
+        sessionType = Math.random() > 0.3 ? "slow" : "pause";
+      } else if (strategy === "normal") {
+        sessionType = "normal";
+      } else if (strategy === "peak_hours") {
+        sessionType = hour >= 18 && hour <= 22 ? "burst" : (hour >= 23 || hour < 6 ? "slow" : "normal");
+      } else {
+        sessionType = i === 0 ? "burst" : pickSessionType(metric);
+      }
       const qty = adjustedRuns[i].quantity;
       const score = calculateHumanBehaviorScore(qty, Math.max(1, stepMinutes), hour, day, sessionType, metric);
 
@@ -637,8 +677,22 @@ export function generateOrganicDeliveryPlan(
   const hourMultipliers = HOUR_OF_DAY_MULTIPLIERS[metric] || HOUR_OF_DAY_MULTIPLIERS.views;
   const dayMultipliers = DAY_OF_WEEK_MULTIPLIERS[metric] || DAY_OF_WEEK_MULTIPLIERS.views;
 
+  const strategy: PacingStrategy = options.pacingStrategy || "s_curve";
+
   while (remainingQuantity > 0 && runNumber <= maxRunsLimit) {
-    const session = pickSessionType(metric);
+    let session = pickSessionType(metric);
+    if (strategy === "burst" && runNumber <= 6) {
+      session = Math.random() < 0.6 ? "burst" : "megaBurst";
+    } else if (strategy === "stealth") {
+      session = Math.random() < 0.7 ? "slow" : "pause";
+    } else if (strategy === "normal") {
+      session = "normal";
+    } else if (strategy === "peak_hours") {
+      const checkIst = new Date(currentTime.getTime() + 5.5 * 60 * 60 * 1000);
+      const h = checkIst.getUTCHours();
+      session = h >= 18 && h <= 22 ? "burst" : (h >= 23 || h < 6 ? "slow" : "normal");
+    }
+
     const sessionMultipliers = SESSION_MULTIPLIERS[session];
     const isPatternBreaker = Math.random() < 0.18;
 

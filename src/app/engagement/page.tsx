@@ -28,6 +28,10 @@ import {
   Layers,
   Send,
   Plus,
+  Flame,
+  Sliders,
+  Activity,
+  Moon,
 } from "lucide-react";
 import { BinanceAddFundsModal } from "@/components/BinanceAddFundsModal";
 import { AdminOutOfBalanceBanner } from "@/components/AdminOutOfBalanceBanner";
@@ -35,6 +39,7 @@ import {
   generateOrganicDeliveryPlan,
   OrganicBatch,
   OrganicPlanResult,
+  PacingStrategy,
 } from "@/lib/engagement/organic-pacing-engine";
 
 interface ApiStatusItem {
@@ -318,18 +323,68 @@ function generateOrganicRandomDistribution(
   return items;
 }
 
+interface StrategyOption {
+  id: PacingStrategy;
+  name: string;
+  badge: string;
+  description: string;
+  icon: "fire" | "zap" | "activity" | "moon" | "shield";
+}
+
+const STRATEGY_OPTIONS: StrategyOption[] = [
+  {
+    id: "s_curve",
+    name: "S-Curve",
+    badge: "Biological FYP",
+    description: "Organic bell curve (gradual warm-up → algorithm peak → natural tail)",
+    icon: "fire",
+  },
+  {
+    id: "burst",
+    name: "Burst",
+    badge: "Viral Launch",
+    description: "Front-loaded momentum rush in first 1–2h for fast algorithmic ranking",
+    icon: "zap",
+  },
+  {
+    id: "normal",
+    name: "Normal",
+    badge: "Steady Human",
+    description: "Consistent human browsing arrival pace across total duration",
+    icon: "activity",
+  },
+  {
+    id: "peak_hours",
+    name: "Peak Hours",
+    badge: "6–10 PM Focus",
+    description: "Concentrates high volume during prime evening viewing hours (18–22h)",
+    icon: "moon",
+  },
+  {
+    id: "stealth",
+    name: "Stealth",
+    badge: "Slow & Safe",
+    description: "Cautious low-velocity trickle delivery for maximum safety",
+    icon: "shield",
+  },
+];
+
 function generateOrganicSCurvePlan(
   target: number,
   runsCount: number,
   durationMinutes: number,
   minBound: number,
-  maxBound: number
+  maxBound: number,
+  strategy: PacingStrategy = "s_curve",
+  peakHoursEnabled: boolean = true
 ): { quantities: number[]; minuteOffsets: number[]; plan: OrganicPlanResult } {
   const plan = generateOrganicDeliveryPlan("views", target, {
     durationHours: durationMinutes / 60,
     runsCount,
     providerMinimum: minBound,
     applyInitialDelay: false,
+    pacingStrategy: strategy,
+    peakHoursEnabled,
   });
 
   return {
@@ -339,7 +394,11 @@ function generateOrganicSCurvePlan(
   };
 }
 
-function generatePlanForPreset(p: PresetOption) {
+function generatePlanForPreset(
+  p: PresetOption,
+  strategy: PacingStrategy = "s_curve",
+  peakHoursEnabled: boolean = true
+) {
   const durationMinutes = (p.durationHours || 5) * 60;
   let views: number[] = [];
   let viewOffsets: number[] = [];
@@ -351,7 +410,9 @@ function generatePlanForPreset(p: PresetOption) {
       p.views.count,
       durationMinutes,
       p.views.min,
-      p.views.max
+      p.views.max,
+      strategy,
+      peakHoursEnabled
     );
     views = sCurve.quantities;
     viewOffsets = sCurve.minuteOffsets;
@@ -481,6 +542,9 @@ export default function EngagementPage() {
 
   const currentPreset = activePresets[selectedPresetId] || activePresets.tiktok_2k || PRESET_OPTIONS.tiktok_2k;
 
+  const [selectedStrategy, setSelectedStrategy] = useState<PacingStrategy>("s_curve");
+  const [peakHoursEnabled, setPeakHoursEnabled] = useState<boolean>(true);
+
   const [plannedSchedule, setPlannedSchedule] = useState<{
     views: number[];
     viewOffsets?: number[];
@@ -488,7 +552,7 @@ export default function EngagementPage() {
     likes: number[];
     saves: number[];
     shares: number[];
-  }>(() => generatePlanForPreset(PRESET_OPTIONS.tiktok_2k));
+  }>(() => generatePlanForPreset(PRESET_OPTIONS.tiktok_2k, "s_curve", true));
 
   const [planTimestamp, setPlanTimestamp] = useState<Date>(new Date());
   const [shuffling, setShuffling] = useState(false);
@@ -498,13 +562,26 @@ export default function EngagementPage() {
     setSelectedPresetId(presetId);
     setShowAllBatches(false);
     const p = activePresets[presetId] || activePresets.tiktok_2k || PRESET_OPTIONS.tiktok_2k;
-    setPlannedSchedule(generatePlanForPreset(p));
+    setPlannedSchedule(generatePlanForPreset(p, selectedStrategy, peakHoursEnabled));
+    setPlanTimestamp(new Date());
+  }
+
+  function selectStrategy(strategy: PacingStrategy) {
+    setSelectedStrategy(strategy);
+    setPlannedSchedule(generatePlanForPreset(currentPreset, strategy, peakHoursEnabled));
+    setPlanTimestamp(new Date());
+  }
+
+  function togglePeakHours() {
+    const nextVal = !peakHoursEnabled;
+    setPeakHoursEnabled(nextVal);
+    setPlannedSchedule(generatePlanForPreset(currentPreset, selectedStrategy, nextVal));
     setPlanTimestamp(new Date());
   }
 
   function rerollPlan() {
     setShuffling(true);
-    setPlannedSchedule(generatePlanForPreset(currentPreset));
+    setPlannedSchedule(generatePlanForPreset(currentPreset, selectedStrategy, peakHoursEnabled));
     setPlanTimestamp(new Date());
     setTimeout(() => setShuffling(false), 300);
   }
@@ -513,10 +590,10 @@ export default function EngagementPage() {
     if (statusData?.presets) {
       const p = activePresets[selectedPresetId] || activePresets.tiktok_2k;
       if (p) {
-        setPlannedSchedule(generatePlanForPreset(p));
+        setPlannedSchedule(generatePlanForPreset(p, selectedStrategy, peakHoursEnabled));
       }
     }
-  }, [statusData?.presets, selectedPresetId]);
+  }, [statusData?.presets, selectedPresetId, selectedStrategy, peakHoursEnabled]);
 
   async function fetchStatus(isManual = false) {
     if (isManual) setRefreshing(true);
@@ -745,6 +822,8 @@ export default function EngagementPage() {
           presetId: currentPreset.id,
           presetName: currentPreset.name,
           platform: "TikTok",
+          pacingStrategy: selectedStrategy,
+          peakHoursEnabled: peakHoursEnabled,
           plannedViews: currentPreset.views.enabled !== false ? plannedSchedule.views : [],
           viewOffsets: currentPreset.views.enabled !== false ? (plannedSchedule.viewOffsets || []) : [],
           plannedLikes: currentPreset.likes.enabled !== false ? plannedSchedule.likes : [],
@@ -1163,7 +1242,7 @@ export default function EngagementPage() {
                   <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-600 text-white shadow-2xs">Protected</span>
                 </div>
                 <p className="text-[11px] text-[#252943]/70 pt-0.5">
-                  Biological S-Curve pacing • Zero round multiples of 5 • Periodicity disruption • Views-First Gated
+                  {selectedStrategy === "s_curve" ? "Biological S-Curve" : selectedStrategy === "burst" ? "Viral Launch Burst" : selectedStrategy === "normal" ? "Steady Human Pace" : selectedStrategy === "peak_hours" ? "Prime Peak Hours (18–22h)" : "Stealth Trickle"} • Zero round multiples of 5 • Periodicity disruption • Views-First Gated
                 </p>
               </div>
             </div>
@@ -1171,6 +1250,83 @@ export default function EngagementPage() {
               <span className="px-2.5 py-1 rounded-xl bg-white/95 border border-emerald-200 font-bold text-emerald-800 text-[11px] shadow-2xs">
                 🛡️ Avg Human Score: {plannedSchedule.viewsPlan?.avgHumanScore ?? 84}/100
               </span>
+            </div>
+          </div>
+
+          {/* PACING STRATEGY SELECTOR */}
+          <div className="p-4 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-[#DEE0ED]/60">
+              <div className="flex items-center gap-2">
+                <Sliders className="w-4 h-4 text-[#3A4EFB]" />
+                <div>
+                  <span className="text-xs font-bold text-[#252943] uppercase tracking-wider block">
+                    Delivery Pacing Strategy
+                  </span>
+                  <span className="text-[11px] text-[#252943]/60">
+                    Choose how views and interactions arrive over time to match your post goals
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={togglePeakHours}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
+                  peakHoursEnabled
+                    ? "bg-amber-500/10 text-amber-900 border-amber-300 shadow-2xs"
+                    : "bg-white text-[#252943]/60 border-[#DEE0ED] hover:bg-gray-50"
+                }`}
+                title="Boost delivery weight during prime viewing hours (18:00–22:00 IST/BST)"
+              >
+                <Moon className={`w-3.5 h-3.5 ${peakHoursEnabled ? "text-amber-600 fill-amber-500" : "text-gray-400"}`} />
+                <span>Prime Evening (18–22h): {peakHoursEnabled ? "Active" : "Off"}</span>
+              </button>
+            </div>
+
+            {/* 5 Interactive Strategy Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-5 gap-2.5">
+              {STRATEGY_OPTIONS.map((opt) => {
+                const isSelected = selectedStrategy === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => selectStrategy(opt.id)}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer relative flex flex-col justify-between group ${
+                      isSelected
+                        ? "bg-white border-[#3A4EFB] shadow-sm ring-2 ring-[#3A4EFB]/25"
+                        : "bg-white/80 hover:bg-white border-[#DEE0ED] hover:border-[#3A4EFB]/40"
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="p-1.5 rounded-lg bg-[#F8F9FD] border border-[#DEE0ED]/80 group-hover:scale-105 transition-transform">
+                          {opt.icon === "fire" && <Flame className="w-4 h-4 text-amber-500" />}
+                          {opt.icon === "zap" && <Zap className="w-4 h-4 text-indigo-500" />}
+                          {opt.icon === "activity" && <Activity className="w-4 h-4 text-emerald-500" />}
+                          {opt.icon === "moon" && <Moon className="w-4 h-4 text-purple-500" />}
+                          {opt.icon === "shield" && <ShieldCheck className="w-4 h-4 text-blue-500" />}
+                        </div>
+                        <span
+                          className={`text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-full ${
+                            isSelected
+                              ? "bg-[#3A4EFB] text-white"
+                              : "bg-gray-100 text-[#252943]/70"
+                          }`}
+                        >
+                          {opt.badge}
+                        </span>
+                      </div>
+                      <div className="font-bold text-xs text-[#252943] flex items-center gap-1">
+                        <span>{opt.name}</span>
+                        {isSelected && <Check className="w-3.5 h-3.5 text-[#3A4EFB] stroke-[3]" />}
+                      </div>
+                      <p className="text-[10px] text-[#252943]/70 mt-1 line-clamp-2 leading-tight">
+                        {opt.description}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -1254,7 +1410,7 @@ export default function EngagementPage() {
                       )}
                       {row.sessionType && (
                         <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-gray-100 text-gray-700">
-                          {row.sessionType === "burst" ? "⚡ Burst" : row.sessionType === "slow" ? "🌙 Slow" : row.sessionType === "pause" ? "⏸️ Pause" : "🌊 Normal"}
+                          {row.sessionType === "burst" ? "⚡ Burst" : row.sessionType === "peak" ? "🔥 Peak" : row.sessionType === "slow" ? "🌙 Slow" : row.sessionType === "pause" ? "⏸️ Pause" : "🌊 Normal"}
                         </span>
                       )}
                       {row.patternBreaker && (

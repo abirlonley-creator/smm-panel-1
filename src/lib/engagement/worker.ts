@@ -562,10 +562,10 @@ async function executeEngagementTick(): Promise<EngagementTickResult> {
         run.engagementType === "likes"
           ? order.plannedLikes || 42
           : run.engagementType === "saves"
-          ? order.plannedSaves || 10
-          : run.engagementType === "shares"
-          ? order.plannedShares || 5
-          : order.plannedComments || 2;
+            ? order.plannedSaves || 10
+            : run.engagementType === "shares"
+              ? order.plannedShares || 5
+              : order.plannedComments || 2;
 
       // Allow a baseline of at least 15 auxiliary units or proportional to views delivered so far
       const allowedAuxiliary = Math.max(15, Math.floor((deliveredViews / targetViews) * targetMetric * 1.35));
@@ -573,10 +573,10 @@ async function executeEngagementTick(): Promise<EngagementTickResult> {
         run.engagementType === "likes"
           ? order.deliveredLikes || 0
           : run.engagementType === "saves"
-          ? order.deliveredSaves || 0
-          : run.engagementType === "shares"
-          ? order.deliveredShares || 0
-          : order.deliveredComments || 0;
+            ? order.deliveredSaves || 0
+            : run.engagementType === "shares"
+              ? order.deliveredShares || 0
+              : order.deliveredComments || 0;
 
       if (alreadySentAuxiliary + run.quantity > allowedAuxiliary && deliveredViews < targetViews * 0.25) {
         // Postpone this auxiliary wave by 5 minutes to wait for views batches to confirm
