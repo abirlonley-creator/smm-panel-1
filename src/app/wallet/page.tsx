@@ -535,7 +535,7 @@ export default function WalletPage() {
                 type="button"
                 id="addfunds-pay-btn"
                 onClick={handlePayClick}
-                className="w-full py-3.5 px-6 rounded-2xl bg-[#E63946] hover:bg-[#d62839] text-white text-sm font-black text-center transition-all shadow-subtle press-scale flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full py-3.5 px-6 rounded-2xl bg-[#3A4EFB] hover:bg-[#2C3FE0] text-white text-sm font-bold text-center transition-all shadow-md shadow-[#3A4EFB]/20 press-scale flex items-center justify-center gap-2 cursor-pointer"
               >
                 <Zap className="w-4 h-4 fill-white" />
                 <span>Pay {inrVal > 0 ? `₹${inrVal.toFixed(2)} (${usdAmountStr || "0.00"} USDT)` : ""}</span>

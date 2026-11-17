@@ -1410,7 +1410,7 @@ function NewOrderForm() {
                     key={plat.key}
                     type="button"
                     onClick={() => handleSelectPlatform(plat.key)}
-                    className={`px-2.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer border ${
+                    className={`px-2.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer border press-scale ${
                       isSel
                         ? isFav
                           ? "bg-amber-500 text-white border-amber-500 shadow-sm"

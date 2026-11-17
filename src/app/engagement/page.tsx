@@ -1018,8 +1018,8 @@ export default function EngagementPage() {
                 key={preset.id}
                 type="button"
                 onClick={() => switchPreset(preset.id)}
-                className={`p-4 rounded-2xl border text-left transition-all relative flex flex-col justify-between cursor-pointer press-scale ${isSelected
-                  ? "bg-[#3A4EFB]/5 border-[#3A4EFB] shadow-sm ring-1 ring-[#3A4EFB]"
+                className={`p-4 rounded-2xl border text-left transition-all relative flex flex-col justify-between cursor-pointer press-scale card-hover ${isSelected
+                  ? "bg-white border-[#3A4EFB] shadow-md ring-2 ring-[#3A4EFB]/25 -translate-y-0.5"
                   : "bg-[#F8F9FD] border-[#DEE0ED] hover:bg-white hover:border-[#3A4EFB]/40"
                   }`}
               >
@@ -1233,9 +1233,9 @@ export default function EngagementPage() {
                     key={opt.id}
                     type="button"
                     onClick={() => selectStrategy(opt.id)}
-                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer relative flex flex-col justify-between group ${
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer relative flex flex-col justify-between group press-scale card-hover ${
                       isSelected
-                        ? "bg-white border-[#3A4EFB] shadow-sm ring-2 ring-[#3A4EFB]/25"
+                        ? "bg-white border-[#3A4EFB] shadow-md ring-2 ring-[#3A4EFB]/25 -translate-y-0.5"
                         : "bg-white/80 hover:bg-white border-[#DEE0ED] hover:border-[#3A4EFB]/40"
                     }`}
                   >
