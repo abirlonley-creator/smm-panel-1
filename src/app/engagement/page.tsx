@@ -29,6 +29,8 @@ import {
   Send,
   Plus,
   Flame,
+  Rocket,
+  Crown,
   Sliders,
   Activity,
   Moon,
@@ -233,6 +235,77 @@ const PRESET_OPTIONS: Record<string, PresetOption> = {
     syncThreshold: { minViews: 5000, maxViews: 8000 },
   },
 };
+
+interface PresetVisualMeta {
+  tierBadge: string;
+  shortTitle: string;
+  durationShort: string;
+  icon: any;
+  iconColor: string;
+  iconBg: string;
+  accentBorder: string;
+  isPopular?: boolean;
+}
+
+function getPresetVisuals(preset: PresetOption): PresetVisualMeta {
+  const id = (preset.id || "").toLowerCase();
+  const name = (preset.name || "").toLowerCase();
+
+  if (id.includes("50k") || name.includes("50k")) {
+    return {
+      tierBadge: "50K",
+      shortTitle: "Mega Viral",
+      durationShort: preset.badge || "48h",
+      icon: Crown,
+      iconColor: "text-amber-500",
+      iconBg: "bg-amber-500/10 border-amber-300/50",
+      accentBorder: "border-amber-400",
+    };
+  }
+  if (id.includes("15k") || name.includes("15k")) {
+    return {
+      tierBadge: "15K",
+      shortTitle: "Acceleration",
+      durationShort: preset.badge || "24h",
+      icon: Sparkles,
+      iconColor: "text-purple-600",
+      iconBg: "bg-purple-500/10 border-purple-300/50",
+      accentBorder: "border-purple-400",
+    };
+  }
+  if (id.includes("10k") || name.includes("10k")) {
+    return {
+      tierBadge: "10K",
+      shortTitle: "Breakthrough",
+      durationShort: preset.badge || "22h",
+      icon: Flame,
+      iconColor: "text-rose-500",
+      iconBg: "bg-rose-500/10 border-rose-300/50",
+      accentBorder: "border-rose-400",
+      isPopular: true,
+    };
+  }
+  if (id.includes("5k") || name.includes("5k")) {
+    return {
+      tierBadge: "5K",
+      shortTitle: "Velocity",
+      durationShort: preset.badge || "16h",
+      icon: Rocket,
+      iconColor: "text-indigo-600",
+      iconBg: "bg-indigo-500/10 border-indigo-300/50",
+      accentBorder: "border-indigo-400",
+    };
+  }
+  return {
+    tierBadge: "2K",
+    shortTitle: "Starter",
+    durationShort: preset.badge || "5h",
+    icon: Zap,
+    iconColor: "text-sky-500",
+    iconBg: "bg-sky-500/10 border-sky-300/50",
+    accentBorder: "border-sky-400",
+  };
+}
 
 function generateOrganicRandomDistribution(
   target: number,
@@ -1033,88 +1106,112 @@ export default function EngagementPage() {
             </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {Object.values(activePresets).map((preset) => {
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+            {Object.values(activePresets).map((preset, idx) => {
               const isSelected = selectedPresetId === preset.id;
               const viewsEnabled = preset.views.enabled !== false;
               const likesEnabled = preset.likes.enabled !== false;
               const estViews = preset.targetViews || (preset.views.count * ((preset.views.min + preset.views.max) / 2));
               const estLikes = preset.targetLikes || (preset.likes.count * ((preset.likes.min + preset.likes.max) / 2));
+              const estSaves = preset.targetSaves || (preset.saves?.enabled ? preset.saves.count * 10 : 0);
+              const estShares = preset.targetShares || (preset.shares?.enabled ? preset.shares.count * 10 : 0);
               const basePrice = getPresetPrice(preset);
+              const visuals = getPresetVisuals(preset);
+              const IconComponent = visuals.icon;
 
               return (
                 <button
                   key={preset.id}
                   type="button"
                   onClick={() => switchPreset(preset.id)}
-                  className={`p-4 rounded-2xl border text-left transition-all relative flex flex-col justify-between cursor-pointer press-scale card-hover ${
+                  className={`group relative p-3 rounded-2xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between press-scale ${
+                    idx === 4 ? "col-span-2 sm:col-span-1 lg:col-span-1" : "col-span-1"
+                  } ${
                     isSelected
-                      ? "bg-white border-[#3A4EFB] shadow-md ring-2 ring-[#3A4EFB]/25 -translate-y-0.5"
-                      : "bg-[#F8F9FD] border-[#DEE0ED] hover:bg-white hover:border-[#3A4EFB]/40"
+                      ? "bg-white border-[#3A4EFB] shadow-md ring-2 ring-[#3A4EFB]/20 -translate-y-0.5"
+                      : "bg-[#F8F9FD] border-[#DEE0ED] hover:bg-white hover:border-[#3A4EFB]/40 hover:shadow-xs"
                   }`}
                 >
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-extrabold text-[#1A1D31]">
-                        {preset.name}
-                      </span>
+                  {/* Top: Tier Icon + Duration Badge */}
+                  <div className="w-full flex items-center justify-between gap-1 mb-2">
+                    <div
+                      className={`w-7 h-7 rounded-xl flex items-center justify-center border transition-transform duration-200 group-hover:scale-105 shrink-0 ${visuals.iconBg}`}
+                    >
+                      <IconComponent className={`w-3.5 h-3.5 ${visuals.iconColor}`} />
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      {visuals.isPopular && !isSelected && (
+                        <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-rose-50 text-rose-600 border border-rose-200/60">
+                          Hot
+                        </span>
+                      )}
                       <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                          isSelected ? "bg-[#3A4EFB] text-white" : "bg-gray-200/70 text-gray-700"
+                        className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider font-mono ${
+                          isSelected
+                            ? "bg-[#3A4EFB] text-white shadow-2xs"
+                            : "bg-gray-200/70 text-gray-700"
                         }`}
                       >
-                        {preset.durationLabel}
+                        {visuals.durationShort}
                       </span>
                     </div>
+                  </div>
 
-                    {/* Views & Metrics */}
-                    <div className="pt-1">
-                      <div className="text-xl font-black text-[#1A1D31] font-mono tracking-tight">
-                        ~{Math.round(estViews).toLocaleString()}{" "}
-                        <span className="text-xs font-bold text-[#3A4EFB]">Views</span>
+                  {/* Middle: Reach Number & Tier Name */}
+                  <div className="space-y-1">
+                    <div>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-base sm:text-lg font-black text-[#1A1D31] font-mono tracking-tight leading-none">
+                          ~{Math.round(estViews).toLocaleString()}
+                        </span>
+                        <span className="text-[10px] font-bold text-[#3A4EFB]">Views</span>
                       </div>
-                      <div className="flex items-center flex-wrap gap-1.5 mt-1 text-[11px] font-semibold text-[#64748B]">
-                        {likesEnabled && (
-                          <span className="flex items-center gap-1 text-rose-600 font-mono font-bold">
-                            <Heart className="w-3 h-3 fill-rose-500 text-rose-500" />
-                            <span>+{Math.round(estLikes)} Likes</span>
-                          </span>
-                        )}
-                        {preset.saves?.enabled && (
-                          <span className="text-amber-600 font-mono font-bold">
-                            • +{preset.targetSaves || preset.saves.count * 10} Saves
-                          </span>
-                        )}
-                        {preset.shares?.enabled && (
-                          <span className="text-purple-600 font-mono font-bold">
-                            • +{preset.targetShares || preset.shares.count * 10} Reposts
-                          </span>
-                        )}
+                      <div className="text-[11px] font-bold text-[#1A1D31] truncate mt-1">
+                        {visuals.tierBadge} {visuals.shortTitle}
                       </div>
                     </div>
 
-                    <p className="text-[11px] text-[#64748B] leading-snug line-clamp-2 pt-0.5">
-                      {preset.tagline}
-                    </p>
+                    {/* Micro-Metrics Badges */}
+                    <div className="flex items-center flex-wrap gap-1 text-[10px] font-semibold text-[#64748B] pt-0.5">
+                      {likesEnabled && (
+                        <span className="inline-flex items-center gap-0.5 text-rose-600 font-mono font-bold bg-rose-50/80 px-1.5 py-0.5 rounded border border-rose-200/50">
+                          <Heart className="w-2.5 h-2.5 fill-rose-500 text-rose-500" />
+                          <span>+{Math.round(estLikes)}</span>
+                        </span>
+                      )}
+                      {Boolean(preset.saves?.enabled && estSaves > 0) && (
+                        <span className="inline-flex items-center gap-0.5 text-amber-600 font-mono font-bold bg-amber-50/80 px-1.5 py-0.5 rounded border border-amber-200/50">
+                          <Bookmark className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
+                          <span>+{estSaves}</span>
+                        </span>
+                      )}
+                      {Boolean(preset.shares?.enabled && estShares > 0) && (
+                        <span className="inline-flex items-center gap-0.5 text-purple-600 font-mono font-bold bg-purple-50/80 px-1.5 py-0.5 rounded border border-purple-200/50">
+                          <Share2 className="w-2.5 h-2.5 text-purple-500" />
+                          <span>+{estShares}</span>
+                        </span>
+                      )}
+                    </div>
                   </div>
 
-                  {/* Price Tag & Active Check Indicator */}
-                  <div className="pt-3 mt-3 border-t border-[#DEE0ED]/60 flex items-center justify-between">
+                  {/* Bottom: Price + Selection Checkmark */}
+                  <div className="pt-2 mt-2 border-t border-[#DEE0ED]/60 flex items-center justify-between w-full">
                     <div>
                       <span className="text-[9px] uppercase font-bold text-[#64748B] block leading-none">Price</span>
-                      <span className="text-sm font-black text-[#1A1D31] font-mono">
+                      <span className="text-xs sm:text-sm font-black text-[#1A1D31] font-mono">
                         ₹{basePrice.toFixed(2)}
                       </span>
                     </div>
 
                     <div
-                      className={`w-5 h-5 rounded-full flex items-center justify-center border transition-all ${
+                      className={`w-4 h-4 rounded-full flex items-center justify-center border transition-all ${
                         isSelected
-                          ? "bg-[#3A4EFB] border-[#3A4EFB] text-white shadow-xs"
-                          : "border-[#DEE0ED] bg-white text-transparent"
+                          ? "bg-[#3A4EFB] border-[#3A4EFB] text-white shadow-2xs"
+                          : "border-[#CBD5E1] bg-white group-hover:border-[#3A4EFB]/60"
                       }`}
                     >
-                      <Check className="w-3 h-3 stroke-[3]" />
+                      {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
                     </div>
                   </div>
                 </button>
