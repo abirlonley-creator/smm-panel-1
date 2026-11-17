@@ -20,6 +20,47 @@ import {
   getPatternMeta,
 } from "@/lib/engagement/organic-pattern-generator";
 
+interface Point {
+  x: number;
+  y: number;
+}
+
+/**
+ * Catmull-Rom to Cubic Bézier spline generator for 100% smooth, anti-radar non-spiked curves.
+ * Creates an elegant, flowing continuous curve identical to radar-approved accounts.
+ */
+function getSmoothSplinePath(points: Point[], tension: number = 0.22): string {
+  if (!points || points.length === 0) return "";
+  if (points.length === 1) return `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
+  if (points.length === 2) {
+    return `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)} L ${points[1].x.toFixed(1)} ${points[1].y.toFixed(1)}`;
+  }
+
+  let d = `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[Math.max(0, i - 1)];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[Math.min(points.length - 1, i + 2)];
+
+    const cp1x = p1.x + (p2.x - p0.x) * tension;
+    const cp1y = p1.y + (p2.y - p0.y) * tension;
+    const cp2x = p2.x - (p3.x - p1.x) * tension;
+    const cp2y = p2.y - (p3.y - p1.y) * tension;
+
+    d += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+  }
+  return d;
+}
+
+function getClosedAreaPath(points: Point[], baselineY: number, tension: number = 0.22): string {
+  const lineD = getSmoothSplinePath(points, tension);
+  if (!lineD || points.length === 0) return "";
+  const first = points[0];
+  const last = points[points.length - 1];
+  return `${lineD} L ${last.x.toFixed(1)} ${baselineY.toFixed(1)} L ${first.x.toFixed(1)} ${baselineY.toFixed(1)} Z`;
+}
+
 export interface LiveOrganicGrowthPreviewProps {
   initialTemplateId?: number;
   targetViews: number;
@@ -71,7 +112,6 @@ export function LiveOrganicGrowthPreview({
   // Click "New Pattern": pick a fresh random template number (1..550+)
   const handleNewPattern = useCallback(() => {
     setIsGenerating(true);
-    // Pick another template ID different from current
     let nextId = Math.floor(Math.random() * 550) + 1;
     if (nextId === templateId) {
       nextId = (nextId % 550) + 1;
@@ -159,82 +199,104 @@ export function LiveOrganicGrowthPreview({
     [baselineY, plotHeight]
   );
 
-  // Stepped Cumulative Paths ("Bursts + pauses • Service-wise natural steps")
-  const viewsSteppedPath = useMemo(() => {
-    if (schedulePlan.views.length === 0) return "";
-    let d = `M ${padLeft.toFixed(1)} ${baselineY.toFixed(1)}`;
-    let currentY = baselineY;
+  // 1. 100% SMOOTH CUMULATIVE VIEWS CURVE (Catmull-Rom Spline, Zero Staircase)
+  const viewPoints: Point[] = useMemo(() => {
+    if (schedulePlan.views.length === 0) return [];
+    const pts: Point[] = [{ x: padLeft, y: baselineY }];
 
     for (let i = 0; i < schedulePlan.views.length; i++) {
       const minute = schedulePlan.viewOffsets[i] || 0;
-      const x = getX(minute);
-      const nextY = getYViews(cumViews[i]);
-      // Step horizontally to the batch minute, then step up
-      d += ` L ${x.toFixed(1)} ${currentY.toFixed(1)} L ${x.toFixed(1)} ${nextY.toFixed(1)}`;
-      currentY = nextY;
+      pts.push({
+        x: getX(minute),
+        y: getYViews(cumViews[i]),
+      });
     }
-    // Continue to the right edge
-    d += ` L ${(padLeft + plotWidth).toFixed(1)} ${currentY.toFixed(1)}`;
-    return d;
-  }, [schedulePlan.views, schedulePlan.viewOffsets, cumViews, getX, getYViews, padLeft, baselineY, plotWidth]);
 
-  const viewsSteppedArea = useMemo(() => {
-    if (!viewsSteppedPath) return "";
-    const rightX = padLeft + plotWidth;
-    return `${viewsSteppedPath} L ${rightX.toFixed(1)} ${baselineY.toFixed(1)} L ${padLeft.toFixed(1)} ${baselineY.toFixed(1)} Z`;
-  }, [viewsSteppedPath, padLeft, plotWidth, baselineY]);
+    const lastX = padLeft + plotWidth;
+    const lastY = getYViews(maxTotalViews);
+    if (pts[pts.length - 1].x < lastX) {
+      pts.push({ x: lastX, y: lastY });
+    }
+    return pts;
+  }, [schedulePlan.views, schedulePlan.viewOffsets, cumViews, maxTotalViews, getX, getYViews, padLeft, baselineY, plotWidth]);
 
-  // Auxiliary stepped paths (Likes, Saves, Shares, Comments)
-  const likesSteppedPath = useMemo(() => {
-    if (schedulePlan.likes.length === 0) return "";
+  const viewsSmoothPath = useMemo(() => {
+    return getSmoothSplinePath(viewPoints, 0.22);
+  }, [viewPoints]);
+
+  const viewsSmoothArea = useMemo(() => {
+    return getClosedAreaPath(viewPoints, baselineY, 0.22);
+  }, [viewPoints, baselineY]);
+
+  // 2. SMOOTH AUXILIARY METRIC CURVES (Likes, Saves, Shares)
+  const likePoints: Point[] = useMemo(() => {
+    if (schedulePlan.likes.length === 0) return [];
+    const pts: Point[] = [{ x: padLeft, y: baselineY }];
     const maxLikes = schedulePlan.totalLikes || 1;
-    let d = `M ${padLeft.toFixed(1)} ${baselineY.toFixed(1)}`;
-    let currentY = baselineY;
 
     for (let i = 0; i < schedulePlan.likes.length; i++) {
       const minute = schedulePlan.likeOffsets[i] || 0;
-      const x = getX(minute);
-      const nextY = getYAux(cumLikes[i], maxLikes);
-      d += ` L ${x.toFixed(1)} ${currentY.toFixed(1)} L ${x.toFixed(1)} ${nextY.toFixed(1)}`;
-      currentY = nextY;
+      pts.push({
+        x: getX(minute),
+        y: getYAux(cumLikes[i], maxLikes),
+      });
     }
-    d += ` L ${(padLeft + plotWidth).toFixed(1)} ${currentY.toFixed(1)}`;
-    return d;
+    const lastX = padLeft + plotWidth;
+    if (pts[pts.length - 1].x < lastX) {
+      pts.push({ x: lastX, y: getYAux(maxLikes, maxLikes) });
+    }
+    return pts;
   }, [schedulePlan.likes, schedulePlan.likeOffsets, cumLikes, schedulePlan.totalLikes, getX, getYAux, padLeft, baselineY, plotWidth]);
 
-  const savesSteppedPath = useMemo(() => {
-    if (schedulePlan.saves.length === 0) return "";
+  const likesSmoothPath = useMemo(() => {
+    return getSmoothSplinePath(likePoints, 0.20);
+  }, [likePoints]);
+
+  const savePoints: Point[] = useMemo(() => {
+    if (schedulePlan.saves.length === 0) return [];
+    const pts: Point[] = [{ x: padLeft, y: baselineY }];
     const maxSaves = schedulePlan.totalSaves || 1;
-    let d = `M ${padLeft.toFixed(1)} ${baselineY.toFixed(1)}`;
-    let currentY = baselineY;
 
     for (let i = 0; i < schedulePlan.saves.length; i++) {
       const minute = schedulePlan.saveOffsets[i] || 0;
-      const x = getX(minute);
-      const nextY = getYAux(cumSaves[i], maxSaves) + 2; // subtle offset
-      d += ` L ${x.toFixed(1)} ${currentY.toFixed(1)} L ${x.toFixed(1)} ${nextY.toFixed(1)}`;
-      currentY = nextY;
+      pts.push({
+        x: getX(minute),
+        y: getYAux(cumSaves[i], maxSaves) - 2,
+      });
     }
-    d += ` L ${(padLeft + plotWidth).toFixed(1)} ${currentY.toFixed(1)}`;
-    return d;
+    const lastX = padLeft + plotWidth;
+    if (pts[pts.length - 1].x < lastX) {
+      pts.push({ x: lastX, y: getYAux(maxSaves, maxSaves) - 2 });
+    }
+    return pts;
   }, [schedulePlan.saves, schedulePlan.saveOffsets, cumSaves, schedulePlan.totalSaves, getX, getYAux, padLeft, baselineY, plotWidth]);
 
-  const sharesSteppedPath = useMemo(() => {
-    if (schedulePlan.shares.length === 0) return "";
+  const savesSmoothPath = useMemo(() => {
+    return getSmoothSplinePath(savePoints, 0.20);
+  }, [savePoints]);
+
+  const sharePoints: Point[] = useMemo(() => {
+    if (schedulePlan.shares.length === 0) return [];
+    const pts: Point[] = [{ x: padLeft, y: baselineY }];
     const maxShares = schedulePlan.totalShares || 1;
-    let d = `M ${padLeft.toFixed(1)} ${baselineY.toFixed(1)}`;
-    let currentY = baselineY;
 
     for (let i = 0; i < schedulePlan.shares.length; i++) {
       const minute = schedulePlan.shareOffsets[i] || 0;
-      const x = getX(minute);
-      const nextY = getYAux(cumShares[i], maxShares) + 4;
-      d += ` L ${x.toFixed(1)} ${currentY.toFixed(1)} L ${x.toFixed(1)} ${nextY.toFixed(1)}`;
-      currentY = nextY;
+      pts.push({
+        x: getX(minute),
+        y: getYAux(cumShares[i], maxShares) - 4,
+      });
     }
-    d += ` L ${(padLeft + plotWidth).toFixed(1)} ${currentY.toFixed(1)}`;
-    return d;
+    const lastX = padLeft + plotWidth;
+    if (pts[pts.length - 1].x < lastX) {
+      pts.push({ x: lastX, y: getYAux(maxShares, maxShares) - 4 });
+    }
+    return pts;
   }, [schedulePlan.shares, schedulePlan.shareOffsets, cumShares, schedulePlan.totalShares, getX, getYAux, padLeft, baselineY, plotWidth]);
+
+  const sharesSmoothPath = useMemo(() => {
+    return getSmoothSplinePath(sharePoints, 0.20);
+  }, [sharePoints]);
 
   // Interactive Hover / Pointer Tooltip State
   const [hoveredPoint, setHoveredPoint] = useState<{
@@ -346,7 +408,7 @@ export function LiveOrganicGrowthPreview({
               Live Organic Growth Preview
             </h2>
             <p className="text-xs text-[#64748B] font-medium font-sans">
-              Bursts + pauses • Service-wise natural steps
+              Smooth anti-radar S-curve • Natural algorithmic growth
             </p>
           </div>
         </div>
@@ -458,7 +520,7 @@ export function LiveOrganicGrowthPreview({
         </div>
       </div>
 
-      {/* 4. THE GRAPH SVG (Cumulative Natural Stepped Anti-Radar Curve) */}
+      {/* 4. THE GRAPH SVG (100% Smooth Anti-Radar Non-Spiked S-Curve) */}
       <div className="relative w-full overflow-hidden bg-gradient-to-b from-[#FAFBFD] to-white rounded-2xl border border-[#DEE0ED]/80 p-2 sm:p-3">
         <svg
           ref={svgRef}
@@ -468,10 +530,10 @@ export function LiveOrganicGrowthPreview({
           onPointerLeave={() => setHoveredPoint(null)}
         >
           <defs>
-            {/* Soft Blue Gradient for Cumulative Views */}
+            {/* Soft Blue Gradient for Cumulative Views Area */}
             <linearGradient id="viewsAreaGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#38BDF8" stopOpacity="0.4" />
-              <stop offset="60%" stopColor="#38BDF8" stopOpacity="0.15" />
+              <stop offset="0%" stopColor="#38BDF8" stopOpacity="0.38" />
+              <stop offset="60%" stopColor="#38BDF8" stopOpacity="0.14" />
               <stop offset="100%" stopColor="#38BDF8" stopOpacity="0.01" />
             </linearGradient>
 
@@ -514,13 +576,13 @@ export function LiveOrganicGrowthPreview({
             strokeWidth="1.5"
           />
 
-          {/* 1. VIEWS AREA FILL */}
-          {viewsSteppedArea && <path d={viewsSteppedArea} fill="url(#viewsAreaGrad)" />}
+          {/* 1. SMOOTH VIEWS AREA FILL */}
+          {viewsSmoothArea && <path d={viewsSmoothArea} fill="url(#viewsAreaGrad)" />}
 
-          {/* 2. AUXILIARY METRIC STEPPED LINES */}
-          {sharesSteppedPath && (
+          {/* 2. SMOOTH AUXILIARY METRIC LINES */}
+          {sharesSmoothPath && (
             <path
-              d={sharesSteppedPath}
+              d={sharesSmoothPath}
               fill="none"
               stroke="#A855F7"
               strokeWidth="1.6"
@@ -528,9 +590,9 @@ export function LiveOrganicGrowthPreview({
             />
           )}
 
-          {savesSteppedPath && (
+          {savesSmoothPath && (
             <path
-              d={savesSteppedPath}
+              d={savesSmoothPath}
               fill="none"
               stroke="#F59E0B"
               strokeWidth="1.6"
@@ -538,24 +600,24 @@ export function LiveOrganicGrowthPreview({
             />
           )}
 
-          {likesSteppedPath && (
+          {likesSmoothPath && (
             <path
-              d={likesSteppedPath}
+              d={likesSmoothPath}
               fill="none"
               stroke="#10B981"
               strokeWidth="1.8"
             />
           )}
 
-          {/* 3. MAIN VIEWS STEPPED LINE (Solid Blue) */}
-          {viewsSteppedPath && (
+          {/* 3. MAIN SMOOTH VIEWS CURVE (Catmull-Rom Cubic Bézier Spline - No Staircase!) */}
+          {viewsSmoothPath && (
             <path
-              d={viewsSteppedPath}
+              d={viewsSmoothPath}
               fill="none"
               stroke="#0284C7"
-              strokeWidth="2.5"
+              strokeWidth="2.8"
               strokeLinecap="round"
-              strokeLinejoin="miter"
+              strokeLinejoin="round"
             />
           )}
 
@@ -573,17 +635,17 @@ export function LiveOrganicGrowthPreview({
                 strokeDasharray="3 3"
               />
 
-              {/* Point on Views Curve */}
+              {/* Point on Smooth Views Curve */}
               <circle
                 cx={hoveredPoint.x}
                 cy={hoveredPoint.y}
-                r="4.5"
+                r="5"
                 fill="#0284C7"
                 stroke="#FFFFFF"
-                strokeWidth="2"
+                strokeWidth="2.5"
               />
 
-              {/* Interactive Tooltip Card (Styled identically to screenshot) */}
+              {/* Interactive Tooltip Card */}
               <g
                 transform={`translate(${Math.min(
                   padLeft + plotWidth - 110,
@@ -652,7 +714,7 @@ export function LiveOrganicGrowthPreview({
         </svg>
       </div>
 
-      {/* 5. BOTTOM LEGEND (Identical to screenshot) */}
+      {/* 5. BOTTOM LEGEND */}
       <div className="flex items-center justify-center flex-wrap gap-4 pt-1 text-xs font-bold text-[#64748B] font-sans">
         <span className="flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-full bg-[#0284C7]" />
