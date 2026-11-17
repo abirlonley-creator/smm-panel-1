@@ -38,7 +38,8 @@ import {
 } from "lucide-react";
 import { BinanceAddFundsModal } from "@/components/BinanceAddFundsModal";
 import { AdminOutOfBalanceBanner } from "@/components/AdminOutOfBalanceBanner";
-import { InteractiveDeliveryGraph } from "@/components/engagement/InteractiveDeliveryGraph";
+import { LiveOrganicGrowthPreview } from "@/components/engagement/LiveOrganicGrowthPreview";
+import { GeneratedSchedulePlan } from "@/lib/engagement/organic-pattern-generator";
 import {
   generateOrganicDeliveryPlan,
   generateTikTokAlgorithmicPlan,
@@ -576,6 +577,7 @@ export default function EngagementPage() {
 
   const [selectedStrategy, setSelectedStrategy] = useState<PacingStrategy>("s_curve");
   const [peakHoursEnabled, setPeakHoursEnabled] = useState<boolean>(true);
+  const [activeTemplateId, setActiveTemplateId] = useState<number>(335);
 
   const [plannedSchedule, setPlannedSchedule] = useState<{
     views: number[];
@@ -593,12 +595,26 @@ export default function EngagementPage() {
   const [shuffling, setShuffling] = useState(false);
   const [showTimeline, setShowTimeline] = useState(false);
 
+  // Receive schedule emitted by LiveOrganicGrowthPreview
+  const handlePatternScheduleChange = useCallback((schedule: GeneratedSchedulePlan) => {
+    setActiveTemplateId(schedule.templateId);
+    setPlannedSchedule({
+      views: schedule.views,
+      viewOffsets: schedule.viewOffsets,
+      viewsPlan: null,
+      likes: schedule.likes,
+      likeOffsets: schedule.likeOffsets,
+      saves: schedule.saves,
+      saveOffsets: schedule.saveOffsets,
+      shares: schedule.shares,
+      shareOffsets: schedule.shareOffsets,
+    });
+  }, []);
+
   // Re-generate plan when preset changes
   function switchPreset(presetId: string) {
     setSelectedPresetId(presetId);
     setShowAllBatches(false);
-    const p = activePresets[presetId] || activePresets.tiktok_2k || PRESET_OPTIONS.tiktok_2k;
-    setPlannedSchedule(generatePlanForPreset(p, selectedStrategy, peakHoursEnabled));
     setPlanTimestamp(new Date());
   }
 
@@ -1207,163 +1223,38 @@ export default function EngagementPage() {
           </div>
         </div>
 
-        {/* STEP 3: DELIVERY PACING */}
-        <div className="bg-white rounded-3xl border border-[#DEE0ED] p-5 sm:p-6 shadow-subtle space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#DEE0ED]">
-            <div className="flex items-center gap-2.5">
-              <span className="w-7 h-7 rounded-xl bg-[#3A4EFB] text-white text-xs font-black flex items-center justify-center shadow-xs">
-                3
-              </span>
-              <div>
-                <h2 className="text-sm font-bold text-[#1A1D31]">
-                  Delivery Pacing & Protection
-                </h2>
-                <p className="text-[11px] text-[#64748B]">
-                  Paced organically across {currentPreset.durationLabel} to simulate authentic viewer arrival
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={togglePeakHours}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border self-start sm:self-auto press-scale ${
-                peakHoursEnabled
-                  ? "bg-amber-500/10 text-amber-900 border-amber-300 shadow-2xs"
-                  : "bg-white text-[#64748B] border-[#DEE0ED] hover:bg-gray-50"
-              }`}
-              title="Prioritizes heavier delivery between 18:00 and 22:00"
-            >
-              <Moon className={`w-3.5 h-3.5 ${peakHoursEnabled ? "text-amber-600 fill-amber-500" : "text-gray-400"}`} />
-              <span>Prime Evening (18–22h): {peakHoursEnabled ? "On" : "Off"}</span>
-            </button>
-          </div>
-
-          {/* Strategy Selection Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-5 gap-2">
-            {STRATEGY_OPTIONS.map((opt) => {
-              const isSelected = selectedStrategy === opt.id;
-              return (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => selectStrategy(opt.id)}
-                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer relative flex flex-col justify-between group press-scale card-hover ${
-                    isSelected
-                      ? "bg-white border-[#3A4EFB] shadow-md ring-2 ring-[#3A4EFB]/25 -translate-y-0.5"
-                      : "bg-[#F8F9FD] hover:bg-white border-[#DEE0ED] hover:border-[#3A4EFB]/40"
-                  }`}
-                >
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className="p-1 rounded-lg bg-white border border-[#DEE0ED]/80">
-                        {opt.icon === "fire" && <Flame className="w-3.5 h-3.5 text-amber-500" />}
-                        {opt.icon === "zap" && <Zap className="w-3.5 h-3.5 text-indigo-500" />}
-                        {opt.icon === "activity" && <Activity className="w-3.5 h-3.5 text-emerald-500" />}
-                        {opt.icon === "moon" && <Moon className="w-3.5 h-3.5 text-purple-500" />}
-                        {opt.icon === "shield" && <ShieldCheck className="w-3.5 h-3.5 text-blue-500" />}
-                      </div>
-                      <span
-                        className={`text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-full ${
-                          isSelected ? "bg-[#3A4EFB] text-white" : "bg-gray-200/70 text-[#475569]"
-                        }`}
-                      >
-                        {opt.badge}
-                      </span>
-                    </div>
-
-                    <div className="font-bold text-xs text-[#1A1D31] flex items-center gap-1 font-sans">
-                      <span>{opt.name}</span>
-                      {isSelected && <Check className="w-3 h-3 text-[#3A4EFB] stroke-[3]" />}
-                    </div>
-
-                    <p className="text-[10px] text-[#64748B] mt-1 line-clamp-2 leading-tight font-sans">
-                      {opt.description}
-                    </p>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Interactive Live Delivery Graph with Draggable Points & Smooth Organic Spline */}
-          <InteractiveDeliveryGraph
+        {/* STEP 3: LIVE ORGANIC GROWTH PREVIEW (Named Anti-Radar Stepped S-Curve) */}
+        <div className="space-y-3">
+          <LiveOrganicGrowthPreview
+            initialTemplateId={activeTemplateId}
+            targetViews={currentPreset.targetViews || 2960}
             durationHours={currentPreset.durationHours}
-            strategy={selectedStrategy}
-            views={plannedSchedule.views}
-            viewOffsets={plannedSchedule.viewOffsets || []}
-            likes={currentPreset.likes.enabled !== false ? plannedSchedule.likes : []}
-            likeOffsets={plannedSchedule.likeOffsets || currentPreset.likes.offsets || []}
-            saves={currentPreset.saves?.enabled ? plannedSchedule.saves : []}
-            saveOffsets={plannedSchedule.saveOffsets || currentPreset.saves?.offsets || []}
-            shares={currentPreset.shares?.enabled ? plannedSchedule.shares : []}
-            shareOffsets={plannedSchedule.shareOffsets || currentPreset.shares?.offsets || []}
-            providerMinimum={currentPreset.views.min || 100}
+            targetLikes={currentPreset.targetLikes}
+            targetSaves={currentPreset.targetSaves}
+            targetShares={currentPreset.targetShares}
+            providerMinViews={currentPreset.views.min || 100}
             planTimestamp={planTimestamp}
-            onUpdateViews={handleUpdateViews}
-            onUpdateLikes={handleUpdateLikes}
-            onUpdateSaves={handleUpdateSaves}
-            onUpdateShares={handleUpdateShares}
-            onResetPlan={rerollPlan}
+            onScheduleChange={handlePatternScheduleChange}
           />
 
-          {/* Quick Metrics & Human Behavior Score Strip */}
-          <div className="p-3.5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] flex flex-wrap items-center justify-between gap-3 text-xs font-sans">
-            <div className="flex items-center flex-wrap gap-2 sm:gap-3 font-sans">
-              <span className="px-2.5 py-1 rounded-xl bg-white border border-blue-200 font-bold text-blue-800 flex items-center gap-1 shadow-2xs font-sans">
-                <Eye className="w-3.5 h-3.5 text-blue-600" />
-                <span>{totalViews.toLocaleString()} Views</span>
-              </span>
-              {currentPreset.likes.enabled !== false && totalLikes > 0 && (
-                <span className="px-2.5 py-1 rounded-xl bg-white border border-rose-200 font-bold text-rose-800 flex items-center gap-1 shadow-2xs font-sans">
-                  <Heart className="w-3.5 h-3.5 text-rose-600 fill-rose-600" />
-                  <span>{totalLikes} Likes</span>
-                </span>
-              )}
-              {currentPreset.saves?.enabled && totalSaves > 0 && (
-                <span className="px-2.5 py-1 rounded-xl bg-white border border-amber-200 font-bold text-amber-800 shadow-2xs font-sans">
-                  +{totalSaves} Saves
-                </span>
-              )}
-              {currentPreset.shares?.enabled && totalShares > 0 && (
-                <span className="px-2.5 py-1 rounded-xl bg-white border border-purple-200 font-bold text-purple-800 shadow-2xs font-sans">
-                  +{totalShares} Reposts
-                </span>
-              )}
-              <span className="px-2.5 py-1 rounded-xl bg-white border border-emerald-200 font-bold text-emerald-800 shadow-2xs font-sans">
-                🛡️ {plannedSchedule.viewsPlan?.avgHumanScore ?? 84}/100 Human Score
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2 font-sans">
-              <button
-                type="button"
-                onClick={rerollPlan}
-                disabled={shuffling}
-                className="px-2.5 py-1 rounded-xl bg-white hover:bg-gray-50 border border-[#DEE0ED] text-[11px] font-bold text-[#3A4EFB] transition-all flex items-center gap-1 cursor-pointer press-scale shadow-2xs font-sans"
-                title="Shuffle batch distributions"
-              >
-                <Dices className={`w-3.5 h-3.5 ${shuffling ? "animate-spin" : ""}`} />
-                <span>{shuffling ? "..." : "Shuffle"}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setShowTimeline(!showTimeline)}
-                className="px-3 py-1 rounded-xl bg-white hover:bg-gray-50 border border-[#DEE0ED] text-[11px] font-bold text-[#1A1D31] transition-all flex items-center gap-1 cursor-pointer press-scale shadow-2xs font-sans"
-              >
-                <span>{showTimeline ? "Hide Schedule" : `View Schedule (${plannedSchedule.views.length} Batches)`}</span>
-                {showTimeline ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-              </button>
-            </div>
+          {/* Schedule Inspector Button */}
+          <div className="flex justify-end px-2">
+            <button
+              type="button"
+              onClick={() => setShowTimeline(!showTimeline)}
+              className="px-3.5 py-1.5 rounded-xl bg-white hover:bg-gray-50 border border-[#DEE0ED] text-[11px] font-bold text-[#1A1D31] transition-all flex items-center gap-1.5 cursor-pointer press-scale shadow-2xs font-sans"
+            >
+              <span>{showTimeline ? "Hide Detailed Batch Schedule" : `Inspect Batch Schedule (${plannedSchedule.views.length} Batches)`}</span>
+              {showTimeline ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            </button>
           </div>
 
           {/* Collapsible Detailed Timeline Accordion */}
           {showTimeline && (
-            <div className="border border-[#DEE0ED] rounded-2xl overflow-hidden bg-white animate-fadeIn font-sans">
+            <div className="border border-[#DEE0ED] rounded-2xl overflow-hidden bg-white animate-fadeIn font-sans shadow-subtle">
               <div className="p-3 bg-[#F8F9FD] border-b border-[#DEE0ED] flex items-center justify-between text-xs font-sans">
-                <span className="font-bold text-[#1A1D31]">Complete Batch Distribution</span>
-                <span className="text-[11px] text-[#64748B]">Non-round quantities, zero multiples of 5</span>
+                <span className="font-bold text-[#1A1D31]">Complete Batch Distribution ({plannedSchedule.views.length} Batches)</span>
+                <span className="text-[11px] text-[#64748B]">Non-round quantities, zero multiples of 5, anti-spike clamped</span>
               </div>
               <div className="divide-y divide-[#DEE0ED]/60 max-h-[320px] overflow-y-auto font-sans">
                 {scheduleRows.map((row) => (
@@ -1379,61 +1270,28 @@ export default function EngagementPage() {
                       </span>
                       <span className="font-semibold text-[#1A1D31] font-sans">+{row.minuteOffset}m</span>
                       <span className="text-[10px] text-[#64748B] font-sans">({row.clockTime})</span>
-                      {row.sessionType && (
-                        <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-gray-100 text-gray-700 font-sans">
-                          {row.sessionType === "burst" ? "⚡ Burst" : row.sessionType === "peak" ? "🔥 Peak" : row.sessionType === "slow" ? "🌙 Slow" : "🌊 Normal"}
-                        </span>
-                      )}
                     </div>
 
                     <div className="flex items-center flex-wrap gap-1.5 self-end sm:self-auto shrink-0 font-sans text-[11px]">
                       {row.viewQty > 0 && currentPreset.views.enabled !== false && (
-                        <div className="flex items-center gap-1 font-sans">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const next = [...plannedSchedule.views];
-                              const curr = next[row.runNumber - 1] ?? row.viewQty;
-                              next[row.runNumber - 1] = Math.max(currentPreset.views.min || 100, curr - 25);
-                              handleUpdateViews(next);
-                            }}
-                            className="w-4 h-4 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center text-[10px] font-bold cursor-pointer transition-colors"
-                            title="Decrease batch volume"
-                          >
-                            -
-                          </button>
-                          <span className="px-2 py-0.5 rounded-md font-bold bg-blue-50 text-blue-700 border border-blue-200/60 font-sans">
-                            {row.viewQty} views
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const next = [...plannedSchedule.views];
-                              const curr = next[row.runNumber - 1] ?? row.viewQty;
-                              next[row.runNumber - 1] = curr + 25;
-                              handleUpdateViews(next);
-                            }}
-                            className="w-4 h-4 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center text-[10px] font-bold cursor-pointer transition-colors"
-                            title="Increase batch volume"
-                          >
-                            +
-                          </button>
-                        </div>
+                        <span className="px-2 py-0.5 rounded-md font-bold bg-blue-50 text-blue-700 border border-blue-200/60 font-sans">
+                          {row.viewQty} views
+                        </span>
                       )}
-                      {row.likeQty && (
-                        <span className="px-2 py-0.5 rounded-md font-bold bg-rose-50 text-rose-700 border border-rose-200/60 flex items-center gap-1 font-sans">
-                          <Heart className="w-2.5 h-2.5 fill-rose-500 text-rose-500" />
+                      {(row.likeQty ?? 0) > 0 && currentPreset.likes.enabled !== false && (
+                        <span className="px-2 py-0.5 rounded-md font-bold bg-rose-50 text-rose-700 border border-rose-200/60 font-sans flex items-center gap-1">
+                          <Heart className="w-3 h-3 fill-rose-500 text-rose-500" />
                           <span>+{row.likeQty} likes</span>
                         </span>
                       )}
-                      {row.saveQty && (
+                      {(row.saveQty ?? 0) > 0 && currentPreset.saves?.enabled && (
                         <span className="px-2 py-0.5 rounded-md font-bold bg-amber-50 text-amber-700 border border-amber-200/60 font-sans">
                           +{row.saveQty} saves
                         </span>
                       )}
-                      {row.shareQty && (
+                      {(row.shareQty ?? 0) > 0 && currentPreset.shares?.enabled && (
                         <span className="px-2 py-0.5 rounded-md font-bold bg-purple-50 text-purple-700 border border-purple-200/60 font-sans">
-                          +{row.shareQty} shares
+                          +{row.shareQty} reposts
                         </span>
                       )}
                     </div>

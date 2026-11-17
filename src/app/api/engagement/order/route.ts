@@ -250,7 +250,11 @@ export async function POST(request: Request) {
         fallbackViewsPlan = algo.views.plan;
       }
 
-      for (let i = 0; i < preset.views.runsCount; i++) {
+      const viewsRunsCount = (parsed.plannedViews && parsed.plannedViews.length > 0)
+        ? parsed.plannedViews.length
+        : preset.views.runsCount;
+
+      for (let i = 0; i < viewsRunsCount; i++) {
         let qty: number;
         if (
           parsed.plannedViews &&
@@ -286,8 +290,11 @@ export async function POST(request: Request) {
       const minL = Math.min(preset.likes.minQuantity, preset.likes.maxQuantity);
       const maxL = Math.max(preset.likes.minQuantity, preset.likes.maxQuantity);
       const likesOffsets = preset.likes.waveOffsets || [120, 200, 280];
+      const likesRunsCount = (parsed.plannedLikes && parsed.plannedLikes.length > 0)
+        ? parsed.plannedLikes.length
+        : preset.likes.runsCount;
 
-      for (let i = 0; i < preset.likes.runsCount; i++) {
+      for (let i = 0; i < likesRunsCount; i++) {
         let qty: number;
         if (
           parsed.plannedLikes &&
@@ -319,8 +326,11 @@ export async function POST(request: Request) {
       const minS = Math.min(preset.saves.minQuantity, preset.saves.maxQuantity);
       const maxS = Math.max(preset.saves.minQuantity, preset.saves.maxQuantity);
       const savesOffsets = preset.saves.waveOffsets || [180, 360, 600];
+      const savesRunsCount = (parsed.plannedSaves && parsed.plannedSaves.length > 0)
+        ? parsed.plannedSaves.length
+        : (preset.saves?.runsCount || 0);
 
-      for (let i = 0; i < preset.saves.runsCount; i++) {
+      for (let i = 0; i < savesRunsCount; i++) {
         let qty: number;
         if (
           parsed.plannedSaves &&
@@ -352,8 +362,11 @@ export async function POST(request: Request) {
       const minR = Math.min(preset.shares.minQuantity, preset.shares.maxQuantity);
       const maxR = Math.max(preset.shares.minQuantity, preset.shares.maxQuantity);
       const sharesOffsets = preset.shares.waveOffsets || [300, 540];
+      const sharesRunsCount = (parsed.plannedShares && parsed.plannedShares.length > 0)
+        ? parsed.plannedShares.length
+        : (preset.shares?.runsCount || 0);
 
-      for (let i = 0; i < preset.shares.runsCount; i++) {
+      for (let i = 0; i < sharesRunsCount; i++) {
         let qty: number;
         if (
           parsed.plannedShares &&
