@@ -41,6 +41,7 @@ import { AdminOutOfBalanceBanner } from "@/components/AdminOutOfBalanceBanner";
 import { InteractiveDeliveryGraph } from "@/components/engagement/InteractiveDeliveryGraph";
 import {
   generateOrganicDeliveryPlan,
+  generateTikTokAlgorithmicPlan,
   OrganicBatch,
   OrganicPlanResult,
   PacingStrategy,
@@ -107,131 +108,127 @@ const PRESET_OPTIONS: Record<string, PresetOption> = {
   tiktok_2k: {
     id: "tiktok_2k",
     name: "2K Starter",
-    tagline: "5-hour organic pacing for new posts",
-    badge: "5h",
-    durationLabel: "5.0 Hours",
-    durationHours: 5.0,
+    tagline: "6-hour initial test pool & seed momentum",
+    badge: "6h",
+    durationLabel: "6.0 Hours",
+    durationHours: 6.0,
     targetViews: 2960,
     targetLikes: 42,
     targetSaves: 0,
     targetShares: 0,
-    views: { enabled: true, count: 16, min: 150, max: 220, interval: 20 },
-    likes: { enabled: true, count: 3, min: 10, max: 20, offsets: [120, 200, 280] },
+    views: { enabled: true, count: 16, min: 110, max: 240, interval: 22 },
+    likes: { enabled: true, count: 3, min: 10, max: 18, offsets: [35, 120, 240] },
     syncThreshold: { minViews: 500, maxViews: 700 },
   },
   tiktok_5k: {
     id: "tiktok_5k",
     name: "5K Velocity",
-    tagline: "16-hour FYP push with likes & reposts",
-    badge: "16h",
-    durationLabel: "16.0 Hours (1 Day)",
-    durationHours: 16.0,
+    tagline: "24-hour FYP expansion with interleaved likes",
+    badge: "24h",
+    durationLabel: "24.0 Hours (1 Day)",
+    durationHours: 24.0,
     targetViews: 5100,
-    targetLikes: 170,
+    targetLikes: 180,
     targetSaves: 44,
     targetShares: 22,
-    views: { enabled: true, count: 20, min: 200, max: 310, interval: 45 },
+    views: { enabled: true, count: 22, min: 140, max: 320, interval: 65 },
     likes: {
       enabled: true,
-      count: 14,
-      min: 10,
-      max: 18,
-      offsets: [45, 105, 165, 225, 285, 345, 405, 465, 525, 585, 645, 705, 765, 810],
+      count: 12,
+      min: 11,
+      max: 24,
+      offsets: [45, 120, 220, 340, 460, 580, 720, 860, 1000, 1140, 1260, 1380],
     },
-    saves: { enabled: true, count: 4, min: 10, max: 14, offsets: [240, 420, 600, 750] },
-    shares: { enabled: true, count: 2, min: 10, max: 14, offsets: [360, 660] },
+    saves: { enabled: true, count: 4, min: 10, max: 14, offsets: [180, 420, 750, 1100] },
+    shares: { enabled: true, count: 2, min: 10, max: 12, offsets: [360, 900] },
     syncThreshold: { minViews: 1000, maxViews: 1500 },
   },
   tiktok_10k: {
     id: "tiktok_10k",
     name: "10K Breakthrough",
-    tagline: "22-hour algorithm breakout with high saves",
-    badge: "22h",
-    durationLabel: "22.0 Hours (1 Day)",
-    durationHours: 22.0,
+    tagline: "2-day FYP surge with circadian peak hours",
+    badge: "2 Days",
+    durationLabel: "48.0 Hours (2 Days)",
+    durationHours: 48.0,
     targetViews: 10500,
-    targetLikes: 384,
+    targetLikes: 420,
     targetSaves: 90,
     targetShares: 44,
-    views: { enabled: true, count: 26, min: 340, max: 460, interval: 48 },
+    views: { enabled: true, count: 28, min: 180, max: 520, interval: 102 },
     likes: {
       enabled: true,
-      count: 24,
-      min: 10,
-      max: 24,
+      count: 18,
+      min: 12,
+      max: 28,
       offsets: [
-        48, 96, 144, 192, 240, 288, 336, 384, 432, 480, 528, 576, 624, 672, 720, 768, 816, 864, 912, 960, 1008, 1056, 1104, 1152,
+        90, 180, 300, 450, 600, 780, 960, 1140, 1320, 1500, 1680, 1860, 2040, 2220, 2400, 2550, 2700, 2820,
       ],
     },
-    saves: { enabled: true, count: 8, min: 10, max: 15, offsets: [192, 336, 480, 624, 768, 912, 1008, 1104] },
-    shares: { enabled: true, count: 4, min: 10, max: 14, offsets: [336, 576, 816, 1056] },
+    saves: { enabled: true, count: 8, min: 10, max: 16, offsets: [240, 540, 900, 1260, 1620, 1980, 2340, 2700] },
+    shares: { enabled: true, count: 4, min: 10, max: 14, offsets: [480, 1140, 1800, 2460] },
     syncThreshold: { minViews: 2000, maxViews: 3000 },
   },
   tiktok_15k: {
     id: "tiktok_15k",
     name: "15K Acceleration",
-    tagline: "24-hour algorithm acceleration with co-delivered engagement",
-    badge: "24h",
-    durationLabel: "24.0 Hours (1 Day)",
-    durationHours: 24.0,
+    tagline: "3-day organic algorithm surge with anti-radar ascent",
+    badge: "3 Days",
+    durationLabel: "72.0 Hours (3 Days)",
+    durationHours: 72.0,
     targetViews: 15200,
-    targetLikes: 550,
-    targetSaves: 120,
+    targetLikes: 650,
+    targetSaves: 140,
     targetShares: 60,
-    views: { enabled: true, count: 30, min: 440, max: 580, interval: 48 },
+    views: { enabled: true, count: 34, min: 220, max: 650, interval: 127 },
     likes: {
       enabled: true,
-      count: 26,
-      min: 15,
-      max: 28,
+      count: 22,
+      min: 14,
+      max: 32,
       offsets: [
-        48, 96, 144, 192, 240, 288, 336, 384, 432, 480, 528, 576, 624, 672, 720, 768, 816, 864, 912, 960, 1008, 1056, 1104, 1152, 1200, 1248,
+        120, 240, 420, 600, 840, 1080, 1320, 1560, 1800, 2100, 2400, 2700, 3000, 3300, 3600, 3840, 4080, 4200,
       ],
     },
-    saves: { enabled: true, count: 10, min: 10, max: 15, offsets: [192, 336, 480, 624, 768, 912, 1008, 1104, 1200, 1296] },
-    shares: { enabled: true, count: 6, min: 8, max: 12, offsets: [336, 576, 816, 1056, 1200, 1344] },
+    saves: { enabled: true, count: 10, min: 11, max: 18, offsets: [300, 720, 1200, 1680, 2160, 2640, 3120, 3600, 4000, 4220] },
+    shares: { enabled: true, count: 6, min: 10, max: 14, offsets: [600, 1440, 2280, 3000, 3600, 4140] },
     syncThreshold: { minViews: 3000, maxViews: 5000 },
   },
   tiktok_50k: {
     id: "tiktok_50k",
     name: "50K Mega Viral",
-    tagline: "48-hour multi-day viral simulation",
-    badge: "48h",
-    durationLabel: "48.0 Hours (2 Days)",
-    durationHours: 48.0,
-    targetViews: 50000,
-    targetLikes: 2000,
-    targetSaves: 450,
-    targetShares: 180,
-    views: { enabled: true, count: 44, min: 900, max: 1350, interval: 62 },
+    tagline: "5-day full multi-day FYP curve with soft landing tail",
+    badge: "5 Days",
+    durationLabel: "120.0 Hours (5 Days)",
+    durationHours: 120.0,
+    targetViews: 50600,
+    targetLikes: 2600,
+    targetSaves: 520,
+    targetShares: 210,
+    views: { enabled: true, count: 56, min: 250, max: 1350, interval: 128 },
     likes: {
       enabled: true,
-      count: 40,
-      min: 30,
-      max: 70,
+      count: 38,
+      min: 24,
+      max: 65,
       offsets: [
-        62, 124, 186, 248, 310, 372, 434, 496, 558, 620, 682, 744, 806, 868, 930, 992, 1054, 1116, 1178, 1240,
-        1302, 1364, 1426, 1488, 1550, 1612, 1674, 1736, 1798, 1860, 1922, 1984, 2046, 2108, 2170, 2232, 2294, 2356, 2418, 2480,
+        180, 360, 600, 840, 1140, 1440, 1800, 2160, 2520, 2880, 3240, 3600, 3960, 4320, 4680, 5040, 5400, 5760, 6120, 6480, 6840, 7080,
       ],
     },
     saves: {
       enabled: true,
-      count: 30,
-      min: 13,
-      max: 17,
+      count: 20,
+      min: 12,
+      max: 25,
       offsets: [
-        248, 325, 402, 480, 558, 635, 712, 790, 868, 945, 1022, 1100, 1178, 1255, 1332, 1410, 1488, 1565, 1642, 1720,
-        1798, 1875, 1952, 2030, 2108, 2185, 2262, 2340, 2418, 2496,
+        480, 960, 1500, 2100, 2700, 3300, 3900, 4500, 5100, 5700, 6300, 6900, 7120,
       ],
     },
     shares: {
       enabled: true,
-      count: 15,
+      count: 12,
       min: 10,
-      max: 14,
-      offsets: [
-        372, 520, 670, 820, 970, 1120, 1270, 1420, 1570, 1720, 1870, 2020, 2170, 2320, 2470,
-      ],
+      max: 18,
+      offsets: [720, 1440, 2200, 3000, 3800, 4600, 5400, 6200, 6900, 7140],
     },
     syncThreshold: { minViews: 5000, maxViews: 8000 },
   },
@@ -256,7 +253,7 @@ function getPresetVisuals(preset: PresetOption): PresetVisualMeta {
     return {
       tierBadge: "50K",
       shortTitle: "Mega Viral",
-      durationShort: preset.badge || "48h",
+      durationShort: preset.badge || "5 Days",
       icon: Crown,
       iconColor: "text-amber-500",
       iconBg: "bg-amber-500/10 border-amber-300/50",
@@ -267,7 +264,7 @@ function getPresetVisuals(preset: PresetOption): PresetVisualMeta {
     return {
       tierBadge: "15K",
       shortTitle: "Acceleration",
-      durationShort: preset.badge || "24h",
+      durationShort: preset.badge || "3 Days",
       icon: Sparkles,
       iconColor: "text-purple-600",
       iconBg: "bg-purple-500/10 border-purple-300/50",
@@ -278,7 +275,7 @@ function getPresetVisuals(preset: PresetOption): PresetVisualMeta {
     return {
       tierBadge: "10K",
       shortTitle: "Breakthrough",
-      durationShort: preset.badge || "22h",
+      durationShort: preset.badge || "2 Days",
       icon: Flame,
       iconColor: "text-rose-500",
       iconBg: "bg-rose-500/10 border-rose-300/50",
@@ -290,7 +287,7 @@ function getPresetVisuals(preset: PresetOption): PresetVisualMeta {
     return {
       tierBadge: "5K",
       shortTitle: "Velocity",
-      durationShort: preset.badge || "16h",
+      durationShort: preset.badge || "24h",
       icon: Rocket,
       iconColor: "text-indigo-600",
       iconBg: "bg-indigo-500/10 border-indigo-300/50",
@@ -300,7 +297,7 @@ function getPresetVisuals(preset: PresetOption): PresetVisualMeta {
   return {
     tierBadge: "2K",
     shortTitle: "Starter",
-    durationShort: preset.badge || "5h",
+    durationShort: preset.badge || "6h",
     icon: Zap,
     iconColor: "text-sky-500",
     iconBg: "bg-sky-500/10 border-sky-300/50",
@@ -474,67 +471,24 @@ function generatePlanForPreset(
   strategy: PacingStrategy = "s_curve",
   peakHoursEnabled: boolean = true
 ) {
-  const durationMinutes = (p.durationHours || 5) * 60;
-  let views: number[] = [];
-  let viewOffsets: number[] = [];
-  let viewsPlan: OrganicPlanResult | null = null;
+  const algoPlan = generateTikTokAlgorithmicPlan(p.targetViews || 2960, {
+    durationHours: p.durationHours,
+    strategy,
+    peakHoursEnabled,
+    targetLikes: p.targetLikes,
+    targetSaves: p.targetSaves,
+    targetShares: p.targetShares,
+    providerMinViews: p.views?.min || 100,
+  });
 
-  if (p.views.enabled !== false && p.targetViews && p.views.count > 0) {
-    const sCurve = generateOrganicSCurvePlan(
-      p.targetViews,
-      p.views.count,
-      durationMinutes,
-      p.views.min,
-      p.views.max,
-      strategy,
-      peakHoursEnabled
-    );
-    views = sCurve.quantities;
-    viewOffsets = sCurve.minuteOffsets;
-    viewsPlan = sCurve.plan;
-  } else if (p.views.enabled !== false) {
-    for (let i = 0; i < p.views.count; i++) {
-      views.push(Math.floor(Math.random() * (p.views.max - p.views.min + 1)) + p.views.min);
-      viewOffsets.push(i * p.views.interval);
-    }
-  }
-
-  const likes: number[] = [];
-  if (p.likes.enabled !== false) {
-    if (p.targetLikes && p.likes.count > 0) {
-      const effectiveMin = Math.min(p.likes.min, 10);
-      const effectiveMax = Math.max(p.likes.max, Math.round((p.targetLikes / p.likes.count) * 1.45));
-      likes.push(...generateOrganicRandomDistribution(p.targetLikes, p.likes.count, effectiveMin, effectiveMax, true));
-    } else {
-      for (let i = 0; i < p.likes.count; i++) {
-        likes.push(Math.floor(Math.random() * (p.likes.max - p.likes.min + 1)) + p.likes.min);
-      }
-    }
-  }
-
-  const saves: number[] = [];
-  if (p.saves && p.saves.enabled !== false) {
-    if (p.targetSaves && p.saves.count > 0) {
-      saves.push(...generateOrganicRandomDistribution(p.targetSaves, p.saves.count, p.saves.min, p.saves.max, true));
-    } else {
-      for (let i = 0; i < p.saves.count; i++) {
-        saves.push(Math.floor(Math.random() * (p.saves.max - p.saves.min + 1)) + p.saves.min);
-      }
-    }
-  }
-
-  const shares: number[] = [];
-  if (p.shares && p.shares.enabled !== false) {
-    if (p.targetShares && p.shares.count > 0) {
-      shares.push(...generateOrganicRandomDistribution(p.targetShares, p.shares.count, p.shares.min, p.shares.max, true));
-    } else {
-      for (let i = 0; i < p.shares.count; i++) {
-        shares.push(Math.floor(Math.random() * (p.shares.max - p.shares.min + 1)) + p.shares.min);
-      }
-    }
-  }
-
-  return { views, viewOffsets, viewsPlan, likes, saves, shares };
+  return {
+    views: algoPlan.views.quantities,
+    viewOffsets: algoPlan.views.minuteOffsets,
+    viewsPlan: algoPlan.views.plan,
+    likes: algoPlan.likes.quantities,
+    saves: algoPlan.saves.quantities,
+    shares: algoPlan.shares.quantities,
+  };
 }
 
 function formatBdTime(offsetMinutes: number, baseDate: Date): string {

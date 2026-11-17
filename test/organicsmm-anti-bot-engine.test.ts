@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   generateOrganicDeliveryPlan,
+  generateTikTokAlgorithmicPlan,
   calculateHumanBehaviorScore,
   antiBotDesaturateQuantity,
   solveKeConservationEquation,
@@ -184,5 +185,57 @@ describe("OrganicSMM Anti-Bot Delivery & View Pacing Engine", () => {
     const earlySum = burstPlan.runs.slice(0, 5).reduce((a, b) => a + b.quantity, 0);
     const lateSum = burstPlan.runs.slice(15, 20).reduce((a, b) => a + b.quantity, 0);
     assert.ok(earlySum > lateSum, `Burst strategy should front-load early runs: early ${earlySum} vs late ${lateSum}`);
+  });
+
+  it("generates TikTok algorithmic anti-radar plan with seed pool test (<240 views) and views-first gated likes", () => {
+    const algo = generateTikTokAlgorithmicPlan(2960, {
+      durationHours: 6,
+      targetLikes: 42,
+    });
+
+    // 1. Initial batch must be a realistic test pool
+    assert.ok(algo.views.quantities[0] <= 240, `Batch #1 views must be <= 240, was ${algo.views.quantities[0]}`);
+    assert.ok(algo.views.quantities[0] >= 100, `Batch #1 views must be >= 100, was ${algo.views.quantities[0]}`);
+
+    // 2. Likes must land AFTER initial views (views-first gating)
+    assert.ok(algo.likes.minuteOffsets[0] >= 25, `Like wave #1 offset must be >= 25m, was ${algo.likes.minuteOffsets[0]}`);
+
+    // 3. Strict conservation of target views
+    const totalV = algo.views.quantities.reduce((a, b) => a + b, 0);
+    assert.equal(totalV, 2960, "Total views must strictly equal 2960");
+
+    // 4. Provider minimums respected
+    algo.views.quantities.forEach((v) => assert.ok(v >= 100, `View batch ${v} below 100`));
+    algo.likes.quantities.forEach((l) => assert.ok(l >= 10, `Like wave ${l} below 10`));
+  });
+
+  it("generates multi-day anti-radar 50K plan over 5 days (120h) with soft tail decay to evade radar detection", () => {
+    const algo = generateTikTokAlgorithmicPlan(50600, {
+      durationHours: 120,
+      targetLikes: 2600,
+      targetSaves: 520,
+      targetShares: 210,
+    });
+
+    assert.equal(algo.metadata.totalDurationHours, 120, "Duration must be 120 hours (5 Days)");
+
+    // Views sum conservation
+    const sumViews = algo.views.quantities.reduce((a, b) => a + b, 0);
+    assert.equal(sumViews, 50600, "Must conserve 50,600 views");
+
+    // All provider minimums respected
+    algo.views.quantities.forEach((v) => assert.ok(v >= 100, `View batch ${v} below 100`));
+    algo.likes.quantities.forEach((l) => assert.ok(l >= 10, `Like wave ${l} below 10`));
+    algo.saves.quantities.forEach((s) => assert.ok(s >= 10, `Save wave ${s} below 10`));
+    algo.shares.quantities.forEach((sh) => assert.ok(sh >= 10, `Share wave ${sh} below 10`));
+
+    // Must span across the full 5 days (> 100 hours of offsets)
+    const maxOffsetMinutes = Math.max(...algo.views.minuteOffsets);
+    assert.ok(maxOffsetMinutes >= 100 * 60, `Last batch offset should span multi-day, was ${maxOffsetMinutes / 60}h`);
+
+    // Must have long-tail decay (final batch is smaller than peak batch)
+    const peakBatch = Math.max(...algo.views.quantities);
+    const lastBatch = algo.views.quantities[algo.views.quantities.length - 1];
+    assert.ok(lastBatch < peakBatch, `Last batch (${lastBatch}) must be smaller than peak batch (${peakBatch}) to prevent cliff`);
   });
 });

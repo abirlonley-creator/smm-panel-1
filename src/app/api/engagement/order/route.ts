@@ -13,7 +13,10 @@ import { recordAdminAlert } from "@/lib/engagement/alert-service";
 import { runEngagementTick } from "@/lib/engagement/worker";
 import { resolveTargetUrl } from "@/lib/urls/tiktok-resolver";
 import { getMaintenanceState } from "@/lib/maintenance/maintenance-service";
-import { generateOrganicDeliveryPlan } from "@/lib/engagement/organic-pacing-engine";
+import {
+  generateOrganicDeliveryPlan,
+  generateTikTokAlgorithmicPlan,
+} from "@/lib/engagement/organic-pacing-engine";
 import { z } from "zod";
 
 const createEngagementOrderSchema = z.object({
@@ -232,14 +235,16 @@ export async function POST(request: Request) {
       const targetViews = preset.targetViews || 2960;
 
       if (!parsed.viewOffsets || parsed.viewOffsets.length === 0) {
-        fallbackViewsPlan = generateOrganicDeliveryPlan("views", targetViews, {
-          durationHours: preset.durationHours || 5,
-          runsCount: preset.views.runsCount,
-          providerMinimum: minV,
-          applyInitialDelay: false,
-          pacingStrategy: parsed.pacingStrategy,
+        const algo = generateTikTokAlgorithmicPlan(targetViews, {
+          durationHours: preset.durationHours,
+          strategy: parsed.pacingStrategy,
           peakHoursEnabled: parsed.peakHoursEnabled,
+          providerMinViews: minV,
+          targetLikes: preset.targetLikes,
+          targetSaves: preset.targetSaves,
+          targetShares: preset.targetShares,
         });
+        fallbackViewsPlan = algo.views.plan;
       }
 
       for (let i = 0; i < preset.views.runsCount; i++) {
