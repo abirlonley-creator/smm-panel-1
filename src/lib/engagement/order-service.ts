@@ -9,6 +9,11 @@ import { getAdminViewsProvider, getAdminEngagementProvider } from "@/lib/provide
 import { logOrderEvent } from "./event-logger";
 import { recordAdminAlert } from "./alert-service";
 import { runEngagementTick } from "./worker";
+import {
+  generateOrganicDeliveryPlan,
+  OrganicBatch,
+  OrganicPlanResult,
+} from "./organic-pacing-engine";
 
 export interface CreateEngagementOrderParams {
   userId: string;
@@ -134,6 +139,7 @@ export function generateOrganicRandomDistribution(
 /**
  * Generates an organic S-Curve delivery schedule with natural jittered checkpoints
  * and non-repeating batch quantities mimicking real social algorithm distribution.
+ * Fully backed by OrganicSMM anti-bot evasion algorithms.
  */
 export function generateOrganicSCurvePlan(
   target: number,
@@ -141,61 +147,29 @@ export function generateOrganicSCurvePlan(
   durationMinutes: number,
   minBound: number,
   maxBound: number
-): { quantities: number[]; minuteOffsets: number[] } {
+): { quantities: number[]; minuteOffsets: number[]; plan: OrganicPlanResult } {
   if (runsCount <= 1) {
-    return { quantities: [target], minuteOffsets: [0] };
+    const singlePlan = generateOrganicDeliveryPlan("views", target, {
+      durationHours: durationMinutes / 60,
+      runsCount: 1,
+      providerMinimum: minBound,
+      applyInitialDelay: false,
+    });
+    return { quantities: [target], minuteOffsets: [0], plan: singlePlan };
   }
 
-  const baseWeights: number[] = [];
-  for (let i = 0; i < runsCount; i++) {
-    const t = i / (runsCount - 1);
-    const sigmoid = 1 / (1 + Math.exp(-6 * (t - 0.45)));
-    const prevSigmoid = i === 0 ? 0 : 1 / (1 + Math.exp(-6 * ((i - 0.5) / (runsCount - 1) - 0.45)));
-    const sliceWeight = Math.max(0.015, sigmoid - prevSigmoid);
-    baseWeights.push(sliceWeight);
-  }
-
-  const sumWeights = baseWeights.reduce((a, b) => a + b, 0);
-  const normalizedWeights = baseWeights.map((w) => w / sumWeights);
-
-  const quantities = normalizedWeights.map((w) => {
-    const rawVal = target * w;
-    const variance = Math.random() * 0.4 - 0.2; // ±20%
-    const varied = Math.round(rawVal * (1 + variance));
-    return Math.max(minBound, Math.min(maxBound, varied));
+  const plan = generateOrganicDeliveryPlan("views", target, {
+    durationHours: durationMinutes / 60,
+    runsCount,
+    providerMinimum: minBound,
+    applyInitialDelay: false,
   });
 
-  // Conservation pass (Ke adjustment) ensuring exact sum equals target
-  let currentSum = quantities.reduce((a, b) => a + b, 0);
-  let diff = target - currentSum;
-  let attempts = 0;
-
-  while (diff !== 0 && attempts < 5000) {
-    attempts++;
-    const idx = Math.floor(Math.random() * runsCount);
-    if (diff > 0 && quantities[idx] < maxBound) {
-      const step = Math.min(diff, Math.max(1, Math.floor(Math.random() * 8) + 1));
-      quantities[idx] += step;
-      diff -= step;
-    } else if (diff < 0 && quantities[idx] > minBound) {
-      const step = Math.min(-diff, Math.max(1, Math.floor(Math.random() * 8) + 1));
-      quantities[idx] -= step;
-      diff += step;
-    }
-  }
-
-  // Jittered minute offsets
-  const avgInterval = durationMinutes / (runsCount - 1);
-  const minuteOffsets: number[] = [0];
-
-  for (let i = 1; i < runsCount; i++) {
-    const idealMinute = Math.round(i * avgInterval);
-    const jitter = Math.round((Math.random() * 0.5 - 0.25) * avgInterval);
-    const minute = Math.max(minuteOffsets[i - 1] + 5, Math.min(durationMinutes, idealMinute + jitter));
-    minuteOffsets.push(minute);
-  }
-
-  return { quantities, minuteOffsets };
+  return {
+    quantities: plan.runs.map((r) => r.quantity),
+    minuteOffsets: plan.runs.map((r) => r.minuteOffset),
+    plan,
+  };
 }
 
 // Helper to resolve or import a service
@@ -485,6 +459,7 @@ export async function createEngagementOrderInternal(
   const viewsRuns: Array<{ runNumber: number; scheduledAt: Date; quantity: number; cost: number }> = [];
   let totalPlannedViews = 0;
   let totalViewsCost = 0;
+  let sCurvePlan: { quantities: number[]; minuteOffsets: number[]; plan: OrganicPlanResult } | null = null;
 
   if (preset.views.enabled !== false) {
     const minV = Math.min(preset.views.minQuantity, preset.views.maxQuantity);
@@ -492,7 +467,7 @@ export async function createEngagementOrderInternal(
     const targetV = preset.targetViews || matchedTier.targetViews;
     const durationMinutes = (preset.durationHours || 5) * 60;
 
-    const sCurvePlan = shouldShuffle
+    sCurvePlan = shouldShuffle
       ? generateOrganicSCurvePlan(targetV, preset.views.runsCount, durationMinutes, minV, maxV)
       : null;
 
@@ -735,6 +710,11 @@ export async function createEngagementOrderInternal(
         plannedShares: totalPlannedShares,
         enabledTypes: JSON.stringify(enabledTypes),
         planParams: JSON.stringify({
+          version: "organicsmm_v2",
+          pacingEngine: "organic_anti_bot_v2",
+          avgHumanScore: sCurvePlan?.plan?.avgHumanScore ?? 84,
+          varietyIndex: sCurvePlan?.plan?.varietyIndex ?? 42,
+          patternBreakCount: sCurvePlan?.plan?.patternBreakCount ?? 0,
           presetId: preset.id,
           presetName: preset.name,
           tierName: matchedTier.name,

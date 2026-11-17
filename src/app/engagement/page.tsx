@@ -31,6 +31,11 @@ import {
 } from "lucide-react";
 import { BinanceAddFundsModal } from "@/components/BinanceAddFundsModal";
 import { AdminOutOfBalanceBanner } from "@/components/AdminOutOfBalanceBanner";
+import {
+  generateOrganicDeliveryPlan,
+  OrganicBatch,
+  OrganicPlanResult,
+} from "@/lib/engagement/organic-pacing-engine";
 
 interface ApiStatusItem {
   connected: boolean;
@@ -319,82 +324,42 @@ function generateOrganicSCurvePlan(
   durationMinutes: number,
   minBound: number,
   maxBound: number
-): { quantities: number[]; minuteOffsets: number[] } {
-  if (runsCount <= 1) {
-    return { quantities: [target], minuteOffsets: [0] };
-  }
-
-  const baseWeights: number[] = [];
-  for (let i = 0; i < runsCount; i++) {
-    const t = i / (runsCount - 1);
-    const sigmoid = 1 / (1 + Math.exp(-6 * (t - 0.45)));
-    const prevSigmoid = i === 0 ? 0 : 1 / (1 + Math.exp(-6 * ((i - 0.5) / (runsCount - 1) - 0.45)));
-    const sliceWeight = Math.max(0.015, sigmoid - prevSigmoid);
-    baseWeights.push(sliceWeight);
-  }
-
-  const sumWeights = baseWeights.reduce((a, b) => a + b, 0);
-  const normalizedWeights = baseWeights.map((w) => w / sumWeights);
-
-  const quantities = normalizedWeights.map((w) => {
-    const rawVal = target * w;
-    const variance = Math.random() * 0.4 - 0.2; // ±20%
-    const varied = Math.round(rawVal * (1 + variance));
-    return Math.max(minBound, Math.min(maxBound, varied));
+): { quantities: number[]; minuteOffsets: number[]; plan: OrganicPlanResult } {
+  const plan = generateOrganicDeliveryPlan("views", target, {
+    durationHours: durationMinutes / 60,
+    runsCount,
+    providerMinimum: minBound,
+    applyInitialDelay: false,
   });
 
-  let currentSum = quantities.reduce((a, b) => a + b, 0);
-  let diff = target - currentSum;
-  let attempts = 0;
-
-  while (diff !== 0 && attempts < 5000) {
-    attempts++;
-    const idx = Math.floor(Math.random() * runsCount);
-    if (diff > 0 && quantities[idx] < maxBound) {
-      const step = Math.min(diff, Math.max(1, Math.floor(Math.random() * 8) + 1));
-      quantities[idx] += step;
-      diff -= step;
-    } else if (diff < 0 && quantities[idx] > minBound) {
-      const step = Math.min(-diff, Math.max(1, Math.floor(Math.random() * 8) + 1));
-      quantities[idx] -= step;
-      diff += step;
-    }
-  }
-
-  const avgInterval = durationMinutes / (runsCount - 1);
-  const minuteOffsets: number[] = [0];
-
-  for (let i = 1; i < runsCount; i++) {
-    const idealMinute = Math.round(i * avgInterval);
-    const jitter = Math.round((Math.random() * 0.5 - 0.25) * avgInterval);
-    const minute = Math.max(minuteOffsets[i - 1] + 5, Math.min(durationMinutes, idealMinute + jitter));
-    minuteOffsets.push(minute);
-  }
-
-  return { quantities, minuteOffsets };
+  return {
+    quantities: plan.runs.map((r) => r.quantity),
+    minuteOffsets: plan.runs.map((r) => r.minuteOffset),
+    plan,
+  };
 }
 
 function generatePlanForPreset(p: PresetOption) {
   const durationMinutes = (p.durationHours || 5) * 60;
   let views: number[] = [];
   let viewOffsets: number[] = [];
+  let viewsPlan: OrganicPlanResult | null = null;
 
-  if (p.views.enabled !== false) {
-    if (p.targetViews && p.views.count > 0) {
-      const sCurve = generateOrganicSCurvePlan(
-        p.targetViews,
-        p.views.count,
-        durationMinutes,
-        p.views.min,
-        p.views.max
-      );
-      views = sCurve.quantities;
-      viewOffsets = sCurve.minuteOffsets;
-    } else {
-      for (let i = 0; i < p.views.count; i++) {
-        views.push(Math.floor(Math.random() * (p.views.max - p.views.min + 1)) + p.views.min);
-        viewOffsets.push(i * p.views.interval);
-      }
+  if (p.views.enabled !== false && p.targetViews && p.views.count > 0) {
+    const sCurve = generateOrganicSCurvePlan(
+      p.targetViews,
+      p.views.count,
+      durationMinutes,
+      p.views.min,
+      p.views.max
+    );
+    views = sCurve.quantities;
+    viewOffsets = sCurve.minuteOffsets;
+    viewsPlan = sCurve.plan;
+  } else if (p.views.enabled !== false) {
+    for (let i = 0; i < p.views.count; i++) {
+      views.push(Math.floor(Math.random() * (p.views.max - p.views.min + 1)) + p.views.min);
+      viewOffsets.push(i * p.views.interval);
     }
   }
 
@@ -433,7 +398,7 @@ function generatePlanForPreset(p: PresetOption) {
     }
   }
 
-  return { views, viewOffsets, likes, saves, shares };
+  return { views, viewOffsets, viewsPlan, likes, saves, shares };
 }
 
 function formatBdTime(offsetMinutes: number, baseDate: Date): string {
@@ -519,6 +484,7 @@ export default function EngagementPage() {
   const [plannedSchedule, setPlannedSchedule] = useState<{
     views: number[];
     viewOffsets?: number[];
+    viewsPlan?: OrganicPlanResult | null;
     likes: number[];
     saves: number[];
     shares: number[];
@@ -633,6 +599,10 @@ export default function EngagementPage() {
         shareQty?: number;
         shareWave?: number;
         totalShareWaves?: number;
+        humanScore?: number;
+        sessionType?: string;
+        patternBreaker?: boolean;
+        timeOfDayLabel?: string;
       }
     >();
 
@@ -651,6 +621,13 @@ export default function EngagementPage() {
         const offset = plannedSchedule.viewOffsets?.[index] ?? (index * currentPreset.views.interval);
         const entry = getOrCreate(offset);
         entry.viewQty = viewQty;
+        const vRun = plannedSchedule.viewsPlan?.runs[index];
+        if (vRun) {
+          entry.humanScore = vRun.humanBehaviorScore;
+          entry.sessionType = vRun.sessionType;
+          entry.patternBreaker = vRun.patternBreaker;
+          entry.timeOfDayLabel = vRun.timeOfDayLabel;
+        }
       });
     }
 
@@ -722,6 +699,10 @@ export default function EngagementPage() {
         shareQty: data.shareQty,
         shareWave: data.shareWave,
         totalShareWaves: data.totalShareWaves,
+        humanScore: data.humanScore,
+        sessionType: data.sessionType,
+        patternBreaker: data.patternBreaker,
+        timeOfDayLabel: data.timeOfDayLabel,
         note,
       };
     });
@@ -765,6 +746,7 @@ export default function EngagementPage() {
           presetName: currentPreset.name,
           platform: "TikTok",
           plannedViews: currentPreset.views.enabled !== false ? plannedSchedule.views : [],
+          viewOffsets: currentPreset.views.enabled !== false ? (plannedSchedule.viewOffsets || []) : [],
           plannedLikes: currentPreset.likes.enabled !== false ? plannedSchedule.likes : [],
           plannedSaves: currentPreset.saves?.enabled ? plannedSchedule.saves : [],
           plannedShares: currentPreset.shares?.enabled ? plannedSchedule.shares : [],
@@ -1169,6 +1151,29 @@ export default function EngagementPage() {
             </button>
           </div>
 
+          {/* Anti-Bot Evasion Status Card */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3.5 rounded-2xl bg-gradient-to-r from-emerald-50/90 via-teal-50/80 to-blue-50/80 border border-emerald-200/80 text-xs">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-emerald-600/10 border border-emerald-600/20 flex items-center justify-center shrink-0">
+                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-emerald-950 text-sm">Anti-Bot Evasion Engine Active</span>
+                  <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-600 text-white shadow-2xs">Protected</span>
+                </div>
+                <p className="text-[11px] text-[#252943]/70 pt-0.5">
+                  Biological S-Curve pacing • Zero round multiples of 5 • Periodicity disruption • Views-First Gated
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto font-mono">
+              <span className="px-2.5 py-1 rounded-xl bg-white/95 border border-emerald-200 font-bold text-emerald-800 text-[11px] shadow-2xs">
+                🛡️ Avg Human Score: {plannedSchedule.viewsPlan?.avgHumanScore ?? 84}/100
+              </span>
+            </div>
+          </div>
+
           {/* Clean 5-Metric Strip */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 p-3 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED]/80">
             <div className="p-2.5 rounded-xl bg-white/80 border border-blue-100 shadow-sm transition-all">
@@ -1239,16 +1244,36 @@ export default function EngagementPage() {
                     <span className="w-6 h-6 rounded-md bg-gray-100 text-[#252943] font-bold text-[10px] flex items-center justify-center shrink-0">
                       #{row.runNumber}
                     </span>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="font-semibold text-[#252943]">+{row.minuteOffset}m</span>
                       <span className="text-[10px] text-[#252943]/50 font-mono">({row.clockTime})</span>
+                      {row.timeOfDayLabel && (
+                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-50 text-amber-800 border border-amber-200/50">
+                          {row.timeOfDayLabel}
+                        </span>
+                      )}
+                      {row.sessionType && (
+                        <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-gray-100 text-gray-700">
+                          {row.sessionType === "burst" ? "⚡ Burst" : row.sessionType === "slow" ? "🌙 Slow" : row.sessionType === "pause" ? "⏸️ Pause" : "🌊 Normal"}
+                        </span>
+                      )}
+                      {row.patternBreaker && (
+                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200/60" title="Anti-Pattern Harmonic Disruption">
+                          🎲 Breaker
+                        </span>
+                      )}
                     </div>
                   </div>
 
                   <div className="flex items-center flex-wrap gap-1.5 self-end sm:self-auto shrink-0">
                     {row.viewQty > 0 && currentPreset.views.enabled !== false && (
-                      <span className="px-2 py-0.5 rounded-md text-[11px] font-bold font-mono bg-blue-50 text-blue-700 border border-blue-200/60">
-                        {row.viewQty} views
+                      <span className="px-2 py-0.5 rounded-md text-[11px] font-bold font-mono bg-blue-50 text-blue-700 border border-blue-200/60 flex items-center gap-1">
+                        <span>{row.viewQty} views</span>
+                        {row.humanScore ? (
+                          <span className="text-[9px] font-normal text-blue-900/60 pl-1 border-l border-blue-200" title="Human Behavior Score">
+                            🛡️ {row.humanScore}%
+                          </span>
+                        ) : null}
                       </span>
                     )}
                     {row.likeQty && currentPreset.likes.enabled !== false && (

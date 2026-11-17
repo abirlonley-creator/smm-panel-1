@@ -13,6 +13,7 @@ import { recordAdminAlert } from "@/lib/engagement/alert-service";
 import { runEngagementTick } from "@/lib/engagement/worker";
 import { resolveTargetUrl } from "@/lib/urls/tiktok-resolver";
 import { getMaintenanceState } from "@/lib/maintenance/maintenance-service";
+import { generateOrganicDeliveryPlan } from "@/lib/engagement/organic-pacing-engine";
 import { z } from "zod";
 
 const createEngagementOrderSchema = z.object({
@@ -21,6 +22,7 @@ const createEngagementOrderSchema = z.object({
   presetName: z.string().optional(),
   platform: z.string().default("TikTok"),
   plannedViews: z.array(z.number().int()).optional(),
+  viewOffsets: z.array(z.number().int()).optional(),
   plannedLikes: z.array(z.number().int()).optional(),
   plannedSaves: z.array(z.number().int()).optional(),
   plannedShares: z.array(z.number().int()).optional(),
@@ -220,9 +222,21 @@ export async function POST(request: Request) {
     const viewsRuns: Array<{ runNumber: number; scheduledAt: Date; quantity: number; cost: number }> = [];
     let totalPlannedViews = 0;
     let totalViewsCost = 0;
+    let fallbackViewsPlan: any = null;
+
     if (preset.views.enabled !== false) {
       const minV = Math.min(preset.views.minQuantity, preset.views.maxQuantity);
       const maxV = Math.max(preset.views.minQuantity, preset.views.maxQuantity);
+      const targetViews = preset.targetViews || 2960;
+
+      if (!parsed.viewOffsets || parsed.viewOffsets.length === 0) {
+        fallbackViewsPlan = generateOrganicDeliveryPlan("views", targetViews, {
+          durationHours: preset.durationHours || 5,
+          runsCount: preset.views.runsCount,
+          providerMinimum: minV,
+          applyInitialDelay: false,
+        });
+      }
 
       for (let i = 0; i < preset.views.runsCount; i++) {
         let qty: number;
@@ -232,10 +246,18 @@ export async function POST(request: Request) {
           parsed.plannedViews[i] >= Math.min(minV, 100)
         ) {
           qty = parsed.plannedViews[i];
+        } else if (fallbackViewsPlan?.runs[i]) {
+          qty = fallbackViewsPlan.runs[i].quantity;
         } else {
           qty = Math.floor(Math.random() * (maxV - minV + 1)) + minV;
         }
-        const scheduledAt = new Date(now + i * preset.views.intervalMinutes * 60 * 1000);
+
+        const offsetMinutes =
+          parsed.viewOffsets && typeof parsed.viewOffsets[i] === "number"
+            ? parsed.viewOffsets[i]
+            : (fallbackViewsPlan?.runs[i]?.minuteOffset ?? (i * preset.views.intervalMinutes));
+
+        const scheduledAt = new Date(now + offsetMinutes * 60 * 1000);
         const runCost = Number(((qty / 1000) * viewsRate).toFixed(4));
 
         totalPlannedViews += qty;
@@ -452,6 +474,11 @@ export async function POST(request: Request) {
           plannedShares: totalPlannedShares,
           enabledTypes: JSON.stringify(enabledTypes),
           planParams: JSON.stringify({
+            version: "organicsmm_v2",
+            pacingEngine: "organic_anti_bot_v2",
+            avgHumanScore: fallbackViewsPlan?.avgHumanScore ?? 84,
+            varietyIndex: fallbackViewsPlan?.varietyIndex ?? 42,
+            patternBreakCount: fallbackViewsPlan?.patternBreakCount ?? 0,
             presetId: preset.id,
             presetName: preset.name,
             durationHours: preset.durationHours,

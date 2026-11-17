@@ -623,39 +623,40 @@ async function executeEngagementTick(): Promise<EngagementTickResult> {
       });
     }
 
+    let activeAdapter: SMMProviderAdapter | null = null;
+
     try {
       // 5. Provider resolution with concurrency isolation
-      let adapter: SMMProviderAdapter | null = null;
       let targetServiceExtId: string = run.providerServiceId || "101";
 
       if (effectiveProviderId) {
         try {
           const resolved = await resolveProviderById(effectiveProviderId);
           if (resolved.provider.active !== false && !resolved.provider.isMock) {
-            adapter = resolved.adapter;
+            activeAdapter = resolved.adapter;
           }
         } catch { }
       }
 
-      if (!adapter && run.serviceId) {
+      if (!activeAdapter && run.serviceId) {
         try {
           const routing = await resolveServiceRouting(run.serviceId);
           if (!routing.provider.isMock) {
-            adapter = routing.adapter;
+            activeAdapter = routing.adapter;
             targetServiceExtId = routing.providerServiceId || targetServiceExtId;
           }
         } catch { }
       }
 
       // If not yet resolved to a live provider, route directly to Administrator's live provider
-      if (!adapter) {
+      if (!activeAdapter) {
         const adminProv = run.engagementType === "views"
           ? await getAdminViewsProvider()
           : await getAdminEngagementProvider();
         if (adminProv && !adminProv.isMock) {
-          adapter = adminProv.adapter;
+          activeAdapter = adminProv.adapter;
         } else {
-          adapter = new MockSMMProvider();
+          activeAdapter = new MockSMMProvider();
         }
       }
 
@@ -693,7 +694,7 @@ async function executeEngagementTick(): Promise<EngagementTickResult> {
       }
 
       const callStart = Date.now();
-      const providerRes = await adapter.createOrder({
+      const providerRes = await activeAdapter.createOrder({
         serviceExternalId: targetServiceExtId,
         targetUrl: finalTargetUrl,
         quantity: run.quantity,
@@ -802,8 +803,8 @@ async function executeEngagementTick(): Promise<EngagementTickResult> {
               status: "sent",
             },
           });
-          if (earlierRun?.providerOrderId && adapter) {
-            const statusCheck = await adapter.getOrderStatus(earlierRun.providerOrderId);
+          if (earlierRun?.providerOrderId && activeAdapter) {
+            const statusCheck = await activeAdapter.getOrderStatus(earlierRun.providerOrderId);
             const rawStat = String(statusCheck?.status || "").toLowerCase();
             if (rawStat.includes("complete")) {
               await prisma.engagementRun.update({
