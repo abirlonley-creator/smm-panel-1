@@ -27,8 +27,11 @@ const createEngagementOrderSchema = z.object({
   plannedViews: z.array(z.number().int()).optional(),
   viewOffsets: z.array(z.number().int()).optional(),
   plannedLikes: z.array(z.number().int()).optional(),
+  likeOffsets: z.array(z.number().int()).optional(),
   plannedSaves: z.array(z.number().int()).optional(),
+  saveOffsets: z.array(z.number().int()).optional(),
   plannedShares: z.array(z.number().int()).optional(),
+  shareOffsets: z.array(z.number().int()).optional(),
   pacingStrategy: z.enum(["s_curve", "burst", "normal", "peak_hours", "stealth"]).optional().default("s_curve"),
   peakHoursEnabled: z.boolean().optional().default(true),
 });
@@ -295,7 +298,10 @@ export async function POST(request: Request) {
         } else {
           qty = Math.floor(Math.random() * (maxL - minL + 1)) + minL;
         }
-        const offsetMinutes = likesOffsets[i] ?? (120 + i * 80);
+        const offsetMinutes =
+          parsed.likeOffsets && typeof parsed.likeOffsets[i] === "number"
+            ? parsed.likeOffsets[i]
+            : (likesOffsets[i] ?? (120 + i * 80));
         const scheduledAt = new Date(now + offsetMinutes * 60 * 1000);
         const runCost = Number(((qty / 1000) * likesRate).toFixed(4));
 
@@ -325,7 +331,10 @@ export async function POST(request: Request) {
         } else {
           qty = Math.floor(Math.random() * (maxS - minS + 1)) + minS;
         }
-        const offsetMinutes = savesOffsets[i] ?? (180 + i * 180);
+        const offsetMinutes =
+          parsed.saveOffsets && typeof parsed.saveOffsets[i] === "number"
+            ? parsed.saveOffsets[i]
+            : (savesOffsets[i] ?? (180 + i * 180));
         const scheduledAt = new Date(now + offsetMinutes * 60 * 1000);
         const runCost = Number(((qty / 1000) * savesRate).toFixed(4));
 
@@ -355,7 +364,10 @@ export async function POST(request: Request) {
         } else {
           qty = Math.floor(Math.random() * (maxR - minR + 1)) + minR;
         }
-        const offsetMinutes = sharesOffsets[i] ?? (300 + i * 240);
+        const offsetMinutes =
+          parsed.shareOffsets && typeof parsed.shareOffsets[i] === "number"
+            ? parsed.shareOffsets[i]
+            : (sharesOffsets[i] ?? (300 + i * 240));
         const scheduledAt = new Date(now + offsetMinutes * 60 * 1000);
         const runCost = Number(((qty / 1000) * sharesRate).toFixed(4));
 

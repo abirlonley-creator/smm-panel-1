@@ -250,19 +250,36 @@ export function InteractiveDeliveryGraph({
   // Time axis ticks
   const timeTicks = useMemo(() => {
     const ticks: { minute: number; label: string }[] = [];
-    const stepHours = durationHours <= 5 ? 1 : durationHours <= 16 ? 4 : durationHours <= 24 ? 6 : 12;
+    const stepHours =
+      durationHours <= 6
+        ? 1
+        : durationHours <= 24
+        ? 4
+        : durationHours <= 48
+        ? 12
+        : 24;
 
     for (let h = 0; h <= durationHours; h += stepHours) {
+      let label = `${h}h`;
+      if (durationHours >= 48) {
+        if (h === 0) label = "0h";
+        else if (h % 24 === 0) label = `Day ${h / 24}`;
+        else label = `${h}h`;
+      }
       ticks.push({
         minute: h * 60,
-        label: `${h}h`,
+        label,
       });
     }
 
-    if (ticks[ticks.length - 1].minute !== totalMinutes) {
+    if (ticks.length > 0 && ticks[ticks.length - 1].minute !== totalMinutes) {
+      let label = `${Math.round(durationHours)}h`;
+      if (durationHours >= 48 && durationHours % 24 === 0) {
+        label = `Day ${durationHours / 24}`;
+      }
       ticks.push({
         minute: totalMinutes,
-        label: `${Math.round(durationHours)}h`,
+        label,
       });
     }
     return ticks;
@@ -472,7 +489,7 @@ export function InteractiveDeliveryGraph({
                 x={padLeft - 8}
                 y={tick.y + 3.5}
                 textAnchor="end"
-                className="font-sans font-mono text-[9px] font-bold fill-[#94A3B8]"
+                className="font-sans text-[9px] font-bold fill-[#94A3B8]"
               >
                 {tick.val}
               </text>
@@ -498,7 +515,7 @@ export function InteractiveDeliveryGraph({
                   x={xVal}
                   y={baselineY + 16}
                   textAnchor="middle"
-                  className="font-sans font-mono text-[10px] font-bold fill-[#64748B]"
+                  className="font-sans text-[10px] font-bold fill-[#64748B]"
                 >
                   {tick.label}
                 </text>

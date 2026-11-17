@@ -486,8 +486,11 @@ function generatePlanForPreset(
     viewOffsets: algoPlan.views.minuteOffsets,
     viewsPlan: algoPlan.views.plan,
     likes: algoPlan.likes.quantities,
+    likeOffsets: algoPlan.likes.minuteOffsets,
     saves: algoPlan.saves.quantities,
+    saveOffsets: algoPlan.saves.minuteOffsets,
     shares: algoPlan.shares.quantities,
+    shareOffsets: algoPlan.shares.minuteOffsets,
   };
 }
 
@@ -579,8 +582,11 @@ export default function EngagementPage() {
     viewOffsets?: number[];
     viewsPlan?: OrganicPlanResult | null;
     likes: number[];
+    likeOffsets?: number[];
     saves: number[];
+    saveOffsets?: number[];
     shares: number[];
+    shareOffsets?: number[];
   }>(() => generatePlanForPreset(PRESET_OPTIONS.tiktok_2k, "s_curve", true));
 
   const [planTimestamp, setPlanTimestamp] = useState<Date>(new Date());
@@ -784,7 +790,8 @@ export default function EngagementPage() {
 
     // 2. Likes (all waves mapped by offset)
     if (currentPreset.likes.enabled !== false && plannedSchedule.likes.length > 0) {
-      currentPreset.likes.offsets.forEach((offset, idx) => {
+      const offsets = plannedSchedule.likeOffsets || currentPreset.likes.offsets || [];
+      offsets.forEach((offset, idx) => {
         if (plannedSchedule.likes[idx] !== undefined) {
           const entry = getOrCreate(offset);
           entry.likeQty = plannedSchedule.likes[idx];
@@ -796,7 +803,8 @@ export default function EngagementPage() {
 
     // 3. Saves (all waves mapped by offset)
     if (currentPreset.saves?.enabled && plannedSchedule.saves.length > 0) {
-      currentPreset.saves.offsets.forEach((offset, idx) => {
+      const offsets = plannedSchedule.saveOffsets || currentPreset.saves.offsets || [];
+      offsets.forEach((offset, idx) => {
         if (plannedSchedule.saves[idx] !== undefined) {
           const entry = getOrCreate(offset);
           entry.saveQty = plannedSchedule.saves[idx];
@@ -808,7 +816,8 @@ export default function EngagementPage() {
 
     // 4. Shares (all waves mapped by offset)
     if (currentPreset.shares?.enabled && plannedSchedule.shares.length > 0) {
-      currentPreset.shares.offsets.forEach((offset, idx) => {
+      const offsets = plannedSchedule.shareOffsets || currentPreset.shares.offsets || [];
+      offsets.forEach((offset, idx) => {
         if (plannedSchedule.shares[idx] !== undefined) {
           const entry = getOrCreate(offset);
           entry.shareQty = plannedSchedule.shares[idx];
@@ -901,8 +910,11 @@ export default function EngagementPage() {
           plannedViews: currentPreset.views.enabled !== false ? plannedSchedule.views : [],
           viewOffsets: currentPreset.views.enabled !== false ? (plannedSchedule.viewOffsets || []) : [],
           plannedLikes: currentPreset.likes.enabled !== false ? plannedSchedule.likes : [],
+          likeOffsets: currentPreset.likes.enabled !== false ? (plannedSchedule.likeOffsets || []) : [],
           plannedSaves: currentPreset.saves?.enabled ? plannedSchedule.saves : [],
+          saveOffsets: currentPreset.saves?.enabled ? (plannedSchedule.saveOffsets || []) : [],
           plannedShares: currentPreset.shares?.enabled ? plannedSchedule.shares : [],
+          shareOffsets: currentPreset.shares?.enabled ? (plannedSchedule.shareOffsets || []) : [],
         }),
       });
 
@@ -982,7 +994,7 @@ export default function EngagementPage() {
                   Engagement Campaign Launched!
                 </h3>
                 <p className="text-xs text-emerald-800">
-                  Order ID: <strong className="font-mono">#{successReceipt.orderRef}</strong> • Preset: <strong>{successReceipt.presetName}</strong> ({successReceipt.durationHours}h).
+                  Order ID: <strong className="font-sans">#{successReceipt.orderRef}</strong> • Preset: <strong>{successReceipt.presetName}</strong> ({successReceipt.durationHours}h).
                 </p>
               </div>
             </div>
@@ -1075,12 +1087,12 @@ export default function EngagementPage() {
 
                     <div className="flex items-center gap-1">
                       {visuals.isPopular && !isSelected && (
-                        <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-rose-50 text-rose-600 border border-rose-200/60">
+                        <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-rose-50 text-rose-600 border border-rose-200/60 font-sans">
                           Hot
                         </span>
                       )}
                       <span
-                        className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider font-mono ${
+                        className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider font-sans ${
                           isSelected
                             ? "bg-[#3A4EFB] text-white shadow-2xs"
                             : "bg-gray-200/70 text-gray-700"
@@ -1095,32 +1107,32 @@ export default function EngagementPage() {
                   <div className="space-y-1">
                     <div>
                       <div className="flex items-baseline gap-1">
-                        <span className="text-base sm:text-lg font-black text-[#1A1D31] font-mono tracking-tight leading-none">
+                        <span className="text-base sm:text-lg font-black text-[#1A1D31] font-sans tracking-tight leading-none">
                           ~{Math.round(estViews).toLocaleString()}
                         </span>
-                        <span className="text-[10px] font-bold text-[#3A4EFB]">Views</span>
+                        <span className="text-[10px] font-bold text-[#3A4EFB] font-sans">Views</span>
                       </div>
-                      <div className="text-[11px] font-bold text-[#1A1D31] truncate mt-1">
+                      <div className="text-[11px] font-bold text-[#1A1D31] truncate mt-1 font-sans">
                         {visuals.tierBadge} {visuals.shortTitle}
                       </div>
                     </div>
 
                     {/* Micro-Metrics Badges */}
-                    <div className="flex items-center flex-wrap gap-1 text-[10px] font-semibold text-[#64748B] pt-0.5">
+                    <div className="flex items-center flex-wrap gap-1 text-[10px] font-semibold text-[#64748B] pt-0.5 font-sans">
                       {likesEnabled && (
-                        <span className="inline-flex items-center gap-0.5 text-rose-600 font-mono font-bold bg-rose-50/80 px-1.5 py-0.5 rounded border border-rose-200/50">
+                        <span className="inline-flex items-center gap-0.5 text-rose-600 font-sans font-bold bg-rose-50/80 px-1.5 py-0.5 rounded border border-rose-200/50">
                           <Heart className="w-2.5 h-2.5 fill-rose-500 text-rose-500" />
                           <span>+{Math.round(estLikes)}</span>
                         </span>
                       )}
                       {Boolean(preset.saves?.enabled && estSaves > 0) && (
-                        <span className="inline-flex items-center gap-0.5 text-amber-600 font-mono font-bold bg-amber-50/80 px-1.5 py-0.5 rounded border border-amber-200/50">
+                        <span className="inline-flex items-center gap-0.5 text-amber-600 font-sans font-bold bg-amber-50/80 px-1.5 py-0.5 rounded border border-amber-200/50">
                           <Bookmark className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
                           <span>+{estSaves}</span>
                         </span>
                       )}
                       {Boolean(preset.shares?.enabled && estShares > 0) && (
-                        <span className="inline-flex items-center gap-0.5 text-purple-600 font-mono font-bold bg-purple-50/80 px-1.5 py-0.5 rounded border border-purple-200/50">
+                        <span className="inline-flex items-center gap-0.5 text-purple-600 font-sans font-bold bg-purple-50/80 px-1.5 py-0.5 rounded border border-purple-200/50">
                           <Share2 className="w-2.5 h-2.5 text-purple-500" />
                           <span>+{estShares}</span>
                         </span>
@@ -1131,8 +1143,8 @@ export default function EngagementPage() {
                   {/* Bottom: Price + Selection Checkmark */}
                   <div className="pt-2 mt-2 border-t border-[#DEE0ED]/60 flex items-center justify-between w-full">
                     <div>
-                      <span className="text-[9px] uppercase font-bold text-[#64748B] block leading-none">Price</span>
-                      <span className="text-xs sm:text-sm font-black text-[#1A1D31] font-mono">
+                      <span className="text-[9px] uppercase font-bold text-[#64748B] block leading-none font-sans">Price</span>
+                      <span className="text-xs sm:text-sm font-black text-[#1A1D31] font-sans">
                         ₹{basePrice.toFixed(2)}
                       </span>
                     </div>
@@ -1189,7 +1201,7 @@ export default function EngagementPage() {
               placeholder="https://www.tiktok.com/@username/video/1234567890..."
               value={targetUrl}
               onChange={(e) => setTargetUrl(e.target.value)}
-              className="w-full pl-11 pr-4 py-3.5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] text-xs sm:text-sm font-semibold text-[#1A1D31] placeholder-[#64748B]/50 focus:outline-none focus:border-[#3A4EFB] focus:bg-white focus:ring-2 focus:ring-[#3A4EFB]/15 transition-all shadow-inner font-mono"
+              className="w-full pl-11 pr-4 py-3.5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] text-xs sm:text-sm font-semibold text-[#1A1D31] placeholder-[#64748B]/50 focus:outline-none focus:border-[#3A4EFB] focus:bg-white focus:ring-2 focus:ring-[#3A4EFB]/15 transition-all shadow-inner font-sans"
             />
             <Link2 className="w-4 h-4 text-[#64748B] absolute left-4 top-1/2 -translate-y-1/2" />
           </div>
@@ -1281,11 +1293,11 @@ export default function EngagementPage() {
             views={plannedSchedule.views}
             viewOffsets={plannedSchedule.viewOffsets || []}
             likes={currentPreset.likes.enabled !== false ? plannedSchedule.likes : []}
-            likeOffsets={currentPreset.likes.offsets || []}
+            likeOffsets={plannedSchedule.likeOffsets || currentPreset.likes.offsets || []}
             saves={currentPreset.saves?.enabled ? plannedSchedule.saves : []}
-            saveOffsets={currentPreset.saves?.offsets || []}
+            saveOffsets={plannedSchedule.saveOffsets || currentPreset.saves?.offsets || []}
             shares={currentPreset.shares?.enabled ? plannedSchedule.shares : []}
-            shareOffsets={currentPreset.shares?.offsets || []}
+            shareOffsets={plannedSchedule.shareOffsets || currentPreset.shares?.offsets || []}
             providerMinimum={currentPreset.views.min || 100}
             planTimestamp={planTimestamp}
             onUpdateViews={handleUpdateViews}
@@ -1296,39 +1308,39 @@ export default function EngagementPage() {
           />
 
           {/* Quick Metrics & Human Behavior Score Strip */}
-          <div className="p-3.5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] flex flex-wrap items-center justify-between gap-3 text-xs">
-            <div className="flex items-center flex-wrap gap-2 sm:gap-3 font-mono">
-              <span className="px-2.5 py-1 rounded-xl bg-white border border-blue-200 font-bold text-blue-800 flex items-center gap-1 shadow-2xs">
+          <div className="p-3.5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] flex flex-wrap items-center justify-between gap-3 text-xs font-sans">
+            <div className="flex items-center flex-wrap gap-2 sm:gap-3 font-sans">
+              <span className="px-2.5 py-1 rounded-xl bg-white border border-blue-200 font-bold text-blue-800 flex items-center gap-1 shadow-2xs font-sans">
                 <Eye className="w-3.5 h-3.5 text-blue-600" />
                 <span>{totalViews.toLocaleString()} Views</span>
               </span>
               {currentPreset.likes.enabled !== false && totalLikes > 0 && (
-                <span className="px-2.5 py-1 rounded-xl bg-white border border-rose-200 font-bold text-rose-800 flex items-center gap-1 shadow-2xs">
+                <span className="px-2.5 py-1 rounded-xl bg-white border border-rose-200 font-bold text-rose-800 flex items-center gap-1 shadow-2xs font-sans">
                   <Heart className="w-3.5 h-3.5 text-rose-600 fill-rose-600" />
                   <span>{totalLikes} Likes</span>
                 </span>
               )}
               {currentPreset.saves?.enabled && totalSaves > 0 && (
-                <span className="px-2.5 py-1 rounded-xl bg-white border border-amber-200 font-bold text-amber-800 shadow-2xs">
+                <span className="px-2.5 py-1 rounded-xl bg-white border border-amber-200 font-bold text-amber-800 shadow-2xs font-sans">
                   +{totalSaves} Saves
                 </span>
               )}
               {currentPreset.shares?.enabled && totalShares > 0 && (
-                <span className="px-2.5 py-1 rounded-xl bg-white border border-purple-200 font-bold text-purple-800 shadow-2xs">
+                <span className="px-2.5 py-1 rounded-xl bg-white border border-purple-200 font-bold text-purple-800 shadow-2xs font-sans">
                   +{totalShares} Reposts
                 </span>
               )}
-              <span className="px-2.5 py-1 rounded-xl bg-white border border-emerald-200 font-bold text-emerald-800 shadow-2xs">
+              <span className="px-2.5 py-1 rounded-xl bg-white border border-emerald-200 font-bold text-emerald-800 shadow-2xs font-sans">
                 🛡️ {plannedSchedule.viewsPlan?.avgHumanScore ?? 84}/100 Human Score
               </span>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 font-sans">
               <button
                 type="button"
                 onClick={rerollPlan}
                 disabled={shuffling}
-                className="px-2.5 py-1 rounded-xl bg-white hover:bg-gray-50 border border-[#DEE0ED] text-[11px] font-bold text-[#3A4EFB] transition-all flex items-center gap-1 cursor-pointer press-scale shadow-2xs"
+                className="px-2.5 py-1 rounded-xl bg-white hover:bg-gray-50 border border-[#DEE0ED] text-[11px] font-bold text-[#3A4EFB] transition-all flex items-center gap-1 cursor-pointer press-scale shadow-2xs font-sans"
                 title="Shuffle batch distributions"
               >
                 <Dices className={`w-3.5 h-3.5 ${shuffling ? "animate-spin" : ""}`} />
@@ -1338,7 +1350,7 @@ export default function EngagementPage() {
               <button
                 type="button"
                 onClick={() => setShowTimeline(!showTimeline)}
-                className="px-3 py-1 rounded-xl bg-white hover:bg-gray-50 border border-[#DEE0ED] text-[11px] font-bold text-[#1A1D31] transition-all flex items-center gap-1 cursor-pointer press-scale shadow-2xs"
+                className="px-3 py-1 rounded-xl bg-white hover:bg-gray-50 border border-[#DEE0ED] text-[11px] font-bold text-[#1A1D31] transition-all flex items-center gap-1 cursor-pointer press-scale shadow-2xs font-sans"
               >
                 <span>{showTimeline ? "Hide Schedule" : `View ${scheduleRows.length} Batches`}</span>
                 {showTimeline ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -1348,33 +1360,33 @@ export default function EngagementPage() {
 
           {/* Collapsible Detailed Timeline Accordion */}
           {showTimeline && (
-            <div className="border border-[#DEE0ED] rounded-2xl overflow-hidden bg-white animate-fadeIn">
-              <div className="p-3 bg-[#F8F9FD] border-b border-[#DEE0ED] flex items-center justify-between text-xs">
+            <div className="border border-[#DEE0ED] rounded-2xl overflow-hidden bg-white animate-fadeIn font-sans">
+              <div className="p-3 bg-[#F8F9FD] border-b border-[#DEE0ED] flex items-center justify-between text-xs font-sans">
                 <span className="font-bold text-[#1A1D31]">Complete Batch Distribution</span>
                 <span className="text-[11px] text-[#64748B]">Non-round quantities, zero multiples of 5</span>
               </div>
-              <div className="divide-y divide-[#DEE0ED]/60 max-h-[320px] overflow-y-auto">
+              <div className="divide-y divide-[#DEE0ED]/60 max-h-[320px] overflow-y-auto font-sans">
                 {scheduleRows.map((row) => (
                   <div
                     key={row.runNumber}
-                    className={`p-2.5 sm:px-3 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 transition-colors ${
+                    className={`p-2.5 sm:px-3 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 transition-colors font-sans ${
                       row.likeQty ? "bg-rose-50/20 hover:bg-rose-50/50" : "hover:bg-[#F8F9FD]"
                     }`}
                   >
                     <div className="flex items-center gap-2">
-                      <span className="w-5 h-5 rounded-md bg-gray-100 text-[#1A1D31] font-bold text-[10px] flex items-center justify-center shrink-0">
+                      <span className="w-5 h-5 rounded-md bg-gray-100 text-[#1A1D31] font-bold text-[10px] flex items-center justify-center shrink-0 font-sans">
                         #{row.runNumber}
                       </span>
-                      <span className="font-semibold text-[#1A1D31]">+{row.minuteOffset}m</span>
-                      <span className="text-[10px] text-[#64748B] font-mono">({row.clockTime})</span>
+                      <span className="font-semibold text-[#1A1D31] font-sans">+{row.minuteOffset}m</span>
+                      <span className="text-[10px] text-[#64748B] font-sans">({row.clockTime})</span>
                       {row.sessionType && (
-                        <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-gray-100 text-gray-700">
+                        <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-gray-100 text-gray-700 font-sans">
                           {row.sessionType === "burst" ? "⚡ Burst" : row.sessionType === "peak" ? "🔥 Peak" : row.sessionType === "slow" ? "🌙 Slow" : "🌊 Normal"}
                         </span>
                       )}
                     </div>
 
-                    <div className="flex items-center flex-wrap gap-1.5 self-end sm:self-auto shrink-0 font-mono text-[11px]">
+                    <div className="flex items-center flex-wrap gap-1.5 self-end sm:self-auto shrink-0 font-sans text-[11px]">
                       {row.viewQty > 0 && currentPreset.views.enabled !== false && (
                         <div className="flex items-center gap-1 font-sans">
                           <button
@@ -1390,7 +1402,7 @@ export default function EngagementPage() {
                           >
                             -
                           </button>
-                          <span className="px-2 py-0.5 rounded-md font-bold bg-blue-50 text-blue-700 border border-blue-200/60 font-mono">
+                          <span className="px-2 py-0.5 rounded-md font-bold bg-blue-50 text-blue-700 border border-blue-200/60 font-sans">
                             {row.viewQty} views
                           </span>
                           <button
@@ -1409,18 +1421,18 @@ export default function EngagementPage() {
                         </div>
                       )}
                       {row.likeQty && (
-                        <span className="px-2 py-0.5 rounded-md font-bold bg-rose-50 text-rose-700 border border-rose-200/60 flex items-center gap-1">
+                        <span className="px-2 py-0.5 rounded-md font-bold bg-rose-50 text-rose-700 border border-rose-200/60 flex items-center gap-1 font-sans">
                           <Heart className="w-2.5 h-2.5 fill-rose-500 text-rose-500" />
                           <span>+{row.likeQty} likes</span>
                         </span>
                       )}
                       {row.saveQty && (
-                        <span className="px-2 py-0.5 rounded-md font-bold bg-amber-50 text-amber-700 border border-amber-200/60">
+                        <span className="px-2 py-0.5 rounded-md font-bold bg-amber-50 text-amber-700 border border-amber-200/60 font-sans">
                           +{row.saveQty} saves
                         </span>
                       )}
                       {row.shareQty && (
-                        <span className="px-2 py-0.5 rounded-md font-bold bg-purple-50 text-purple-700 border border-purple-200/60">
+                        <span className="px-2 py-0.5 rounded-md font-bold bg-purple-50 text-purple-700 border border-purple-200/60 font-sans">
                           +{row.shareQty} shares
                         </span>
                       )}
@@ -1433,7 +1445,7 @@ export default function EngagementPage() {
         </div>
 
         {/* STEP 4: CONFIRM & LAUNCH */}
-        <div className="bg-white rounded-3xl border border-[#DEE0ED] p-5 sm:p-6 shadow-subtle space-y-4">
+        <div className="bg-white rounded-3xl border border-[#DEE0ED] p-5 sm:p-6 shadow-subtle space-y-4 font-sans">
           <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
             <div className="flex items-center gap-2.5">
               <span className="w-7 h-7 rounded-xl bg-[#3A4EFB] text-white text-xs font-black flex items-center justify-center shadow-xs">
@@ -1450,21 +1462,21 @@ export default function EngagementPage() {
             </div>
 
             <div className="text-right">
-              <span className="text-[10px] uppercase font-bold text-[#64748B] block leading-none">Your Balance</span>
-              <span className="text-sm font-bold font-mono text-[#1A1D31]">
+              <span className="text-[10px] uppercase font-bold text-[#64748B] block leading-none font-sans">Your Balance</span>
+              <span className="text-sm font-bold font-sans text-[#1A1D31]">
                 ₹{walletBalance.toFixed(2)}
               </span>
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED]">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] font-sans">
             <div className="space-y-1">
-              <span className="text-[10px] uppercase font-bold text-[#64748B] block">Total Campaign Price</span>
+              <span className="text-[10px] uppercase font-bold text-[#64748B] block font-sans">Total Campaign Price</span>
               <div className="flex items-baseline gap-2">
-                <span className="text-2xl sm:text-3xl font-black text-[#1A1D31] font-mono tracking-tight">
+                <span className="text-2xl sm:text-3xl font-black text-[#1A1D31] font-sans tracking-tight">
                   ₹{exactTotalCost.toFixed(2)}
                 </span>
-                <span className="text-xs text-[#64748B]">
+                <span className="text-xs text-[#64748B] font-sans">
                   ({currentPreset.name} • {currentPreset.durationLabel})
                 </span>
               </div>

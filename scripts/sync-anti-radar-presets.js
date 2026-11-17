@@ -1,0 +1,303 @@
+const { PrismaClient } = require("@prisma/client");
+const fs = require("fs");
+const path = require("path");
+
+const prisma = new PrismaClient();
+
+const ANTI_RADAR_PRESETS = {
+  tiktok_2k: {
+    id: "tiktok_2k",
+    name: "TikTok 1st Working 2K",
+    tagline: "6-Hour Algorithmic Seed Pool & Initial Watch-Time Push",
+    badge: "6 Hours",
+    targetViews: 2960,
+    targetLikes: 42,
+    targetSaves: 0,
+    targetShares: 0,
+    durationHours: 6.0,
+    totalDurationMinutes: 360,
+    views: {
+      enabled: true,
+      providerName: "Views Engine",
+      serviceId: "897",
+      minQuantity: 110,
+      maxQuantity: 240,
+      runsCount: 16,
+      intervalMinutes: 22,
+    },
+    likes: {
+      enabled: true,
+      providerName: "Engagement Engine",
+      serviceId: "1123",
+      minQuantity: 10,
+      maxQuantity: 18,
+      runsCount: 3,
+      waveOffsets: [35, 120, 240],
+    },
+    saves: {
+      enabled: false,
+      providerName: "Engagement Engine",
+      serviceId: "807",
+      minQuantity: 10,
+      maxQuantity: 12,
+      runsCount: 3,
+      waveOffsets: [180, 240, 280],
+    },
+    shares: {
+      enabled: false,
+      providerName: "Engagement Engine",
+      serviceId: "718",
+      minQuantity: 10,
+      maxQuantity: 12,
+      runsCount: 2,
+      waveOffsets: [200, 260],
+    },
+    syncThreshold: {
+      minViews: 500,
+      maxViews: 700,
+    },
+  },
+
+  tiktok_5k: {
+    id: "tiktok_5k",
+    name: "TikTok Organic Velocity 5K",
+    tagline: "Natural 24-Hour FYP Momentum with Synchronized Engagement Waves",
+    badge: "24 Hours (1 Day)",
+    targetViews: 5100,
+    targetLikes: 180,
+    targetSaves: 44,
+    targetShares: 22,
+    durationHours: 24.0,
+    totalDurationMinutes: 1440,
+    views: {
+      enabled: true,
+      providerName: "Views Engine",
+      serviceId: "897",
+      minQuantity: 140,
+      maxQuantity: 320,
+      runsCount: 22,
+      intervalMinutes: 65,
+    },
+    likes: {
+      enabled: true,
+      providerName: "Engagement Engine",
+      serviceId: "1123",
+      minQuantity: 11,
+      maxQuantity: 24,
+      runsCount: 12,
+      waveOffsets: [45, 120, 220, 340, 460, 580, 720, 860, 1000, 1140, 1260, 1380],
+    },
+    saves: {
+      enabled: true,
+      providerName: "Engagement Engine",
+      serviceId: "807",
+      minQuantity: 10,
+      maxQuantity: 14,
+      runsCount: 4,
+      waveOffsets: [180, 420, 750, 1100],
+    },
+    shares: {
+      enabled: true,
+      providerName: "Engagement Engine",
+      serviceId: "718",
+      minQuantity: 10,
+      maxQuantity: 12,
+      runsCount: 2,
+      waveOffsets: [360, 900],
+    },
+    syncThreshold: {
+      minViews: 1000,
+      maxViews: 1500,
+    },
+  },
+
+  tiktok_10k: {
+    id: "tiktok_10k",
+    name: "TikTok FYP Breakthrough 10K",
+    tagline: "2-Day Algorithmic FYP Breakout with Circadian Evening Weighting",
+    badge: "2 Days (48h)",
+    targetViews: 10500,
+    targetLikes: 420,
+    targetSaves: 90,
+    targetShares: 44,
+    durationHours: 48.0,
+    totalDurationMinutes: 2880,
+    views: {
+      enabled: true,
+      providerName: "Views Engine",
+      serviceId: "897",
+      minQuantity: 180,
+      maxQuantity: 520,
+      runsCount: 28,
+      intervalMinutes: 102,
+    },
+    likes: {
+      enabled: true,
+      providerName: "Engagement Engine",
+      serviceId: "1123",
+      minQuantity: 12,
+      maxQuantity: 28,
+      runsCount: 18,
+      waveOffsets: [
+        90, 180, 300, 450, 600, 780, 960, 1140, 1320, 1500, 1680, 1860, 2040, 2220, 2400, 2550, 2700, 2820,
+      ],
+    },
+    saves: {
+      enabled: true,
+      providerName: "Engagement Engine",
+      serviceId: "807",
+      minQuantity: 10,
+      maxQuantity: 16,
+      runsCount: 8,
+      waveOffsets: [240, 540, 900, 1260, 1620, 1980, 2340, 2700],
+    },
+    shares: {
+      enabled: true,
+      providerName: "Engagement Engine",
+      serviceId: "718",
+      minQuantity: 10,
+      maxQuantity: 14,
+      runsCount: 4,
+      waveOffsets: [480, 1140, 1800, 2460],
+    },
+    syncThreshold: {
+      minViews: 2000,
+      maxViews: 3000,
+    },
+  },
+
+  tiktok_15k: {
+    id: "tiktok_15k",
+    name: "TikTok FYP Acceleration 15K",
+    tagline: "3-Day Organic Algorithm Surge with Steady Anti-Radar Ascent",
+    badge: "3 Days (72h)",
+    targetViews: 15200,
+    targetLikes: 650,
+    targetSaves: 140,
+    targetShares: 60,
+    durationHours: 72.0,
+    totalDurationMinutes: 4320,
+    views: {
+      enabled: true,
+      providerName: "Views Engine",
+      serviceId: "897",
+      minQuantity: 220,
+      maxQuantity: 650,
+      runsCount: 34,
+      intervalMinutes: 127,
+    },
+    likes: {
+      enabled: true,
+      providerName: "Engagement Engine",
+      serviceId: "1123",
+      minQuantity: 14,
+      maxQuantity: 32,
+      runsCount: 22,
+      waveOffsets: [
+        120, 240, 420, 600, 840, 1080, 1320, 1560, 1800, 2100, 2400, 2700, 3000, 3300, 3600, 3840, 4080, 4200,
+      ],
+    },
+    saves: {
+      enabled: true,
+      providerName: "Engagement Engine",
+      serviceId: "807",
+      minQuantity: 11,
+      maxQuantity: 18,
+      runsCount: 10,
+      waveOffsets: [300, 720, 1200, 1680, 2160, 2640, 3120, 3600, 4000, 4220],
+    },
+    shares: {
+      enabled: true,
+      providerName: "Engagement Engine",
+      serviceId: "718",
+      minQuantity: 10,
+      maxQuantity: 14,
+      runsCount: 6,
+      waveOffsets: [600, 1440, 2280, 3000, 3600, 4140],
+    },
+    syncThreshold: {
+      minViews: 3000,
+      maxViews: 5000,
+    },
+  },
+
+  tiktok_50k: {
+    id: "tiktok_50k",
+    name: "TikTok Viral Mega 50K",
+    tagline: "5-Day Continuous FYP Virality Curve with Anti-Radar Long Tail",
+    badge: "5 Days (Anti-Radar)",
+    targetViews: 50600,
+    targetLikes: 2600,
+    targetSaves: 520,
+    targetShares: 210,
+    durationHours: 120.0,
+    totalDurationMinutes: 7200,
+    views: {
+      enabled: true,
+      providerName: "Views Engine",
+      serviceId: "897",
+      minQuantity: 250,
+      maxQuantity: 1350,
+      runsCount: 56,
+      intervalMinutes: 128,
+    },
+    likes: {
+      enabled: true,
+      providerName: "Engagement Engine",
+      serviceId: "1123",
+      minQuantity: 24,
+      maxQuantity: 65,
+      runsCount: 38,
+      waveOffsets: [
+        180, 360, 600, 840, 1140, 1440, 1800, 2160, 2520, 2880, 3240, 3600, 3960, 4320, 4680, 5040, 5400, 5760, 6120, 6480, 6840, 7080,
+      ],
+    },
+    saves: {
+      enabled: true,
+      providerName: "Engagement Engine",
+      serviceId: "807",
+      minQuantity: 12,
+      maxQuantity: 25,
+      runsCount: 20,
+      waveOffsets: [
+        480, 960, 1500, 2100, 2700, 3300, 3900, 4500, 5100, 5700, 6300, 6900, 7120,
+      ],
+    },
+    shares: {
+      enabled: true,
+      providerName: "Engagement Engine",
+      serviceId: "718",
+      minQuantity: 10,
+      maxQuantity: 18,
+      runsCount: 12,
+      waveOffsets: [720, 1440, 2200, 3000, 3800, 4600, 5400, 6200, 6900, 7140],
+    },
+    syncThreshold: {
+      minViews: 5000,
+      maxViews: 8000,
+    },
+  },
+};
+
+async function main() {
+  console.log("Writing anti-radar presets to data/tiktok-tier-presets.json...");
+  const filePath = path.join(process.cwd(), "data", "tiktok-tier-presets.json");
+  const dir = path.dirname(filePath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(filePath, JSON.stringify(ANTI_RADAR_PRESETS, null, 2), "utf-8");
+  console.log("File written successfully.");
+
+  console.log("Writing latest anti-radar presets to Prisma auditLog...");
+  await prisma.auditLog.create({
+    data: {
+      action: "TIKTOK_TIER_PRESETS",
+      actor: "system_anti_radar_sync",
+      details: JSON.stringify(ANTI_RADAR_PRESETS),
+    },
+  });
+  console.log("AuditLog created successfully.");
+}
+
+main()
+  .catch(console.error)
+  .finally(() => prisma.$disconnect());
