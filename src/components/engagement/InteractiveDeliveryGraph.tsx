@@ -10,7 +10,9 @@ import {
   RefreshCw,
   Sparkles,
   Info,
-  ChevronRight,
+  TrendingUp,
+  BarChart3,
+  CheckCircle2,
 } from "lucide-react";
 import { PacingStrategy } from "@/lib/engagement/organic-pacing-engine";
 
@@ -95,6 +97,9 @@ export function InteractiveDeliveryGraph({
 }: InteractiveDeliveryGraphProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
 
+  // View Mode: "rate" (delivery flow pacing with draggable anchors) vs "cumulative" (total growth S-curve)
+  const [viewMode, setViewMode] = useState<"rate" | "cumulative">("rate");
+
   // SVG dimensions
   const SVG_WIDTH = 800;
   const SVG_HEIGHT = 240;
@@ -109,21 +114,21 @@ export function InteractiveDeliveryGraph({
 
   // Active dragging state
   const [activeDrag, setActiveDrag] = useState<{
-    type: "views" | "likes" | "saves" | "shares";
+    type: "views" | "likes";
     index: number;
   } | null>(null);
 
   // Hovered item for tooltip
   const [hoveredNode, setHoveredNode] = useState<{
     type: "views" | "likes" | "saves" | "shares";
-    index: number;
+    label: string;
     x: number;
     y: number;
     qty: number;
-    minute: number;
+    cumQty?: number;
   } | null>(null);
 
-  // Time bounds
+  // Total duration in minutes
   const totalMinutes = Math.max(60, (durationHours || 5) * 60);
 
   const getX = useCallback(
@@ -134,14 +139,35 @@ export function InteractiveDeliveryGraph({
     [totalMinutes, plotWidth, padLeft]
   );
 
-  // Max views ceiling for Y axis
-  const maxViews = useMemo(() => {
-    return Math.max(...views, 250);
+  // 1. CUMULATIVE DATA (For radar verification view)
+  const cumViews = useMemo(() => {
+    let running = 0;
+    return views.map((v) => (running += v));
   }, [views]);
 
-  const yCeil = useMemo(() => {
-    return Math.ceil((maxViews * 1.25) / 50) * 50;
-  }, [maxViews]);
+  const totalViews = cumViews[cumViews.length - 1] || 1;
+
+  const cumLikes = useMemo(() => {
+    let running = 0;
+    return likes.map((l) => (running += l));
+  }, [likes]);
+  const totalLikes = cumLikes[cumLikes.length - 1] || 1;
+
+  const cumSaves = useMemo(() => {
+    let running = 0;
+    return saves.map((s) => (running += s));
+  }, [saves]);
+  const totalSaves = cumSaves[cumSaves.length - 1] || 1;
+
+  const cumShares = useMemo(() => {
+    let running = 0;
+    return shares.map((s) => (running += s));
+  }, [shares]);
+  const totalShares = cumShares[cumShares.length - 1] || 1;
+
+  // 2. RATE SCALING
+  const maxViews = useMemo(() => Math.max(...views, 250), [views]);
+  const yCeil = useMemo(() => Math.ceil((maxViews * 1.25) / 50) * 50, [maxViews]);
 
   const getY = useCallback(
     (qty: number) => {
@@ -159,7 +185,7 @@ export function InteractiveDeliveryGraph({
     [baselineY, plotHeight, yCeil, providerMinimum]
   );
 
-  // Auxiliary engagement scaling (Likes, Saves, Shares)
+  // Auxiliary scaling
   const maxLikes = useMemo(() => Math.max(...likes, 20), [likes]);
   const getLikeY = useCallback(
     (qty: number) => {
@@ -168,10 +194,11 @@ export function InteractiveDeliveryGraph({
     },
     [maxLikes, plotHeight, padTop]
   );
+
   const getLikeQtyFromY = useCallback(
     (yVal: number) => {
       const ratio = (baselineY - yVal) / (plotHeight * 0.52);
-      return Math.round(Math.max(10, Math.min(200, ratio * (maxLikes * 1.35))));
+      return Math.round(Math.max(10, Math.min(250, ratio * (maxLikes * 1.35))));
     },
     [baselineY, plotHeight, maxLikes]
   );
@@ -184,13 +211,6 @@ export function InteractiveDeliveryGraph({
     },
     [maxSaves, plotHeight, padTop]
   );
-  const getSaveQtyFromY = useCallback(
-    (yVal: number) => {
-      const ratio = (baselineY - yVal) / (plotHeight * 0.42);
-      return Math.round(Math.max(10, Math.min(100, ratio * (maxSaves * 1.35))));
-    },
-    [baselineY, plotHeight, maxSaves]
-  );
 
   const maxShares = useMemo(() => Math.max(...shares, 12), [shares]);
   const getShareY = useCallback(
@@ -200,52 +220,188 @@ export function InteractiveDeliveryGraph({
     },
     [maxShares, plotHeight, padTop]
   );
-  const getShareQtyFromY = useCallback(
-    (yVal: number) => {
-      const ratio = (baselineY - yVal) / (plotHeight * 0.36);
-      return Math.round(Math.max(10, Math.min(80, ratio * (maxShares * 1.35))));
+
+  // 3. CUMULATIVE SCALING
+  const getCumY = useCallback(
+    (val: number, max: number) => {
+      const ratio = Math.max(0, val) / (max * 1.08);
+      return padTop + plotHeight - ratio * plotHeight;
     },
-    [baselineY, plotHeight, maxShares]
+    [plotHeight, padTop]
   );
 
-  // Compute points
-  const viewPoints: Point[] = useMemo(() => {
+  // 4. KEYFRAME CONTROL ANCHORS: select 10 to 12 evenly-spaced points for clean interaction
+  const anchorIndices = useMemo(() => {
+    if (views.length <= 14) {
+      return views.map((_, i) => i);
+    }
+    const count = 11; // 11 clean keyframes across the curve
+    const step = (views.length - 1) / (count - 1);
+    const indices: number[] = [];
+    for (let k = 0; k < count; k++) {
+      indices.push(Math.round(k * step));
+    }
+    return Array.from(new Set(indices));
+  }, [views.length]);
+
+  const likeAnchorIndices = useMemo(() => {
+    if (likes.length <= 10) {
+      return likes.map((_, i) => i);
+    }
+    const count = 8;
+    const step = (likes.length - 1) / (count - 1);
+    const indices: number[] = [];
+    for (let k = 0; k < count; k++) {
+      indices.push(Math.round(k * step));
+    }
+    return Array.from(new Set(indices));
+  }, [likes.length]);
+
+  // Smooth Gaussian Anchor Propagation
+  const handleUpdateViewAnchor = useCallback(
+    (anchorIdx: number, newQty: number) => {
+      const next = [...views];
+      const oldVal = next[anchorIdx] || 1;
+      const delta = newQty - oldVal;
+      const radius = Math.max(2, Math.floor(views.length * 0.12));
+
+      for (
+        let i = Math.max(0, anchorIdx - radius);
+        i <= Math.min(views.length - 1, anchorIdx + radius);
+        i++
+      ) {
+        const dist = Math.abs(i - anchorIdx);
+        const falloff = Math.cos((dist / (radius + 1)) * (Math.PI / 2));
+        next[i] = Math.max(providerMinimum, Math.round(next[i] + delta * falloff));
+      }
+      onUpdateViews(next);
+    },
+    [views, providerMinimum, onUpdateViews]
+  );
+
+  const handleUpdateLikeAnchor = useCallback(
+    (likeIdx: number, newQty: number) => {
+      if (!onUpdateLikes) return;
+      const next = [...likes];
+      const oldVal = next[likeIdx] || 1;
+      const delta = newQty - oldVal;
+      const radius = Math.max(1, Math.floor(likes.length * 0.15));
+
+      for (
+        let i = Math.max(0, likeIdx - radius);
+        i <= Math.min(likes.length - 1, likeIdx + radius);
+        i++
+      ) {
+        const dist = Math.abs(i - likeIdx);
+        const falloff = Math.cos((dist / (radius + 1)) * (Math.PI / 2));
+        next[i] = Math.max(10, Math.round(next[i] + delta * falloff));
+      }
+      onUpdateLikes(next);
+    },
+    [likes, onUpdateLikes]
+  );
+
+  // 5. POINTS CALCULATION
+  // A. Rate Points
+  const rateViewPoints: Point[] = useMemo(() => {
     return views.map((val, idx) => ({
       x: getX(viewOffsets[idx] ?? idx * (totalMinutes / Math.max(1, views.length))),
       y: getY(val),
     }));
   }, [views, viewOffsets, getX, getY, totalMinutes]);
 
-  const likePoints: Point[] = useMemo(() => {
-    return likes.map((val, idx) => ({
-      x: getX(likeOffsets[idx] ?? idx * 60),
-      y: getLikeY(val),
-    }));
-  }, [likes, likeOffsets, getX, getLikeY]);
+  const rateLikePoints: Point[] = useMemo(() => {
+    if (!likes || likes.length === 0) return [];
+    return likes.map((val, idx) => {
+      const minute =
+        likeOffsets && typeof likeOffsets[idx] === "number" && likeOffsets[idx] <= totalMinutes
+          ? likeOffsets[idx]
+          : Math.round(((idx + 0.5) / likes.length) * totalMinutes);
+      return {
+        x: getX(minute),
+        y: getLikeY(val),
+      };
+    });
+  }, [likes, likeOffsets, getX, getLikeY, totalMinutes]);
 
-  const savePoints: Point[] = useMemo(() => {
-    return saves.map((val, idx) => ({
-      x: getX(saveOffsets[idx] ?? idx * 90),
-      y: getSaveY(val),
-    }));
-  }, [saves, saveOffsets, getX, getSaveY]);
+  const rateSavePoints: Point[] = useMemo(() => {
+    if (!saves || saves.length === 0) return [];
+    return saves.map((val, idx) => {
+      const minute =
+        saveOffsets && typeof saveOffsets[idx] === "number" && saveOffsets[idx] <= totalMinutes
+          ? saveOffsets[idx]
+          : Math.round(((idx + 0.5) / saves.length) * totalMinutes);
+      return {
+        x: getX(minute),
+        y: getSaveY(val),
+      };
+    });
+  }, [saves, saveOffsets, getX, getSaveY, totalMinutes]);
 
-  const sharePoints: Point[] = useMemo(() => {
-    return shares.map((val, idx) => ({
-      x: getX(shareOffsets[idx] ?? idx * 120),
-      y: getShareY(val),
-    }));
-  }, [shares, shareOffsets, getX, getShareY]);
+  const rateSharePoints: Point[] = useMemo(() => {
+    if (!shares || shares.length === 0) return [];
+    return shares.map((val, idx) => {
+      const minute =
+        shareOffsets && typeof shareOffsets[idx] === "number" && shareOffsets[idx] <= totalMinutes
+          ? shareOffsets[idx]
+          : Math.round(((idx + 0.5) / shares.length) * totalMinutes);
+      return {
+        x: getX(minute),
+        y: getShareY(val),
+      };
+    });
+  }, [shares, shareOffsets, getX, getShareY, totalMinutes]);
 
-  // Smooth spline curves
-  const viewsPath = useMemo(() => getSmoothSplinePath(viewPoints), [viewPoints]);
-  const viewsArea = useMemo(() => getClosedAreaPath(viewPoints, baselineY), [viewPoints, baselineY]);
+  // B. Cumulative Points (Radar Curve)
+  const cumViewPoints: Point[] = useMemo(() => {
+    const pts: Point[] = [{ x: padLeft, y: baselineY }];
+    views.forEach((_, idx) => {
+      const minute = viewOffsets[idx] ?? idx * (totalMinutes / Math.max(1, views.length));
+      pts.push({
+        x: getX(minute),
+        y: getCumY(cumViews[idx], totalViews),
+      });
+    });
+    return pts;
+  }, [views, viewOffsets, cumViews, totalViews, getX, getCumY, totalMinutes, baselineY, padLeft]);
 
-  const likesPath = useMemo(() => getSmoothSplinePath(likePoints), [likePoints]);
-  const likesArea = useMemo(() => getClosedAreaPath(likePoints, baselineY), [likePoints, baselineY]);
+  const cumLikePoints: Point[] = useMemo(() => {
+    if (!likes || likes.length === 0) return [];
+    const pts: Point[] = [{ x: padLeft, y: baselineY }];
+    likes.forEach((_, idx) => {
+      const minute =
+        likeOffsets && typeof likeOffsets[idx] === "number" && likeOffsets[idx] <= totalMinutes
+          ? likeOffsets[idx]
+          : Math.round(((idx + 0.5) / likes.length) * totalMinutes);
+      pts.push({
+        x: getX(minute),
+        y: getCumY(cumLikes[idx], totalLikes),
+      });
+    });
+    return pts;
+  }, [likes, likeOffsets, cumLikes, totalLikes, getX, getCumY, totalMinutes, baselineY, padLeft]);
 
-  const savesPath = useMemo(() => getSmoothSplinePath(savePoints), [savePoints]);
-  const sharesPath = useMemo(() => getSmoothSplinePath(sharePoints), [sharePoints]);
+  // Selected Points depending on viewMode
+  const activeViewPoints = viewMode === "cumulative" ? cumViewPoints : rateViewPoints;
+  const activeLikePoints = viewMode === "cumulative" ? cumLikePoints : rateLikePoints;
+  const activeSavePoints = rateSavePoints;
+  const activeSharePoints = rateSharePoints;
+
+  // Splines
+  const viewsPath = useMemo(() => getSmoothSplinePath(activeViewPoints), [activeViewPoints]);
+  const viewsArea = useMemo(
+    () => getClosedAreaPath(activeViewPoints, baselineY),
+    [activeViewPoints, baselineY]
+  );
+
+  const likesPath = useMemo(() => getSmoothSplinePath(activeLikePoints), [activeLikePoints]);
+  const likesArea = useMemo(
+    () => getClosedAreaPath(activeLikePoints, baselineY),
+    [activeLikePoints, baselineY]
+  );
+
+  const savesPath = useMemo(() => getSmoothSplinePath(activeSavePoints), [activeSavePoints]);
+  const sharesPath = useMemo(() => getSmoothSplinePath(activeSharePoints), [activeSharePoints]);
 
   // Time axis ticks
   const timeTicks = useMemo(() => {
@@ -288,20 +444,32 @@ export function InteractiveDeliveryGraph({
   // Y-axis grid ticks
   const yTicks = useMemo(() => {
     const count = 4;
-    const ticks: { val: number; y: number }[] = [];
-    for (let i = 0; i <= count; i++) {
-      const val = Math.round((yCeil / count) * i);
-      ticks.push({ val, y: getY(val) });
+    const ticks: { val: number | string; y: number }[] = [];
+    if (viewMode === "cumulative") {
+      for (let i = 0; i <= count; i++) {
+        const val = Math.round((totalViews / count) * i);
+        const yPos = padTop + plotHeight - (i / count) * (plotHeight / 1.08);
+        ticks.push({
+          val: val >= 1000 ? `${(val / 1000).toFixed(val % 1000 === 0 ? 0 : 1)}k` : val,
+          y: yPos,
+        });
+      }
+    } else {
+      for (let i = 0; i <= count; i++) {
+        const val = Math.round((yCeil / count) * i);
+        ticks.push({ val, y: getY(val) });
+      }
     }
     return ticks;
-  }, [yCeil, getY]);
+  }, [viewMode, totalViews, yCeil, getY, padTop, plotHeight]);
 
   // Drag handler
   const handlePointerDown = (
-    type: "views" | "likes" | "saves" | "shares",
+    type: "views" | "likes",
     index: number,
     e: React.PointerEvent<SVGCircleElement>
   ) => {
+    if (viewMode === "cumulative") return; // Keyframe dragging active in Rate mode
     e.preventDefault();
     e.stopPropagation();
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -309,39 +477,24 @@ export function InteractiveDeliveryGraph({
   };
 
   const handlePointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
-    if (!activeDrag || !svgRef.current) return;
+    if (!activeDrag || !svgRef.current || viewMode === "cumulative") return;
     const rect = svgRef.current.getBoundingClientRect();
     const scaleY = SVG_HEIGHT / rect.height;
     const svgY = (e.clientY - rect.top) * scaleY;
 
     if (activeDrag.type === "views") {
       const newQty = getQtyFromY(svgY);
-      const next = [...views];
-      next[activeDrag.index] = newQty;
-      onUpdateViews(next);
+      handleUpdateViewAnchor(activeDrag.index, newQty);
       setHoveredNode({
         type: "views",
-        index: activeDrag.index,
-        x: viewPoints[activeDrag.index]?.x ?? 0,
+        label: `Phase #${activeDrag.index + 1}`,
+        x: rateViewPoints[activeDrag.index]?.x ?? 0,
         y: getY(newQty),
         qty: newQty,
-        minute: viewOffsets[activeDrag.index] ?? 0,
       });
-    } else if (activeDrag.type === "likes" && onUpdateLikes) {
+    } else if (activeDrag.type === "likes") {
       const newQty = getLikeQtyFromY(svgY);
-      const next = [...likes];
-      next[activeDrag.index] = newQty;
-      onUpdateLikes(next);
-    } else if (activeDrag.type === "saves" && onUpdateSaves) {
-      const newQty = getSaveQtyFromY(svgY);
-      const next = [...saves];
-      next[activeDrag.index] = newQty;
-      onUpdateSaves(next);
-    } else if (activeDrag.type === "shares" && onUpdateShares) {
-      const newQty = getShareQtyFromY(svgY);
-      const next = [...shares];
-      next[activeDrag.index] = newQty;
-      onUpdateShares(next);
+      handleUpdateLikeAnchor(activeDrag.index, newQty);
     }
   };
 
@@ -349,21 +502,11 @@ export function InteractiveDeliveryGraph({
     setActiveDrag(null);
   };
 
-  // Format minute offset to relative string
-  const formatOffsetTime = (min: number) => {
-    if (min === 0) return "Launch (0m)";
-    const h = Math.floor(min / 60);
-    const m = min % 60;
-    if (h === 0) return `+${m}m`;
-    if (m === 0) return `+${h}h`;
-    return `+${h}h ${m}m`;
-  };
-
   // Strategy badge meta
   const strategyMeta = useMemo(() => {
     switch (strategy) {
       case "s_curve":
-        return { name: "S-Curve", desc: "Biological FYP Bell Curve" };
+        return { name: "S-Curve", desc: "Biological FYP Sigmoid Curve" };
       case "burst":
         return { name: "Burst", desc: "Front-Loaded Viral Wave" };
       case "normal":
@@ -377,65 +520,98 @@ export function InteractiveDeliveryGraph({
     }
   }, [strategy]);
 
-  const totalCalculatedViews = useMemo(() => {
-    return views.reduce((a, b) => a + b, 0);
-  }, [views]);
-
   return (
     <div className="bg-white rounded-3xl border border-[#DEE0ED] p-4 sm:p-5 shadow-subtle space-y-3 font-sans select-none">
-      {/* Top Header: Title, Live Strategy & Legend */}
+      {/* Top Header: Title, Live Strategy, Mode Switcher & Legend */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#DEE0ED]/80">
-        <div className="space-y-0.5">
+        <div className="space-y-1">
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-bold text-[#1A1D31] font-sans">
-              Live Delivery Process ({strategyMeta.name})
+              Delivery Curve ({strategyMeta.name})
             </h3>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#3A4EFB]/10 text-[#3A4EFB]">
-              Interactive Spline
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#3A4EFB]/10 text-[#3A4EFB] font-sans">
+              Organic Spline
+            </span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/60 hidden sm:inline-flex items-center gap-1 font-sans">
+              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+              <span>Anti-Radar Approved</span>
             </span>
           </div>
           <p className="text-[11px] text-[#64748B] font-sans">
-            {strategyMeta.desc} across {durationHours}h. Drag any circle point to reshape delivery volume.
+            {viewMode === "rate"
+              ? `${strategyMeta.desc} across ${durationHours}h. Drag handles to sculpt delivery volume.`
+              : `Cumulative growth trajectory across ${durationHours}h. Smooth derivative evades bot detection.`}
           </p>
         </div>
 
-        {/* Legend Chips with colors */}
+        {/* Controls: Mode Switcher & Legend */}
         <div className="flex items-center flex-wrap gap-2 text-[11px] font-bold">
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-blue-50 text-[#3A4EFB] border border-blue-200/60 shadow-2xs font-sans">
+          {/* View Mode Toggle */}
+          <div className="flex items-center p-0.5 rounded-lg bg-[#F8F9FD] border border-[#DEE0ED]">
+            <button
+              type="button"
+              onClick={() => setViewMode("rate")}
+              className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer font-sans ${
+                viewMode === "rate"
+                  ? "bg-white text-[#3A4EFB] shadow-2xs border border-[#DEE0ED]/70"
+                  : "text-[#64748B] hover:text-[#1A1D31]"
+              }`}
+              title="Show batch delivery pacing rate"
+            >
+              <BarChart3 className="w-3 h-3" />
+              <span>Pacing</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("cumulative")}
+              className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer font-sans ${
+                viewMode === "cumulative"
+                  ? "bg-white text-[#3A4EFB] shadow-2xs border border-[#DEE0ED]/70"
+                  : "text-[#64748B] hover:text-[#1A1D31]"
+              }`}
+              title="Show total cumulative growth curve (TikTok Radar View)"
+            >
+              <TrendingUp className="w-3 h-3" />
+              <span>Radar S-Curve</span>
+            </button>
+          </div>
+
+          {/* Metric Legend Chips */}
+          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-blue-50 text-[#3A4EFB] border border-blue-200/60 shadow-2xs font-sans">
             <span className="w-2 h-2 rounded-full bg-[#3A4EFB]" />
-            <span>Views ({totalCalculatedViews.toLocaleString()})</span>
+            <span>Views ({totalViews.toLocaleString()})</span>
           </span>
 
           {likes.length > 0 && (
-            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-rose-50 text-rose-600 border border-rose-200/60 shadow-2xs font-sans">
+            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-rose-50 text-rose-600 border border-rose-200/60 shadow-2xs font-sans">
               <span className="w-2 h-2 rounded-full bg-rose-500" />
-              <span>Likes ({likes.reduce((a, b) => a + b, 0)})</span>
+              <span>Likes ({totalLikes})</span>
             </span>
           )}
 
           {saves.length > 0 && (
-            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200/60 shadow-2xs font-sans">
+            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-50 text-amber-700 border border-amber-200/60 shadow-2xs font-sans">
               <span className="w-2 h-2 rounded-full bg-amber-500" />
-              <span>Saves ({saves.reduce((a, b) => a + b, 0)})</span>
+              <span>Saves ({totalSaves})</span>
             </span>
           )}
 
           {shares.length > 0 && (
-            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200/60 shadow-2xs font-sans">
+            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-purple-50 text-purple-700 border border-purple-200/60 shadow-2xs font-sans">
               <span className="w-2 h-2 rounded-full bg-purple-500" />
-              <span>Reposts ({shares.reduce((a, b) => a + b, 0)})</span>
+              <span>Reposts ({totalShares})</span>
             </span>
           )}
 
-          {onResetPlan && (
+          {onResetPlan && viewMode === "rate" && (
             <button
               type="button"
               onClick={onResetPlan}
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#F8F9FD] text-[#64748B] hover:text-[#3A4EFB] hover:bg-white border border-[#DEE0ED] transition-all cursor-pointer press-scale"
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold bg-[#F8F9FD] text-[#64748B] hover:text-[#3A4EFB] hover:bg-white border border-[#DEE0ED] transition-all cursor-pointer press-scale font-sans"
               title="Re-roll algorithmic curve"
             >
               <RefreshCw className="w-2.5 h-2.5" />
-              <span>Reset Curve</span>
+              <span>Reset</span>
             </button>
           )}
         </div>
@@ -446,7 +622,7 @@ export function InteractiveDeliveryGraph({
         <svg
           ref={svgRef}
           viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
-          className="w-full h-48 sm:h-60 touch-none overflow-visible cursor-crosshair"
+          className="w-full h-48 sm:h-60 touch-none overflow-visible cursor-crosshair font-sans"
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerLeave={() => {
@@ -456,8 +632,8 @@ export function InteractiveDeliveryGraph({
           <defs>
             {/* Views Blue Gradient */}
             <linearGradient id="viewsAreaGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#3A4EFB" stopOpacity="0.22" />
-              <stop offset="85%" stopColor="#3A4EFB" stopOpacity="0.02" />
+              <stop offset="0%" stopColor="#3A4EFB" stopOpacity="0.25" />
+              <stop offset="85%" stopColor="#3A4EFB" stopOpacity="0.03" />
               <stop offset="100%" stopColor="#3A4EFB" stopOpacity="0" />
             </linearGradient>
 
@@ -467,9 +643,9 @@ export function InteractiveDeliveryGraph({
               <stop offset="100%" stopColor="#EF4444" stopOpacity="0" />
             </linearGradient>
 
-            {/* Filter for glowing circle handle when dragging */}
+            {/* Drop Shadow for Handles */}
             <filter id="handleShadow" x="-20%" y="-20%" width="140%" height="140%">
-              <feDropShadow dx="0" dy="1" stdDeviation="2" floodOpacity="0.25" />
+              <feDropShadow dx="0" dy="1.5" stdDeviation="2.5" floodOpacity="0.28" />
             </filter>
           </defs>
 
@@ -540,26 +716,26 @@ export function InteractiveDeliveryGraph({
               d={likesPath}
               fill="none"
               stroke="#EF4444"
-              strokeWidth="2.5"
+              strokeWidth={viewMode === "cumulative" ? 2.5 : 2.2}
               strokeLinecap="round"
               strokeLinejoin="round"
             />
           )}
 
-          {/* 2. SAVES CURVE (YELLOW) */}
-          {savesPath && (
+          {/* 2. SAVES CURVE (YELLOW / AMBER) */}
+          {viewMode === "rate" && savesPath && (
             <path
               d={savesPath}
               fill="none"
               stroke="#F59E0B"
               strokeWidth="2"
               strokeLinecap="round"
-              strokeDasharray="4 2"
+              strokeDasharray="4 2.5"
             />
           )}
 
-          {/* 3. SHARES CURVE (PURPLE) */}
-          {sharesPath && (
+          {/* 3. SHARES / REPOSTS CURVE (PURPLE) */}
+          {viewMode === "rate" && sharesPath && (
             <path
               d={sharesPath}
               fill="none"
@@ -577,171 +753,157 @@ export function InteractiveDeliveryGraph({
               d={viewsPath}
               fill="none"
               stroke="#3A4EFB"
-              strokeWidth="3.2"
+              strokeWidth={viewMode === "cumulative" ? 3.6 : 3.2}
               strokeLinecap="round"
               strokeLinejoin="round"
             />
           )}
 
-          {/* 5. AUXILIARY CIRCLE NODES (Saves & Shares) */}
-          {savePoints.map((pt, idx) => (
-            <g key={`save-node-${idx}`}>
-              <circle
-                cx={pt.x}
-                cy={pt.y}
-                r="3.5"
-                fill="#FFFFFF"
-                stroke="#F59E0B"
-                strokeWidth="2"
-              />
-            </g>
-          ))}
+          {/* 5. RATE MODE: DRAGGABLE KEYFRAME ANCHORS (Clean 10-12 handles) */}
+          {viewMode === "rate" &&
+            anchorIndices.map((idx) => {
+              const pt = rateViewPoints[idx];
+              if (!pt) return null;
+              const isHovered = hoveredNode?.type === "views" && hoveredNode?.label === `Phase #${idx + 1}`;
+              const isDragging = activeDrag?.type === "views" && activeDrag?.index === idx;
 
-          {sharePoints.map((pt, idx) => (
-            <g key={`share-node-${idx}`}>
-              <circle
-                cx={pt.x}
-                cy={pt.y}
-                r="3"
-                fill="#FFFFFF"
-                stroke="#A855F7"
-                strokeWidth="2"
-              />
-            </g>
-          ))}
-
-          {/* 6. LIKES INTERACTIVE CIRCLE NODES (RED) */}
-          {likePoints.map((pt, idx) => {
-            const isHovered = hoveredNode?.type === "likes" && hoveredNode?.index === idx;
-            const isDragging = activeDrag?.type === "likes" && activeDrag?.index === idx;
-            return (
-              <g key={`like-node-${idx}`}>
-                {/* Generous hit area for effortless touch/pointer grabbing */}
-                <circle
-                  cx={pt.x}
-                  cy={pt.y}
-                  r="14"
-                  fill="transparent"
-                  className="cursor-grab active:cursor-grabbing"
-                  onPointerDown={(e) => handlePointerDown("likes", idx, e)}
-                  onMouseEnter={() =>
-                    setHoveredNode({
-                      type: "likes",
-                      index: idx,
-                      x: pt.x,
-                      y: pt.y,
-                      qty: likes[idx] ?? 0,
-                      minute: likeOffsets[idx] ?? idx * 60,
-                    })
-                  }
-                />
-                {/* Visual node */}
-                <circle
-                  cx={pt.x}
-                  cy={pt.y}
-                  r={isDragging ? 6.5 : isHovered ? 5.5 : 4}
-                  fill="#FFFFFF"
-                  stroke="#EF4444"
-                  strokeWidth="2.5"
-                  filter="url(#handleShadow)"
-                  className="transition-all duration-150 pointer-events-none"
-                />
-              </g>
-            );
-          })}
-
-          {/* 7. VIEWS PRIMARY DRAGGABLE CIRCLE HANDLES (BLUE) */}
-          {viewPoints.map((pt, idx) => {
-            const isHovered = hoveredNode?.type === "views" && hoveredNode?.index === idx;
-            const isDragging = activeDrag?.type === "views" && activeDrag?.index === idx;
-            return (
-              <g key={`view-node-${idx}`}>
-                {/* Generous 18px invisible touch hit target */}
-                <circle
-                  cx={pt.x}
-                  cy={pt.y}
-                  r="18"
-                  fill="transparent"
-                  className="cursor-grab active:cursor-grabbing"
-                  onPointerDown={(e) => handlePointerDown("views", idx, e)}
-                  onMouseEnter={() =>
-                    setHoveredNode({
-                      type: "views",
-                      index: idx,
-                      x: pt.x,
-                      y: pt.y,
-                      qty: views[idx] ?? 0,
-                      minute: viewOffsets[idx] ?? 0,
-                    })
-                  }
-                />
-                {/* Pulse ring when dragging */}
-                {isDragging && (
+              return (
+                <g key={`anchor-view-${idx}`}>
+                  {/* Generous touch hit area */}
                   <circle
                     cx={pt.x}
                     cy={pt.y}
-                    r="12"
-                    fill="none"
-                    stroke="#3A4EFB"
-                    strokeWidth="1.5"
-                    opacity="0.4"
-                    className="animate-ping"
+                    r="18"
+                    fill="transparent"
+                    className="cursor-grab active:cursor-grabbing"
+                    onPointerDown={(e) => handlePointerDown("views", idx, e)}
+                    onMouseEnter={() =>
+                      setHoveredNode({
+                        type: "views",
+                        label: `Phase #${idx + 1}`,
+                        x: pt.x,
+                        y: pt.y,
+                        qty: views[idx] ?? 0,
+                      })
+                    }
                   />
-                )}
-                {/* Center Circle Node */}
-                <circle
-                  cx={pt.x}
-                  cy={pt.y}
-                  r={isDragging ? 7.5 : isHovered ? 6.5 : 5}
-                  fill="#FFFFFF"
-                  stroke="#3A4EFB"
-                  strokeWidth={isDragging ? 3.5 : 3}
-                  filter="url(#handleShadow)"
-                  className="transition-all duration-150 pointer-events-none"
-                />
-              </g>
-            );
-          })}
+
+                  {/* Pulse ring when dragging */}
+                  {isDragging && (
+                    <circle
+                      cx={pt.x}
+                      cy={pt.y}
+                      r="12"
+                      fill="none"
+                      stroke="#3A4EFB"
+                      strokeWidth="1.5"
+                      opacity="0.4"
+                      className="animate-ping"
+                    />
+                  )}
+
+                  {/* Visual Node Handle */}
+                  <circle
+                    cx={pt.x}
+                    cy={pt.y}
+                    r={isDragging ? 7.5 : isHovered ? 6.5 : 5}
+                    fill="#FFFFFF"
+                    stroke="#3A4EFB"
+                    strokeWidth={isDragging ? 3.5 : 3}
+                    filter="url(#handleShadow)"
+                    className="transition-all duration-150 pointer-events-none"
+                  />
+                </g>
+              );
+            })}
+
+          {/* 6. RATE MODE: LIKES KEYFRAME HANDLES */}
+          {viewMode === "rate" &&
+            likeAnchorIndices.map((idx) => {
+              const pt = rateLikePoints[idx];
+              if (!pt) return null;
+              const isHovered = hoveredNode?.type === "likes" && hoveredNode?.label === `Like #${idx + 1}`;
+              const isDragging = activeDrag?.type === "likes" && activeDrag?.index === idx;
+
+              return (
+                <g key={`anchor-like-${idx}`}>
+                  <circle
+                    cx={pt.x}
+                    cy={pt.y}
+                    r="14"
+                    fill="transparent"
+                    className="cursor-grab active:cursor-grabbing"
+                    onPointerDown={(e) => handlePointerDown("likes", idx, e)}
+                    onMouseEnter={() =>
+                      setHoveredNode({
+                        type: "likes",
+                        label: `Like #${idx + 1}`,
+                        x: pt.x,
+                        y: pt.y,
+                        qty: likes[idx] ?? 0,
+                      })
+                    }
+                  />
+                  <circle
+                    cx={pt.x}
+                    cy={pt.y}
+                    r={isDragging ? 6.5 : isHovered ? 5.5 : 4}
+                    fill="#FFFFFF"
+                    stroke="#EF4444"
+                    strokeWidth="2.5"
+                    filter="url(#handleShadow)"
+                    className="transition-all duration-150 pointer-events-none"
+                  />
+                </g>
+              );
+            })}
 
           {/* Floating Pill Tooltip inside SVG */}
           {hoveredNode && (
             <g
               transform={`translate(${Math.min(
-                SVG_WIDTH - 120,
-                Math.max(10, hoveredNode.x - 55)
+                SVG_WIDTH - 140,
+                Math.max(10, hoveredNode.x - 65)
               )}, ${Math.max(10, hoveredNode.y - 36)})`}
-              className="pointer-events-none transition-transform"
+              className="pointer-events-none transition-transform font-sans"
             >
               <rect
                 x="0"
                 y="0"
-                width="110"
+                width="130"
                 height="28"
                 rx="8"
                 fill="#1A1D31"
                 filter="url(#handleShadow)"
               />
               <text
-                x="55"
+                x="65"
                 y="17"
                 textAnchor="middle"
                 className="font-sans font-bold text-[10px] fill-white"
               >
                 {hoveredNode.type === "views"
-                  ? `Batch #${hoveredNode.index + 1}: ${hoveredNode.qty} Views`
+                  ? `${hoveredNode.qty.toLocaleString()} Views`
                   : hoveredNode.type === "likes"
-                  ? `Wave #${hoveredNode.index + 1}: ${hoveredNode.qty} Likes`
+                  ? `${hoveredNode.qty.toLocaleString()} Likes`
                   : `${hoveredNode.qty} items`}
               </text>
             </g>
           )}
         </svg>
 
-        {/* Bottom Micro Guide */}
+        {/* Bottom Micro Guide & Anti-Radar Signal */}
         <div className="flex items-center justify-between px-2 pt-1.5 text-[10px] font-semibold text-[#64748B] font-sans">
-          <span>0h (Campaign Start)</span>
-          <span className="flex items-center gap-1 text-[#3A4EFB] font-bold">
-            <span>↑ Drag handles vertically to sculpt delivery flow</span>
+          <span>0h (Launch Pool)</span>
+          <span className="flex items-center gap-1.5 text-[#3A4EFB] font-bold">
+            {viewMode === "rate" ? (
+              <span>↑ Drag handles vertically to sculpt organic delivery curve</span>
+            ) : (
+              <span className="text-emerald-600 flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                <span>Sigmoid derivative dV/dt &gt; 0 • Zero detection cliffs</span>
+              </span>
+            )}
           </span>
           <span>{durationHours}h (Completed)</span>
         </div>

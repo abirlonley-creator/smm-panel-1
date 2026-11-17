@@ -129,37 +129,37 @@ export const DAY_OF_WEEK_MULTIPLIERS: Record<EngagementMetric, number[]> = {
   shares: [1.20, 0.78, 0.85, 0.90, 0.95, 1.10, 1.25],
 };
 
-// 7. Hour of day multipliers (0 to 23 in IST UTC+5.5 / BST UTC+6)
+// 7. Hour of day multipliers (Smooth circadian rhythm without violent sawteeth)
 export const HOUR_OF_DAY_MULTIPLIERS: Record<EngagementMetric, number[]> = {
   views: [
-    0.18, 0.12, 0.08, 0.07, 0.12, 0.28, // 00:00 - 05:00 Night dead zone
-    0.48, 0.68, 0.82, 0.93, 0.98, 1.08, // 06:00 - 11:00 Morning ramp
-    0.98, 0.88, 0.83, 0.88, 0.93, 1.08, // 12:00 - 17:00 Afternoon steady
-    1.38, 1.58, 1.72, 1.52, 1.18, 0.68, // 18:00 - 23:00 Evening prime peak
+    0.78, 0.72, 0.68, 0.70, 0.76, 0.84, // 00:00 - 05:00 Night gentle dip
+    0.90, 0.96, 1.00, 1.04, 1.06, 1.08, // 06:00 - 11:00 Morning steady ramp
+    1.02, 0.98, 0.96, 1.00, 1.06, 1.12, // 12:00 - 17:00 Afternoon baseline
+    1.20, 1.26, 1.30, 1.24, 1.14, 0.92, // 18:00 - 23:00 Evening prime peak
   ],
   likes: [
-    0.13, 0.08, 0.06, 0.06, 0.10, 0.23,
-    0.38, 0.58, 0.73, 0.83, 0.93, 1.03,
-    0.93, 0.83, 0.78, 0.83, 0.88, 0.98,
-    1.28, 1.48, 1.63, 1.58, 1.28, 0.78,
+    0.76, 0.70, 0.66, 0.68, 0.74, 0.82,
+    0.88, 0.94, 0.98, 1.02, 1.06, 1.10,
+    1.04, 0.98, 0.96, 1.00, 1.08, 1.16,
+    1.22, 1.28, 1.32, 1.26, 1.16, 0.90,
   ],
   comments: [
-    0.08, 0.06, 0.04, 0.04, 0.08, 0.18,
-    0.33, 0.48, 0.63, 0.73, 0.83, 0.93,
-    0.88, 0.78, 0.73, 0.78, 0.83, 0.93,
-    1.18, 1.38, 1.53, 1.68, 1.48, 0.88,
+    0.72, 0.66, 0.62, 0.64, 0.70, 0.80,
+    0.86, 0.92, 0.96, 1.00, 1.04, 1.08,
+    1.02, 0.96, 0.94, 0.98, 1.06, 1.14,
+    1.20, 1.26, 1.30, 1.24, 1.12, 0.88,
   ],
   saves: [
-    0.28, 0.23, 0.18, 0.18, 0.23, 0.33,
-    0.48, 0.58, 0.68, 0.78, 0.88, 0.98,
-    0.93, 0.88, 0.83, 0.88, 0.93, 0.98,
-    1.13, 1.23, 1.28, 1.23, 1.08, 0.68,
+    0.80, 0.75, 0.72, 0.74, 0.78, 0.85,
+    0.90, 0.95, 0.98, 1.02, 1.05, 1.08,
+    1.02, 0.98, 0.96, 1.00, 1.05, 1.10,
+    1.16, 1.22, 1.25, 1.20, 1.12, 0.94,
   ],
   shares: [
-    0.10, 0.06, 0.04, 0.04, 0.08, 0.18,
-    0.38, 0.53, 0.68, 0.83, 0.98, 1.18,
-    1.28, 1.08, 0.88, 0.83, 0.88, 0.98,
-    1.33, 1.53, 1.58, 1.43, 1.18, 0.73,
+    0.74, 0.68, 0.64, 0.66, 0.72, 0.80,
+    0.88, 0.94, 0.98, 1.02, 1.06, 1.12,
+    1.04, 0.98, 0.96, 1.00, 1.08, 1.16,
+    1.22, 1.28, 1.32, 1.25, 1.15, 0.90,
   ],
 };
 
@@ -532,32 +532,35 @@ export function generateOrganicDeliveryPlan(
         // Biological Sigmoid FYP: gentle ramp-up, accelerated peak at ~45%, smooth tapering tail
         const sigmoid = 1 / (1 + Math.exp(-6 * (t - 0.45)));
         const prevSig = i === 0 ? 0 : 1 / (1 + Math.exp(-6 * ((i - 0.5) / (runsCount - 1) - 0.45)));
-        strategyWeight = Math.max(0.15, (sigmoid - prevSig) * runsCount);
+        strategyWeight = Math.max(0.2, (sigmoid - prevSig) * runsCount);
       } else if (strategy === "burst") {
-        // Front-Loaded Rush: heavy initial momentum in first 35% of duration, then smooth taper
-        strategyWeight = Math.max(0.25, Math.exp(-2.2 * t) * 1.8 + 0.25);
+        // Front-Loaded Rush: heavy initial momentum in first 30% of duration, then smooth taper
+        strategyWeight = Math.max(0.3, Math.exp(-2.2 * t) * 1.6 + 0.35);
       } else if (strategy === "normal") {
         // Steady Human Pace: balanced arrival rate with organic subtle variation
-        strategyWeight = 1.0 + (Math.random() * 0.16 - 0.08);
+        strategyWeight = 1.0 + Math.sin(t * Math.PI * 1.5) * 0.08;
       } else if (strategy === "peak_hours") {
-        // Circadian Prime-Time Amplification: boost 18h-22h window by 1.8x, suppress night
-        const hourMult = hourMultipliers[hour] || 1.0;
-        strategyWeight = Math.pow(hourMult, 1.5);
+        // Evening viral prime weighting: baseline organic wave + smooth evening crests
+        const baseCurve = Math.sin(t * Math.PI) * 0.5 + 0.75;
+        const hourEffect = 1 + ((hourMultipliers[hour] || 1.0) - 1) * 0.5;
+        strategyWeight = baseCurve * hourEffect;
       } else if (strategy === "stealth") {
         // Stealth Trickle: lower velocity with extended intervals
-        strategyWeight = 0.85 + (Math.random() * 0.2 - 0.1);
+        strategyWeight = 0.88 + Math.sin(t * Math.PI * 2) * 0.08;
       }
 
       let weight = strategyWeight;
       if (peakHoursEnabled && strategy !== "peak_hours") {
-        weight *= (hourMultipliers[hour] || 1.0) * (dayMultipliers[day] || 1.0);
+        // Subtle organic circadian ripple (±10% influence so curve stays smooth and doesn't create jagged spikes)
+        const hourEffect = 1 + ((hourMultipliers[hour] || 1.0) - 1) * 0.35;
+        weight *= hourEffect;
       }
 
-      // Add biological variance (±20%)
-      const varianceRange = Math.min(0.25, Math.max(0.05, (variancePercent / 100) * 0.25));
+      // Add gentle biological variance (±8% so it stays smooth while evading pattern detection)
+      const varianceRange = Math.min(0.12, Math.max(0.04, (variancePercent / 100) * 0.12));
       weight *= 1 + (Math.random() * 2 - 1) * varianceRange;
 
-      weights.push(Math.max(0.05, weight));
+      weights.push(Math.max(0.1, weight));
       scheduledTimes.push(scheduledMs);
     }
 
@@ -1040,7 +1043,7 @@ export function generateTikTokAlgorithmicPlan(
 
   for (let i = 0; i < savesWaveCount; i++) {
     const progress = (i + 1) / (savesWaveCount + 1);
-    const saveOffset = Math.max(45, Math.min(durationMinutes - 30, Math.round(progress * durationMinutes * 0.85)));
+    const saveOffset = Math.max(45, Math.min(durationMinutes - 20, Math.round(progress * durationMinutes)));
     savesOffsets.push(saveOffset);
     savesRaw.push(minSaves + Math.floor(Math.random() * 5));
   }
@@ -1061,7 +1064,7 @@ export function generateTikTokAlgorithmicPlan(
 
   for (let i = 0; i < sharesWaveCount; i++) {
     const progress = (i + 1) / (sharesWaveCount + 1);
-    const shareOffset = Math.max(60, Math.min(durationMinutes - 45, Math.round(progress * durationMinutes * 0.80)));
+    const shareOffset = Math.max(60, Math.min(durationMinutes - 25, Math.round(progress * durationMinutes)));
     sharesOffsets.push(shareOffset);
     sharesRaw.push(minShares + Math.floor(Math.random() * 4));
   }

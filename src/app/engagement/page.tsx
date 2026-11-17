@@ -1352,7 +1352,7 @@ export default function EngagementPage() {
                 onClick={() => setShowTimeline(!showTimeline)}
                 className="px-3 py-1 rounded-xl bg-white hover:bg-gray-50 border border-[#DEE0ED] text-[11px] font-bold text-[#1A1D31] transition-all flex items-center gap-1 cursor-pointer press-scale shadow-2xs font-sans"
               >
-                <span>{showTimeline ? "Hide Schedule" : `View ${scheduleRows.length} Batches`}</span>
+                <span>{showTimeline ? "Hide Schedule" : `View Schedule (${plannedSchedule.views.length} Batches)`}</span>
                 {showTimeline ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
               </button>
             </div>
