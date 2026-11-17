@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { BinanceAddFundsModal } from "@/components/BinanceAddFundsModal";
 import { AdminOutOfBalanceBanner } from "@/components/AdminOutOfBalanceBanner";
+import { InteractiveDeliveryGraph } from "@/components/engagement/InteractiveDeliveryGraph";
 import {
   generateOrganicDeliveryPlan,
   OrganicBatch,
@@ -661,6 +662,34 @@ export default function EngagementPage() {
     setTimeout(() => setShuffling(false), 300);
   }
 
+  const handleUpdateViews = useCallback((newViews: number[]) => {
+    setPlannedSchedule((prev) => ({
+      ...prev,
+      views: newViews,
+    }));
+  }, []);
+
+  const handleUpdateLikes = useCallback((newLikes: number[]) => {
+    setPlannedSchedule((prev) => ({
+      ...prev,
+      likes: newLikes,
+    }));
+  }, []);
+
+  const handleUpdateSaves = useCallback((newSaves: number[]) => {
+    setPlannedSchedule((prev) => ({
+      ...prev,
+      saves: newSaves,
+    }));
+  }, []);
+
+  const handleUpdateShares = useCallback((newShares: number[]) => {
+    setPlannedSchedule((prev) => ({
+      ...prev,
+      shares: newShares,
+    }));
+  }, []);
+
   useEffect(() => {
     if (statusData?.presets) {
       const p = activePresets[selectedPresetId] || activePresets.tiktok_2k;
@@ -1277,12 +1306,12 @@ export default function EngagementPage() {
                       </span>
                     </div>
 
-                    <div className="font-bold text-xs text-[#1A1D31] flex items-center gap-1">
+                    <div className="font-bold text-xs text-[#1A1D31] flex items-center gap-1 font-sans">
                       <span>{opt.name}</span>
                       {isSelected && <Check className="w-3 h-3 text-[#3A4EFB] stroke-[3]" />}
                     </div>
 
-                    <p className="text-[10px] text-[#64748B] mt-1 line-clamp-2 leading-tight">
+                    <p className="text-[10px] text-[#64748B] mt-1 line-clamp-2 leading-tight font-sans">
                       {opt.description}
                     </p>
                   </div>
@@ -1290,6 +1319,27 @@ export default function EngagementPage() {
               );
             })}
           </div>
+
+          {/* Interactive Live Delivery Graph with Draggable Points & Smooth Organic Spline */}
+          <InteractiveDeliveryGraph
+            durationHours={currentPreset.durationHours}
+            strategy={selectedStrategy}
+            views={plannedSchedule.views}
+            viewOffsets={plannedSchedule.viewOffsets || []}
+            likes={currentPreset.likes.enabled !== false ? plannedSchedule.likes : []}
+            likeOffsets={currentPreset.likes.offsets || []}
+            saves={currentPreset.saves?.enabled ? plannedSchedule.saves : []}
+            saveOffsets={currentPreset.saves?.offsets || []}
+            shares={currentPreset.shares?.enabled ? plannedSchedule.shares : []}
+            shareOffsets={currentPreset.shares?.offsets || []}
+            providerMinimum={currentPreset.views.min || 100}
+            planTimestamp={planTimestamp}
+            onUpdateViews={handleUpdateViews}
+            onUpdateLikes={handleUpdateLikes}
+            onUpdateSaves={handleUpdateSaves}
+            onUpdateShares={handleUpdateShares}
+            onResetPlan={rerollPlan}
+          />
 
           {/* Quick Metrics & Human Behavior Score Strip */}
           <div className="p-3.5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] flex flex-wrap items-center justify-between gap-3 text-xs">
@@ -1372,9 +1422,37 @@ export default function EngagementPage() {
 
                     <div className="flex items-center flex-wrap gap-1.5 self-end sm:self-auto shrink-0 font-mono text-[11px]">
                       {row.viewQty > 0 && currentPreset.views.enabled !== false && (
-                        <span className="px-2 py-0.5 rounded-md font-bold bg-blue-50 text-blue-700 border border-blue-200/60">
-                          {row.viewQty} views
-                        </span>
+                        <div className="flex items-center gap-1 font-sans">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = [...plannedSchedule.views];
+                              const curr = next[row.runNumber - 1] ?? row.viewQty;
+                              next[row.runNumber - 1] = Math.max(currentPreset.views.min || 100, curr - 25);
+                              handleUpdateViews(next);
+                            }}
+                            className="w-4 h-4 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center text-[10px] font-bold cursor-pointer transition-colors"
+                            title="Decrease batch volume"
+                          >
+                            -
+                          </button>
+                          <span className="px-2 py-0.5 rounded-md font-bold bg-blue-50 text-blue-700 border border-blue-200/60 font-mono">
+                            {row.viewQty} views
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = [...plannedSchedule.views];
+                              const curr = next[row.runNumber - 1] ?? row.viewQty;
+                              next[row.runNumber - 1] = curr + 25;
+                              handleUpdateViews(next);
+                            }}
+                            className="w-4 h-4 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center text-[10px] font-bold cursor-pointer transition-colors"
+                            title="Increase batch volume"
+                          >
+                            +
+                          </button>
+                        </div>
                       )}
                       {row.likeQty && (
                         <span className="px-2 py-0.5 rounded-md font-bold bg-rose-50 text-rose-700 border border-rose-200/60 flex items-center gap-1">
