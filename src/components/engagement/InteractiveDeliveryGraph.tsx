@@ -521,15 +521,15 @@ export function InteractiveDeliveryGraph({
   }, [strategy]);
 
   return (
-    <div className="bg-white rounded-3xl border border-[#DEE0ED] p-4 sm:p-5 shadow-subtle space-y-3 font-sans select-none">
+    <div className="bg-white rounded-3xl border border-[#E4E0D3] p-4 sm:p-5 shadow-subtle space-y-3 font-sans select-none">
       {/* Top Header: Title, Live Strategy, Mode Switcher & Legend */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#DEE0ED]/80">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#E4E0D3]/80">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-bold text-[#1A1D31] font-sans">
               Delivery Curve ({strategyMeta.name})
             </h3>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#3A4EFB]/10 text-[#3A4EFB] font-sans">
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#2F6B3A]/10 text-[#2F6B3A] font-sans">
               Organic Spline
             </span>
             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/60 hidden sm:inline-flex items-center gap-1 font-sans">
@@ -547,13 +547,13 @@ export function InteractiveDeliveryGraph({
         {/* Controls: Mode Switcher & Legend */}
         <div className="flex items-center flex-wrap gap-2 text-[11px] font-bold">
           {/* View Mode Toggle */}
-          <div className="flex items-center p-0.5 rounded-lg bg-[#F8F9FD] border border-[#DEE0ED]">
+          <div className="flex items-center p-0.5 rounded-lg bg-[#F3F1EA] border border-[#E4E0D3]">
             <button
               type="button"
               onClick={() => setViewMode("rate")}
               className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer font-sans ${
                 viewMode === "rate"
-                  ? "bg-white text-[#3A4EFB] shadow-2xs border border-[#DEE0ED]/70"
+                  ? "bg-white text-[#2F6B3A] shadow-2xs border border-[#E4E0D3]/70"
                   : "text-[#64748B] hover:text-[#1A1D31]"
               }`}
               title="Show batch delivery pacing rate"
@@ -566,7 +566,7 @@ export function InteractiveDeliveryGraph({
               onClick={() => setViewMode("cumulative")}
               className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer font-sans ${
                 viewMode === "cumulative"
-                  ? "bg-white text-[#3A4EFB] shadow-2xs border border-[#DEE0ED]/70"
+                  ? "bg-white text-[#2F6B3A] shadow-2xs border border-[#E4E0D3]/70"
                   : "text-[#64748B] hover:text-[#1A1D31]"
               }`}
               title="Show total cumulative growth curve (TikTok Radar View)"
@@ -577,8 +577,8 @@ export function InteractiveDeliveryGraph({
           </div>
 
           {/* Metric Legend Chips */}
-          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-blue-50 text-[#3A4EFB] border border-blue-200/60 shadow-2xs font-sans">
-            <span className="w-2 h-2 rounded-full bg-[#3A4EFB]" />
+          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-blue-50 text-[#2F6B3A] border border-blue-200/60 shadow-2xs font-sans">
+            <span className="w-2 h-2 rounded-full bg-[#2F6B3A]" />
             <span>Views ({totalViews.toLocaleString()})</span>
           </span>
 
@@ -607,7 +607,7 @@ export function InteractiveDeliveryGraph({
             <button
               type="button"
               onClick={onResetPlan}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold bg-[#F8F9FD] text-[#64748B] hover:text-[#3A4EFB] hover:bg-white border border-[#DEE0ED] transition-all cursor-pointer press-scale font-sans"
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold bg-[#F3F1EA] text-[#64748B] hover:text-[#2F6B3A] hover:bg-white border border-[#E4E0D3] transition-all cursor-pointer press-scale font-sans"
               title="Re-roll algorithmic curve"
             >
               <RefreshCw className="w-2.5 h-2.5" />
@@ -618,7 +618,7 @@ export function InteractiveDeliveryGraph({
       </div>
 
       {/* SVG Canvas Area */}
-      <div className="relative w-full overflow-hidden rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED]/80 p-1 sm:p-2">
+      <div className="relative w-full overflow-hidden rounded-2xl bg-[#F3F1EA] border border-[#E4E0D3]/80 p-1 sm:p-2">
         <svg
           ref={svgRef}
           viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
@@ -632,9 +632,9 @@ export function InteractiveDeliveryGraph({
           <defs>
             {/* Views Blue Gradient */}
             <linearGradient id="viewsAreaGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#3A4EFB" stopOpacity="0.25" />
-              <stop offset="85%" stopColor="#3A4EFB" stopOpacity="0.03" />
-              <stop offset="100%" stopColor="#3A4EFB" stopOpacity="0" />
+              <stop offset="0%" stopColor="#2F6B3A" stopOpacity="0.12" />
+              <stop offset="85%" stopColor="#2F6B3A" stopOpacity="0.03" />
+              <stop offset="100%" stopColor="#2F6B3A" stopOpacity="0" />
             </linearGradient>
 
             {/* Likes Red Gradient */}
@@ -752,7 +752,7 @@ export function InteractiveDeliveryGraph({
             <path
               d={viewsPath}
               fill="none"
-              stroke="#3A4EFB"
+              stroke="#2F6B3A"
               strokeWidth={viewMode === "cumulative" ? 3.6 : 3.2}
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -795,7 +795,7 @@ export function InteractiveDeliveryGraph({
                       cy={pt.y}
                       r="12"
                       fill="none"
-                      stroke="#3A4EFB"
+                      stroke="#2F6B3A"
                       strokeWidth="1.5"
                       opacity="0.4"
                       className="animate-ping"
@@ -808,7 +808,7 @@ export function InteractiveDeliveryGraph({
                     cy={pt.y}
                     r={isDragging ? 7.5 : isHovered ? 6.5 : 5}
                     fill="#FFFFFF"
-                    stroke="#3A4EFB"
+                    stroke="#2F6B3A"
                     strokeWidth={isDragging ? 3.5 : 3}
                     filter="url(#handleShadow)"
                     className="transition-all duration-150 pointer-events-none"
@@ -895,7 +895,7 @@ export function InteractiveDeliveryGraph({
         {/* Bottom Micro Guide & Anti-Radar Signal */}
         <div className="flex items-center justify-between px-2 pt-1.5 text-[10px] font-semibold text-[#64748B] font-sans">
           <span>0h (Launch Pool)</span>
-          <span className="flex items-center gap-1.5 text-[#3A4EFB] font-bold">
+          <span className="flex items-center gap-1.5 text-[#2F6B3A] font-bold">
             {viewMode === "rate" ? (
               <span>↑ Drag handles vertically to sculpt organic delivery curve</span>
             ) : (

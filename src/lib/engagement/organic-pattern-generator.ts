@@ -286,19 +286,25 @@ export function generatePatternSchedule(
   const minComments = 1;
 
   // 1. Determine optimal runs count for micro-batching
-  let runsCount: number;
-  if (targetViews <= 3500) {
-    runsCount = 24; // avg ~123 views, ~15m
+  // Max batches must allow headroom above provider minimum (avg >= minViews * 1.18) so variance doesn't dip below min
+  const maxBatchesPossible = Math.max(1, Math.floor(targetViews / (minViews * 1.18)));
+  let desiredRuns: number;
+  if (targetViews <= 1500) {
+    desiredRuns = Math.max(3, Math.floor(targetViews / 130)); // e.g. 1000 views -> 7-8 runs
+  } else if (targetViews <= 3500) {
+    desiredRuns = 24; // avg ~123 views, ~15m
   } else if (targetViews <= 8000) {
-    runsCount = 42; // avg ~121 views, ~34m
+    desiredRuns = 42; // avg ~121 views, ~34m
   } else if (targetViews <= 12000) {
-    runsCount = 72; // avg ~146 views, ~40m
+    desiredRuns = 72; // avg ~146 views, ~40m
   } else if (targetViews <= 20000) {
-    runsCount = 96; // avg ~158 views, ~45m
+    desiredRuns = 96; // avg ~158 views, ~45m
   } else {
     // 50K: 240 batches over 5 days (avg ~211 views, max <= 400)
-    runsCount = Math.min(260, Math.max(180, Math.round(durationHours * 2.0)));
+    desiredRuns = Math.min(260, Math.max(180, Math.round(durationHours * 2.0)));
   }
+
+  const runsCount = Math.max(1, Math.min(maxBatchesPossible, desiredRuns));
 
   // 2. Generate raw weights using Sigmoid S-Curve modulated by archetype
   const k = archetype.steepness + (rand() * 0.4 - 0.2);
@@ -402,10 +408,10 @@ export function generatePatternSchedule(
   }
 
   // 4. Views-Proportional Auxiliary Engagement Milestones
-  const defaultLikes = options.targetLikes || Math.round(targetViews * 0.022); // ~2.2% like ratio
-  const defaultSaves = options.targetSaves || Math.round(targetViews * 0.012); // ~1.2% save ratio
-  const defaultShares = options.targetShares || Math.round(targetViews * 0.005); // ~0.5% share ratio
-  const defaultComments = options.targetComments || (targetViews >= 5000 ? Math.round(targetViews * 0.001) : 0);
+  const defaultLikes = options.targetLikes ?? Math.round(targetViews * 0.022); // ~2.2% like ratio
+  const defaultSaves = options.targetSaves ?? Math.round(targetViews * 0.012); // ~1.2% save ratio
+  const defaultShares = options.targetShares ?? Math.round(targetViews * 0.005); // ~0.5% share ratio
+  const defaultComments = options.targetComments ?? (targetViews >= 5000 ? Math.round(targetViews * 0.001) : 0);
 
   // Cumulative views array
   const cumViews: number[] = [];
@@ -415,105 +421,103 @@ export function generatePatternSchedule(
     cumViews.push(runningViews);
   }
 
-  // A. LIKES: Every ~1K cumulative views (17–25 likes / 1K)
+  // A. LIKES: Distributed organically behind views
   const likeOffsets: number[] = [];
   const likesRaw: number[] = [];
-  const likeMilestoneGap = Math.max(800, Math.min(2000, Math.round(1000 + (rand() * 300 - 150))));
-  let nextLikeMilestone = likeMilestoneGap;
-
-  for (let i = 0; i < views.length; i++) {
-    if (cumViews[i] >= nextLikeMilestone && likesRaw.length < Math.floor(defaultLikes / minLikes)) {
-      const delay = 15 + Math.floor(rand() * 20); // 15-35m lag after view batch
-      const offset = Math.min(durationMinutes - 10, viewOffsets[i] + delay);
-      likeOffsets.push(offset);
-      likesRaw.push(minLikes + Math.floor(rand() * 14));
-      nextLikeMilestone = cumViews[i] + likeMilestoneGap + Math.floor(rand() * 200 - 100);
+  if (defaultLikes >= minLikes) {
+    const likeBatchesCount = Math.max(1, Math.min(Math.floor(defaultLikes / minLikes), Math.max(2, Math.round(defaultLikes / 25))));
+    const step = Math.max(1, Math.floor(views.length / (likeBatchesCount + 1)));
+    for (let b = 0; b < likeBatchesCount; b++) {
+      const viewIdx = Math.min(views.length - 1, Math.max(1, (b + 1) * step));
+      const lag = 12 + Math.floor(rand() * 20);
+      likeOffsets.push(Math.min(durationMinutes - 5, (viewOffsets[viewIdx] || 0) + lag));
+      likesRaw.push(minLikes);
     }
-  }
-
-  if (likesRaw.length === 0) {
-    likeOffsets.push(Math.min(durationMinutes - 10, viewOffsets[Math.min(2, views.length - 1)] + 25));
-    likesRaw.push(minLikes + Math.floor(rand() * 8));
+  } else if (defaultLikes > 0) {
+    likeOffsets.push(Math.min(durationMinutes - 10, (viewOffsets[Math.min(2, views.length - 1)] || 0) + 20));
+    likesRaw.push(defaultLikes);
   }
   likeOffsets.sort((a, b) => a - b);
 
-  const likesAdjusted = solveKeConservationEquation(
-    likesRaw.map((q) => ({ quantity: q })),
-    Math.max(minLikes * likesRaw.length, defaultLikes),
-    minLikes,
-    Math.max(minLikes * 4, Math.ceil((defaultLikes / Math.max(1, likesRaw.length)) * 2.5))
-  );
-  const likes = likesAdjusted.map((r) => r.quantity);
+  const likes = likesRaw.length > 0 && defaultLikes >= minLikes
+    ? solveKeConservationEquation(
+        likesRaw.map((q) => ({ quantity: q })),
+        defaultLikes,
+        minLikes,
+        Math.max(minLikes * 3, Math.ceil((defaultLikes / likesRaw.length) * 2.2))
+      ).map((r) => r.quantity)
+    : likesRaw;
 
-  // B. SAVES: Every ~3K cumulative views (~1.2% ratio)
+  // B. SAVES: Organic milestone saves
   const saveOffsets: number[] = [];
   const savesRaw: number[] = [];
-  const saveMilestoneGap = Math.max(2000, Math.min(5000, Math.round(3000 + (rand() * 500 - 250))));
-  let nextSaveMilestone = saveMilestoneGap;
-
-  for (let i = 0; i < views.length; i++) {
-    if (cumViews[i] >= nextSaveMilestone && savesRaw.length < Math.floor(defaultSaves / minSaves)) {
-      const delay = 30 + Math.floor(rand() * 35);
-      const offset = Math.min(durationMinutes - 15, viewOffsets[i] + delay);
-      saveOffsets.push(offset);
-      savesRaw.push(minSaves + Math.floor(rand() * 6));
-      nextSaveMilestone = cumViews[i] + saveMilestoneGap + Math.floor(rand() * 400 - 200);
+  if (defaultSaves >= minSaves) {
+    const saveBatchesCount = Math.max(1, Math.min(Math.floor(defaultSaves / minSaves), Math.max(1, Math.round(defaultSaves / 20))));
+    const step = Math.max(1, Math.floor(views.length / (saveBatchesCount + 1)));
+    for (let b = 0; b < saveBatchesCount; b++) {
+      const viewIdx = Math.min(views.length - 1, Math.max(1, (b + 1) * step));
+      const lag = 25 + Math.floor(rand() * 30);
+      saveOffsets.push(Math.min(durationMinutes - 10, (viewOffsets[viewIdx] || 0) + lag));
+      savesRaw.push(minSaves);
     }
-  }
-
-  if (savesRaw.length === 0 && defaultSaves >= minSaves) {
-    saveOffsets.push(Math.min(durationMinutes - 15, viewOffsets[Math.min(4, views.length - 1)] + 45));
-    savesRaw.push(minSaves);
+  } else if (defaultSaves > 0) {
+    saveOffsets.push(Math.min(durationMinutes - 10, (viewOffsets[Math.min(4, views.length - 1)] || 0) + 35));
+    savesRaw.push(defaultSaves);
   }
   saveOffsets.sort((a, b) => a - b);
 
-  const savesAdjusted = solveKeConservationEquation(
-    savesRaw.map((q) => ({ quantity: q })),
-    Math.max(minSaves * savesRaw.length, defaultSaves),
-    minSaves,
-    Math.max(minSaves * 3, Math.ceil((defaultSaves / Math.max(1, savesRaw.length)) * 2.0))
-  );
-  const saves = savesAdjusted.map((r) => r.quantity);
+  const saves = savesRaw.length > 0 && defaultSaves >= minSaves
+    ? solveKeConservationEquation(
+        savesRaw.map((q) => ({ quantity: q })),
+        defaultSaves,
+        minSaves,
+        Math.max(minSaves * 3, Math.ceil((defaultSaves / savesRaw.length) * 2.0))
+      ).map((r) => r.quantity)
+    : savesRaw;
 
-  // C. SHARES: Every ~5K cumulative views (~0.5% ratio)
+  // C. SHARES: Organic milestone shares
   const shareOffsets: number[] = [];
   const sharesRaw: number[] = [];
-  const shareMilestoneGap = Math.max(3000, Math.min(8000, Math.round(5000 + (rand() * 800 - 400))));
-  let nextShareMilestone = shareMilestoneGap;
-
-  for (let i = 0; i < views.length; i++) {
-    if (cumViews[i] >= nextShareMilestone && sharesRaw.length < Math.floor(defaultShares / minShares)) {
-      const delay = 45 + Math.floor(rand() * 45);
-      const offset = Math.min(durationMinutes - 20, viewOffsets[i] + delay);
-      shareOffsets.push(offset);
-      sharesRaw.push(minShares + Math.floor(rand() * 4));
-      nextShareMilestone = cumViews[i] + shareMilestoneGap + Math.floor(rand() * 600 - 300);
+  if (defaultShares >= minShares) {
+    const shareBatchesCount = Math.max(1, Math.min(Math.floor(defaultShares / minShares), Math.max(1, Math.round(defaultShares / 20))));
+    const step = Math.max(1, Math.floor(views.length / (shareBatchesCount + 1)));
+    for (let b = 0; b < shareBatchesCount; b++) {
+      const viewIdx = Math.min(views.length - 1, Math.max(1, (b + 1) * step));
+      const lag = 40 + Math.floor(rand() * 40);
+      shareOffsets.push(Math.min(durationMinutes - 15, (viewOffsets[viewIdx] || 0) + lag));
+      sharesRaw.push(minShares);
     }
-  }
-
-  if (sharesRaw.length === 0 && defaultShares >= minShares) {
-    shareOffsets.push(Math.min(durationMinutes - 20, viewOffsets[Math.min(6, views.length - 1)] + 60));
-    sharesRaw.push(minShares);
+  } else if (defaultShares > 0) {
+    shareOffsets.push(Math.min(durationMinutes - 15, (viewOffsets[Math.min(6, views.length - 1)] || 0) + 45));
+    sharesRaw.push(defaultShares);
   }
   shareOffsets.sort((a, b) => a - b);
 
-  const sharesAdjusted = solveKeConservationEquation(
-    sharesRaw.map((q) => ({ quantity: q })),
-    Math.max(minShares * sharesRaw.length, defaultShares),
-    minShares,
-    Math.max(minShares * 3, Math.ceil((defaultShares / Math.max(1, sharesRaw.length)) * 2.0))
-  );
-  const shares = sharesAdjusted.map((r) => r.quantity);
+  const shares = sharesRaw.length > 0 && defaultShares >= minShares
+    ? solveKeConservationEquation(
+        sharesRaw.map((q) => ({ quantity: q })),
+        defaultShares,
+        minShares,
+        Math.max(minShares * 3, Math.ceil((defaultShares / sharesRaw.length) * 2.0))
+      ).map((r) => r.quantity)
+    : sharesRaw;
 
-  // D. COMMENTS: Optional organic social proof (~0.1% or defaultComments)
+  // D. COMMENTS: Optional organic social proof
   const commentOffsets: number[] = [];
   const commentsRaw: number[] = [];
   if (defaultComments > 0) {
-    const commentWaveCount = Math.max(1, Math.min(10, Math.round(defaultComments / 3)));
+    const commentWaveCount = Math.max(1, Math.min(defaultComments, Math.min(10, Math.round(defaultComments / 3))));
     const cStep = durationMinutes / (commentWaveCount + 1);
     for (let c = 0; c < commentWaveCount; c++) {
       commentOffsets.push(Math.round((c + 1) * cStep + (rand() * 20 - 10)));
-      commentsRaw.push(Math.max(1, Math.round(defaultComments / commentWaveCount)));
+      commentsRaw.push(Math.max(1, Math.floor(defaultComments / commentWaveCount)));
+    }
+    let rem = defaultComments - commentsRaw.reduce((a, b) => a + b, 0);
+    let ci = 0;
+    while (rem > 0) {
+      commentsRaw[ci % commentsRaw.length]++;
+      rem--;
+      ci++;
     }
   }
   const comments = commentsRaw;

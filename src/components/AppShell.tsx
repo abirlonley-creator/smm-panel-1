@@ -73,10 +73,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="lg:pl-64 flex flex-col min-h-screen overflow-x-hidden">
         {/* Administrator Under Update Mode Alert Banner */}
         {underMaintenance && isAdmin && (
-          <div className="bg-amber-500/15 border-b border-amber-500/30 px-4 py-2.5 text-xs text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2 z-30 animate-fadeIn">
+          <div className="bg-[#FBF0DC] border-b border-[#B7791F]/30 px-4 py-2.5 text-xs text-[#B7791F] flex flex-col sm:flex-row sm:items-center justify-between gap-2 z-30 animate-fadeIn">
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
-              <span className="font-semibold">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#B7791F] animate-pulse shrink-0" />
+              <span className="font-semibold text-amber-950">
                 Under Update Mode Active: Standard users are locked out and see the update screen. As administrator, you have full access to every panel.
               </span>
             </div>
@@ -94,12 +94,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
           {children}
         </main>
-        <footer className="border-t border-[#DEE0ED]/80 py-4 sm:py-6 px-4 sm:px-8 text-xs text-[#252943]/60 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4 max-w-7xl mx-auto w-full">
+        <footer className="border-t border-[#E4E0D3] py-4 sm:py-6 px-4 sm:px-8 text-xs text-[#5B625F] flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4 max-w-7xl mx-auto w-full">
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-[#3A4EFB]"></span>
-            <span>AuraSMM Minimalist Panel & Growth Planner</span>
+            <img
+              src="/brand/logos/mark-on-light.svg"
+              alt="AuraSMM"
+              className="w-4 h-4 inline-block shrink-0"
+            />
+            <span className="font-medium text-[#111413]">AuraSMM Minimalist Panel & Growth Planner</span>
           </div>
-          <div className="flex items-center gap-4 text-xs text-[#252943]/40">
+          <div className="flex items-center gap-4 text-xs text-[#5B625F]/60">
             <span>{underMaintenance ? "Under Update (Admin Mode)" : "All systems operational"}</span>
           </div>
         </footer>

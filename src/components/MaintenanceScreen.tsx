@@ -98,9 +98,18 @@ export function MaintenanceScreen({
   const cleanHandle = supportTelegram.replace(/^@/, "");
 
   return (
-    <div className="min-h-screen bg-[#090A0F] text-white flex items-center justify-center p-4 select-none">
-      <div className="w-full max-w-sm rounded-2xl bg-[#12131A] border border-white/10 p-6 sm:p-7 text-center space-y-5 shadow-xl relative overflow-hidden">
+    <div className="min-h-screen bg-[#111413] text-white flex items-center justify-center p-4 select-none">
+      <div className="w-full max-w-sm rounded-2xl bg-[#1B201E] border border-[#222826] p-6 sm:p-7 text-center space-y-5 shadow-xl relative overflow-hidden">
         
+        {/* Brand Lockup */}
+        <div className="flex justify-center mb-1">
+          <img
+            src="/brand/logos/lockup-stacked-on-dark.svg"
+            alt="AuraSMM"
+            className="w-36 h-auto mx-auto"
+          />
+        </div>
+
         {/* Status indicator */}
         <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-300 text-[11px] font-semibold">
           <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
@@ -112,7 +121,7 @@ export function MaintenanceScreen({
           <h1 className="text-lg font-bold text-white tracking-tight">
             {customTitle || "Updating website"}
           </h1>
-          <p className="text-xs text-neutral-400 leading-relaxed">
+          <p className="text-xs text-[#9AA39F] leading-relaxed">
             {customMessage || "Please hold on for a moment while our team completes important platform improvements. Orders continue delivering in the background."}
           </p>
         </div>
@@ -122,19 +131,19 @@ export function MaintenanceScreen({
           href={`https://t.me/${cleanHandle}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="w-full py-2.5 px-4 rounded-xl bg-white/5 hover:bg-white/10 text-white text-xs font-semibold flex items-center justify-center gap-2 transition-colors border border-white/10"
+          className="w-full py-2.5 px-4 rounded-xl bg-[#229ED9]/15 hover:bg-[#229ED9]/25 text-[#229ED9] hover:text-white text-xs font-semibold flex items-center justify-center gap-2 transition-colors border border-[#222826]"
         >
-          <Send className="w-3.5 h-3.5 text-neutral-400" />
+          <Send className="w-3.5 h-3.5 text-[#229ED9]" />
           <span>Support (@{cleanHandle})</span>
         </a>
 
         {/* Administrator Access Accordion */}
-        <div className="pt-2 border-t border-white/5 space-y-3">
+        <div className="pt-2 border-t border-[#222826] space-y-3">
           {!showAdminLogin ? (
             <button
               type="button"
               onClick={() => setShowAdminLogin(true)}
-              className="text-[11px] text-neutral-500 hover:text-neutral-300 transition-colors flex items-center justify-center gap-1.5 mx-auto"
+              className="text-[11px] text-[#9AA39F] hover:text-[#F3F1EA] transition-colors flex items-center justify-center gap-1.5 mx-auto"
             >
               <Lock className="w-3 h-3" />
               <span>Administrator Access</span>
@@ -142,8 +151,8 @@ export function MaintenanceScreen({
           ) : (
             <form onSubmit={handleAdminLogin} className="space-y-2.5 text-left animate-fadeIn">
               <div className="flex items-center justify-between">
-                <label className="text-[11px] font-semibold text-neutral-300 flex items-center gap-1.5">
-                  <KeyRound className="w-3 h-3 text-amber-400" />
+                <label className="text-[11px] font-semibold text-[#9AA39F] flex items-center gap-1.5">
+                  <KeyRound className="w-3 h-3 text-[#D4F04F]" />
                   <span>Admin Passkey</span>
                 </label>
                 <button
@@ -152,7 +161,7 @@ export function MaintenanceScreen({
                     setShowAdminLogin(false);
                     setLoginError(null);
                   }}
-                  className="text-[10px] text-neutral-500 hover:text-neutral-300"
+                  className="text-[10px] text-[#5B625F] hover:text-[#9AA39F]"
                 >
                   Cancel
                 </button>
@@ -165,20 +174,20 @@ export function MaintenanceScreen({
                   value={adminPasskey}
                   onChange={(e) => setAdminPasskey(e.target.value)}
                   disabled={loginLoading}
-                  className="flex-1 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-amber-400/50"
+                  className="flex-1 px-3 py-1.5 rounded-lg bg-[#111413] border border-[#222826] text-xs text-white placeholder-[#5B625F] focus:outline-none focus:border-[#D4F04F]"
                   autoFocus
                 />
                 <button
                   type="submit"
                   disabled={loginLoading || !adminPasskey.trim()}
-                  className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs flex items-center justify-center gap-1 transition-all disabled:opacity-50"
+                  className="px-3 py-1.5 rounded-lg bg-[#D4F04F] hover:bg-[#C5E23A] text-[#111413] font-bold text-xs flex items-center justify-center gap-1 transition-all disabled:opacity-50"
                 >
-                  {loginLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowRight className="w-3.5 h-3.5" />}
+                  {loginLoading ? <img src="/brand/logos/mark-on-dark.svg" className="w-3.5 h-3.5 animate-pulse opacity-80" alt="" /> : <ArrowRight className="w-3.5 h-3.5" />}
                 </button>
               </div>
 
               {loginError && (
-                <div className="flex items-center gap-1 text-[11px] text-red-400">
+                <div className="flex items-center gap-1 text-[11px] text-[#C4552D]">
                   <AlertCircle className="w-3 h-3 shrink-0" />
                   <span>{loginError}</span>
                 </div>
@@ -187,9 +196,9 @@ export function MaintenanceScreen({
           )}
 
           {/* Quiet footer auto-reconnecting status */}
-          <div className="flex items-center justify-center text-[10px] text-neutral-600">
+          <div className="flex items-center justify-center text-[10px] text-[#5B625F]">
             <span className="flex items-center gap-1.5">
-              <span className={`w-1 h-1 rounded-full ${checking ? "bg-amber-400 animate-pulse" : "bg-neutral-600"}`} />
+              <span className={`w-1 h-1 rounded-full ${checking ? "bg-[#D4F04F] animate-pulse" : "bg-[#5B625F]"}`} />
               <span>Auto-reconnecting</span>
             </span>
           </div>

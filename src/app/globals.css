@@ -3,15 +3,34 @@
 @tailwind utilities;
 
 :root {
-  --background: #F8F9FD;
-  --foreground: #252943;
+  --background: #F3F1EA;
+  --foreground: #111413;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* AuraSMM brand tokens */
+  --aura-ink: #111413;        /* sidebar, dark panels, main text */
+  --aura-ink-2: #1B201E;      /* raised dark surfaces */
+  --aura-line-dark: #222826;  /* hairlines on ink */
+  --aura-bone: #F3F1EA;       /* page background */
+  --aura-card: #FFFFFF;       /* cards */
+  --aura-line: #E4E0D3;       /* borders on light */
+  --aura-lime: #D4F04F;       /* primary action, active state (never as text on light) */
+  --aura-lime-hover: #C5E23A;
+  --aura-forest: #5E8C1F;     /* links, positive text on light */
+  --aura-forest-dark: #3F6212;
+  --aura-clay: #C4552D;       /* errors, logout, destructive */
+  --aura-muted: #5B625F;      /* secondary text on light */
+  --aura-muted-dark: #9AA39F; /* secondary text on ink */
+  --aura-warn-bg: #FBF0DC; --aura-warn: #B7791F; /* keep the Under Update banner amber */
+  --aura-telegram: #229ED9;   /* third-party, keep as is */
+  /* chart series */
+  --aura-views: #2F6B3A; --aura-comments: #2A9D8F; --aura-likes: #C4552D; --aura-saves: #E0A030; --aura-shares: #7C5CBF;
 }
 
 body, input, button, select, textarea {
   font-family: var(--font-inter, system-ui), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  color: #1A1D31;
+  color: #111413;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -57,17 +76,17 @@ body, input, button, select, textarea {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #DEE0ED;
+  background: #E4E0D3;
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #BCC0D6;
+  background: #CBD5E1;
 }
 
 /* Focus styles that are high-contrast and subtle */
 :focus-visible {
-  outline: 2px solid #3A4EFB;
+  outline: 2px solid #5E8C1F;
   outline-offset: 2px;
 }
 

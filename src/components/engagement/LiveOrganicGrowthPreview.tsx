@@ -4,21 +4,26 @@ import React, { useState, useRef, useMemo, useCallback } from "react";
 import {
   Activity,
   RefreshCw,
-  Sparkles,
-  Zap,
   Clock,
   TrendingUp,
-  Eye,
+  Download,
+  Filter,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Layers,
   Heart,
   Bookmark,
   Share2,
   MessageCircle,
+  Eye,
+  Zap,
 } from "lucide-react";
 import {
-  GeneratedSchedulePlan,
-  generatePatternSchedule,
-  getPatternMeta,
-} from "@/lib/engagement/organic-pattern-generator";
+  DeterministicPlan,
+  ScheduledBatch,
+  formatDurationDaysHours,
+} from "@/lib/engagement/deterministic-pattern-engine";
 
 interface Point {
   x: number;
@@ -27,7 +32,7 @@ interface Point {
 
 /**
  * Catmull-Rom to Cubic Bézier spline generator for 100% smooth, anti-radar non-spiked curves.
- * Creates an elegant, flowing continuous curve identical to radar-approved accounts.
+ * Guarantees zero perpendicular spikes or staircase jumps, matching organic TikTok FYP trajectory.
  */
 function getSmoothSplinePath(points: Point[], tension: number = 0.22): string {
   if (!points || points.length === 0) return "";
@@ -62,116 +67,61 @@ function getClosedAreaPath(points: Point[], baselineY: number, tension: number =
 }
 
 export interface LiveOrganicGrowthPreviewProps {
-  initialTemplateId?: number;
-  targetViews: number;
-  durationHours: number;
-  targetLikes?: number;
-  targetSaves?: number;
-  targetShares?: number;
-  targetComments?: number;
-  providerMinViews?: number;
-  planTimestamp?: Date;
-  onScheduleChange?: (schedule: GeneratedSchedulePlan) => void;
+  plan: DeterministicPlan;
+  startDate?: Date;
+  isAdmin?: boolean;
+  onNewPattern?: () => void;
+  onSelectTemplate?: (templateNumber: number) => void;
 }
 
 export function LiveOrganicGrowthPreview({
-  initialTemplateId = 335,
-  targetViews,
-  durationHours,
-  targetLikes,
-  targetSaves,
-  targetShares,
-  targetComments,
-  providerMinViews = 100,
-  planTimestamp = new Date(),
-  onScheduleChange,
+  plan,
+  startDate = new Date(),
+  isAdmin = false,
+  onNewPattern,
+  onSelectTemplate,
 }: LiveOrganicGrowthPreviewProps) {
-  const [templateId, setTemplateId] = useState<number>(initialTemplateId);
-  const [templateInput, setTemplateInput] = useState<string>(String(initialTemplateId));
+  const [showEngagementOverlay, setShowEngagementOverlay] = useState(true);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [filterService, setFilterService] = useState<string>("ALL");
+  const [templateInput, setTemplateInput] = useState<string>("335");
   const [isGenerating, setIsGenerating] = useState(false);
   const svgRef = useRef<SVGSVGElement | null>(null);
-
-  // Generate the active deterministic pattern schedule
-  const schedulePlan = useMemo(() => {
-    return generatePatternSchedule(templateId, targetViews, durationHours, {
-      targetLikes,
-      targetSaves,
-      targetShares,
-      targetComments,
-      providerMinViews,
-    });
-  }, [templateId, targetViews, durationHours, targetLikes, targetSaves, targetShares, targetComments, providerMinViews]);
-
-  // Notify parent on change so actual order payload has these exact runs
-  React.useEffect(() => {
-    if (onScheduleChange) {
-      onScheduleChange(schedulePlan);
-    }
-  }, [schedulePlan, onScheduleChange]);
-
-  // Click "New Pattern": pick a fresh random template number (1..550+)
-  const handleNewPattern = useCallback(() => {
-    setIsGenerating(true);
-    let nextId = Math.floor(Math.random() * 550) + 1;
-    if (nextId === templateId) {
-      nextId = (nextId % 550) + 1;
-    }
-    setTemplateId(nextId);
-    setTemplateInput(String(nextId));
-    setTimeout(() => setIsGenerating(false), 200);
-  }, [templateId]);
-
-  // User typing in Template ID input
-  const handleTemplateInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setTemplateInput(val);
-    const parsed = parseInt(val, 10);
-    if (!isNaN(parsed) && parsed >= 1 && parsed <= 999) {
-      setTemplateId(parsed);
-    }
-  };
 
   // SVG dimensions
   const SVG_WIDTH = 800;
   const SVG_HEIGHT = 260;
-  const padLeft = 45;
-  const padRight = 20;
+  const padLeft = 50;
+  const padRight = 25;
   const padTop = 25;
   const padBottom = 35;
 
   const plotWidth = SVG_WIDTH - padLeft - padRight;
   const plotHeight = SVG_HEIGHT - padTop - padBottom;
   const baselineY = padTop + plotHeight;
+  const totalMinutes = Math.max(60, plan.totalDurationMinutes);
 
-  // Cumulative trajectories
-  const totalMinutes = schedulePlan.totalDurationMinutes;
-
-  const cumViews = useMemo(() => {
-    let running = 0;
-    return schedulePlan.views.map((v) => (running += v));
-  }, [schedulePlan.views]);
-
-  const cumLikes = useMemo(() => {
-    let running = 0;
-    return schedulePlan.likes.map((l) => (running += l));
-  }, [schedulePlan.likes]);
-
-  const cumSaves = useMemo(() => {
-    let running = 0;
-    return schedulePlan.saves.map((s) => (running += s));
-  }, [schedulePlan.saves]);
-
-  const cumShares = useMemo(() => {
-    let running = 0;
-    return schedulePlan.shares.map((s) => (running += s));
-  }, [schedulePlan.shares]);
-
-  const cumComments = useMemo(() => {
-    let running = 0;
-    return schedulePlan.comments.map((c) => (running += c));
-  }, [schedulePlan.comments]);
-
-  const maxTotalViews = Math.max(1, schedulePlan.totalViews);
+  // Separate batches by service
+  const viewBatches = useMemo(
+    () => plan.batches.filter((b) => b.service === "views"),
+    [plan.batches]
+  );
+  const likeBatches = useMemo(
+    () => plan.batches.filter((b) => b.service === "likes"),
+    [plan.batches]
+  );
+  const saveBatches = useMemo(
+    () => plan.batches.filter((b) => b.service === "saves"),
+    [plan.batches]
+  );
+  const shareBatches = useMemo(
+    () => plan.batches.filter((b) => b.service === "shares"),
+    [plan.batches]
+  );
+  const commentBatches = useMemo(
+    () => plan.batches.filter((b) => b.service === "comments"),
+    [plan.batches]
+  );
 
   // Coordinate mappers
   const getX = useCallback(
@@ -184,121 +134,98 @@ export function LiveOrganicGrowthPreview({
 
   const getYViews = useCallback(
     (val: number) => {
-      const fraction = Math.max(0, Math.min(1, val / maxTotalViews));
+      const fraction = Math.max(0, Math.min(1, val / Math.max(1, plan.viewsTotal)));
       return baselineY - fraction * plotHeight;
     },
-    [maxTotalViews, baselineY, plotHeight]
+    [plan.viewsTotal, baselineY, plotHeight]
   );
 
-  // Auxiliary metrics sit gently at the bottom (max 10% of graph height for natural scale)
   const getYAux = useCallback(
     (val: number, maxAux: number) => {
       const fraction = maxAux > 0 ? Math.max(0, Math.min(1, val / maxAux)) : 0;
-      return baselineY - fraction * (plotHeight * 0.12);
+      return baselineY - fraction * (plotHeight * 0.16);
     },
     [baselineY, plotHeight]
   );
 
-  // 1. 100% SMOOTH CUMULATIVE VIEWS CURVE (Catmull-Rom Spline, Zero Staircase)
+  // Build Spline Curve Points from plan.curvePoints
   const viewPoints: Point[] = useMemo(() => {
-    if (schedulePlan.views.length === 0) return [];
+    if (!plan.curvePoints || plan.curvePoints.length === 0) {
+      return [{ x: padLeft, y: baselineY }, { x: padLeft + plotWidth, y: getYViews(plan.viewsTotal) }];
+    }
     const pts: Point[] = [{ x: padLeft, y: baselineY }];
-
-    for (let i = 0; i < schedulePlan.views.length; i++) {
-      const minute = schedulePlan.viewOffsets[i] || 0;
+    for (const cp of plan.curvePoints) {
       pts.push({
-        x: getX(minute),
-        y: getYViews(cumViews[i]),
+        x: getX(cp.minuteOffset),
+        y: getYViews(cp.views),
       });
     }
-
     const lastX = padLeft + plotWidth;
-    const lastY = getYViews(maxTotalViews);
     if (pts[pts.length - 1].x < lastX) {
-      pts.push({ x: lastX, y: lastY });
+      pts.push({ x: lastX, y: getYViews(plan.viewsTotal) });
     }
     return pts;
-  }, [schedulePlan.views, schedulePlan.viewOffsets, cumViews, maxTotalViews, getX, getYViews, padLeft, baselineY, plotWidth]);
+  }, [plan.curvePoints, plan.viewsTotal, getX, getYViews, padLeft, baselineY, plotWidth]);
 
-  const viewsSmoothPath = useMemo(() => {
-    return getSmoothSplinePath(viewPoints, 0.22);
-  }, [viewPoints]);
+  const viewsSmoothPath = useMemo(() => getSmoothSplinePath(viewPoints, 0.22), [viewPoints]);
+  const viewsSmoothArea = useMemo(() => getClosedAreaPath(viewPoints, baselineY, 0.22), [viewPoints, baselineY]);
 
-  const viewsSmoothArea = useMemo(() => {
-    return getClosedAreaPath(viewPoints, baselineY, 0.22);
-  }, [viewPoints, baselineY]);
-
-  // 2. SMOOTH AUXILIARY METRIC CURVES (Likes, Saves, Shares)
+  // Engagement auxiliary spline curves
   const likePoints: Point[] = useMemo(() => {
-    if (schedulePlan.likes.length === 0) return [];
+    if (plan.likesTotal === 0 || !plan.curvePoints) return [];
     const pts: Point[] = [{ x: padLeft, y: baselineY }];
-    const maxLikes = schedulePlan.totalLikes || 1;
-
-    for (let i = 0; i < schedulePlan.likes.length; i++) {
-      const minute = schedulePlan.likeOffsets[i] || 0;
+    for (const cp of plan.curvePoints) {
       pts.push({
-        x: getX(minute),
-        y: getYAux(cumLikes[i], maxLikes),
+        x: getX(cp.minuteOffset),
+        y: getYAux(cp.likes, plan.likesTotal),
       });
     }
     const lastX = padLeft + plotWidth;
     if (pts[pts.length - 1].x < lastX) {
-      pts.push({ x: lastX, y: getYAux(maxLikes, maxLikes) });
+      pts.push({ x: lastX, y: getYAux(plan.likesTotal, plan.likesTotal) });
     }
     return pts;
-  }, [schedulePlan.likes, schedulePlan.likeOffsets, cumLikes, schedulePlan.totalLikes, getX, getYAux, padLeft, baselineY, plotWidth]);
+  }, [plan.curvePoints, plan.likesTotal, getX, getYAux, padLeft, baselineY, plotWidth]);
 
-  const likesSmoothPath = useMemo(() => {
-    return getSmoothSplinePath(likePoints, 0.20);
-  }, [likePoints]);
+  const likesSmoothPath = useMemo(() => getSmoothSplinePath(likePoints, 0.20), [likePoints]);
 
   const savePoints: Point[] = useMemo(() => {
-    if (schedulePlan.saves.length === 0) return [];
+    if (plan.savesTotal === 0 || !plan.curvePoints) return [];
     const pts: Point[] = [{ x: padLeft, y: baselineY }];
-    const maxSaves = schedulePlan.totalSaves || 1;
-
-    for (let i = 0; i < schedulePlan.saves.length; i++) {
-      const minute = schedulePlan.saveOffsets[i] || 0;
+    for (const cp of plan.curvePoints) {
       pts.push({
-        x: getX(minute),
-        y: getYAux(cumSaves[i], maxSaves) - 2,
+        x: getX(cp.minuteOffset),
+        y: getYAux(cp.saves, plan.savesTotal) - 2,
       });
     }
     const lastX = padLeft + plotWidth;
     if (pts[pts.length - 1].x < lastX) {
-      pts.push({ x: lastX, y: getYAux(maxSaves, maxSaves) - 2 });
+      pts.push({ x: lastX, y: getYAux(plan.savesTotal, plan.savesTotal) - 2 });
     }
     return pts;
-  }, [schedulePlan.saves, schedulePlan.saveOffsets, cumSaves, schedulePlan.totalSaves, getX, getYAux, padLeft, baselineY, plotWidth]);
+  }, [plan.curvePoints, plan.savesTotal, getX, getYAux, padLeft, baselineY, plotWidth]);
 
-  const savesSmoothPath = useMemo(() => {
-    return getSmoothSplinePath(savePoints, 0.20);
-  }, [savePoints]);
+  const savesSmoothPath = useMemo(() => getSmoothSplinePath(savePoints, 0.20), [savePoints]);
 
   const sharePoints: Point[] = useMemo(() => {
-    if (schedulePlan.shares.length === 0) return [];
+    if (plan.sharesTotal === 0 || !plan.curvePoints) return [];
     const pts: Point[] = [{ x: padLeft, y: baselineY }];
-    const maxShares = schedulePlan.totalShares || 1;
-
-    for (let i = 0; i < schedulePlan.shares.length; i++) {
-      const minute = schedulePlan.shareOffsets[i] || 0;
+    for (const cp of plan.curvePoints) {
       pts.push({
-        x: getX(minute),
-        y: getYAux(cumShares[i], maxShares) - 4,
+        x: getX(cp.minuteOffset),
+        y: getYAux(cp.shares, plan.sharesTotal) - 4,
       });
     }
     const lastX = padLeft + plotWidth;
     if (pts[pts.length - 1].x < lastX) {
-      pts.push({ x: lastX, y: getYAux(maxShares, maxShares) - 4 });
+      pts.push({ x: lastX, y: getYAux(plan.sharesTotal, plan.sharesTotal) - 4 });
     }
     return pts;
-  }, [schedulePlan.shares, schedulePlan.shareOffsets, cumShares, schedulePlan.totalShares, getX, getYAux, padLeft, baselineY, plotWidth]);
+  }, [plan.curvePoints, plan.sharesTotal, getX, getYAux, padLeft, baselineY, plotWidth]);
 
-  const sharesSmoothPath = useMemo(() => {
-    return getSmoothSplinePath(sharePoints, 0.20);
-  }, [sharePoints]);
+  const sharesSmoothPath = useMemo(() => getSmoothSplinePath(sharePoints, 0.20), [sharePoints]);
 
-  // Interactive Hover / Pointer Tooltip State
+  // Interactive Hover Tooltip State
   const [hoveredPoint, setHoveredPoint] = useState<{
     x: number;
     y: number;
@@ -322,34 +249,24 @@ export function LiveOrganicGrowthPreview({
 
     const minute = Math.round(((svgX - padLeft) / plotWidth) * totalMinutes);
 
-    // Compute cumulative metrics at this specific minute
+    // Cumulative at this specific minute
     let vAtMinute = 0;
-    for (let i = 0; i < schedulePlan.viewOffsets.length; i++) {
-      if (schedulePlan.viewOffsets[i] <= minute) vAtMinute = cumViews[i];
-      else break;
-    }
-
     let lAtMinute = 0;
-    for (let i = 0; i < schedulePlan.likeOffsets.length; i++) {
-      if (schedulePlan.likeOffsets[i] <= minute) lAtMinute = cumLikes[i];
-      else break;
-    }
-
     let sAtMinute = 0;
-    for (let i = 0; i < schedulePlan.saveOffsets.length; i++) {
-      if (schedulePlan.saveOffsets[i] <= minute) sAtMinute = cumSaves[i];
-      else break;
-    }
-
     let shAtMinute = 0;
-    for (let i = 0; i < schedulePlan.shareOffsets.length; i++) {
-      if (schedulePlan.shareOffsets[i] <= minute) shAtMinute = cumShares[i];
-      else break;
+    let cAtMinute = 0;
+
+    for (const b of plan.batches) {
+      if (b.minuteOffset <= minute) {
+        if (b.service === "views") vAtMinute += b.quantity;
+        if (b.service === "likes") lAtMinute += b.quantity;
+        if (b.service === "saves") sAtMinute += b.quantity;
+        if (b.service === "shares") shAtMinute += b.quantity;
+        if (b.service === "comments") cAtMinute += b.quantity;
+      }
     }
 
-    const cAtMinute = schedulePlan.totalComments > 0 ? Math.round(schedulePlan.totalComments * (minute / totalMinutes)) : 0;
-
-    const timeDate = new Date(planTimestamp.getTime() + minute * 60 * 1000);
+    const timeDate = new Date(startDate.getTime() + minute * 60 * 1000);
     const timeLabel = new Intl.DateTimeFormat("en-US", {
       hour: "2-digit",
       minute: "2-digit",
@@ -371,20 +288,23 @@ export function LiveOrganicGrowthPreview({
   // Horizontal Grid Ticks (0, 25%, 50%, 75%, 100%)
   const yTicks = useMemo(() => {
     return [0.25, 0.5, 0.75, 1.0].map((frac) => ({
-      val: Math.round(maxTotalViews * frac),
-      label: frac === 1.0 && maxTotalViews >= 1000 ? `${(maxTotalViews / 1000).toFixed(0)}K` : `${Math.round(maxTotalViews * frac)}`,
+      val: Math.round(plan.viewsTotal * frac),
+      label:
+        frac === 1.0 && plan.viewsTotal >= 1000
+          ? `${(plan.viewsTotal / 1000).toFixed(0)}K`
+          : `${Math.round(plan.viewsTotal * frac)}`,
       y: baselineY - frac * plotHeight,
     }));
-  }, [maxTotalViews, baselineY, plotHeight]);
+  }, [plan.viewsTotal, baselineY, plotHeight]);
 
-  // Bottom Timeline Labels (spaced evenly across total duration)
+  // Bottom Timeline Labels
   const timeLabels = useMemo(() => {
-    const count = 12;
+    const count = 10;
     const labels: Array<{ x: number; text: string }> = [];
     for (let i = 0; i < count; i++) {
       const frac = i / (count - 1);
       const minute = frac * totalMinutes;
-      const targetDate = new Date(planTimestamp.getTime() + minute * 60 * 1000);
+      const targetDate = new Date(startDate.getTime() + minute * 60 * 1000);
       const text = new Intl.DateTimeFormat("en-US", {
         hour: "2-digit",
         minute: "2-digit",
@@ -393,135 +313,193 @@ export function LiveOrganicGrowthPreview({
       labels.push({ x: getX(minute), text });
     }
     return labels;
-  }, [totalMinutes, planTimestamp, getX]);
+  }, [totalMinutes, startDate, getX]);
+
+  // Filtered batches for Schedule Panel
+  const filteredBatches = useMemo(() => {
+    if (filterService === "ALL") return plan.batches;
+    return plan.batches.filter((b) => b.service === filterService.toLowerCase());
+  }, [plan.batches, filterService]);
+
+  // CSV Export
+  const handleDownloadCsv = () => {
+    const headers = ["Batch Number", "Time Offset (min)", "Scheduled Clock Time", "Service", "Quantity", "15m Grid Snapped"];
+    const rows = plan.batches.map((b, i) => {
+      const batchTime = new Date(startDate.getTime() + b.minuteOffset * 60 * 1000);
+      const timeStr = new Intl.DateTimeFormat("en-US", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+      }).format(batchTime);
+
+      return [
+        i + 1,
+        `+${b.minuteOffset}m`,
+        timeStr,
+        b.service,
+        b.quantity,
+        b.minuteOffset % 15 === 0 ? "YES (:00/:15/:30/:45)" : "NO",
+      ];
+    });
+
+    const csvContent =
+      "data:text/csv;charset=utf-8," +
+      [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `aurasmm-schedule-${plan.seed}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleNewPatternClick = () => {
+    setIsGenerating(true);
+    if (onNewPattern) onNewPattern();
+    setTimeout(() => setIsGenerating(false), 250);
+  };
 
   return (
-    <div className="bg-white rounded-3xl border border-[#DEE0ED] p-5 sm:p-6 shadow-subtle space-y-4 font-sans select-none">
-      {/* 1. TOP HEADER: Live Organic Growth Preview */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#DEE0ED]/80">
+    <div className="bg-white rounded-3xl border border-[#E4E0D3] p-5 sm:p-6 shadow-subtle space-y-4 font-sans select-none">
+      {/* 1. TOP HEADER: Live Growth Preview */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#E4E0D3]">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-sky-50 border border-sky-100 flex items-center justify-center text-sky-600 shadow-2xs">
+          <div className="w-10 h-10 rounded-2xl bg-[#F3F1EA] border border-[#E4E0D3] flex items-center justify-center text-[#5E8C1F] shadow-2xs">
             <Activity className="w-5 h-5 stroke-[2.3]" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-[#1A1D31] font-sans">
-              Live Organic Growth Preview
+            <h2 className="text-base font-bold text-[#111413] font-sans">
+              Live Growth Preview
             </h2>
-            <p className="text-xs text-[#64748B] font-medium font-sans">
-              Smooth anti-radar S-curve • Natural algorithmic growth
+            <p className="text-xs text-[#5B625F] font-medium font-sans">
+              Gradual, view-paced delivery • Monotonic continuous S-curve
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
           {/* New Pattern Button */}
           <button
             type="button"
-            onClick={handleNewPattern}
-            className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white hover:bg-gray-50 border border-[#DEE0ED] text-[#1A1D31] flex items-center gap-1.5 shadow-2xs hover:border-[#3A4EFB]/50 transition-all press-scale cursor-pointer"
-            title="Generate a fresh, unique anti-radar delivery pattern"
+            onClick={handleNewPatternClick}
+            className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white hover:bg-[#F3F1EA] border border-[#E4E0D3] text-[#111413] flex items-center gap-1.5 shadow-2xs hover:border-[#111413]/40 transition-all press-scale cursor-pointer"
+            title="Generate a fresh, unique delivery pattern schedule"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isGenerating ? "animate-spin text-[#3A4EFB]" : "text-[#64748B]"}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${isGenerating ? "animate-spin text-[#5E8C1F]" : "text-[#5B625F]"}`} />
             <span>New Pattern</span>
           </button>
 
-          {/* 99% Organic Badge */}
-          <span className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/60 flex items-center gap-1 shadow-2xs font-sans">
-            <Sparkles className="w-3.5 h-3.5 text-emerald-600 fill-emerald-500/20" />
-            <span>99% Organic</span>
+          {/* Delivery Quality Pill */}
+          <span className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 text-[#5E8C1F] border border-emerald-200/80 flex items-center gap-1 shadow-2xs font-sans">
+            <CheckCircle2 className="w-3.5 h-3.5 text-[#5E8C1F]" />
+            <span>Gradual, view-paced delivery</span>
           </span>
         </div>
       </div>
 
-      {/* 2. TEMPLATE / PATTERN SELECTOR BAR */}
+      {/* 2. PATTERN ID & DURATION BAR */}
       <div className="flex items-center justify-between flex-wrap gap-2 pt-0.5">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-[#64748B] font-sans"># Template:</span>
-          <input
-            type="number"
-            min="1"
-            max="999"
-            value={templateInput}
-            onChange={handleTemplateInputChange}
-            className="w-16 px-2.5 py-1 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED] text-xs font-bold text-[#1A1D31] text-center focus:outline-none focus:border-[#3A4EFB] focus:bg-white shadow-inner font-sans transition-all"
-            title="Enter any template number (1 to 550+)"
-          />
-
-          {/* Named Archetype Badge */}
-          <span className="px-3 py-1 rounded-full text-xs font-bold bg-sky-50 text-[#0284C7] border border-sky-200/60 shadow-2xs font-sans">
-            {schedulePlan.patternMeta.fullName}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="px-3 py-1 rounded-full text-xs font-bold bg-white text-[#111413] border border-[#E4E0D3] shadow-2xs font-sans">
+            Pattern #{plan.seed.slice(-8)}
           </span>
+
+          <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-[#5E8C1F] border border-emerald-200/60 shadow-2xs font-sans flex items-center gap-1">
+            <Clock className="w-3 h-3 text-[#5E8C1F]" />
+            <span>{plan.durationLabel} finish</span>
+          </span>
+
+          {/* Engagement Overlay Toggle */}
+          <button
+            type="button"
+            onClick={() => setShowEngagementOverlay(!showEngagementOverlay)}
+            className={`px-3 py-1 rounded-full text-xs font-bold transition-all border cursor-pointer ${
+              showEngagementOverlay
+                ? "bg-[#111413] text-[#D4F04F] border-[#111413] shadow-2xs"
+                : "bg-white text-[#5B625F] border-[#E4E0D3] hover:bg-[#F3F1EA]"
+            }`}
+          >
+            {showEngagementOverlay ? "Engagement: Shown" : "Engagement: Hidden"}
+          </button>
         </div>
 
-        <span className="text-xs font-semibold text-[#94A3B8] font-sans">
-          550+ patterns
-        </span>
+        {/* Admin Only: Template Number & Count */}
+        {isAdmin && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-[#5B625F] font-sans"># Template:</span>
+            <input
+              type="number"
+              min="1"
+              max="999"
+              value={templateInput}
+              onChange={(e) => {
+                setTemplateInput(e.target.value);
+                const num = parseInt(e.target.value, 10);
+                if (!isNaN(num) && onSelectTemplate) onSelectTemplate(num);
+              }}
+              className="w-16 px-2.5 py-1 rounded-xl bg-white border border-[#E4E0D3] text-xs font-bold text-[#111413] text-center focus:outline-none focus:border-[#111413] font-sans"
+              title="Admin control: Select template (1 to 550+)"
+            />
+            <span className="text-xs font-semibold text-[#5B625F] font-sans">
+              550+ patterns
+            </span>
+          </div>
+        )}
       </div>
 
-      {/* 3. METRIC SUMMARY ROW (Pills) */}
+      {/* 3. METRIC CHIPS SUMMARY ROW */}
       <div className="flex items-center flex-wrap gap-2 text-xs font-sans">
-        {/* Total Metric Pill */}
-        <span className="px-3 py-1 rounded-xl bg-[#0284C7] text-white font-bold flex items-center gap-1 shadow-2xs font-sans">
-          <Zap className="w-3.5 h-3.5 fill-white" />
-          <span>{schedulePlan.totalEngagement.toLocaleString()} total</span>
+        {/* Total Views Chip */}
+        <span className="px-3 py-1 rounded-xl bg-[#2F6B3A] text-white font-bold flex items-center gap-1.5 shadow-2xs font-sans">
+          <Eye className="w-3.5 h-3.5 fill-white" />
+          <span>{plan.viewsTotal.toLocaleString()} Views</span>
         </span>
 
-        {/* Runs Count */}
-        <span className="px-2.5 py-1 rounded-xl bg-white border border-[#DEE0ED] text-[#1A1D31] font-bold shadow-2xs flex items-center gap-1 font-sans">
-          <TrendingUp className="w-3.5 h-3.5 text-indigo-500" />
-          <span>{schedulePlan.runsCount} runs</span>
+        {/* Likes Chip */}
+        <span className="px-3 py-1 rounded-xl bg-white border border-[#C4552D]/30 text-[#C4552D] font-bold flex items-center gap-1.5 shadow-2xs font-sans">
+          <Heart className="w-3.5 h-3.5 fill-[#C4552D] text-[#C4552D]" />
+          <span>{plan.likesTotal.toLocaleString()} Likes</span>
         </span>
 
-        {/* Interval */}
-        <span className="px-2.5 py-1 rounded-xl bg-white border border-[#DEE0ED] text-[#1A1D31] font-bold shadow-2xs flex items-center gap-1 font-sans">
-          <Clock className="w-3.5 h-3.5 text-[#64748B]" />
-          <span>~{schedulePlan.avgIntervalMinutes} min</span>
-        </span>
-
-        {/* Service Dots */}
-        <div className="flex items-center flex-wrap gap-1.5 ml-auto text-[11px] font-bold">
-          {/* Views Dot */}
-          <span className="px-2.5 py-1 rounded-xl bg-white border border-blue-200 text-blue-800 shadow-2xs flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-[#0284C7]" />
-            <span>{schedulePlan.totalViews.toLocaleString()}</span>
+        {/* Saves Chip */}
+        {plan.savesTotal > 0 && (
+          <span className="px-3 py-1 rounded-xl bg-white border border-[#E0A030]/30 text-[#E0A030] font-bold flex items-center gap-1.5 shadow-2xs font-sans">
+            <Bookmark className="w-3.5 h-3.5 fill-[#E0A030] text-[#E0A030]" />
+            <span>{plan.savesTotal.toLocaleString()} Saves</span>
           </span>
+        )}
 
-          {/* Comments Dot */}
-          {schedulePlan.totalComments > 0 && (
-            <span className="px-2.5 py-1 rounded-xl bg-white border border-sky-200 text-sky-800 shadow-2xs flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-[#38BDF8]" />
-              <span>{schedulePlan.totalComments}</span>
-            </span>
-          )}
+        {/* Shares Chip */}
+        {plan.sharesTotal > 0 && (
+          <span className="px-3 py-1 rounded-xl bg-white border border-[#7C5CBF]/30 text-[#7C5CBF] font-bold flex items-center gap-1.5 shadow-2xs font-sans">
+            <Share2 className="w-3.5 h-3.5 text-[#7C5CBF]" />
+            <span>{plan.sharesTotal.toLocaleString()} Shares</span>
+          </span>
+        )}
 
-          {/* Likes Dot */}
-          {schedulePlan.totalLikes > 0 && (
-            <span className="px-2.5 py-1 rounded-xl bg-white border border-emerald-200 text-emerald-800 shadow-2xs flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-[#10B981]" />
-              <span>{schedulePlan.totalLikes.toLocaleString()}</span>
-            </span>
-          )}
+        {/* Comments Chip */}
+        {plan.commentsTotal > 0 && (
+          <span className="px-3 py-1 rounded-xl bg-white border border-[#2A9D8F]/30 text-[#2A9D8F] font-bold flex items-center gap-1.5 shadow-2xs font-sans">
+            <MessageCircle className="w-3.5 h-3.5 text-[#2A9D8F]" />
+            <span>{plan.commentsTotal.toLocaleString()} Comments</span>
+          </span>
+        )}
 
-          {/* Saves Dot */}
-          {schedulePlan.totalSaves > 0 && (
-            <span className="px-2.5 py-1 rounded-xl bg-white border border-amber-200 text-amber-800 shadow-2xs flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-[#F59E0B]" />
-              <span>{schedulePlan.totalSaves}</span>
-            </span>
-          )}
-
-          {/* Shares Dot */}
-          {schedulePlan.totalShares > 0 && (
-            <span className="px-2.5 py-1 rounded-xl bg-white border border-purple-200 text-purple-800 shadow-2xs flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-[#A855F7]" />
-              <span>{schedulePlan.totalShares}</span>
-            </span>
-          )}
-        </div>
+        {/* Batches Count Chip */}
+        <span className="px-2.5 py-1 rounded-xl bg-white border border-[#E4E0D3] text-[#111413] font-bold shadow-2xs flex items-center gap-1 font-sans ml-auto">
+          <TrendingUp className="w-3.5 h-3.5 text-[#5E8C1F]" />
+          <span>{plan.totalBatchesCount} batches on 15m grid</span>
+        </span>
       </div>
 
       {/* 4. THE GRAPH SVG (100% Smooth Anti-Radar Non-Spiked S-Curve) */}
-      <div className="relative w-full overflow-hidden bg-gradient-to-b from-[#FAFBFD] to-white rounded-2xl border border-[#DEE0ED]/80 p-2 sm:p-3">
+      <div className="relative w-full overflow-hidden bg-gradient-to-b from-[#F3F1EA]/40 to-white rounded-2xl border border-[#E4E0D3] p-2 sm:p-3">
         <svg
           ref={svgRef}
           viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
@@ -530,16 +508,13 @@ export function LiveOrganicGrowthPreview({
           onPointerLeave={() => setHoveredPoint(null)}
         >
           <defs>
-            {/* Soft Blue Gradient for Cumulative Views Area */}
             <linearGradient id="viewsAreaGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#38BDF8" stopOpacity="0.38" />
-              <stop offset="60%" stopColor="#38BDF8" stopOpacity="0.14" />
-              <stop offset="100%" stopColor="#38BDF8" stopOpacity="0.01" />
+              <stop offset="0%" stopColor="#2F6B3A" stopOpacity="0.12" />
+              <stop offset="100%" stopColor="#2F6B3A" stopOpacity="0.01" />
             </linearGradient>
 
-            {/* Drop Shadow for Tooltip */}
             <filter id="tooltipShadow" x="-20%" y="-20%" width="140%" height="140%">
-              <feDropShadow dx="0" dy="2" stdDeviation="4" floodOpacity="0.18" />
+              <feDropShadow dx="0" dy="2" stdDeviation="4" floodOpacity="0.12" />
             </filter>
           </defs>
 
@@ -551,7 +526,7 @@ export function LiveOrganicGrowthPreview({
                 y1={tick.y}
                 x2={padLeft + plotWidth}
                 y2={tick.y}
-                stroke="#E2E8F0"
+                stroke="#E4E0D3"
                 strokeWidth="1"
                 strokeDasharray="3 3"
               />
@@ -559,7 +534,7 @@ export function LiveOrganicGrowthPreview({
                 x={padLeft - 8}
                 y={tick.y + 3.5}
                 textAnchor="end"
-                className="fill-[#94A3B8] text-[10px] font-bold font-sans"
+                className="fill-[#5B625F] text-[10px] font-bold font-sans"
               >
                 {tick.label}
               </text>
@@ -572,171 +547,242 @@ export function LiveOrganicGrowthPreview({
             y1={baselineY}
             x2={padLeft + plotWidth}
             y2={baselineY}
-            stroke="#CBD5E1"
+            stroke="#E4E0D3"
             strokeWidth="1.5"
           />
 
-          {/* 1. SMOOTH VIEWS AREA FILL */}
+          {/* 1. SMOOTH VIEWS AREA FILL & LINE */}
           {viewsSmoothArea && <path d={viewsSmoothArea} fill="url(#viewsAreaGrad)" />}
-
-          {/* 2. SMOOTH AUXILIARY METRIC LINES */}
-          {sharesSmoothPath && (
-            <path
-              d={sharesSmoothPath}
-              fill="none"
-              stroke="#A855F7"
-              strokeWidth="1.6"
-              strokeDasharray="3 2"
-            />
-          )}
-
-          {savesSmoothPath && (
-            <path
-              d={savesSmoothPath}
-              fill="none"
-              stroke="#F59E0B"
-              strokeWidth="1.6"
-              strokeDasharray="3 2"
-            />
-          )}
-
-          {likesSmoothPath && (
-            <path
-              d={likesSmoothPath}
-              fill="none"
-              stroke="#10B981"
-              strokeWidth="1.8"
-            />
-          )}
-
-          {/* 3. MAIN SMOOTH VIEWS CURVE (Catmull-Rom Cubic Bézier Spline - No Staircase!) */}
           {viewsSmoothPath && (
             <path
               d={viewsSmoothPath}
               fill="none"
-              stroke="#0284C7"
-              strokeWidth="2.8"
+              stroke="#2F6B3A"
+              strokeWidth="2.4"
               strokeLinecap="round"
-              strokeLinejoin="round"
             />
           )}
 
-          {/* 4. HOVER GUIDELINE & DATA POINTS */}
+          {/* 2. SMOOTH AUXILIARY METRIC LINES (when overlay enabled) */}
+          {showEngagementOverlay && (
+            <>
+              {sharesSmoothPath && (
+                <path
+                  d={sharesSmoothPath}
+                  fill="none"
+                  stroke="#7C5CBF"
+                  strokeWidth="1.6"
+                  strokeDasharray="3 2"
+                />
+              )}
+              {savesSmoothPath && (
+                <path
+                  d={savesSmoothPath}
+                  fill="none"
+                  stroke="#E0A030"
+                  strokeWidth="1.6"
+                  strokeDasharray="3 2"
+                />
+              )}
+              {likesSmoothPath && (
+                <path
+                  d={likesSmoothPath}
+                  fill="none"
+                  stroke="#C4552D"
+                  strokeWidth="1.8"
+                  strokeDasharray="3 2"
+                />
+              )}
+            </>
+          )}
+
+          {/* Bottom Time Labels */}
+          {timeLabels.map((lbl, idx) => (
+            <text
+              key={idx}
+              x={lbl.x}
+              y={baselineY + 18}
+              textAnchor="middle"
+              className="fill-[#5B625F] text-[9.5px] font-semibold font-sans"
+            >
+              {lbl.text}
+            </text>
+          ))}
+
+          {/* Interactive Hover Crosshair & Tooltip */}
           {hoveredPoint && (
-            <g className="pointer-events-none">
-              {/* Vertical Crosshair Line */}
+            <g>
               <line
                 x1={hoveredPoint.x}
                 y1={padTop}
                 x2={hoveredPoint.x}
                 y2={baselineY}
-                stroke="#64748B"
-                strokeWidth="1"
-                strokeDasharray="3 3"
+                stroke="#2F6B3A"
+                strokeWidth="1.2"
+                strokeDasharray="2 2"
+                opacity="0.8"
               />
-
-              {/* Point on Smooth Views Curve */}
               <circle
                 cx={hoveredPoint.x}
                 cy={hoveredPoint.y}
-                r="5"
-                fill="#0284C7"
+                r="4.5"
+                fill="#2F6B3A"
                 stroke="#FFFFFF"
-                strokeWidth="2.5"
+                strokeWidth="2"
               />
 
-              {/* Interactive Tooltip Card */}
+              {/* Tooltip Card */}
               <g
-                transform={`translate(${Math.min(
-                  padLeft + plotWidth - 110,
-                  Math.max(padLeft + 10, hoveredPoint.x + 12)
-                )}, ${Math.max(padTop + 5, hoveredPoint.y - 45)})`}
+                transform={`translate(${
+                  hoveredPoint.x > SVG_WIDTH - 160
+                    ? hoveredPoint.x - 145
+                    : hoveredPoint.x + 12
+                }, ${Math.max(padTop + 10, Math.min(baselineY - 100, hoveredPoint.y - 45))})`}
+                filter="url(#tooltipShadow)"
               >
                 <rect
-                  width="105"
-                  height="120"
-                  rx="12"
+                  width="135"
+                  height="115"
+                  rx="14"
                   fill="#FFFFFF"
-                  stroke="#DEE0ED"
+                  stroke="#E4E0D3"
                   strokeWidth="1"
-                  filter="url(#tooltipShadow)"
                 />
-                {/* Time header */}
-                <text x="14" y="20" className="fill-[#1A1D31] text-[11px] font-black font-sans">
+                <text x="12" y="20" className="fill-[#111413] text-[11px] font-black font-sans">
                   {hoveredPoint.timeLabel}
                 </text>
+                <line x1="12" y1="26" x2="123" y2="26" stroke="#E4E0D3" strokeWidth="1" />
 
-                {/* Views row */}
-                <circle cx="18" cy="38" r="3" fill="#0284C7" />
-                <text x="28" y="41" className="fill-[#475569] text-[10px] font-bold font-sans">
+                <circle cx="16" cy="40" r="3" fill="#2F6B3A" />
+                <text x="24" y="43" className="fill-[#5B625F] text-[10px] font-semibold font-sans">Views</text>
+                <text x="123" y="43" textAnchor="end" className="fill-[#2F6B3A] text-[10px] font-bold font-sans">
                   {hoveredPoint.views.toLocaleString()}
                 </text>
 
-                {/* Comments row */}
-                <circle cx="18" cy="56" r="3" fill="#38BDF8" />
-                <text x="28" y="59" className="fill-[#475569] text-[10px] font-bold font-sans">
-                  {hoveredPoint.comments}
-                </text>
-
-                {/* Likes row */}
-                <circle cx="18" cy="74" r="3" fill="#10B981" />
-                <text x="28" y="77" className="fill-[#475569] text-[10px] font-bold font-sans">
+                <circle cx="16" cy="58" r="3" fill="#C4552D" />
+                <text x="24" y="61" className="fill-[#5B625F] text-[10px] font-semibold font-sans">Likes</text>
+                <text x="123" y="61" textAnchor="end" className="fill-[#C4552D] text-[10px] font-bold font-sans">
                   {hoveredPoint.likes.toLocaleString()}
                 </text>
 
-                {/* Saves row */}
-                <circle cx="18" cy="92" r="3" fill="#F59E0B" />
-                <text x="28" y="95" className="fill-[#475569] text-[10px] font-bold font-sans">
-                  {hoveredPoint.saves}
+                <circle cx="16" cy="76" r="3" fill="#E0A030" />
+                <text x="24" y="79" className="fill-[#5B625F] text-[10px] font-semibold font-sans">Saves</text>
+                <text x="123" y="79" textAnchor="end" className="fill-[#E0A030] text-[10px] font-bold font-sans">
+                  {hoveredPoint.saves.toLocaleString()}
                 </text>
 
-                {/* Shares row */}
-                <circle cx="18" cy="110" r="3" fill="#A855F7" />
-                <text x="28" y="113" className="fill-[#475569] text-[10px] font-bold font-sans">
-                  {hoveredPoint.shares}
+                <circle cx="16" cy="94" r="3" fill="#7C5CBF" />
+                <text x="24" y="97" className="fill-[#5B625F] text-[10px] font-semibold font-sans">Shares</text>
+                <text x="123" y="97" textAnchor="end" className="fill-[#7C5CBF] text-[10px] font-bold font-sans">
+                  {hoveredPoint.shares.toLocaleString()}
                 </text>
               </g>
             </g>
           )}
-
-          {/* 5. BOTTOM TIME AXIS LABELS */}
-          {timeLabels.map((lbl, idx) => (
-            <text
-              key={idx}
-              x={lbl.x}
-              y={baselineY + 16}
-              textAnchor="middle"
-              className="fill-[#94A3B8] text-[9px] font-semibold font-sans"
-            >
-              {lbl.text}
-            </text>
-          ))}
         </svg>
       </div>
 
-      {/* 5. BOTTOM LEGEND */}
-      <div className="flex items-center justify-center flex-wrap gap-4 pt-1 text-xs font-bold text-[#64748B] font-sans">
-        <span className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#0284C7]" />
-          <span>Views</span>
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#38BDF8]" />
-          <span>Comments</span>
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#10B981]" />
-          <span>Likes</span>
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#F59E0B]" />
-          <span>Saves</span>
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#A855F7]" />
-          <span>Shares</span>
-        </span>
+      {/* 5. VIEW SCHEDULE BUTTON & COLLAPSIBLE PANEL */}
+      <div className="flex items-center justify-between pt-1">
+        <button
+          type="button"
+          onClick={() => setShowScheduleModal(!showScheduleModal)}
+          className="px-3.5 py-2 rounded-xl bg-white hover:bg-[#F3F1EA] border border-[#E4E0D3] text-xs font-bold text-[#111413] flex items-center gap-2 shadow-2xs transition-all press-scale cursor-pointer"
+        >
+          <Layers className="w-3.5 h-3.5 text-[#5E8C1F]" />
+          <span>View Schedule ({plan.totalBatchesCount} Batches)</span>
+          {showScheduleModal ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+        </button>
+
+        <button
+          type="button"
+          onClick={handleDownloadCsv}
+          className="px-3.5 py-2 rounded-xl bg-white hover:bg-[#F3F1EA] border border-[#E4E0D3] text-xs font-bold text-[#111413] flex items-center gap-1.5 shadow-2xs hover:border-[#111413]/40 transition-all press-scale cursor-pointer"
+          title="Download schedule CSV"
+        >
+          <Download className="w-3.5 h-3.5 text-[#5B625F]" />
+          <span>Download CSV</span>
+        </button>
       </div>
+
+      {/* SCHEDULE PANEL (Filters & Table) */}
+      {showScheduleModal && (
+        <div className="p-4 rounded-2xl bg-[#F3F1EA]/50 border border-[#E4E0D3] space-y-3 animate-fadeIn">
+          {/* Filter Chips */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[11px] font-bold text-[#5B625F] mr-1 flex items-center gap-1">
+              <Filter className="w-3 h-3" /> Filter:
+            </span>
+            {["ALL", "VIEWS", "LIKES", "SAVES", "SHARES", "COMMENTS"].map((svc) => (
+              <button
+                key={svc}
+                type="button"
+                onClick={() => setFilterService(svc)}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                  filterService === svc
+                    ? "bg-[#111413] text-[#D4F04F] shadow-2xs"
+                    : "bg-white text-[#5B625F] border border-[#E4E0D3] hover:bg-[#F3F1EA]"
+                }`}
+              >
+                {svc}
+              </button>
+            ))}
+          </div>
+
+          {/* Schedule Table */}
+          <div className="max-h-64 overflow-y-auto rounded-xl border border-[#E4E0D3] bg-white divide-y divide-[#E4E0D3]/60 font-sans text-xs">
+            {filteredBatches.map((b, idx) => {
+              const batchDate = new Date(startDate.getTime() + b.minuteOffset * 60 * 1000);
+              const clockTime = new Intl.DateTimeFormat("en-US", {
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: false,
+              }).format(batchDate);
+
+              return (
+                <div
+                  key={b.id || idx}
+                  className="px-3.5 py-2.5 flex items-center justify-between gap-2 hover:bg-[#F3F1EA] transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-md bg-[#F3F1EA] text-[#111413] font-bold text-[10px] flex items-center justify-center shrink-0">
+                      #{idx + 1}
+                    </span>
+                    <span className="font-semibold text-[#111413]">+{b.minuteOffset}m</span>
+                    <span className="text-[10px] text-[#5B625F]">({clockTime})</span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${
+                        b.service === "views"
+                          ? "bg-emerald-50 text-[#2F6B3A] border border-emerald-200"
+                          : b.service === "likes"
+                          ? "bg-rose-50 text-[#C4552D] border border-rose-200"
+                          : b.service === "saves"
+                          ? "bg-amber-50 text-[#E0A030] border border-amber-200"
+                          : b.service === "shares"
+                          ? "bg-purple-50 text-[#7C5CBF] border border-purple-200"
+                          : "bg-teal-50 text-[#2A9D8F] border border-teal-200"
+                      }`}
+                    >
+                      {b.service}
+                    </span>
+
+                    <span className="font-black text-[#111413] min-w-[50px] text-right">
+                      {b.quantity.toLocaleString()}
+                    </span>
+
+                    <span className="text-[9px] font-bold text-[#5E8C1F] bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/50 hidden sm:inline-block">
+                      :{(b.minuteOffset % 60).toString().padStart(2, "0")} grid
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

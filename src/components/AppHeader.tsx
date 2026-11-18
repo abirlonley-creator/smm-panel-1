@@ -95,7 +95,7 @@ export function AppHeader() {
   const remainingHours = session.remainingHours;
 
   return (
-    <header className="hidden lg:flex w-full bg-white/80 backdrop-blur-md border-b border-[#DEE0ED] sticky top-0 z-40 px-4 sm:px-6 lg:px-8 py-3 items-center justify-between gap-4">
+    <header className="hidden lg:flex w-full bg-[#F3F1EA]/80 backdrop-blur-md border-b border-[#E4E0D3] sticky top-0 z-40 px-4 sm:px-6 lg:px-8 py-3 items-center justify-between gap-4">
       {/* Left: Quick User Indicator */}
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2">
@@ -103,25 +103,25 @@ export function AppHeader() {
             <Link
               href="/admin"
               title="Open Admin Panel"
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-black uppercase tracking-wider bg-[#252943] text-[#E3FF3B] border border-[#323758] shadow-subtle hover:bg-[#1a1d31] transition-all cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-black uppercase tracking-wider bg-[#111413] text-[#D4F04F] border border-[#222826] shadow-subtle hover:bg-[#1B201E] transition-all cursor-pointer"
             >
-              <ShieldCheck className="w-3.5 h-3.5 text-[#E3FF3B]" />
+              <ShieldCheck className="w-3.5 h-3.5 text-[#D4F04F]" />
               ADMIN
             </Link>
           ) : (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase tracking-wider bg-[#3A4EFB]/10 text-[#3A4EFB] border border-[#3A4EFB]/20">
-              <User className="w-3.5 h-3.5 text-[#3A4EFB]" />
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase tracking-wider bg-[#111413]/5 text-[#111413] border border-[#111413]/10">
+              <User className="w-3.5 h-3.5 text-[#111413]" />
               USER
             </span>
           )}
-          <span className="text-xs font-bold text-[#252943] hidden md:inline-block">
+          <span className="text-xs font-bold text-[#111413] hidden md:inline-block">
             {session.user?.username || session.label || "Account"}
           </span>
         </div>
 
         {/* Passkey Remaining Access Pill */}
-        <div className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#F8F9FD] border border-[#DEE0ED] text-[11px] font-semibold text-[#252943]/70">
-          <Clock className="w-3 h-3 text-[#3A4EFB]" />
+        <div className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-[#E4E0D3] text-[11px] font-semibold text-[#5B625F]">
+          <Clock className="w-3 h-3 text-[#5E8C1F]" />
           <span>
             {remainingDays !== null && remainingDays !== undefined ? (
               remainingDays > 0 ? (
@@ -144,10 +144,10 @@ export function AppHeader() {
           target="_blank"
           rel="noopener noreferrer"
           title="24/7 Live Telegram Support"
-          className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#0088cc]/10 hover:bg-[#0088cc]/20 border border-[#0088cc]/30 text-[#0088cc] text-xs font-bold transition-all shadow-subtle press-scale"
+          className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#229ED9]/10 hover:bg-[#229ED9]/20 border border-[#229ED9]/30 text-[#229ED9] text-xs font-bold transition-all shadow-subtle press-scale"
         >
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          <Send className="w-3.5 h-3.5 text-[#0088cc]" />
+          <Send className="w-3.5 h-3.5 text-[#229ED9]" />
           <span>24/7 Support</span>
         </a>
 
@@ -159,9 +159,9 @@ export function AppHeader() {
           <Link
             href="/admin"
             title="Open Admin Panel"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#252943] hover:bg-[#1a1d31] border border-[#323758] text-[#E3FF3B] text-xs font-bold transition-all shadow-subtle"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#111413] hover:bg-[#1B201E] border border-[#222826] text-[#D4F04F] text-xs font-bold transition-all shadow-subtle"
           >
-            <ShieldCheck className="w-3.5 h-3.5 text-[#E3FF3B]" />
+            <ShieldCheck className="w-3.5 h-3.5 text-[#D4F04F]" />
             <span className="hidden sm:inline">Admin Panel</span>
           </Link>
         )}
@@ -171,9 +171,9 @@ export function AppHeader() {
           <Link
             href="/api-key"
             title="Configure Provider API Key"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#F8F9FD] hover:bg-white border border-[#DEE0ED] text-[#252943]/80 hover:text-[#3A4EFB] hover:border-[#3A4EFB] text-xs font-semibold transition-all shadow-subtle"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-[#F3F1EA] border border-[#E4E0D3] text-[#111413] hover:text-[#5E8C1F] hover:border-[#5E8C1F] text-xs font-semibold transition-all shadow-subtle"
           >
-            <KeyRound className="w-3.5 h-3.5 text-[#3A4EFB]" />
+            <KeyRound className="w-3.5 h-3.5 text-[#5E8C1F]" />
             <span className="hidden sm:inline">API Key</span>
           </Link>
         )}
@@ -184,7 +184,7 @@ export function AppHeader() {
           onClick={handleLogout}
           id="logout-btn"
           title="Sign out of panel"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 active:scale-95 border border-red-200 text-red-700 text-xs font-bold transition-all shadow-subtle cursor-pointer"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#C4552D]/10 hover:bg-[#C4552D]/20 active:scale-95 border border-[#C4552D]/30 text-[#C4552D] text-xs font-bold transition-all shadow-subtle cursor-pointer"
         >
           <LogOut className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">Logout</span>

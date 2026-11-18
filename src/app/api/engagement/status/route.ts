@@ -258,21 +258,25 @@ export async function GET(request: Request) {
 
   // Calculate costs for all presets based on user retail rates
   const allPresets = await getAllTikTokPresetsAsync();
-  const presetsList = allPresets.map((preset) => {
+  const presetsList = allPresets.map((preset: any) => {
     const vCost = Number(((preset.targetViews / 1000) * viewsRate).toFixed(4));
     const lCost = Number(((preset.targetLikes / 1000) * likesRate).toFixed(4));
     const sCost = preset.saves?.enabled ? Number(((preset.targetSaves / 1000) * savesRate).toFixed(4)) : 0;
     const rCost = preset.shares?.enabled ? Number(((preset.targetShares / 1000) * sharesRate).toFixed(4)) : 0;
-    const totalCost = Number((vCost + lCost + sCost + rCost).toFixed(2));
+    const computedCost = Number((vCost + lCost + sCost + rCost).toFixed(2));
+    const priceInr = typeof preset.price_inr === "number" ? preset.price_inr : computedCost;
 
     return {
       ...preset,
+      price_inr: priceInr,
+      views_total: preset.views_total || preset.targetViews,
+      base_duration_hours: preset.base_duration_hours || preset.durationHours,
       pricing: {
         viewsCost: vCost,
         likesCost: lCost,
         savesCost: sCost,
         sharesCost: rCost,
-        totalCost,
+        totalCost: priceInr,
       },
     };
   });
@@ -302,6 +306,7 @@ export async function GET(request: Request) {
   return NextResponse.json({
     success: true,
     enabled: true,
+    isAdmin,
     walletBalance,
     readyToOrder,
     zeofame: zeofameStatus,

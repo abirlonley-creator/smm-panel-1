@@ -255,8 +255,8 @@ export default function EngagementOrderDetailPage() {
   if (loading && !order) {
     return (
       <div className="max-w-6xl mx-auto py-20 text-center space-y-3">
-        <Loader2 className="w-8 h-8 text-[#3A4EFB] animate-spin mx-auto" />
-        <p className="text-xs font-bold text-[#252943]/60">Loading campaign details...</p>
+        <img src="/brand/logos/mark-on-light.svg" className="w-8 h-8 animate-pulse mx-auto" alt="" />
+        <p className="text-xs font-bold text-[#111413]/60">Loading campaign details...</p>
       </div>
     );
   }
@@ -265,13 +265,13 @@ export default function EngagementOrderDetailPage() {
     return (
       <div className="max-w-xl mx-auto py-20 text-center space-y-4">
         <AlertCircle className="w-12 h-12 text-rose-500 mx-auto" />
-        <h2 className="text-lg font-bold text-[#252943]">Engagement Order Not Found</h2>
-        <p className="text-xs text-[#252943]/60">
+        <h2 className="text-lg font-bold text-[#111413]">Engagement Order Not Found</h2>
+        <p className="text-xs text-[#111413]/60">
           The requested TikTok engagement delivery could not be found or you do not have permission.
         </p>
         <Link
           href="/orders"
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#3A4EFB] text-white text-xs font-bold"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#D4F04F] hover:bg-[#C5E23A] text-[#111413] text-xs font-bold transition-all shadow-sm"
         >
           <ArrowLeft className="w-4 h-4" /> Return to Orders
         </Link>
@@ -347,31 +347,31 @@ export default function EngagementOrderDetailPage() {
   return (
     <div className="max-w-6xl mx-auto pb-20 space-y-6 animate-fadeIn">
       {/* Breadcrumb & Navigation */}
-      <div className="flex items-center gap-2 text-xs text-[#252943]/50">
-        <Link href="/orders" className="hover:text-[#3A4EFB] transition-colors">
+      <div className="flex items-center gap-2 text-xs text-[#111413]/50">
+        <Link href="/orders" className="hover:text-[#5E8C1F] transition-colors">
           Orders
         </Link>
         <ChevronRight className="w-3 h-3" />
-        <Link href="/engagement" className="hover:text-[#3A4EFB] transition-colors">
+        <Link href="/engagement" className="hover:text-[#5E8C1F] transition-colors font-sans">
           Engagement
         </Link>
         <ChevronRight className="w-3 h-3" />
-        <span className="font-mono font-bold text-[#252943]">{order.orderRef}</span>
+        <span className="font-sans font-bold text-[#111413]">{order.orderRef}</span>
       </div>
 
       {/* Main Order Header Banner */}
-      <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 shadow-subtle space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-[#DEE0ED]">
-          <div className="space-y-1.5">
+      <div className="bg-white rounded-3xl border border-[#E4E0D3] p-6 shadow-subtle space-y-4 font-sans">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-[#E4E0D3]">
+          <div className="space-y-1.5 font-sans">
             <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-2xl font-black text-[#252943] font-mono tracking-tight">
+              <h1 className="text-2xl font-black text-[#111413] font-sans tracking-tight">
                 {order.orderRef}
               </h1>
               <span className={`px-3 py-1 rounded-full text-xs font-bold border ${activeStatusStyle.bg} ${activeStatusStyle.text} ${activeStatusStyle.border}`}>
                 {order.status}
               </span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E3FF3B]/30 border border-[#252943]/20 text-[#252943] text-xs font-bold">
-                <Sparkles className="w-3.5 h-3.5 text-[#3A4EFB]" />
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#D4F04F]/30 border border-[#111413]/20 text-[#111413] text-xs font-bold font-sans">
+                <Sparkles className="w-3.5 h-3.5 text-[#5E8C1F]" />
                 {order.presetKey === "tiktok_2k"
                   ? "2K Starter"
                   : order.presetKey === "tiktok_5k"
@@ -384,13 +384,13 @@ export default function EngagementOrderDetailPage() {
               </span>
             </div>
 
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-[#252943]/60">Target:</span>
+            <div className="flex items-center gap-2 text-xs font-sans">
+              <span className="text-[#111413]/60">Target:</span>
               <a
                 href={order.targetUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="font-mono font-semibold text-[#3A4EFB] hover:underline inline-flex items-center gap-1 break-all"
+                className="font-sans font-semibold text-[#5E8C1F] hover:underline inline-flex items-center gap-1 break-all"
               >
                 {order.targetUrl} <ExternalLink className="w-3 h-3 shrink-0" />
               </a>
@@ -403,10 +403,10 @@ export default function EngagementOrderDetailPage() {
               type="button"
               onClick={handleSyncWithProviders}
               disabled={syncing}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-[#DEE0ED] bg-white hover:bg-[#F8F9FD] text-[#252943] text-xs font-bold transition-all shadow-subtle"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-[#E4E0D3] bg-white hover:bg-[#F3F1EA] text-[#111413] text-xs font-bold transition-all shadow-subtle"
               title="Sync live delivery status"
             >
-              <RefreshCw className={`w-3.5 h-3.5 text-[#3A4EFB] ${syncing ? "animate-spin" : ""}`} />
+              <RefreshCw className={`w-3.5 h-3.5 text-[#5E8C1F] ${syncing ? "animate-spin" : ""}`} />
               <span>Sync Status</span>
             </button>
 
@@ -493,71 +493,71 @@ export default function EngagementOrderDetailPage() {
         {/* Section 7.D: Live Statistics Grid */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 pt-2">
           {/* 1. Views Progress */}
-          <div className="p-3.5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] space-y-1">
-            <div className="flex items-center justify-between text-[11px] font-bold text-[#252943]/60">
+          <div className="p-3.5 rounded-2xl bg-[#F3F1EA] border border-[#E4E0D3] space-y-1">
+            <div className="flex items-center justify-between text-[11px] font-bold text-[#111413]/60">
               <span className="flex items-center gap-1">
-                <Eye className="w-3.5 h-3.5 text-[#3A4EFB]" /> Views
+                <Eye className="w-3.5 h-3.5 text-[#5E8C1F]" /> Views
               </span>
-              <span className="font-mono text-[#3A4EFB]">{viewsSummary.percent}%</span>
+              <span className="font-sans text-[#5E8C1F]">{viewsSummary.percent}%</span>
             </div>
-            <div className="text-base font-black text-[#252943] font-mono tracking-tight">
+            <div className="text-base font-black text-[#111413] font-sans tracking-tight">
               {viewsSummary.delivered.toLocaleString()}{" "}
-              <span className="text-xs font-normal text-[#252943]/50">/ {viewsSummary.planned.toLocaleString()}</span>
+              <span className="text-xs font-normal text-[#111413]/50">/ {viewsSummary.planned.toLocaleString()}</span>
             </div>
-            <div className="w-full bg-[#DEE0ED] h-1.5 rounded-full overflow-hidden">
+            <div className="w-full bg-[#E4E0D3] h-1.5 rounded-full overflow-hidden">
               <div
-                className="bg-[#3A4EFB] h-full rounded-full transition-all duration-500"
+                className="bg-[#5E8C1F] h-full rounded-full transition-all duration-500"
                 style={{ width: `${viewsSummary.percent}%` }}
               />
             </div>
-            <span className="text-[10px] text-[#252943]/50 block">
+            <span className="text-[10px] text-[#111413]/50 block">
               {viewsSummary.remaining.toLocaleString()} views remaining
             </span>
           </div>
 
           {/* 2. Likes Progress */}
-          <div className="p-3.5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] space-y-1">
-            <div className="flex items-center justify-between text-[11px] font-bold text-[#252943]/60">
+          <div className="p-3.5 rounded-2xl bg-[#F3F1EA] border border-[#E4E0D3] space-y-1">
+            <div className="flex items-center justify-between text-[11px] font-bold text-[#111413]/60">
               <span className="flex items-center gap-1">
                 <Heart className="w-3.5 h-3.5 text-rose-500" /> Likes
               </span>
-              <span className="font-mono text-rose-600">{likesSummary.percent}%</span>
+              <span className="font-sans text-rose-600">{likesSummary.percent}%</span>
             </div>
-            <div className="text-base font-black text-[#252943] font-mono tracking-tight">
+            <div className="text-base font-black text-[#111413] font-sans tracking-tight">
               {likesSummary.delivered.toLocaleString()}{" "}
-              <span className="text-xs font-normal text-[#252943]/50">/ {likesSummary.planned.toLocaleString()}</span>
+              <span className="text-xs font-normal text-[#111413]/50">/ {likesSummary.planned.toLocaleString()}</span>
             </div>
-            <div className="w-full bg-[#DEE0ED] h-1.5 rounded-full overflow-hidden">
+            <div className="w-full bg-[#E4E0D3] h-1.5 rounded-full overflow-hidden">
               <div
                 className="bg-rose-500 h-full rounded-full transition-all duration-500"
                 style={{ width: `${likesSummary.percent}%` }}
               />
             </div>
-            <span className="text-[10px] text-[#252943]/50 block">
+            <span className="text-[10px] text-[#111413]/50 block">
               {likesSummary.remaining.toLocaleString()} likes remaining
             </span>
           </div>
 
           {/* Saves Progress (if present) */}
           {savesRuns.length > 0 && (
-            <div className="p-3.5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] space-y-1">
-              <div className="flex items-center justify-between text-[11px] font-bold text-[#252943]/60">
+            <div className="p-3.5 rounded-2xl bg-[#F3F1EA] border border-[#E4E0D3] space-y-1">
+              <div className="flex items-center justify-between text-[11px] font-bold text-[#111413]/60">
                 <span className="flex items-center gap-1">
                   <Bookmark className="w-3.5 h-3.5 text-amber-500" /> Saves
                 </span>
-                <span className="font-mono text-amber-600">{savesSummary.percent}%</span>
+                <span className="font-sans text-amber-600">{savesSummary.percent}%</span>
               </div>
-              <div className="text-base font-black text-[#252943] font-mono tracking-tight">
+              <div className="text-base font-black text-[#111413] font-sans tracking-tight">
                 {savesSummary.delivered.toLocaleString()}{" "}
-                <span className="text-xs font-normal text-[#252943]/50">/ {savesSummary.planned.toLocaleString()}</span>
+                <span className="text-xs font-normal text-[#111413]/50">/ {savesSummary.planned.toLocaleString()}</span>
               </div>
-              <div className="w-full bg-[#DEE0ED] h-1.5 rounded-full overflow-hidden">
+              <div className="w-full bg-[#E4E0D3] h-1.5 rounded-full overflow-hidden">
                 <div
                   className="bg-amber-500 h-full rounded-full transition-all duration-500"
                   style={{ width: `${savesSummary.percent}%` }}
                 />
               </div>
-              <span className="text-[10px] text-[#252943]/50 block">
+              <span className="text-[10px] text-[#111413]/50 block">
                 {savesSummary.remaining.toLocaleString()} saves remaining
               </span>
             </div>
@@ -565,38 +565,38 @@ export default function EngagementOrderDetailPage() {
 
           {/* Reposts Progress (if present) */}
           {sharesRuns.length > 0 && (
-            <div className="p-3.5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] space-y-1">
-              <div className="flex items-center justify-between text-[11px] font-bold text-[#252943]/60">
+            <div className="p-3.5 rounded-2xl bg-[#F3F1EA] border border-[#E4E0D3] space-y-1">
+              <div className="flex items-center justify-between text-[11px] font-bold text-[#111413]/60">
                 <span className="flex items-center gap-1">
                   <Share2 className="w-3.5 h-3.5 text-emerald-500" /> Reposts
                 </span>
-                <span className="font-mono text-emerald-600">{sharesSummary.percent}%</span>
+                <span className="font-sans text-emerald-600">{sharesSummary.percent}%</span>
               </div>
-              <div className="text-base font-black text-[#252943] font-mono tracking-tight">
+              <div className="text-base font-black text-[#111413] font-sans tracking-tight">
                 {sharesSummary.delivered.toLocaleString()}{" "}
-                <span className="text-xs font-normal text-[#252943]/50">/ {sharesSummary.planned.toLocaleString()}</span>
+                <span className="text-xs font-normal text-[#111413]/50">/ {sharesSummary.planned.toLocaleString()}</span>
               </div>
-              <div className="w-full bg-[#DEE0ED] h-1.5 rounded-full overflow-hidden">
+              <div className="w-full bg-[#E4E0D3] h-1.5 rounded-full overflow-hidden">
                 <div
                   className="bg-emerald-500 h-full rounded-full transition-all duration-500"
                   style={{ width: `${sharesSummary.percent}%` }}
                 />
               </div>
-              <span className="text-[10px] text-[#252943]/50 block">
+              <span className="text-[10px] text-[#111413]/50 block">
                 {sharesSummary.remaining.toLocaleString()} reposts remaining
               </span>
             </div>
           )}
 
           {/* 3. Overall Delivery % */}
-          <div className="p-3.5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] space-y-1">
-            <span className="text-[11px] font-bold text-[#252943]/60 block">Delivery Completion</span>
-            <div className="text-lg font-black text-[#3A4EFB] font-mono tracking-tight">
+          <div className="p-3.5 rounded-2xl bg-[#F3F1EA] border border-[#E4E0D3] space-y-1">
+            <span className="text-[11px] font-bold text-[#111413]/60 block">Delivery Completion</span>
+            <div className="text-lg font-black text-[#5E8C1F] font-sans tracking-tight">
               {order.progressPercent}%
             </div>
-            <div className="w-full bg-[#DEE0ED] h-1.5 rounded-full overflow-hidden">
+            <div className="w-full bg-[#E4E0D3] h-1.5 rounded-full overflow-hidden">
               <div
-                className="bg-[#3A4EFB] h-full rounded-full transition-all duration-500"
+                className="bg-[#5E8C1F] h-full rounded-full transition-all duration-500"
                 style={{ width: `${order.progressPercent}%` }}
               />
             </div>
@@ -606,32 +606,32 @@ export default function EngagementOrderDetailPage() {
           </div>
 
           {/* 4. Completed Runs */}
-          <div className="p-3.5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] space-y-1">
-            <span className="text-[11px] font-bold text-[#252943]/60 block">Batches Dispatched</span>
-            <div className="text-base font-black text-[#252943] font-mono tracking-tight">
+          <div className="p-3.5 rounded-2xl bg-[#F3F1EA] border border-[#E4E0D3] space-y-1">
+            <span className="text-[11px] font-bold text-[#111413]/60 block">Batches Dispatched</span>
+            <div className="text-base font-black text-[#111413] font-sans tracking-tight">
               {order.completedRuns}{" "}
-              <span className="text-xs font-normal text-[#252943]/50">/ {order.totalRuns}</span>
+              <span className="text-xs font-normal text-[#111413]/50">/ {order.totalRuns}</span>
             </div>
-            <span className="text-[10px] text-[#252943]/60 block">
+            <span className="text-[10px] text-[#111413]/60 block">
               {order.totalRuns - order.completedRuns} pending runs
             </span>
           </div>
 
           {/* 5. Next Scheduled Delivery in Bangladesh Time */}
-          <div className="p-3.5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] space-y-1">
-            <span className="text-[11px] font-bold text-[#252943]/60 block">Next Scheduled Run</span>
-            <div className="text-sm font-extrabold text-[#3A4EFB] font-mono">
+          <div className="p-3.5 rounded-2xl bg-[#F3F1EA] border border-[#E4E0D3] space-y-1">
+            <span className="text-[11px] font-bold text-[#111413]/60 block">Next Scheduled Run</span>
+            <div className="text-sm font-extrabold text-[#5E8C1F] font-sans">
               {order.nextRunTime ? `${formatBdTime(order.nextRunTime)} BD` : "Finished"}
             </div>
-            <span className="text-[10px] text-[#252943]/50 block">
+            <span className="text-[10px] text-[#111413]/50 block">
               {order.nextRunTime ? formatBdDateTime(order.nextRunTime) : "All runs finished"}
             </span>
           </div>
 
           {/* 6. Order Total Cost & Wallet */}
-          <div className="p-3.5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] space-y-1">
-            <span className="text-[11px] font-bold text-[#252943]/60 block">Total Investment</span>
-            <div className="text-base font-black text-[#252943] font-mono">
+          <div className="p-3.5 rounded-2xl bg-[#F3F1EA] border border-[#E4E0D3] space-y-1">
+            <span className="text-[11px] font-bold text-[#111413]/60 block">Total Investment</span>
+            <div className="text-base font-black text-[#111413] font-sans">
               ₹{Number(order.totalCost).toFixed(2)}
             </div>
             {order.refundedAmount > 0 ? (
@@ -648,14 +648,14 @@ export default function EngagementOrderDetailPage() {
       </div>
 
       {/* Tabs Navigation */}
-      <div className="flex items-center gap-2 border-b border-[#DEE0ED] pb-2 overflow-x-auto">
+      <div className="flex items-center gap-2 border-b border-[#E4E0D3] pb-2 overflow-x-auto">
         <button
           type="button"
           onClick={() => setActiveTab("overview")}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 ${
             activeTab === "overview"
-              ? "bg-[#252943] text-white shadow-subtle"
-              : "bg-white text-[#252943]/70 hover:bg-[#F8F9FD] border border-[#DEE0ED]"
+              ? "bg-[#111413] text-white shadow-subtle"
+              : "bg-white text-[#111413]/70 hover:bg-[#F3F1EA] border border-[#E4E0D3]"
           }`}
         >
           Combined Overview
@@ -665,8 +665,8 @@ export default function EngagementOrderDetailPage() {
           onClick={() => setActiveTab("views")}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${
             activeTab === "views"
-              ? "bg-[#3A4EFB] text-white shadow-subtle"
-              : "bg-white text-[#252943]/70 hover:bg-[#F8F9FD] border border-[#DEE0ED]"
+              ? "bg-[#5E8C1F] text-white shadow-subtle"
+              : "bg-white text-[#111413]/70 hover:bg-[#F3F1EA] border border-[#E4E0D3]"
           }`}
         >
           <Eye className="w-3.5 h-3.5" />
@@ -678,7 +678,7 @@ export default function EngagementOrderDetailPage() {
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${
             activeTab === "likes"
               ? "bg-rose-600 text-white shadow-subtle"
-              : "bg-white text-[#252943]/70 hover:bg-[#F8F9FD] border border-[#DEE0ED]"
+              : "bg-white text-[#111413]/70 hover:bg-[#F3F1EA] border border-[#E4E0D3]"
           }`}
         >
           <Heart className="w-3.5 h-3.5" />
@@ -691,7 +691,7 @@ export default function EngagementOrderDetailPage() {
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${
               activeTab === "saves"
                 ? "bg-amber-600 text-white shadow-subtle"
-                : "bg-white text-[#252943]/70 hover:bg-[#F8F9FD] border border-[#DEE0ED]"
+                : "bg-white text-[#111413]/70 hover:bg-[#F3F1EA] border border-[#E4E0D3]"
             }`}
           >
             <Bookmark className="w-3.5 h-3.5" />
@@ -705,7 +705,7 @@ export default function EngagementOrderDetailPage() {
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${
               activeTab === "shares"
                 ? "bg-emerald-600 text-white shadow-subtle"
-                : "bg-white text-[#252943]/70 hover:bg-[#F8F9FD] border border-[#DEE0ED]"
+                : "bg-white text-[#111413]/70 hover:bg-[#F3F1EA] border border-[#E4E0D3]"
             }`}
           >
             <Share2 className="w-3.5 h-3.5" />
@@ -717,8 +717,8 @@ export default function EngagementOrderDetailPage() {
           onClick={() => setActiveTab("timeline")}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${
             activeTab === "timeline"
-              ? "bg-[#252943] text-white shadow-subtle"
-              : "bg-white text-[#252943]/70 hover:bg-[#F8F9FD] border border-[#DEE0ED]"
+              ? "bg-[#111413] text-white shadow-subtle"
+              : "bg-white text-[#111413]/70 hover:bg-[#F3F1EA] border border-[#E4E0D3]"
           }`}
         >
           <Clock className="w-3.5 h-3.5" />
@@ -731,36 +731,36 @@ export default function EngagementOrderDetailPage() {
         <div className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Section 7.A: Views Summary Card */}
-            <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 shadow-subtle space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
+            <div className="bg-white rounded-3xl border border-[#E4E0D3] p-6 shadow-subtle space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-[#E4E0D3]">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-blue-50 text-[#3A4EFB] flex items-center justify-center font-bold">
+                  <div className="w-8 h-8 rounded-xl bg-blue-50 text-[#5E8C1F] flex items-center justify-center font-bold">
                     <Eye className="w-4 h-4" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-[#252943]">{viewsRuns[0]?.serviceName || "TikTok Views"}</h3>
-                    <p className="text-[11px] text-[#252943]/60">
+                    <h3 className="text-sm font-bold text-[#111413]">{viewsRuns[0]?.serviceName || "TikTok Views"}</h3>
+                    <p className="text-[11px] text-[#111413]/60">
                       Automated High-Speed Delivery • {viewsRuns.length} batches
                     </p>
                   </div>
                 </div>
-                <span className="text-xs font-mono font-bold text-[#3A4EFB]">
+                <span className="text-xs font-sans font-bold text-[#5E8C1F]">
                   {viewsSummary.delivered.toLocaleString()} / {viewsSummary.planned.toLocaleString()}
                 </span>
               </div>
 
               <div className="space-y-2">
                 <div className="flex justify-between text-xs font-semibold">
-                  <span className="text-[#252943]/70">Views Delivered:</span>
-                  <span className="font-mono text-[#252943]">{viewsSummary.delivered.toLocaleString()} ({viewsSummary.percent}%)</span>
+                  <span className="text-[#111413]/70">Views Delivered:</span>
+                  <span className="font-sans text-[#111413]">{viewsSummary.delivered.toLocaleString()} ({viewsSummary.percent}%)</span>
                 </div>
                 <div className="w-full bg-[#F0F2FA] h-2.5 rounded-full overflow-hidden">
                   <div
-                    className="bg-[#3A4EFB] h-full rounded-full transition-all duration-500"
+                    className="bg-[#5E8C1F] h-full rounded-full transition-all duration-500"
                     style={{ width: `${viewsSummary.percent}%` }}
                   />
                 </div>
-                <div className="flex justify-between text-[11px] text-[#252943]/50">
+                <div className="flex justify-between text-[11px] text-[#111413]/50">
                   <span>Completed: {viewsSummary.completedRuns} of {viewsRuns.length} runs</span>
                   <span>Remaining: {viewsSummary.remaining.toLocaleString()} views</span>
                 </div>
@@ -769,15 +769,15 @@ export default function EngagementOrderDetailPage() {
               {/* All views runs */}
               <div className="space-y-2 pt-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase text-[#252943]/60 block">Views Delivery Batches ({viewsRuns.length} total)</span>
-                  <span className="text-[10px] text-[#252943]/50">Scroll to view all</span>
+                  <span className="text-[11px] font-bold uppercase text-[#111413]/60 block">Views Delivery Batches ({viewsRuns.length} total)</span>
+                  <span className="text-[10px] text-[#111413]/50">Scroll to view all</span>
                 </div>
                 <div className="space-y-1.5 max-h-[380px] overflow-y-auto pr-1">
                   {viewsRuns.map((r) => (
-                    <div key={r.id} className="flex items-center justify-between p-2 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED]/60 text-xs">
-                      <span className="font-mono font-bold text-[#252943]">Run #{r.runNumber}</span>
-                      <span className="text-[#252943]/70">{formatBdTime(r.scheduledAt)} BD</span>
-                      <span className="font-mono font-semibold text-[#3A4EFB]">{r.quantity.toLocaleString()} views</span>
+                    <div key={r.id} className="flex items-center justify-between p-2 rounded-xl bg-[#F3F1EA] border border-[#E4E0D3]/60 text-xs">
+                      <span className="font-sans font-bold text-[#111413]">Run #{r.runNumber}</span>
+                      <span className="text-[#111413]/70">{formatBdTime(r.scheduledAt)} BD</span>
+                      <span className="font-sans font-semibold text-[#5E8C1F]">{r.quantity.toLocaleString()} views</span>
                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
                         r.status === "completed" || r.status === "confirmed"
                           ? "bg-emerald-100 text-emerald-800"
@@ -796,28 +796,28 @@ export default function EngagementOrderDetailPage() {
             </div>
 
             {/* Section 7.B: Likes Summary Card */}
-            <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 shadow-subtle space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
+            <div className="bg-white rounded-3xl border border-[#E4E0D3] p-6 shadow-subtle space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-[#E4E0D3]">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold">
                     <Heart className="w-4 h-4" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-[#252943]">{likesRuns[0]?.serviceName || "TikTok Likes"}</h3>
-                    <p className="text-[11px] text-[#252943]/60">
+                    <h3 className="text-sm font-bold text-[#111413]">{likesRuns[0]?.serviceName || "TikTok Likes"}</h3>
+                    <p className="text-[11px] text-[#111413]/60">
                       Organic Pacing Network • {likesRuns.length} batches
                     </p>
                   </div>
                 </div>
-                <span className="text-xs font-mono font-bold text-rose-600">
+                <span className="text-xs font-sans font-bold text-rose-600">
                   {likesSummary.delivered.toLocaleString()} / {likesSummary.planned.toLocaleString()}
                 </span>
               </div>
 
               <div className="space-y-2">
                 <div className="flex justify-between text-xs font-semibold">
-                  <span className="text-[#252943]/70">Likes Delivered:</span>
-                  <span className="font-mono text-[#252943]">{likesSummary.delivered.toLocaleString()} ({likesSummary.percent}%)</span>
+                  <span className="text-[#111413]/70">Likes Delivered:</span>
+                  <span className="font-sans text-[#111413]">{likesSummary.delivered.toLocaleString()} ({likesSummary.percent}%)</span>
                 </div>
                 <div className="w-full bg-[#F0F2FA] h-2.5 rounded-full overflow-hidden">
                   <div
@@ -825,7 +825,7 @@ export default function EngagementOrderDetailPage() {
                     style={{ width: `${likesSummary.percent}%` }}
                   />
                 </div>
-                <div className="flex justify-between text-[11px] text-[#252943]/50">
+                <div className="flex justify-between text-[11px] text-[#111413]/50">
                   <span>Completed: {likesSummary.completedRuns} of {likesRuns.length} runs</span>
                   <span>Remaining: {likesSummary.remaining.toLocaleString()} likes</span>
                 </div>
@@ -834,22 +834,22 @@ export default function EngagementOrderDetailPage() {
               {/* All likes runs */}
               <div className="space-y-2 pt-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase text-[#252943]/60 block">Likes Delivery Batches ({likesRuns.length} total)</span>
-                  <span className="text-[10px] text-[#252943]/50">Scroll to view all</span>
+                  <span className="text-[11px] font-bold uppercase text-[#111413]/60 block">Likes Delivery Batches ({likesRuns.length} total)</span>
+                  <span className="text-[10px] text-[#111413]/50">Scroll to view all</span>
                 </div>
                 <div className="space-y-1.5 max-h-[380px] overflow-y-auto pr-1">
                   {likesRuns.map((r) => (
-                    <div key={r.id} className="flex items-center justify-between p-2 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED]/60 text-xs">
+                    <div key={r.id} className="flex items-center justify-between p-2 rounded-xl bg-[#F3F1EA] border border-[#E4E0D3]/60 text-xs">
                       <div className="flex items-center gap-1.5">
-                        <span className="font-mono font-bold text-[#252943]">Run #{r.runNumber}</span>
+                        <span className="font-sans font-bold text-[#111413]">Run #{r.runNumber}</span>
                         {r.isReplan && (
                           <span className="px-1.5 py-0.2 rounded text-[9px] bg-amber-100 text-amber-800 font-bold" title="Accelerated by Delayed Likes Protection">
                             Accelerated
                           </span>
                         )}
                       </div>
-                      <span className="text-[#252943]/70">{formatBdTime(r.scheduledAt)} BD</span>
-                      <span className="font-mono font-semibold text-rose-600">{r.quantity.toLocaleString()} likes</span>
+                      <span className="text-[#111413]/70">{formatBdTime(r.scheduledAt)} BD</span>
+                      <span className="font-sans font-semibold text-rose-600">{r.quantity.toLocaleString()} likes</span>
                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
                         r.status === "completed" || r.status === "confirmed"
                           ? "bg-emerald-100 text-emerald-800"
@@ -872,28 +872,28 @@ export default function EngagementOrderDetailPage() {
           {(savesRuns.length > 0 || sharesRuns.length > 0) && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {savesRuns.length > 0 && (
-                <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 shadow-subtle space-y-4">
-                  <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
+                <div className="bg-white rounded-3xl border border-[#E4E0D3] p-6 shadow-subtle space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-[#E4E0D3]">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
                         <Bookmark className="w-4 h-4" />
                       </div>
                       <div>
-                        <h3 className="text-sm font-bold text-[#252943]">{savesRuns[0]?.serviceName || "TikTok Saves"}</h3>
-                        <p className="text-[11px] text-[#252943]/60">
+                        <h3 className="text-sm font-bold text-[#111413]">{savesRuns[0]?.serviceName || "TikTok Saves"}</h3>
+                        <p className="text-[11px] text-[#111413]/60">
                           Organic Saves Network • {savesRuns.length} batches
                         </p>
                       </div>
                     </div>
-                    <span className="text-xs font-mono font-bold text-amber-600">
+                    <span className="text-xs font-sans font-bold text-amber-600">
                       {savesSummary.delivered.toLocaleString()} / {savesSummary.planned.toLocaleString()}
                     </span>
                   </div>
 
                   <div className="space-y-2">
                     <div className="flex justify-between text-xs font-semibold">
-                      <span className="text-[#252943]/70">Saves Delivered:</span>
-                      <span className="font-mono text-[#252943]">{savesSummary.delivered.toLocaleString()} ({savesSummary.percent}%)</span>
+                      <span className="text-[#111413]/70">Saves Delivered:</span>
+                      <span className="font-sans text-[#111413]">{savesSummary.delivered.toLocaleString()} ({savesSummary.percent}%)</span>
                     </div>
                     <div className="w-full bg-[#F0F2FA] h-2.5 rounded-full overflow-hidden">
                       <div
@@ -901,7 +901,7 @@ export default function EngagementOrderDetailPage() {
                         style={{ width: `${savesSummary.percent}%` }}
                       />
                     </div>
-                    <div className="flex justify-between text-[11px] text-[#252943]/50">
+                    <div className="flex justify-between text-[11px] text-[#111413]/50">
                       <span>Completed: {savesSummary.completedRuns} of {savesRuns.length} runs</span>
                       <span>Remaining: {savesSummary.remaining.toLocaleString()} saves</span>
                     </div>
@@ -909,15 +909,15 @@ export default function EngagementOrderDetailPage() {
 
                   <div className="space-y-2 pt-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold uppercase text-[#252943]/60 block">Saves Delivery Batches ({savesRuns.length} total)</span>
-                      <span className="text-[10px] text-[#252943]/50">Scroll to view all</span>
+                      <span className="text-[11px] font-bold uppercase text-[#111413]/60 block">Saves Delivery Batches ({savesRuns.length} total)</span>
+                      <span className="text-[10px] text-[#111413]/50">Scroll to view all</span>
                     </div>
                     <div className="space-y-1.5 max-h-[380px] overflow-y-auto pr-1">
                       {savesRuns.map((r) => (
-                        <div key={r.id} className="flex items-center justify-between p-2 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED]/60 text-xs">
-                          <span className="font-mono font-bold text-[#252943]">Run #{r.runNumber}</span>
-                          <span className="text-[#252943]/70">{formatBdTime(r.scheduledAt)} BD</span>
-                          <span className="font-mono font-semibold text-amber-600">{r.quantity.toLocaleString()} saves</span>
+                        <div key={r.id} className="flex items-center justify-between p-2 rounded-xl bg-[#F3F1EA] border border-[#E4E0D3]/60 text-xs">
+                          <span className="font-sans font-bold text-[#111413]">Run #{r.runNumber}</span>
+                          <span className="text-[#111413]/70">{formatBdTime(r.scheduledAt)} BD</span>
+                          <span className="font-sans font-semibold text-amber-600">{r.quantity.toLocaleString()} saves</span>
                           <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
                             r.status === "completed" || r.status === "confirmed"
                               ? "bg-emerald-100 text-emerald-800"
@@ -937,28 +937,28 @@ export default function EngagementOrderDetailPage() {
               )}
 
               {sharesRuns.length > 0 && (
-                <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 shadow-subtle space-y-4">
-                  <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
+                <div className="bg-white rounded-3xl border border-[#E4E0D3] p-6 shadow-subtle space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-[#E4E0D3]">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
                         <Share2 className="w-4 h-4" />
                       </div>
                       <div>
-                        <h3 className="text-sm font-bold text-[#252943]">{sharesRuns[0]?.serviceName || "TikTok Reposts"}</h3>
-                        <p className="text-[11px] text-[#252943]/60">
+                        <h3 className="text-sm font-bold text-[#111413]">{sharesRuns[0]?.serviceName || "TikTok Reposts"}</h3>
+                        <p className="text-[11px] text-[#111413]/60">
                           Organic Reposts Network • {sharesRuns.length} batches
                         </p>
                       </div>
                     </div>
-                    <span className="text-xs font-mono font-bold text-emerald-600">
+                    <span className="text-xs font-sans font-bold text-emerald-600">
                       {sharesSummary.delivered.toLocaleString()} / {sharesSummary.planned.toLocaleString()}
                     </span>
                   </div>
 
                   <div className="space-y-2">
                     <div className="flex justify-between text-xs font-semibold">
-                      <span className="text-[#252943]/70">Reposts Delivered:</span>
-                      <span className="font-mono text-[#252943]">{sharesSummary.delivered.toLocaleString()} ({sharesSummary.percent}%)</span>
+                      <span className="text-[#111413]/70">Reposts Delivered:</span>
+                      <span className="font-sans text-[#111413]">{sharesSummary.delivered.toLocaleString()} ({sharesSummary.percent}%)</span>
                     </div>
                     <div className="w-full bg-[#F0F2FA] h-2.5 rounded-full overflow-hidden">
                       <div
@@ -966,7 +966,7 @@ export default function EngagementOrderDetailPage() {
                         style={{ width: `${sharesSummary.percent}%` }}
                       />
                     </div>
-                    <div className="flex justify-between text-[11px] text-[#252943]/50">
+                    <div className="flex justify-between text-[11px] text-[#111413]/50">
                       <span>Completed: {sharesSummary.completedRuns} of {sharesRuns.length} runs</span>
                       <span>Remaining: {sharesSummary.remaining.toLocaleString()} reposts</span>
                     </div>
@@ -974,15 +974,15 @@ export default function EngagementOrderDetailPage() {
 
                   <div className="space-y-2 pt-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold uppercase text-[#252943]/60 block">Reposts Delivery Batches ({sharesRuns.length} total)</span>
-                      <span className="text-[10px] text-[#252943]/50">Scroll to view all</span>
+                      <span className="text-[11px] font-bold uppercase text-[#111413]/60 block">Reposts Delivery Batches ({sharesRuns.length} total)</span>
+                      <span className="text-[10px] text-[#111413]/50">Scroll to view all</span>
                     </div>
                     <div className="space-y-1.5 max-h-[380px] overflow-y-auto pr-1">
                       {sharesRuns.map((r) => (
-                        <div key={r.id} className="flex items-center justify-between p-2 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED]/60 text-xs">
-                          <span className="font-mono font-bold text-[#252943]">Run #{r.runNumber}</span>
-                          <span className="text-[#252943]/70">{formatBdTime(r.scheduledAt)} BD</span>
-                          <span className="font-mono font-semibold text-emerald-600">{r.quantity.toLocaleString()} reposts</span>
+                        <div key={r.id} className="flex items-center justify-between p-2 rounded-xl bg-[#F3F1EA] border border-[#E4E0D3]/60 text-xs">
+                          <span className="font-sans font-bold text-[#111413]">Run #{r.runNumber}</span>
+                          <span className="text-[#111413]/70">{formatBdTime(r.scheduledAt)} BD</span>
+                          <span className="font-sans font-semibold text-emerald-600">{r.quantity.toLocaleString()} reposts</span>
                           <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
                             r.status === "completed" || r.status === "confirmed"
                               ? "bg-emerald-100 text-emerald-800"
@@ -1007,17 +1007,17 @@ export default function EngagementOrderDetailPage() {
 
       {/* TAB 2: VIEWS PROGRESS GRAPH & RUNS */}
       {activeTab === "views" && (
-        <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 shadow-subtle space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#DEE0ED]">
+        <div className="bg-white rounded-3xl border border-[#E4E0D3] p-6 shadow-subtle space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#E4E0D3]">
             <div>
-              <h2 className="text-base font-bold text-[#252943]">
+              <h2 className="text-base font-bold text-[#111413]">
                 {viewsRuns[0]?.serviceName || "TikTok Views"}
               </h2>
-              <p className="text-xs text-[#252943]/60">
+              <p className="text-xs text-[#111413]/60">
                 {viewsRuns.length} randomized delivery runs scheduled across {order.durationHours} hours.
               </p>
             </div>
-            <div className="flex items-center gap-3 text-xs font-mono">
+            <div className="flex items-center gap-3 text-xs font-sans">
               <span className="px-3 py-1 rounded-xl bg-blue-50 text-blue-700 font-bold">
                 Delivered: {viewsSummary.delivered.toLocaleString()} / {viewsSummary.planned.toLocaleString()}
               </span>
@@ -1025,8 +1025,8 @@ export default function EngagementOrderDetailPage() {
           </div>
 
           {/* SVG Progress Graph */}
-          <div className="p-4 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] space-y-2">
-            <span className="text-xs font-bold text-[#252943] block">Planned Cumulative vs Delivered Delivery Curve</span>
+          <div className="p-4 rounded-2xl bg-[#F3F1EA] border border-[#E4E0D3] space-y-2">
+            <span className="text-xs font-bold text-[#111413] block">Planned Cumulative vs Delivered Delivery Curve</span>
             <div className="h-28 w-full flex items-end gap-1.5 pt-4">
               {viewsRuns.map((r, idx) => {
                 const maxQty = viewsSummary.planned || 3000;
@@ -1038,34 +1038,34 @@ export default function EngagementOrderDetailPage() {
                   <div key={r.id} className="flex-1 flex flex-col items-center gap-1 h-full justify-end group relative">
                     <div className="w-full flex items-end gap-0.5 h-20">
                       <div
-                        className="w-1/2 bg-[#3A4EFB]/20 rounded-t transition-all"
+                        className="w-1/2 bg-[#5E8C1F]/20 rounded-t transition-all"
                         style={{ height: `${plannedH}%` }}
                         title={`Run #${r.runNumber} Planned Cumulative: ${r.plannedCumulative || "—"}`}
                       />
                       <div
-                        className="w-1/2 bg-[#3A4EFB] rounded-t transition-all"
+                        className="w-1/2 bg-[#5E8C1F] rounded-t transition-all"
                         style={{ height: `${deliveredH}%` }}
                         title={`Run #${r.runNumber} Delivered Cumulative: ${delivered}`}
                       />
                     </div>
-                    <span className="text-[9px] font-mono text-[#252943]/50">#{r.runNumber}</span>
+                    <span className="text-[9px] font-sans text-[#111413]/50">#{r.runNumber}</span>
                   </div>
                 );
               })}
             </div>
-            <div className="flex items-center justify-between text-[11px] text-[#252943]/60 pt-2 border-t border-[#DEE0ED]">
+            <div className="flex items-center justify-between text-[11px] text-[#111413]/60 pt-2 border-t border-[#E4E0D3]">
               <span>Axis: Run #1 (0m) to Run #{viewsRuns.length} ({order.durationHours * 60}m)</span>
               <div className="flex items-center gap-3">
-                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-[#3A4EFB]/20 rounded" /> Planned Target</span>
-                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-[#3A4EFB] rounded" /> Confirmed Delivery</span>
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-[#5E8C1F]/20 rounded" /> Planned Target</span>
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-[#5E8C1F] rounded" /> Confirmed Delivery</span>
               </div>
             </div>
           </div>
 
           {/* Views Runs Table */}
-          <div className="overflow-x-auto rounded-2xl border border-[#DEE0ED]">
+          <div className="overflow-x-auto rounded-2xl border border-[#E4E0D3]">
             <table className="w-full text-left text-xs">
-              <thead className="bg-[#F8F9FD] text-[#252943]/70 font-bold border-b border-[#DEE0ED]">
+              <thead className="bg-[#F3F1EA] text-[#111413]/70 font-bold border-b border-[#E4E0D3]">
                 <tr>
                   <th className="py-2.5 px-3">Run #</th>
                   <th className="py-2.5 px-3">Scheduled (BD Time)</th>
@@ -1076,22 +1076,22 @@ export default function EngagementOrderDetailPage() {
                   <th className="py-2.5 px-3 text-right">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#DEE0ED]">
+              <tbody className="divide-y divide-[#E4E0D3]">
                 {viewsRuns.map((r) => (
-                  <tr key={r.id} className="hover:bg-[#F8F9FD]/60">
-                    <td className="py-2.5 px-3 font-mono font-bold text-[#252943]">
+                  <tr key={r.id} className="hover:bg-[#F3F1EA]/60">
+                    <td className="py-2.5 px-3 font-sans font-bold text-[#111413]">
                       #{r.runNumber}
                     </td>
-                    <td className="py-2.5 px-3 font-mono text-[11px] text-[#252943]/70">
+                    <td className="py-2.5 px-3 font-sans text-[11px] text-[#111413]/70">
                       {formatBdDateTime(r.scheduledAt)} ({formatBdTime(r.scheduledAt)} BD)
                     </td>
-                    <td className="py-2.5 px-3 font-mono font-bold text-[#252943]">
+                    <td className="py-2.5 px-3 font-sans font-bold text-[#111413]">
                       {r.quantity}
                     </td>
-                    <td className="py-2.5 px-3 font-mono text-[11px] text-[#3A4EFB]">
+                    <td className="py-2.5 px-3 font-sans text-[11px] text-[#5E8C1F]">
                       Batch #{r.runNumber}
                     </td>
-                    <td className="py-2.5 px-3 font-mono font-bold text-emerald-600">
+                    <td className="py-2.5 px-3 font-sans font-bold text-emerald-600">
                       {r.deliveredQuantity ?? (r.status === "completed" ? r.quantity : 0)}
                     </td>
                     <td className="py-2.5 px-3">
@@ -1113,7 +1113,7 @@ export default function EngagementOrderDetailPage() {
                           type="button"
                           onClick={() => handleRetryRun(r.id)}
                           disabled={retryingRunId === r.id}
-                          className="px-2 py-1 rounded bg-[#3A4EFB] text-white text-[10px] font-bold hover:bg-[#252943]"
+                          className="px-2 py-1 rounded bg-[#5E8C1F] text-white text-[10px] font-bold hover:bg-[#111413]"
                         >
                           {retryingRunId === r.id ? "Retrying..." : "Retry"}
                         </button>
@@ -1129,17 +1129,17 @@ export default function EngagementOrderDetailPage() {
 
       {/* TAB 3: LIKES PROGRESS & RUNS */}
       {activeTab === "likes" && (
-        <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 shadow-subtle space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#DEE0ED]">
+        <div className="bg-white rounded-3xl border border-[#E4E0D3] p-6 shadow-subtle space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#E4E0D3]">
             <div>
-              <h2 className="text-base font-bold text-[#252943]">
+              <h2 className="text-base font-bold text-[#111413]">
                 {likesRuns[0]?.serviceName || "TikTok Likes"}
               </h2>
-              <p className="text-xs text-[#252943]/60">
+              <p className="text-xs text-[#111413]/60">
                 {likesRuns.length} natural delivery runs scheduled across {order.durationHours} hours.
               </p>
             </div>
-            <div className="flex items-center gap-3 text-xs font-mono">
+            <div className="flex items-center gap-3 text-xs font-sans">
               <span className="px-3 py-1 rounded-xl bg-rose-50 text-rose-700 font-bold">
                 Delivered: {likesSummary.delivered.toLocaleString()} / {likesSummary.planned.toLocaleString()}
               </span>
@@ -1147,9 +1147,9 @@ export default function EngagementOrderDetailPage() {
           </div>
 
           {/* Likes Runs Table */}
-          <div className="overflow-x-auto rounded-2xl border border-[#DEE0ED]">
+          <div className="overflow-x-auto rounded-2xl border border-[#E4E0D3]">
             <table className="w-full text-left text-xs">
-              <thead className="bg-[#F8F9FD] text-[#252943]/70 font-bold border-b border-[#DEE0ED]">
+              <thead className="bg-[#F3F1EA] text-[#111413]/70 font-bold border-b border-[#E4E0D3]">
                 <tr>
                   <th className="py-2.5 px-3">Run #</th>
                   <th className="py-2.5 px-3">Scheduled (BD Time)</th>
@@ -1160,10 +1160,10 @@ export default function EngagementOrderDetailPage() {
                   <th className="py-2.5 px-3 text-right">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#DEE0ED]">
+              <tbody className="divide-y divide-[#E4E0D3]">
                 {likesRuns.map((r) => (
-                  <tr key={r.id} className="hover:bg-[#F8F9FD]/60">
-                    <td className="py-2.5 px-3 font-mono font-bold text-[#252943]">
+                  <tr key={r.id} className="hover:bg-[#F3F1EA]/60">
+                    <td className="py-2.5 px-3 font-sans font-bold text-[#111413]">
                       #{r.runNumber}
                       {r.isReplan && (
                         <span className="ml-1.5 px-1.5 py-0.2 rounded text-[9px] bg-amber-100 text-amber-800 font-bold">
@@ -1171,16 +1171,16 @@ export default function EngagementOrderDetailPage() {
                         </span>
                       )}
                     </td>
-                    <td className="py-2.5 px-3 font-mono text-[11px] text-[#252943]/70">
+                    <td className="py-2.5 px-3 font-sans text-[11px] text-[#111413]/70">
                       {formatBdDateTime(r.scheduledAt)} ({formatBdTime(r.scheduledAt)} BD)
                     </td>
-                    <td className="py-2.5 px-3 font-mono font-bold text-rose-600">
+                    <td className="py-2.5 px-3 font-sans font-bold text-rose-600">
                       {r.quantity}
                     </td>
-                    <td className="py-2.5 px-3 font-mono text-[11px] text-[#3A4EFB]">
+                    <td className="py-2.5 px-3 font-sans text-[11px] text-[#5E8C1F]">
                       Batch #{r.runNumber}
                     </td>
-                    <td className="py-2.5 px-3 font-mono font-bold text-emerald-600">
+                    <td className="py-2.5 px-3 font-sans font-bold text-emerald-600">
                       {r.deliveredQuantity ?? (r.status === "completed" ? r.quantity : 0)}
                     </td>
                     <td className="py-2.5 px-3">
@@ -1202,7 +1202,7 @@ export default function EngagementOrderDetailPage() {
                           type="button"
                           onClick={() => handleRetryRun(r.id)}
                           disabled={retryingRunId === r.id}
-                          className="px-2 py-1 rounded bg-[#3A4EFB] text-white text-[10px] font-bold hover:bg-[#252943]"
+                          className="px-2 py-1 rounded bg-[#5E8C1F] text-white text-[10px] font-bold hover:bg-[#111413]"
                         >
                           {retryingRunId === r.id ? "Retrying..." : "Retry"}
                         </button>
@@ -1218,26 +1218,26 @@ export default function EngagementOrderDetailPage() {
 
       {/* TAB: SAVES PROGRESS & RUNS */}
       {activeTab === "saves" && (
-        <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 shadow-subtle space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#DEE0ED]">
+        <div className="bg-white rounded-3xl border border-[#E4E0D3] p-6 shadow-subtle space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#E4E0D3]">
             <div>
-              <h2 className="text-base font-bold text-[#252943]">
+              <h2 className="text-base font-bold text-[#111413]">
                 {savesRuns[0]?.serviceName || "TikTok Saves"}
               </h2>
-              <p className="text-xs text-[#252943]/60">
+              <p className="text-xs text-[#111413]/60">
                 {savesRuns.length} delivery runs scheduled across {order.durationHours} hours.
               </p>
             </div>
-            <div className="flex items-center gap-3 text-xs font-mono">
+            <div className="flex items-center gap-3 text-xs font-sans">
               <span className="px-3 py-1 rounded-xl bg-amber-50 text-amber-700 font-bold">
                 Delivered: {savesSummary.delivered.toLocaleString()} / {savesSummary.planned.toLocaleString()}
               </span>
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-2xl border border-[#DEE0ED]">
+          <div className="overflow-x-auto rounded-2xl border border-[#E4E0D3]">
             <table className="w-full text-left text-xs">
-              <thead className="bg-[#F8F9FD] text-[#252943]/70 font-bold border-b border-[#DEE0ED]">
+              <thead className="bg-[#F3F1EA] text-[#111413]/70 font-bold border-b border-[#E4E0D3]">
                 <tr>
                   <th className="py-2.5 px-3">Run #</th>
                   <th className="py-2.5 px-3">Scheduled (BD Time)</th>
@@ -1248,22 +1248,22 @@ export default function EngagementOrderDetailPage() {
                   <th className="py-2.5 px-3 text-right">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#DEE0ED]">
+              <tbody className="divide-y divide-[#E4E0D3]">
                 {savesRuns.map((r) => (
-                  <tr key={r.id} className="hover:bg-[#F8F9FD]/60">
-                    <td className="py-2.5 px-3 font-mono font-bold text-[#252943]">
+                  <tr key={r.id} className="hover:bg-[#F3F1EA]/60">
+                    <td className="py-2.5 px-3 font-sans font-bold text-[#111413]">
                       #{r.runNumber}
                     </td>
-                    <td className="py-2.5 px-3 font-mono text-[11px] text-[#252943]/70">
+                    <td className="py-2.5 px-3 font-sans text-[11px] text-[#111413]/70">
                       {formatBdDateTime(r.scheduledAt)} ({formatBdTime(r.scheduledAt)} BD)
                     </td>
-                    <td className="py-2.5 px-3 font-mono font-bold text-amber-600">
+                    <td className="py-2.5 px-3 font-sans font-bold text-amber-600">
                       {r.quantity}
                     </td>
-                    <td className="py-2.5 px-3 font-mono text-[11px] text-[#3A4EFB]">
+                    <td className="py-2.5 px-3 font-sans text-[11px] text-[#5E8C1F]">
                       Batch #{r.runNumber}
                     </td>
-                    <td className="py-2.5 px-3 font-mono font-bold text-emerald-600">
+                    <td className="py-2.5 px-3 font-sans font-bold text-emerald-600">
                       {r.deliveredQuantity ?? (r.status === "completed" ? r.quantity : 0)}
                     </td>
                     <td className="py-2.5 px-3">
@@ -1285,7 +1285,7 @@ export default function EngagementOrderDetailPage() {
                           type="button"
                           onClick={() => handleRetryRun(r.id)}
                           disabled={retryingRunId === r.id}
-                          className="px-2 py-1 rounded bg-[#3A4EFB] text-white text-[10px] font-bold hover:bg-[#252943]"
+                          className="px-2 py-1 rounded bg-[#5E8C1F] text-white text-[10px] font-bold hover:bg-[#111413]"
                         >
                           {retryingRunId === r.id ? "Retrying..." : "Retry"}
                         </button>
@@ -1301,26 +1301,26 @@ export default function EngagementOrderDetailPage() {
 
       {/* TAB: REPOSTS/SHARES PROGRESS & RUNS */}
       {activeTab === "shares" && (
-        <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 shadow-subtle space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#DEE0ED]">
+        <div className="bg-white rounded-3xl border border-[#E4E0D3] p-6 shadow-subtle space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#E4E0D3]">
             <div>
-              <h2 className="text-base font-bold text-[#252943]">
+              <h2 className="text-base font-bold text-[#111413]">
                 {sharesRuns[0]?.serviceName || "TikTok Reposts"}
               </h2>
-              <p className="text-xs text-[#252943]/60">
+              <p className="text-xs text-[#111413]/60">
                 {sharesRuns.length} delivery runs scheduled across {order.durationHours} hours.
               </p>
             </div>
-            <div className="flex items-center gap-3 text-xs font-mono">
+            <div className="flex items-center gap-3 text-xs font-sans">
               <span className="px-3 py-1 rounded-xl bg-emerald-50 text-emerald-700 font-bold">
                 Delivered: {sharesSummary.delivered.toLocaleString()} / {sharesSummary.planned.toLocaleString()}
               </span>
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-2xl border border-[#DEE0ED]">
+          <div className="overflow-x-auto rounded-2xl border border-[#E4E0D3]">
             <table className="w-full text-left text-xs">
-              <thead className="bg-[#F8F9FD] text-[#252943]/70 font-bold border-b border-[#DEE0ED]">
+              <thead className="bg-[#F3F1EA] text-[#111413]/70 font-bold border-b border-[#E4E0D3]">
                 <tr>
                   <th className="py-2.5 px-3">Run #</th>
                   <th className="py-2.5 px-3">Scheduled (BD Time)</th>
@@ -1331,22 +1331,22 @@ export default function EngagementOrderDetailPage() {
                   <th className="py-2.5 px-3 text-right">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#DEE0ED]">
+              <tbody className="divide-y divide-[#E4E0D3]">
                 {sharesRuns.map((r) => (
-                  <tr key={r.id} className="hover:bg-[#F8F9FD]/60">
-                    <td className="py-2.5 px-3 font-mono font-bold text-[#252943]">
+                  <tr key={r.id} className="hover:bg-[#F3F1EA]/60">
+                    <td className="py-2.5 px-3 font-sans font-bold text-[#111413]">
                       #{r.runNumber}
                     </td>
-                    <td className="py-2.5 px-3 font-mono text-[11px] text-[#252943]/70">
+                    <td className="py-2.5 px-3 font-sans text-[11px] text-[#111413]/70">
                       {formatBdDateTime(r.scheduledAt)} ({formatBdTime(r.scheduledAt)} BD)
                     </td>
-                    <td className="py-2.5 px-3 font-mono font-bold text-emerald-600">
+                    <td className="py-2.5 px-3 font-sans font-bold text-emerald-600">
                       {r.quantity}
                     </td>
-                    <td className="py-2.5 px-3 font-mono text-[11px] text-[#3A4EFB]">
+                    <td className="py-2.5 px-3 font-sans text-[11px] text-[#5E8C1F]">
                       Batch #{r.runNumber}
                     </td>
-                    <td className="py-2.5 px-3 font-mono font-bold text-emerald-600">
+                    <td className="py-2.5 px-3 font-sans font-bold text-emerald-600">
                       {r.deliveredQuantity ?? (r.status === "completed" ? r.quantity : 0)}
                     </td>
                     <td className="py-2.5 px-3">
@@ -1368,7 +1368,7 @@ export default function EngagementOrderDetailPage() {
                           type="button"
                           onClick={() => handleRetryRun(r.id)}
                           disabled={retryingRunId === r.id}
-                          className="px-2 py-1 rounded bg-[#3A4EFB] text-white text-[10px] font-bold hover:bg-[#252943]"
+                          className="px-2 py-1 rounded bg-[#5E8C1F] text-white text-[10px] font-bold hover:bg-[#111413]"
                         >
                           {retryingRunId === r.id ? "Retrying..." : "Retry"}
                         </button>
@@ -1384,26 +1384,26 @@ export default function EngagementOrderDetailPage() {
 
       {/* TAB 4: COMBINED TIMELINE */}
       {activeTab === "timeline" && (
-        <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 shadow-subtle space-y-6">
-          <div className="pb-3 border-b border-[#DEE0ED]">
-            <h2 className="text-base font-bold text-[#252943]">Unified Delivery Timeline & Event Logs</h2>
-            <p className="text-xs text-[#252943]/60">
+        <div className="bg-white rounded-3xl border border-[#E4E0D3] p-6 shadow-subtle space-y-6">
+          <div className="pb-3 border-b border-[#E4E0D3]">
+            <h2 className="text-base font-bold text-[#111413]">Unified Delivery Timeline & Event Logs</h2>
+            <p className="text-xs text-[#111413]/60">
               Chronological sequence of all views runs, likes runs, and smart synchronization triggers.
             </p>
           </div>
 
           {/* Timeline Sequence */}
-          <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-[#DEE0ED]">
+          <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-[#E4E0D3]">
             {/* Event 0: Campaign Started */}
             <div className="relative space-y-1">
-              <div className="absolute -left-6 top-1 w-3 h-3 rounded-full bg-[#3A4EFB] ring-4 ring-white" />
-              <div className="text-xs font-bold text-[#252943]">
+              <div className="absolute -left-6 top-1 w-3 h-3 rounded-full bg-[#5E8C1F] ring-4 ring-white" />
+              <div className="text-xs font-bold text-[#111413]">
                 Order Created & Queued
               </div>
-              <span className="text-[10px] font-mono text-[#252943]/50 block">
+              <span className="text-[10px] font-sans text-[#111413]/50 block">
                 {formatBdDateTime(order.createdAt)} ({formatBdTime(order.createdAt)} BD)
               </span>
-              <p className="text-xs text-[#252943]/70">
+              <p className="text-xs text-[#111413]/70">
                 {viewsRuns.length} Views batches, {likesRuns.length} Likes batches{savesRuns.length > 0 ? `, ${savesRuns.length} Saves batches` : ""}{sharesRuns.length > 0 ? `, and ${sharesRuns.length} Reposts batches` : ""} successfully queued across {order.durationHours} hours.
               </p>
             </div>
@@ -1419,7 +1419,7 @@ export default function EngagementOrderDetailPage() {
                 <p className="text-xs text-amber-900 leading-relaxed">
                   {delayedLikesEvents[0]?.message}
                 </p>
-                <span className="text-[10px] font-mono text-amber-800/60 block">
+                <span className="text-[10px] font-sans text-amber-800/60 block">
                   {formatBdDateTime(delayedLikesEvents[0]?.createdAt)} ({formatBdTime(delayedLikesEvents[0]?.createdAt)} BD)
                 </span>
               </div>
@@ -1439,7 +1439,7 @@ export default function EngagementOrderDetailPage() {
                       isDone
                         ? "bg-emerald-500"
                         : isViews
-                        ? "bg-[#3A4EFB]"
+                        ? "bg-[#5E8C1F]"
                         : isLikes
                         ? "bg-rose-500"
                         : isSaves
@@ -1448,7 +1448,7 @@ export default function EngagementOrderDetailPage() {
                     }`}
                   />
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-bold capitalize text-[#252943]">
+                    <span className="text-xs font-bold capitalize text-[#111413]">
                       {r.engagementType} Run #{r.runNumber}
                     </span>
                     <span className={`px-2 py-0.2 rounded text-[10px] font-bold uppercase ${
@@ -1468,7 +1468,7 @@ export default function EngagementOrderDetailPage() {
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-3 text-[11px] text-[#252943]/60 font-mono">
+                  <div className="flex items-center gap-3 text-[11px] text-[#111413]/60 font-sans">
                     <span>Scheduled: {formatBdTime(r.scheduledAt)} BD</span>
                     <span>•</span>
                     <span>Quantity: {r.quantity}</span>
@@ -1484,10 +1484,10 @@ export default function EngagementOrderDetailPage() {
                 <div className="text-xs font-bold text-emerald-700">
                   Engagement Delivery Completed
                 </div>
-                <span className="text-[10px] font-mono text-[#252943]/50 block">
+                <span className="text-[10px] font-sans text-[#111413]/50 block">
                   {formatBdDateTime(order.updatedAt)} ({formatBdTime(order.updatedAt)} BD)
                 </span>
-                <p className="text-xs text-[#252943]/70">
+                <p className="text-xs text-[#111413]/70">
                   All {viewsRuns.length} Views batches, {likesRuns.length} Likes batches{savesRuns.length > 0 ? `, ${savesRuns.length} Saves batches` : ""}{sharesRuns.length > 0 ? `, and ${sharesRuns.length} Reposts batches` : ""} confirmed delivered by delivery networks.
                 </p>
               </div>
@@ -1497,20 +1497,20 @@ export default function EngagementOrderDetailPage() {
       )}
 
       {/* 24/7 Live Support Banner */}
-      <div className="p-4 rounded-3xl bg-white border border-[#DEE0ED] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-subtle mt-6">
+      <div className="p-4 rounded-3xl bg-white border border-[#E4E0D3] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-subtle mt-6">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-2xl bg-[#0088cc]/10 border border-[#0088cc]/20 flex items-center justify-center text-[#0088cc] shrink-0">
             <Send className="w-4 h-4" />
           </div>
           <div>
-            <h4 className="font-bold text-[#252943] flex items-center gap-2">
+            <h4 className="font-bold text-[#111413] flex items-center gap-2">
               <span>Campaign Order Assistance</span>
               <span className="flex items-center gap-1 text-[9px] font-bold text-emerald-600 bg-emerald-100/80 px-2 py-0.5 rounded-full">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 24/7 Support Online
               </span>
             </h4>
-            <p className="text-[11px] text-[#252943]/60">
+            <p className="text-[11px] text-[#111413]/60">
               Need to modify batch cadence or have questions about delivery status?
             </p>
           </div>

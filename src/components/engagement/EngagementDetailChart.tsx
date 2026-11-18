@@ -53,11 +53,11 @@ export interface EngagementDetailChartProps {
 const ALL_ENGAGEMENT_TYPES: EngagementType[] = ["views", "likes", "saves", "shares", "comments"];
 
 const TYPE_COLORS: Record<EngagementType, { stroke: string; lightBg: string; text: string }> = {
-  views: { stroke: "#3A4EFB", lightBg: "#EFF2FE", text: "text-[#3A4EFB]" },
-  likes: { stroke: "#E11D48", lightBg: "#FFE4E6", text: "text-[#E11D48]" },
-  saves: { stroke: "#D97706", lightBg: "#FEF3C7", text: "text-[#D97706]" },
-  shares: { stroke: "#7C3AED", lightBg: "#EDE9FE", text: "text-[#7C3AED]" },
-  comments: { stroke: "#059669", lightBg: "#D1FAE5", text: "text-[#059669]" },
+  views: { stroke: "#2F6B3A", lightBg: "rgba(47, 107, 58, 0.12)", text: "text-[#2F6B3A]" },
+  likes: { stroke: "#C4552D", lightBg: "rgba(196, 85, 45, 0.12)", text: "text-[#C4552D]" },
+  saves: { stroke: "#E0A030", lightBg: "rgba(224, 160, 48, 0.12)", text: "text-[#E0A030]" },
+  shares: { stroke: "#7C5CBF", lightBg: "rgba(124, 92, 191, 0.12)", text: "text-[#7C5CBF]" },
+  comments: { stroke: "#2A9D8F", lightBg: "rgba(42, 157, 143, 0.12)", text: "text-[#2A9D8F]" },
 };
 
 /**
@@ -334,8 +334,8 @@ export function EngagementDetailChart({
                 onClick={() => onToggleType && onToggleType(t)}
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border transition-all ${
                   isVis
-                    ? "bg-white border-[#DEE0ED] shadow-xs text-[#252943]"
-                    : "bg-gray-100/60 border-transparent text-[#252943]/40 line-through"
+                    ? "bg-white border-[#E4E0D3] shadow-xs text-[#111413]"
+                    : "bg-gray-100/60 border-transparent text-[#111413]/40 line-through"
                 }`}
               >
                 <span className="w-2.5 h-1.5 rounded-sm" style={{ backgroundColor: cfg.stroke }} />
@@ -345,15 +345,15 @@ export function EngagementDetailChart({
           })}
         </div>
 
-        <div className="flex items-center gap-3 text-[11px] font-semibold text-[#252943]/70">
+        <div className="flex items-center gap-3 text-[11px] font-semibold text-[#111413]/70">
           {/* Scale Per Type Toggle */}
           <button
             type="button"
             onClick={() => setScalePerType(!scalePerType)}
             className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${
               scalePerType
-                ? "bg-[#3A4EFB] text-white border-[#3A4EFB] shadow-xs"
-                : "bg-white text-[#252943]/70 border-[#DEE0ED] hover:text-[#252943]"
+                ? "bg-[#2F6B3A] text-white border-[#2F6B3A] shadow-xs"
+                : "bg-white text-[#111413]/70 border-[#E4E0D3] hover:text-[#111413]"
             }`}
             title="Scale each engagement type to its own maximum for clear viewing"
           >
@@ -361,12 +361,12 @@ export function EngagementDetailChart({
           </button>
 
           <span className="flex items-center gap-1">
-            <span className="w-4 h-0 border-t-2 border-dashed border-[#252943]/60" />
+            <span className="w-4 h-0 border-t-2 border-dashed border-[#111413]/60" />
             <span>Expected</span>
           </span>
           {showDelivered && (
             <span className="flex items-center gap-1">
-              <span className="w-4 h-0.5 bg-[#252943]" />
+              <span className="w-4 h-0.5 bg-[#111413]" />
               <span>Delivered (Confirmed)</span>
             </span>
           )}
@@ -374,7 +374,7 @@ export function EngagementDetailChart({
       </div>
 
       {/* SVG Chart Frame */}
-      <div className="relative w-full overflow-hidden rounded-2xl bg-white border border-[#DEE0ED] p-2 shadow-subtle">
+      <div className="relative w-full overflow-hidden rounded-2xl bg-white border border-[#E4E0D3] p-2 shadow-subtle">
         <svg
           viewBox={`0 0 ${width} ${height}`}
           className="w-full h-auto select-none"
@@ -416,7 +416,7 @@ export function EngagementDetailChart({
                   x={paddingLeft - 8}
                   y={y + 3.5}
                   textAnchor="end"
-                  className="text-[9px] fill-[#252943]/50 font-mono font-semibold"
+                  className="text-[9px] fill-[#111413]/50 font-mono font-semibold"
                 >
                   {scalePerType
                     ? `${Math.round(frac * 100)}%`
@@ -445,7 +445,7 @@ export function EngagementDetailChart({
                   x={x}
                   y={paddingTop + chartHeight + 16}
                   textAnchor="middle"
-                  className="text-[10px] fill-[#252943]/70 font-bold font-mono"
+                  className="text-[10px] fill-[#111413]/70 font-bold font-mono"
                 >
                   {tick.label}
                 </text>
@@ -558,7 +558,7 @@ export function EngagementDetailChart({
                 y1={paddingTop}
                 x2={hoverData.x}
                 y2={paddingTop + chartHeight}
-                stroke="#3A4EFB"
+                stroke="#2F6B3A"
                 strokeWidth="1"
                 strokeDasharray="2 2"
                 opacity={0.6}
@@ -570,7 +570,7 @@ export function EngagementDetailChart({
         {/* Hover Tooltip Overlay */}
         {hoverData && (
           <div
-            className="pointer-events-none absolute z-20 rounded-xl bg-[#252943] text-white p-2.5 text-xs shadow-xl animate-scaleUp space-y-1.5"
+            className="pointer-events-none absolute z-20 rounded-xl bg-[#111413] text-white p-2.5 text-xs shadow-xl animate-scaleUp space-y-1.5"
             style={{
               left: Math.min(width - 180, Math.max(10, hoverData.x - 70)),
               top: 14,

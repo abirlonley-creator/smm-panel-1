@@ -176,8 +176,8 @@ export default function EngagementOrdersPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="flex items-center gap-2 text-sm text-[#252943]/60">
-          <Loader2 className="w-5 h-5 animate-spin text-[#3A4EFB]" />
+        <div className="flex items-center gap-3 text-sm text-[#5B625F]">
+          <img src="/brand/logos/mark-on-light.svg" className="w-6 h-6 animate-pulse" alt="" />
           <span>Loading campaigns...</span>
         </div>
       </div>
@@ -185,41 +185,41 @@ export default function EngagementOrdersPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 animate-fadeIn pb-16">
+    <div className="max-w-5xl mx-auto space-y-6 animate-fadeIn pb-16 font-sans">
       {/* Navigation Sub-Tabs */}
-      <div className="flex items-center gap-2 border-b border-[#DEE0ED] pb-3">
+      <div className="flex items-center gap-2 border-b border-[#E4E0D3] pb-3">
         <Link
           href="/engagement"
-          className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-white text-[#252943]/70 hover:text-[#252943] hover:bg-[#F8F9FD] border border-[#DEE0ED] shadow-xs transition-all press-scale"
+          className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-white text-[#111413] hover:bg-[#F3F1EA] border border-[#E4E0D3] shadow-xs transition-all press-scale"
         >
-          <Zap className="w-3.5 h-3.5 text-[#3A4EFB]" />
+          <Zap className="w-3.5 h-3.5 text-[#5E8C1F]" />
           <span>New Campaign</span>
         </Link>
         <Link
           href="/engagement/orders"
-          className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-[#3A4EFB] text-white shadow-subtle transition-all press-scale"
+          className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-[#D4F04F] hover:bg-[#C5E23A] text-[#111413] shadow-sm transition-all press-scale"
         >
-          <Layers className="w-3.5 h-3.5 text-[#E3FF3B]" />
+          <Layers className="w-3.5 h-3.5 text-[#111413]" />
           <span>Campaign Orders</span>
         </Link>
       </div>
 
       {/* Top Reassurance Banner */}
-      <div className="p-3.5 rounded-2xl bg-[#F0F3FF] border border-[#3A4EFB]/20 flex items-center gap-2 text-xs text-[#252943] shadow-subtle">
-        <ShieldCheck className="w-4 h-4 text-[#3A4EFB] shrink-0" />
+      <div className="p-3.5 rounded-2xl bg-[#F3F1EA] border border-[#E4E0D3] flex items-center gap-2 text-xs text-[#111413] shadow-subtle">
+        <ShieldCheck className="w-4 h-4 text-[#5E8C1F] shrink-0" />
         <span className="font-medium">
           <strong>Calm guarantee:</strong> Nothing is charged until you confirm. You can cancel anytime, and unsent batches are refunded immediately to your wallet.
         </span>
       </div>
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-[#DEE0ED]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-[#E4E0D3]">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#252943] flex items-center gap-2">
-            <Layers className="w-6 h-6 text-[#3A4EFB]" />
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#111413] flex items-center gap-2">
+            <Layers className="w-6 h-6 text-[#5E8C1F]" />
             Full Engagement Delivery Orders
           </h1>
-          <p className="text-xs text-[#252943]/60 mt-0.5">
+          <p className="text-xs text-[#5B625F] mt-0.5">
             Monitor real-time natural-looking delivery across Views, Likes, Shares, Saves, and Comments.
           </p>
         </div>
@@ -228,16 +228,16 @@ export default function EngagementOrdersPage() {
           <button
             type="button"
             onClick={loadOrders}
-            className="p-2 rounded-xl border border-[#DEE0ED] text-xs font-semibold text-[#252943]/80 hover:bg-[#F8F9FD] flex items-center gap-1.5"
+            className="p-2 rounded-xl border border-[#E4E0D3] text-xs font-semibold text-[#111413] hover:bg-[#F3F1EA] flex items-center gap-1.5 transition-colors"
             title="Refresh order progress"
           >
-            <RefreshCw className="w-4 h-4 text-[#3A4EFB]" />
+            <RefreshCw className="w-4 h-4 text-[#5E8C1F]" />
           </button>
           <Link
             href="/engagement"
-            className="px-4 py-2 rounded-xl bg-[#3A4EFB] hover:bg-[#2C3FE0] text-white text-xs font-bold transition-all press-scale flex items-center gap-1.5 shadow-subtle"
+            className="px-4 py-2 rounded-xl bg-[#D4F04F] hover:bg-[#C5E23A] text-[#111413] text-xs font-bold transition-all press-scale flex items-center gap-1.5 shadow-sm"
           >
-            <TrendingUp className="w-4 h-4 text-[#E3FF3B]" />
+            <TrendingUp className="w-4 h-4 text-[#111413]" />
             <span>New Campaign</span>
           </Link>
         </div>
@@ -258,22 +258,22 @@ export default function EngagementOrdersPage() {
 
       {/* Orders List */}
       {orders.length === 0 ? (
-        <div className="p-12 text-center bg-white rounded-2xl border border-[#DEE0ED] shadow-subtle space-y-3">
-          <Layers className="w-10 h-10 text-[#3A4EFB]/40 mx-auto" />
-          <h3 className="text-sm font-bold text-[#252943]">No Full Engagement Orders Yet</h3>
-          <p className="text-xs text-[#252943]/60 max-w-sm mx-auto">
+        <div className="p-12 text-center bg-white rounded-2xl border border-[#E4E0D3] shadow-subtle space-y-3 font-sans">
+          <Layers className="w-10 h-10 text-[#5E8C1F]/40 mx-auto" />
+          <h3 className="text-sm font-bold text-[#111413]">No Full Engagement Orders Yet</h3>
+          <p className="text-xs text-[#5B625F] max-w-sm mx-auto">
             Launch your first campaign with natural-looking S-curve delivery across all engagement types.
           </p>
           <Link
             href="/engagement"
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#3A4EFB] text-white text-xs font-bold hover:bg-[#2C3FE0]"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#D4F04F] hover:bg-[#C5E23A] text-[#111413] text-xs font-bold transition-all press-scale shadow-sm"
           >
-            <TrendingUp className="w-4 h-4 text-[#E3FF3B]" />
+            <TrendingUp className="w-4 h-4 text-[#111413]" />
             <span>Create Campaign</span>
           </Link>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-4 font-sans">
           {orders.map((order) => {
             const isCancelling = cancellingId === order.id;
             const friendly = getFriendlyStatus(order);
@@ -284,20 +284,20 @@ export default function EngagementOrdersPage() {
             return (
               <div
                 key={order.id}
-                className="bg-white rounded-2xl border border-[#DEE0ED] p-6 shadow-subtle space-y-4 hover:border-[#3A4EFB]/40 transition-all"
+                className="bg-white rounded-2xl border border-[#E4E0D3] p-6 shadow-subtle space-y-4 hover:border-[#111413]/30 transition-all font-sans"
               >
                 {/* Order Top Bar */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#DEE0ED]/60">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#E4E0D3]/60">
                   <div className="space-y-1">
                     <div className="flex items-center flex-wrap gap-2">
                       <Link
                         href={`/engagement/orders/${order.id}`}
-                        className="font-mono text-xs font-bold px-2.5 py-1 rounded-lg bg-[#252943] text-white hover:bg-[#3A4EFB] transition-colors flex items-center gap-1"
+                        className="font-sans text-xs font-bold px-2.5 py-1 rounded-lg bg-[#111413] text-white hover:bg-[#1B201E] transition-colors flex items-center gap-1"
                       >
                         <span>{order.orderRef}</span>
-                        <ChevronRight className="w-3 h-3" />
+                        <ChevronRight className="w-3 h-3 text-[#D4F04F]" />
                       </Link>
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#3A4EFB]/10 text-[#3A4EFB]">
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#5E8C1F]/10 text-[#5E8C1F]">
                         {order.platform.replace(/_/g, " ")}
                       </span>
                       <span
@@ -311,7 +311,7 @@ export default function EngagementOrdersPage() {
                       href={order.targetUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-xs text-[#252943]/70 hover:text-[#3A4EFB] flex items-center gap-1 truncate max-w-md"
+                      className="text-xs text-[#5B625F] hover:text-[#5E8C1F] flex items-center gap-1 truncate max-w-md transition-colors"
                     >
                       <span>{order.targetUrl}</span>
                       <ExternalLink className="w-3 h-3 shrink-0" />
@@ -320,7 +320,7 @@ export default function EngagementOrdersPage() {
 
                   <div className="flex items-center gap-2 self-start sm:self-center">
                     <div className="text-right">
-                      <span className="text-xs font-bold text-[#252943] block">
+                      <span className="text-xs font-bold text-[#111413] block">
                         ₹{order.totalCost.toFixed(2)}
                       </span>
                       {order.refundedAmount > 0 && (
@@ -332,10 +332,10 @@ export default function EngagementOrdersPage() {
 
                     <Link
                       href={`/engagement/orders/${order.id}`}
-                      className="px-3 py-1.5 rounded-xl bg-[#3A4EFB] text-white hover:bg-[#2C3FE0] text-xs font-bold transition-colors flex items-center gap-1"
+                      className="px-3 py-1.5 rounded-xl bg-[#111413] text-white hover:bg-[#1B201E] text-xs font-bold transition-colors flex items-center gap-1 shadow-xs"
                     >
                       <span>Graph &amp; Runs</span>
-                      <ChevronRight className="w-3.5 h-3.5" />
+                      <ChevronRight className="w-3.5 h-3.5 text-[#D4F04F]" />
                     </Link>
 
                     {canCancel && (
@@ -343,7 +343,7 @@ export default function EngagementOrdersPage() {
                         type="button"
                         onClick={() => handleCancelOrder(order.id, order.orderRef, refundable)}
                         disabled={isCancelling}
-                        className="px-3 py-1.5 rounded-xl border border-rose-300 text-rose-600 hover:bg-rose-50 text-xs font-bold transition-colors flex items-center gap-1 disabled:opacity-50"
+                        className="px-3 py-1.5 rounded-xl border border-[#C4552D]/30 text-[#C4552D] hover:bg-[#C4552D]/10 text-xs font-bold transition-colors flex items-center gap-1 disabled:opacity-50 cursor-pointer"
                         title={`Cancel unsent runs and refund ₹${refundable.toFixed(2)}`}
                       >
                         {isCancelling ? (
@@ -360,14 +360,14 @@ export default function EngagementOrdersPage() {
                 {/* Progress Bar & Run Stats */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-[#252943]">
+                    <span className="font-semibold text-[#111413]">
                       Delivery Progress ({order.completedRuns} of {order.runsCount} Batches Delivered)
                     </span>
-                    <span className="font-bold text-[#3A4EFB]">{order.progressPercent}%</span>
+                    <span className="font-bold text-[#2F6B3A]">{order.progressPercent}%</span>
                   </div>
-                  <div className="w-full h-2 bg-[#F8F9FD] rounded-full overflow-hidden border border-[#DEE0ED]">
+                  <div className="w-full h-2 bg-[#F3F1EA] rounded-full overflow-hidden border border-[#E4E0D3]">
                     <div
-                      className="h-full bg-[#3A4EFB] rounded-full transition-all duration-500"
+                      className="h-full bg-[#2F6B3A] rounded-full transition-all duration-500"
                       style={{ width: `${Math.min(100, Math.max(2, order.progressPercent))}%` }}
                     />
                   </div>
@@ -376,11 +376,11 @@ export default function EngagementOrdersPage() {
                 {/* Per-Type Progress Grid */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3 pt-2">
                   {[
-                    { type: "views", label: "Views", icon: Eye, color: "text-blue-600" },
-                    { type: "likes", label: "Likes", icon: Heart, color: "text-rose-600" },
-                    { type: "shares", label: "Shares", icon: Share2, color: "text-indigo-600" },
-                    { type: "saves", label: "Saves", icon: Bookmark, color: "text-amber-600" },
-                    { type: "comments", label: "Comments", icon: MessageSquare, color: "text-emerald-600" },
+                    { type: "views", label: "Views", icon: Eye, color: "text-[#2F6B3A]" },
+                    { type: "likes", label: "Likes", icon: Heart, color: "text-[#C4552D]" },
+                    { type: "shares", label: "Shares", icon: Share2, color: "text-[#7C5CBF]" },
+                    { type: "saves", label: "Saves", icon: Bookmark, color: "text-[#E0A030]" },
+                    { type: "comments", label: "Comments", icon: MessageSquare, color: "text-[#2A9D8F]" },
                   ].map((m, idx) => {
                     const data = (order.breakdown as any)[m.type] as OrderBreakdownItem;
                     const Icon = m.icon;
@@ -390,12 +390,12 @@ export default function EngagementOrdersPage() {
                     return (
                       <div
                         key={m.type}
-                        className={`p-3 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED] space-y-1 ${
+                        className={`p-3 rounded-xl bg-[#F3F1EA]/60 border border-[#E4E0D3] space-y-1 ${
                           idx === 4 ? "col-span-2 sm:col-span-1" : ""
                         }`}
                       >
                         <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-bold text-[#252943] flex items-center gap-1">
+                          <span className="text-[11px] font-bold text-[#111413] flex items-center gap-1">
                             <Icon className={`w-3 h-3 ${m.color}`} />
                             {m.label}
                           </span>
@@ -405,10 +405,10 @@ export default function EngagementOrdersPage() {
                                 Custom
                               </span>
                             )}
-                            <span className="text-[10px] font-semibold text-[#3A4EFB]">{pct}%</span>
+                            <span className="text-[10px] font-semibold text-[#5E8C1F]">{pct}%</span>
                           </div>
                         </div>
-                        <div className="text-xs font-black text-[#252943]">
+                        <div className="text-xs font-black text-[#111413]">
                           {(data?.delivered || 0).toLocaleString()} / {(data?.planned || 0).toLocaleString()}
                         </div>
                       </div>
@@ -421,15 +421,15 @@ export default function EngagementOrdersPage() {
                   <button
                     type="button"
                     onClick={() => toggleTimeline(order.id)}
-                    className="w-full flex items-center justify-between p-2.5 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED] text-xs font-semibold text-[#252943] hover:bg-[#F0F3FF] transition-colors"
+                    className="w-full flex items-center justify-between p-2.5 rounded-xl bg-[#F3F1EA]/50 border border-[#E4E0D3] text-xs font-semibold text-[#111413] hover:bg-[#F3F1EA] transition-colors cursor-pointer"
                   >
                     <span className="flex items-center gap-2">
-                      <Clock className="w-3.5 h-3.5 text-[#3A4EFB]" />
+                      <Clock className="w-3.5 h-3.5 text-[#5E8C1F]" />
                       <span>
                         Timeline: {order.completedRuns} completed, {order.runsCount - order.completedRuns} remaining
                       </span>
                     </span>
-                    <span className="flex items-center gap-1 text-[11px] text-[#3A4EFB]">
+                    <span className="flex items-center gap-1 text-[11px] text-[#5E8C1F] font-bold">
                       {isTimelineExpanded ? (
                         <>Hide details <ChevronUp className="w-3.5 h-3.5" /></>
                       ) : (
@@ -439,11 +439,11 @@ export default function EngagementOrdersPage() {
                   </button>
 
                   {isTimelineExpanded && order.recentRuns && (
-                    <div className="mt-2 p-3 bg-[#FAFBFD] rounded-xl border border-[#DEE0ED] space-y-2 text-xs">
-                      <div className="font-semibold text-[#252943] flex items-center justify-between">
+                    <div className="mt-2 p-3 bg-white rounded-xl border border-[#E4E0D3] space-y-2 text-xs">
+                      <div className="font-semibold text-[#111413] flex items-center justify-between">
                         <span>Upcoming & Recent Batches:</span>
                         {order.estimatedFinishTime && (
-                          <span className="text-[11px] text-[#252943]/60">
+                          <span className="text-[11px] text-[#5B625F]">
                             Estimated finish: {new Date(order.estimatedFinishTime).toLocaleDateString()} {new Date(order.estimatedFinishTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </span>
                         )}
@@ -452,13 +452,13 @@ export default function EngagementOrdersPage() {
                         {order.recentRuns.map((r, idx) => (
                           <div
                             key={r.id || idx}
-                            className="flex items-center justify-between p-2 rounded-lg bg-white border border-[#DEE0ED] text-[11px]"
+                            className="flex items-center justify-between p-2 rounded-lg bg-[#F3F1EA]/50 border border-[#E4E0D3] text-[11px]"
                           >
-                            <span className="font-medium text-[#252943] capitalize">
+                            <span className="font-medium text-[#111413] capitalize">
                               {r.type}: {r.quantity.toLocaleString()}
                             </span>
                             <div className="flex items-center gap-2">
-                              <span className="text-[#252943]/60">
+                              <span className="text-[#5B625F]">
                                 {new Date(r.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                               </span>
                               <span
@@ -468,8 +468,8 @@ export default function EngagementOrdersPage() {
                                     : r.status === "delayed"
                                     ? "bg-amber-50 text-amber-700"
                                     : r.status === "failed"
-                                    ? "bg-rose-50 text-rose-700"
-                                    : "bg-blue-50 text-blue-700"
+                                    ? "bg-rose-50 text-[#C4552D]"
+                                    : "bg-emerald-50 text-[#5E8C1F]"
                                 }`}
                               >
                                 {r.status}
@@ -483,9 +483,9 @@ export default function EngagementOrdersPage() {
                 </div>
 
                 {/* Footer Bar: Next run time and timestamp */}
-                <div className="pt-3 border-t border-[#DEE0ED]/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-[#252943]/60">
+                <div className="pt-3 border-t border-[#E4E0D3]/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-[#5B625F]">
                   <div className="flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5 text-[#3A4EFB]" />
+                    <Clock className="w-3.5 h-3.5 text-[#5E8C1F]" />
                     <span>
                       {order.nextRunTime
                         ? `Next batch scheduled for: ${new Date(order.nextRunTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
@@ -511,20 +511,20 @@ export default function EngagementOrdersPage() {
       )}
 
       {/* 24/7 Live Support Banner */}
-      <div className="p-4 rounded-3xl bg-white border border-[#DEE0ED] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-subtle mt-6">
+      <div className="p-4 rounded-3xl bg-white border border-[#E4E0D3] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-subtle mt-6 font-sans">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-2xl bg-[#0088cc]/10 border border-[#0088cc]/20 flex items-center justify-center text-[#0088cc] shrink-0">
+          <div className="w-9 h-9 rounded-2xl bg-[#229ED9]/10 border border-[#229ED9]/20 flex items-center justify-center text-[#229ED9] shrink-0">
             <Send className="w-4 h-4" />
           </div>
           <div>
-            <h4 className="font-bold text-[#252943] flex items-center gap-2">
+            <h4 className="font-bold text-[#111413] flex items-center gap-2">
               <span>Need Help with an Order?</span>
               <span className="flex items-center gap-1 text-[9px] font-bold text-emerald-600 bg-emerald-100/80 px-2 py-0.5 rounded-full">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 24/7 Live Support
               </span>
             </h4>
-            <p className="text-[11px] text-[#252943]/60">
+            <p className="text-[11px] text-[#5B625F]">
               For batch speed adjustments, order questions, or cancellations, message our 24/7 support.
             </p>
           </div>
@@ -534,7 +534,7 @@ export default function EngagementOrdersPage() {
           href="https://t.me/Ghostfinds"
           target="_blank"
           rel="noopener noreferrer"
-          className="px-4 py-2 rounded-xl bg-[#0088cc] hover:bg-[#0077b5] text-white text-xs font-bold transition-all shadow-subtle flex items-center justify-center gap-1.5 press-scale self-start sm:self-auto shrink-0"
+          className="px-4 py-2 rounded-xl bg-[#229ED9] hover:bg-[#0077b5] text-white text-xs font-bold transition-all shadow-subtle flex items-center justify-center gap-1.5 press-scale self-start sm:self-auto shrink-0"
         >
           <Send className="w-3.5 h-3.5" />
           <span>Message @Ghostfinds (24/7)</span>

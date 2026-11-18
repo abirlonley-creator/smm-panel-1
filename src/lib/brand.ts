@@ -17,10 +17,10 @@ export const BRAND = {
   manifestName: "AuraSMM — Minimalist SMM Panel & Growth Planner",
   logoAlt: "AuraSMM Logo",
   supportEmail: "support@aurasmm.com",
-  themeColor: "#252943",
-  accentColor: "#3A4EFB",
-  highlightColor: "#E3FF3B",
-  backgroundColor: "#F8F9FD",
+  themeColor: "#111413",
+  accentColor: "#D4F04F",
+  highlightColor: "#D4F04F",
+  backgroundColor: "#F3F1EA",
 } as const;
 
 export const BRAND_NAME = BRAND.name;

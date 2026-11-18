@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
 import {
   Zap,
@@ -20,9 +20,10 @@ import {
   Heart,
   Bookmark,
   Share2,
+  MessageSquare,
+  MessageCircle,
   ChevronDown,
   ChevronUp,
-  Dices,
   Sparkles,
   Calendar,
   Layers,
@@ -31,22 +32,20 @@ import {
   Flame,
   Rocket,
   Crown,
-  Sliders,
-  Activity,
-  Moon,
   Link2,
+  Users,
 } from "lucide-react";
 import { BinanceAddFundsModal } from "@/components/BinanceAddFundsModal";
 import { AdminOutOfBalanceBanner } from "@/components/AdminOutOfBalanceBanner";
 import { LiveOrganicGrowthPreview } from "@/components/engagement/LiveOrganicGrowthPreview";
-import { GeneratedSchedulePlan } from "@/lib/engagement/organic-pattern-generator";
 import {
-  generateOrganicDeliveryPlan,
-  generateTikTokAlgorithmicPlan,
-  OrganicBatch,
-  OrganicPlanResult,
-  PacingStrategy,
-} from "@/lib/engagement/organic-pacing-engine";
+  generatePattern,
+  DEFAULT_PACKAGES,
+  PackageConfig,
+  DeterministicPlan,
+  DEFAULT_PROVIDER_MINIMUMS,
+  formatDurationDaysHours,
+} from "@/lib/engagement/deterministic-pattern-engine";
 
 interface ApiStatusItem {
   connected: boolean;
@@ -70,6 +69,7 @@ interface ApiStatusItem {
 interface EngagementStatusResponse {
   success: boolean;
   enabled: boolean;
+  isAdmin?: boolean;
   walletBalance: number;
   readyToOrder: boolean;
   zeofame: ApiStatusItem;
@@ -79,6 +79,7 @@ interface EngagementStatusResponse {
     likesRate: number;
     savesRate: number;
     sharesRate: number;
+    commentsRate?: number;
   };
   presets?: any[];
   services?: any[];
@@ -86,154 +87,14 @@ interface EngagementStatusResponse {
   pricing: any;
 }
 
-// Preset definitions on the client
-interface PresetOption {
-  id: string;
-  name: string;
-  tagline: string;
-  badge: string;
-  durationLabel: string;
-  durationHours: number;
-  targetViews?: number;
-  targetLikes?: number;
-  targetSaves?: number;
-  targetShares?: number;
-  views: { enabled?: boolean; count: number; min: number; max: number; interval: number };
-  likes: { enabled?: boolean; count: number; min: number; max: number; offsets: number[] };
-  saves?: { enabled?: boolean; count: number; min: number; max: number; offsets: number[] };
-  shares?: { enabled?: boolean; count: number; min: number; max: number; offsets: number[] };
-  syncThreshold: { minViews: number; maxViews: number };
+interface PostPreviewData {
+  authorHandle: string;
+  authorName: string;
+  title: string;
+  thumbnailUrl: string;
+  videoId?: string;
+  views?: number;
 }
-
-const PRESET_OPTIONS: Record<string, PresetOption> = {
-  tiktok_2k: {
-    id: "tiktok_2k",
-    name: "2K Starter",
-    tagline: "6-hour initial test pool & seed momentum",
-    badge: "6h",
-    durationLabel: "6.0 Hours",
-    durationHours: 6.0,
-    targetViews: 2960,
-    targetLikes: 65,
-    targetSaves: 0,
-    targetShares: 0,
-    views: { enabled: true, count: 24, min: 100, max: 200, interval: 15 },
-    likes: { enabled: true, count: 3, min: 10, max: 25, offsets: [35, 120, 240] },
-    syncThreshold: { minViews: 500, maxViews: 700 },
-  },
-  tiktok_5k: {
-    id: "tiktok_5k",
-    name: "5K Velocity",
-    tagline: "24-hour FYP expansion with interleaved likes",
-    badge: "24h",
-    durationLabel: "24.0 Hours (1 Day)",
-    durationHours: 24.0,
-    targetViews: 5100,
-    targetLikes: 112,
-    targetSaves: 44,
-    targetShares: 22,
-    views: { enabled: true, count: 42, min: 100, max: 240, interval: 34 },
-    likes: {
-      enabled: true,
-      count: 5,
-      min: 12,
-      max: 28,
-      offsets: [90, 240, 480, 780, 1140],
-    },
-    saves: { enabled: true, count: 4, min: 10, max: 14, offsets: [180, 420, 750, 1100] },
-    shares: { enabled: true, count: 2, min: 10, max: 12, offsets: [360, 900] },
-    syncThreshold: { minViews: 1000, maxViews: 1500 },
-  },
-  tiktok_10k: {
-    id: "tiktok_10k",
-    name: "10K Breakthrough",
-    tagline: "2-day FYP surge with circadian peak hours",
-    badge: "2 Days",
-    durationLabel: "48.0 Hours (2 Days)",
-    durationHours: 48.0,
-    targetViews: 10500,
-    targetLikes: 231,
-    targetSaves: 90,
-    targetShares: 44,
-    views: { enabled: true, count: 72, min: 100, max: 280, interval: 40 },
-    likes: {
-      enabled: true,
-      count: 10,
-      min: 12,
-      max: 30,
-      offsets: [
-        120, 300, 540, 840, 1200, 1560, 1920, 2280, 2520, 2760,
-      ],
-    },
-    saves: { enabled: true, count: 8, min: 10, max: 16, offsets: [240, 540, 900, 1260, 1620, 1980, 2340, 2700] },
-    shares: { enabled: true, count: 4, min: 10, max: 14, offsets: [480, 1140, 1800, 2460] },
-    syncThreshold: { minViews: 2000, maxViews: 3000 },
-  },
-  tiktok_15k: {
-    id: "tiktok_15k",
-    name: "15K Acceleration",
-    tagline: "3-day organic algorithm surge with anti-radar ascent",
-    badge: "3 Days",
-    durationLabel: "72.0 Hours (3 Days)",
-    durationHours: 72.0,
-    targetViews: 15200,
-    targetLikes: 334,
-    targetSaves: 140,
-    targetShares: 60,
-    views: { enabled: true, count: 96, min: 100, max: 320, interval: 45 },
-    likes: {
-      enabled: true,
-      count: 15,
-      min: 14,
-      max: 32,
-      offsets: [
-        120, 300, 540, 840, 1200, 1560, 1920, 2280, 2640, 3000, 3360, 3600, 3840, 4080, 4200,
-      ],
-    },
-    saves: { enabled: true, count: 10, min: 11, max: 18, offsets: [300, 720, 1200, 1680, 2160, 2640, 3120, 3600, 4000, 4220] },
-    shares: { enabled: true, count: 6, min: 10, max: 14, offsets: [600, 1440, 2280, 3000, 3600, 4140] },
-    syncThreshold: { minViews: 3000, maxViews: 5000 },
-  },
-  tiktok_50k: {
-    id: "tiktok_50k",
-    name: "50K Mega Viral",
-    tagline: "5-day full multi-day FYP curve with soft landing tail",
-    badge: "5 Days",
-    durationLabel: "120.0 Hours (5 Days)",
-    durationHours: 120.0,
-    targetViews: 50600,
-    targetLikes: 1113,
-    targetSaves: 520,
-    targetShares: 210,
-    views: { enabled: true, count: 240, min: 100, max: 400, interval: 30 },
-    likes: {
-      enabled: true,
-      count: 40,
-      min: 15,
-      max: 45,
-      offsets: [
-        180, 360, 600, 840, 1140, 1440, 1800, 2160, 2520, 2880, 3240, 3600, 3960, 4320, 4680, 5040, 5400, 5760, 6120, 6480, 6840, 7080,
-      ],
-    },
-    saves: {
-      enabled: true,
-      count: 20,
-      min: 12,
-      max: 25,
-      offsets: [
-        480, 960, 1500, 2100, 2700, 3300, 3900, 4500, 5100, 5700, 6300, 6900, 7120,
-      ],
-    },
-    shares: {
-      enabled: true,
-      count: 12,
-      min: 10,
-      max: 18,
-      offsets: [720, 1440, 2200, 3000, 3800, 4600, 5400, 6200, 6900, 7140],
-    },
-    syncThreshold: { minViews: 5000, maxViews: 8000 },
-  },
-};
 
 interface PresetVisualMeta {
   tierBadge: string;
@@ -246,15 +107,15 @@ interface PresetVisualMeta {
   isPopular?: boolean;
 }
 
-function getPresetVisuals(preset: PresetOption): PresetVisualMeta {
-  const id = (preset.id || "").toLowerCase();
-  const name = (preset.name || "").toLowerCase();
+function getPresetVisuals(pkg: PackageConfig): PresetVisualMeta {
+  const id = (pkg.id || "").toLowerCase();
+  const name = (pkg.name || "").toLowerCase();
 
   if (id.includes("50k") || name.includes("50k")) {
     return {
       tierBadge: "50K",
       shortTitle: "Mega Viral",
-      durationShort: preset.badge || "5 Days",
+      durationShort: "5 Days",
       icon: Crown,
       iconColor: "text-amber-500",
       iconBg: "bg-amber-500/10 border-amber-300/50",
@@ -265,7 +126,7 @@ function getPresetVisuals(preset: PresetOption): PresetVisualMeta {
     return {
       tierBadge: "15K",
       shortTitle: "Acceleration",
-      durationShort: preset.badge || "3 Days",
+      durationShort: "3 Days",
       icon: Sparkles,
       iconColor: "text-purple-600",
       iconBg: "bg-purple-500/10 border-purple-300/50",
@@ -276,7 +137,7 @@ function getPresetVisuals(preset: PresetOption): PresetVisualMeta {
     return {
       tierBadge: "10K",
       shortTitle: "Breakthrough",
-      durationShort: preset.badge || "2 Days",
+      durationShort: "2 Days",
       icon: Flame,
       iconColor: "text-rose-500",
       iconBg: "bg-rose-500/10 border-rose-300/50",
@@ -288,7 +149,7 @@ function getPresetVisuals(preset: PresetOption): PresetVisualMeta {
     return {
       tierBadge: "5K",
       shortTitle: "Velocity",
-      durationShort: preset.badge || "24h",
+      durationShort: "24h",
       icon: Rocket,
       iconColor: "text-indigo-600",
       iconBg: "bg-indigo-500/10 border-indigo-300/50",
@@ -298,7 +159,7 @@ function getPresetVisuals(preset: PresetOption): PresetVisualMeta {
   return {
     tierBadge: "2K",
     shortTitle: "Starter",
-    durationShort: preset.badge || "6h",
+    durationShort: "6h",
     icon: Zap,
     iconColor: "text-sky-500",
     iconBg: "bg-sky-500/10 border-sky-300/50",
@@ -306,213 +167,59 @@ function getPresetVisuals(preset: PresetOption): PresetVisualMeta {
   };
 }
 
-function generateOrganicRandomDistribution(
-  target: number,
-  count: number,
-  minBound: number,
-  maxBound: number,
-  allowVariance: boolean = true
-): number[] {
-  if (count <= 0) return [];
-  if (count === 1) return [Math.max(minBound, target)];
-
-  let min = Math.max(1, minBound);
-  let max = Math.max(min + 1, maxBound);
-
-  // If the bounds range is too tight compared to average, dynamically give room for realistic waves
-  const avg = target / count;
-  if (max - min < 10 && avg > 10) {
-    min = Math.max(minBound, Math.floor(avg * 0.7));
-    max = Math.max(maxBound, Math.ceil(avg * 1.35));
-  }
-
-  // When shuffling or generating, allow slight natural organic variance around the target (±2.5%)
-  // so every plan has its own unique, realistic total that visibly updates the header and metric card!
-  let effectiveTarget = target;
-  if (allowVariance && count > 1) {
-    const varianceSpread = Math.max(2, Math.round(target * 0.025));
-    const randomShift = Math.floor((Math.random() * 2 - 1) * varianceSpread);
-    effectiveTarget = target + randomShift;
-  }
-
-  // Ensure target can be reached within bounds
-  const clampedTarget = Math.max(count * min, Math.min(count * max, effectiveTarget));
-
-  // Generate initial random values spanning the entire [min, max] range
-  const items: number[] = [];
-  for (let i = 0; i < count; i++) {
-    items.push(Math.floor(Math.random() * (max - min + 1)) + min);
-  }
-
-  // Distribute difference randomly so total equals clampedTarget 100%
-  let currentSum = items.reduce((a, b) => a + b, 0);
-  let diff = clampedTarget - currentSum;
-  let attempts = 0;
-
-  while (diff !== 0 && attempts < 8000) {
-    attempts++;
-    const idx = Math.floor(Math.random() * count);
-    if (diff > 0 && items[idx] < max) {
-      const room = max - items[idx];
-      const step = Math.min(diff, Math.max(1, Math.floor(Math.random() * Math.min(room, 12)) + 1));
-      items[idx] += step;
-      diff -= step;
-    } else if (diff < 0 && items[idx] > min) {
-      const room = items[idx] - min;
-      const step = Math.min(-diff, Math.max(1, Math.floor(Math.random() * Math.min(room, 12)) + 1));
-      items[idx] -= step;
-      diff += step;
-    }
-  }
-
-  // If after attempts there is still a small remainder, distribute 1 by 1
-  let guard = 0;
-  while (diff > 0 && guard < count * 2) {
-    const idx = guard % count;
-    if (items[idx] < max) {
-      items[idx]++;
-      diff--;
-    }
-    guard++;
-  }
-  guard = 0;
-  while (diff < 0 && guard < count * 2) {
-    const idx = guard % count;
-    if (items[idx] > min) {
-      items[idx]--;
-      diff++;
-    }
-    guard++;
-  }
-
-  // Fisher-Yates shuffle so high and low batches are organically dispersed
-  for (let i = items.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    const temp = items[i];
-    items[i] = items[j];
-    items[j] = temp;
-  }
-
-  return items;
-}
-
-interface StrategyOption {
-  id: PacingStrategy;
-  name: string;
-  badge: string;
-  description: string;
-  icon: "fire" | "zap" | "activity" | "moon" | "shield";
-}
-
-const STRATEGY_OPTIONS: StrategyOption[] = [
-  {
-    id: "s_curve",
-    name: "S-Curve",
-    badge: "Biological FYP",
-    description: "Organic bell curve (gradual warm-up → algorithm peak → natural tail)",
-    icon: "fire",
-  },
-  {
-    id: "burst",
-    name: "Burst",
-    badge: "Viral Launch",
-    description: "Front-loaded momentum rush in first 1–2h for fast algorithmic ranking",
-    icon: "zap",
-  },
-  {
-    id: "normal",
-    name: "Normal",
-    badge: "Steady Human",
-    description: "Consistent human browsing arrival pace across total duration",
-    icon: "activity",
-  },
-  {
-    id: "peak_hours",
-    name: "Peak Hours",
-    badge: "6–10 PM Focus",
-    description: "Concentrates high volume during prime evening viewing hours (18–22h)",
-    icon: "moon",
-  },
-  {
-    id: "stealth",
-    name: "Stealth",
-    badge: "Slow & Safe",
-    description: "Cautious low-velocity trickle delivery for maximum safety",
-    icon: "shield",
-  },
-];
-
-function generateOrganicSCurvePlan(
-  target: number,
-  runsCount: number,
-  durationMinutes: number,
-  minBound: number,
-  maxBound: number,
-  strategy: PacingStrategy = "s_curve",
-  peakHoursEnabled: boolean = true
-): { quantities: number[]; minuteOffsets: number[]; plan: OrganicPlanResult } {
-  const plan = generateOrganicDeliveryPlan("views", target, {
-    durationHours: durationMinutes / 60,
-    runsCount,
-    providerMinimum: minBound,
-    applyInitialDelay: false,
-    pacingStrategy: strategy,
-    peakHoursEnabled,
-  });
-
-  return {
-    quantities: plan.runs.map((r) => r.quantity),
-    minuteOffsets: plan.runs.map((r) => r.minuteOffset),
-    plan,
-  };
-}
-
-function generatePlanForPreset(
-  p: PresetOption,
-  strategy: PacingStrategy = "s_curve",
-  peakHoursEnabled: boolean = true
-) {
-  const algoPlan = generateTikTokAlgorithmicPlan(p.targetViews || 2960, {
-    durationHours: p.durationHours,
-    strategy,
-    peakHoursEnabled,
-    targetLikes: p.targetLikes,
-    targetSaves: p.targetSaves,
-    targetShares: p.targetShares,
-    providerMinViews: p.views?.min || 100,
-  });
-
-  return {
-    views: algoPlan.views.quantities,
-    viewOffsets: algoPlan.views.minuteOffsets,
-    viewsPlan: algoPlan.views.plan,
-    likes: algoPlan.likes.quantities,
-    likeOffsets: algoPlan.likes.minuteOffsets,
-    saves: algoPlan.saves.quantities,
-    saveOffsets: algoPlan.saves.minuteOffsets,
-    shares: algoPlan.shares.quantities,
-    shareOffsets: algoPlan.shares.minuteOffsets,
-  };
-}
-
-function formatBdTime(offsetMinutes: number, baseDate: Date): string {
-  const targetDate = new Date(baseDate.getTime() + offsetMinutes * 60 * 1000);
+function formatBdTime(date: Date): string {
   return (
     new Intl.DateTimeFormat("en-US", {
       timeZone: "Asia/Dhaka",
+      month: "short",
+      day: "numeric",
       hour: "numeric",
       minute: "2-digit",
       hour12: true,
-    }).format(targetDate) + " BD"
+    }).format(date) + " BD"
   );
+}
+
+function snapTo15MinuteGrid(d: Date): Date {
+  const ms = 1000 * 60 * 15;
+  return new Date(Math.round(d.getTime() / ms) * ms);
 }
 
 export default function EngagementPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [statusData, setStatusData] = useState<EngagementStatusResponse | null>(null);
-  const [selectedPresetId, setSelectedPresetId] = useState<string>("tiktok_2k");
+
+  // Selected package
+  const [selectedPackageId, setSelectedPackageId] = useState<string>("tiktok_2k");
+
+  // Step 1: Add-ons state
+  const [addOnLikes, setAddOnLikes] = useState<boolean>(true);
+  const [addOnSaves, setAddOnSaves] = useState<boolean>(true);
+  const [addOnShares, setAddOnShares] = useState<boolean>(true);
+  const [addOnComments, setAddOnComments] = useState<boolean>(false);
+  const [commentsCount, setCommentsCount] = useState<number>(10);
+
+  // Step 2: URL & Post preview
   const [targetUrl, setTargetUrl] = useState("");
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewData, setPreviewData] = useState<PostPreviewData | null>(null);
+  const previewAbortRef = useRef<AbortController | null>(null);
+
+  // Step 2: Follower count & timing
+  const [followers, setFollowers] = useState<number>(500);
+  const [startMode, setStartMode] = useState<"now" | "schedule">("now");
+  const [scheduledDate, setScheduledDate] = useState<string>(() => {
+    const d = new Date();
+    return d.toISOString().split("T")[0];
+  });
+  const [scheduledTime, setScheduledTime] = useState<string>("12:00");
+
+  // Step 3: Pattern seed
+  const [patternSeed, setPatternSeed] = useState<string>(() => `aurasmm_${Math.random().toString(36).substring(2, 9)}`);
+
+  // Step 4: Terms agreement & submission
+  const [agreedToTerms, setAgreedToTerms] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [adminOutOfBalance, setAdminOutOfBalance] = useState<{
@@ -520,161 +227,137 @@ export default function EngagementPage() {
     providerName: string;
   } | null>(null);
   const [successReceipt, setSuccessReceipt] = useState<any | null>(null);
-  const [showApiDetails, setShowApiDetails] = useState(false);
   const [showAddFundsModal, setShowAddFundsModal] = useState(false);
-  const [showAllBatches, setShowAllBatches] = useState(false);
 
-  const activePresets: Record<string, PresetOption> = useMemo(() => {
-    if (Array.isArray(statusData?.presets) && statusData.presets.length > 0) {
-      const result: Record<string, PresetOption> = {};
-      for (const raw of statusData.presets) {
-        result[raw.id] = {
-          id: raw.id,
-          name: raw.name || raw.id,
-          tagline: raw.tagline || "",
-          badge: raw.badge || `${raw.durationHours}h`,
-          durationLabel: raw.durationLabel || `${raw.durationHours} Hours`,
-          durationHours: raw.durationHours || 5.0,
-          targetViews: raw.targetViews,
-          targetLikes: raw.targetLikes,
-          views: {
-            enabled: raw.views?.enabled !== false,
-            count: raw.views?.runsCount ?? 16,
-            min: raw.views?.minQuantity ?? 150,
-            max: raw.views?.maxQuantity ?? 220,
-            interval: raw.views?.intervalMinutes ?? 20,
-          },
-          likes: {
-            enabled: raw.likes?.enabled !== false,
-            count: raw.likes?.runsCount ?? 3,
-            min: raw.likes?.minQuantity ?? 12,
-            max: raw.likes?.maxQuantity ?? 16,
-            offsets: raw.likes?.waveOffsets ?? [120, 200, 280],
-          },
-          saves: raw.saves ? {
-            enabled: Boolean(raw.saves.enabled),
-            count: raw.saves?.runsCount ?? 4,
-            min: raw.saves?.minQuantity ?? 10,
-            max: raw.saves?.maxQuantity ?? 12,
-            offsets: raw.saves?.waveOffsets ?? [240, 420, 600, 750],
-          } : undefined,
-          shares: raw.shares ? {
-            enabled: Boolean(raw.shares.enabled),
-            count: raw.shares?.runsCount ?? 2,
-            min: raw.shares?.minQuantity ?? 10,
-            max: raw.shares?.maxQuantity ?? 12,
-            offsets: raw.shares?.waveOffsets ?? [360, 660],
-          } : undefined,
-          syncThreshold: raw.syncThreshold || { minViews: 500, maxViews: 700 },
+  // Active package definition
+  const currentPackage: PackageConfig = useMemo(() => {
+    const defaultPkg = DEFAULT_PACKAGES[selectedPackageId] || DEFAULT_PACKAGES.tiktok_2k;
+    // Check if database presets from statusData override price or fields
+    if (Array.isArray(statusData?.presets)) {
+      const match = statusData.presets.find((p: any) => p.id === selectedPackageId);
+      if (match) {
+        return {
+          ...defaultPkg,
+          price_inr: typeof match.price_inr === "number" ? match.price_inr : defaultPkg.price_inr,
+          views_total: match.views_total || match.targetViews || defaultPkg.views_total,
+          base_duration_hours: match.base_duration_hours || match.durationHours || defaultPkg.base_duration_hours,
+          likes: match.targetLikes ?? defaultPkg.likes,
+          saves: match.targetSaves ?? defaultPkg.saves,
+          shares: match.targetShares ?? defaultPkg.shares,
+          min_followers_note: match.min_followers_note || defaultPkg.min_followers_note,
         };
       }
-      return result;
     }
-    return PRESET_OPTIONS;
-  }, [statusData?.presets]);
+    return defaultPkg;
+  }, [selectedPackageId, statusData?.presets]);
 
-  const currentPreset = activePresets[selectedPresetId] || activePresets.tiktok_2k || PRESET_OPTIONS.tiktok_2k;
-
-  const [selectedStrategy, setSelectedStrategy] = useState<PacingStrategy>("s_curve");
-  const [peakHoursEnabled, setPeakHoursEnabled] = useState<boolean>(true);
-  const [activeTemplateId, setActiveTemplateId] = useState<number>(335);
-
-  const [plannedSchedule, setPlannedSchedule] = useState<{
-    views: number[];
-    viewOffsets?: number[];
-    viewsPlan?: OrganicPlanResult | null;
-    likes: number[];
-    likeOffsets?: number[];
-    saves: number[];
-    saveOffsets?: number[];
-    shares: number[];
-    shareOffsets?: number[];
-  }>(() => generatePlanForPreset(PRESET_OPTIONS.tiktok_2k, "s_curve", true));
-
-  const [planTimestamp, setPlanTimestamp] = useState<Date>(new Date());
-  const [shuffling, setShuffling] = useState(false);
-  const [showTimeline, setShowTimeline] = useState(false);
-
-  // Receive schedule emitted by LiveOrganicGrowthPreview
-  const handlePatternScheduleChange = useCallback((schedule: GeneratedSchedulePlan) => {
-    setActiveTemplateId(schedule.templateId);
-    setPlannedSchedule({
-      views: schedule.views,
-      viewOffsets: schedule.viewOffsets,
-      viewsPlan: null,
-      likes: schedule.likes,
-      likeOffsets: schedule.likeOffsets,
-      saves: schedule.saves,
-      saveOffsets: schedule.saveOffsets,
-      shares: schedule.shares,
-      shareOffsets: schedule.shareOffsets,
-    });
+  // When switching package, configure default add-ons matching package specs
+  const handleSelectPackage = useCallback((pkgId: string) => {
+    setSelectedPackageId(pkgId);
+    const targetPkg = DEFAULT_PACKAGES[pkgId] || DEFAULT_PACKAGES.tiktok_2k;
+    setAddOnLikes(targetPkg.likes > 0);
+    setAddOnSaves(targetPkg.saves > 0);
+    setAddOnShares(targetPkg.shares > 0);
   }, []);
 
-  // Re-generate plan when preset changes
-  function switchPreset(presetId: string) {
-    setSelectedPresetId(presetId);
-    setShowAllBatches(false);
-    setPlanTimestamp(new Date());
-  }
+  // Compute calculated start time
+  const computedStartTime = useMemo(() => {
+    if (startMode === "now") {
+      return snapTo15MinuteGrid(new Date());
+    }
+    try {
+      const [hours, minutes] = scheduledTime.split(":").map(Number);
+      const combined = new Date(scheduledDate);
+      combined.setHours(hours || 0, minutes || 0, 0, 0);
+      return snapTo15MinuteGrid(combined);
+    } catch {
+      return snapTo15MinuteGrid(new Date());
+    }
+  }, [startMode, scheduledDate, scheduledTime]);
 
-  function selectStrategy(strategy: PacingStrategy) {
-    setSelectedStrategy(strategy);
-    setPlannedSchedule(generatePlanForPreset(currentPreset, strategy, peakHoursEnabled));
-    setPlanTimestamp(new Date());
-  }
+  // Construct effective package config incorporating add-on selections
+  const effectivePackage: PackageConfig = useMemo(() => {
+    return {
+      ...currentPackage,
+      likes: addOnLikes ? currentPackage.likes : 0,
+      saves: addOnSaves ? (currentPackage.saves > 0 ? currentPackage.saves : 20) : 0,
+      shares: addOnShares ? (currentPackage.shares > 0 ? currentPackage.shares : 10) : 0,
+      comments: addOnComments ? commentsCount : 0,
+    };
+  }, [currentPackage, addOnLikes, addOnSaves, addOnShares, addOnComments, commentsCount]);
 
-  function togglePeakHours() {
-    const nextVal = !peakHoursEnabled;
-    setPeakHoursEnabled(nextVal);
-    setPlannedSchedule(generatePlanForPreset(currentPreset, selectedStrategy, nextVal));
-    setPlanTimestamp(new Date());
-  }
+  // Generate deterministic schedule plan
+  const plan: DeterministicPlan = useMemo(() => {
+    return generatePattern(
+      effectivePackage,
+      followers,
+      patternSeed,
+      DEFAULT_PROVIDER_MINIMUMS,
+      computedStartTime
+    );
+  }, [effectivePackage, followers, patternSeed, computedStartTime]);
 
-  function rerollPlan() {
-    setShuffling(true);
-    setPlannedSchedule(generatePlanForPreset(currentPreset, selectedStrategy, peakHoursEnabled));
-    setPlanTimestamp(new Date());
-    setTimeout(() => setShuffling(false), 300);
-  }
+  // Price calculation: package price + add-ons = total price
+  const basePriceInr = currentPackage.price_inr;
+  const commentsAddOnCost = addOnComments ? Math.round(commentsCount * 2.5) : 0;
+  // If 2K package (which has 0 saves/shares included), adding saves or shares has small add-on fee
+  const savesAddOnCost = currentPackage.saves === 0 && addOnSaves ? 15 : 0;
+  const sharesAddOnCost = currentPackage.shares === 0 && addOnShares ? 15 : 0;
+  const addOnsTotalInr = commentsAddOnCost + savesAddOnCost + sharesAddOnCost;
+  const totalCampaignPriceInr = basePriceInr + addOnsTotalInr;
 
-  const handleUpdateViews = useCallback((newViews: number[]) => {
-    setPlannedSchedule((prev) => ({
-      ...prev,
-      views: newViews,
-    }));
-  }, []);
+  const walletBalance = statusData?.walletBalance ?? 0;
+  const hasSufficientFunds = walletBalance >= totalCampaignPriceInr;
+  const isReady = Boolean(statusData?.readyToOrder);
+  const isAdmin = Boolean(statusData?.isAdmin);
 
-  const handleUpdateLikes = useCallback((newLikes: number[]) => {
-    setPlannedSchedule((prev) => ({
-      ...prev,
-      likes: newLikes,
-    }));
-  }, []);
-
-  const handleUpdateSaves = useCallback((newSaves: number[]) => {
-    setPlannedSchedule((prev) => ({
-      ...prev,
-      saves: newSaves,
-    }));
-  }, []);
-
-  const handleUpdateShares = useCallback((newShares: number[]) => {
-    setPlannedSchedule((prev) => ({
-      ...prev,
-      shares: newShares,
-    }));
-  }, []);
-
+  // Auto-fetch TikTok post preview
   useEffect(() => {
-    if (statusData?.presets) {
-      const p = activePresets[selectedPresetId] || activePresets.tiktok_2k;
-      if (p) {
-        setPlannedSchedule(generatePlanForPreset(p, selectedStrategy, peakHoursEnabled));
-      }
+    const trimmed = targetUrl.trim();
+    if (!trimmed || !trimmed.toLowerCase().includes("tiktok.com")) {
+      setPreviewData(null);
+      return;
     }
-  }, [statusData?.presets, selectedPresetId, selectedStrategy, peakHoursEnabled]);
 
+    if (previewAbortRef.current) {
+      previewAbortRef.current.abort();
+    }
+    const abortController = new AbortController();
+    previewAbortRef.current = abortController;
+
+    const timer = setTimeout(async () => {
+      setPreviewLoading(true);
+      try {
+        const res = await fetch(`/api/engagement/preview-post?url=${encodeURIComponent(trimmed)}`, {
+          signal: abortController.signal,
+        });
+        const data = await res.json();
+        if (data.success && data.data) {
+          setPreviewData(data.data);
+        } else {
+          setPreviewData(null);
+        }
+      } catch (err: any) {
+        if (err.name !== "AbortError") {
+          setPreviewData(null);
+        }
+      } finally {
+        setPreviewLoading(false);
+      }
+    }, 400);
+
+    return () => {
+      clearTimeout(timer);
+      abortController.abort();
+    };
+  }, [targetUrl]);
+
+  // Pick new seed
+  const handleNewPattern = useCallback(() => {
+    setPatternSeed(`aurasmm_${Math.random().toString(36).substring(2, 9)}`);
+  }, []);
+
+  // Fetch status
   async function fetchStatus(isManual = false) {
     if (isManual) setRefreshing(true);
     const controller = new AbortController();
@@ -705,185 +388,7 @@ export default function EngagementPage() {
     fetchStatus();
   }, []);
 
-  // Compute exact totals dynamically
-  const totalViews = useMemo(
-    () => plannedSchedule.views.reduce((a, b) => a + b, 0),
-    [plannedSchedule.views]
-  );
-  const totalLikes = useMemo(
-    () => plannedSchedule.likes.reduce((a, b) => a + b, 0),
-    [plannedSchedule.likes]
-  );
-  const totalSaves = useMemo(
-    () => plannedSchedule.saves.reduce((a, b) => a + b, 0),
-    [plannedSchedule.saves]
-  );
-  const totalShares = useMemo(
-    () => plannedSchedule.shares.reduce((a, b) => a + b, 0),
-    [plannedSchedule.shares]
-  );
-
-  const viewsRate = statusData?.rates?.viewsRate ?? (statusData?.pricing?.viewsRate ?? 5.7);
-  const likesRate = statusData?.rates?.likesRate ?? (statusData?.pricing?.likesRate ?? 0.88);
-  const savesRate = statusData?.rates?.savesRate ?? 0.22;
-  const sharesRate = statusData?.rates?.sharesRate ?? 0.22;
-
-  const exactViewsCost = Number(((totalViews / 1000) * viewsRate).toFixed(4));
-  const exactLikesCost = Number(((totalLikes / 1000) * likesRate).toFixed(4));
-  const exactSavesCost = totalSaves > 0 ? Number(((totalSaves / 1000) * savesRate).toFixed(4)) : 0;
-  const exactSharesCost = totalShares > 0 ? Number(((totalShares / 1000) * sharesRate).toFixed(4)) : 0;
-  const exactTotalCost = Number((exactViewsCost + exactLikesCost + exactSavesCost + exactSharesCost).toFixed(2));
-
-  // Upfront estimated price per package
-  const getPresetPrice = useCallback(
-    (p: PresetOption) => {
-      const estViews = p.targetViews || (p.views.count * ((p.views.min + p.views.max) / 2));
-      const estLikes = p.targetLikes || (p.likes.count * ((p.likes.min + p.likes.max) / 2));
-      const estSaves = p.targetSaves || (p.saves ? p.saves.count * ((p.saves.min + p.saves.max) / 2) : 0);
-      const estShares = p.targetShares || (p.shares ? p.shares.count * ((p.shares.min + p.shares.max) / 2) : 0);
-      const vCost = (estViews / 1000) * viewsRate;
-      const lCost = (estLikes / 1000) * likesRate;
-      const sCost = (estSaves / 1000) * savesRate;
-      const rCost = (estShares / 1000) * sharesRate;
-      return Number((vCost + lCost + sCost + rCost).toFixed(2));
-    },
-    [viewsRate, likesRate, savesRate, sharesRate]
-  );
-
-  const walletBalance = statusData?.walletBalance ?? 0;
-  const zeofame = statusData?.zeofame;
-  const xmedia = statusData?.xmedia;
-  const hasSufficientFunds = walletBalance >= exactTotalCost;
-  const isReady = Boolean(statusData?.readyToOrder);
-
-  // Build the batch rows with unified timeline across all engagement waves
-  const scheduleRows = useMemo(() => {
-    // Map all unique minute offsets across views, likes, saves, shares
-    const offsetMap = new Map<
-      number,
-      {
-        viewQty: number;
-        likeQty?: number;
-        likeWave?: number;
-        totalLikeWaves?: number;
-        saveQty?: number;
-        saveWave?: number;
-        totalSaveWaves?: number;
-        shareQty?: number;
-        shareWave?: number;
-        totalShareWaves?: number;
-        humanScore?: number;
-        sessionType?: string;
-        patternBreaker?: boolean;
-        timeOfDayLabel?: string;
-      }
-    >();
-
-    const getOrCreate = (offset: number) => {
-      let entry = offsetMap.get(offset);
-      if (!entry) {
-        entry = { viewQty: 0 };
-        offsetMap.set(offset, entry);
-      }
-      return entry;
-    };
-
-    // 1. Views
-    if (currentPreset.views.enabled !== false && plannedSchedule.views.length > 0) {
-      plannedSchedule.views.forEach((viewQty, index) => {
-        const offset = plannedSchedule.viewOffsets?.[index] ?? (index * currentPreset.views.interval);
-        const entry = getOrCreate(offset);
-        entry.viewQty = viewQty;
-        const vRun = plannedSchedule.viewsPlan?.runs[index];
-        if (vRun) {
-          entry.humanScore = vRun.humanBehaviorScore;
-          entry.sessionType = vRun.sessionType;
-          entry.patternBreaker = vRun.patternBreaker;
-          entry.timeOfDayLabel = vRun.timeOfDayLabel;
-        }
-      });
-    }
-
-    // 2. Likes (all waves mapped by offset)
-    if (currentPreset.likes.enabled !== false && plannedSchedule.likes.length > 0) {
-      const offsets = plannedSchedule.likeOffsets || currentPreset.likes.offsets || [];
-      offsets.forEach((offset, idx) => {
-        if (plannedSchedule.likes[idx] !== undefined) {
-          const entry = getOrCreate(offset);
-          entry.likeQty = plannedSchedule.likes[idx];
-          entry.likeWave = idx + 1;
-          entry.totalLikeWaves = plannedSchedule.likes.length;
-        }
-      });
-    }
-
-    // 3. Saves (all waves mapped by offset)
-    if (currentPreset.saves?.enabled && plannedSchedule.saves.length > 0) {
-      const offsets = plannedSchedule.saveOffsets || currentPreset.saves.offsets || [];
-      offsets.forEach((offset, idx) => {
-        if (plannedSchedule.saves[idx] !== undefined) {
-          const entry = getOrCreate(offset);
-          entry.saveQty = plannedSchedule.saves[idx];
-          entry.saveWave = idx + 1;
-          entry.totalSaveWaves = plannedSchedule.saves.length;
-        }
-      });
-    }
-
-    // 4. Shares (all waves mapped by offset)
-    if (currentPreset.shares?.enabled && plannedSchedule.shares.length > 0) {
-      const offsets = plannedSchedule.shareOffsets || currentPreset.shares.offsets || [];
-      offsets.forEach((offset, idx) => {
-        if (plannedSchedule.shares[idx] !== undefined) {
-          const entry = getOrCreate(offset);
-          entry.shareQty = plannedSchedule.shares[idx];
-          entry.shareWave = idx + 1;
-          entry.totalShareWaves = plannedSchedule.shares.length;
-        }
-      });
-    }
-
-    // Sort chronologically so all batches and waves flow in perfect sequence
-    const sortedOffsets = Array.from(offsetMap.keys()).sort((a, b) => a - b);
-    const totalBatches = sortedOffsets.length;
-
-    return sortedOffsets.map((minuteOffset, idx) => {
-      const runNumber = idx + 1;
-      const clockTime = formatBdTime(minuteOffset, planTimestamp);
-      const data = offsetMap.get(minuteOffset)!;
-
-      let note = "";
-      if (runNumber === 1) {
-        note = "Instant Launch • View batch #1 dispatches immediately";
-      } else if (runNumber === Math.ceil(totalBatches * 0.25)) {
-        note = "Steady Momentum • Natural scheduled pacing active";
-      } else if (runNumber === totalBatches) {
-        note = "Final Batch • Campaign 100% Completed";
-      }
-
-      return {
-        runNumber,
-        minuteOffset,
-        clockTime,
-        viewQty: data.viewQty,
-        likeQty: data.likeQty,
-        likeWave: data.likeWave,
-        totalLikeWaves: data.totalLikeWaves,
-        saveQty: data.saveQty,
-        saveWave: data.saveWave,
-        totalSaveWaves: data.totalSaveWaves,
-        shareQty: data.shareQty,
-        shareWave: data.shareWave,
-        totalShareWaves: data.totalShareWaves,
-        humanScore: data.humanScore,
-        sessionType: data.sessionType,
-        patternBreaker: data.patternBreaker,
-        timeOfDayLabel: data.timeOfDayLabel,
-        note,
-      };
-    });
-  }, [plannedSchedule, planTimestamp, currentPreset]);
-
+  // Submit order
   async function handleCreateOrder(e: React.FormEvent) {
     e.preventDefault();
     setErrorMsg(null);
@@ -899,38 +404,40 @@ export default function EngagementPage() {
       return;
     }
 
+    if (!agreedToTerms) {
+      setErrorMsg("Please confirm that you agree to gradual, view-paced delivery.");
+      return;
+    }
+
     if (!isReady) {
       setErrorMsg("Fulfillment engines are temporarily synchronizing. Please wait a moment or contact 24/7 Telegram support.");
       return;
     }
 
     if (!hasSufficientFunds) {
-      const needed = Number((exactTotalCost - walletBalance).toFixed(2));
+      const needed = Number((totalCampaignPriceInr - walletBalance).toFixed(2));
       setErrorMsg(`Insufficient wallet balance: ₹${needed} more needed. Tap 'Add Funds' below to top up.`);
       return;
     }
 
     setSubmitting(true);
     setAdminOutOfBalance(null);
+
     try {
       const res = await fetch("/api/engagement/order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           targetUrl: url,
-          presetId: currentPreset.id,
-          presetName: currentPreset.name,
+          presetId: currentPackage.id,
+          presetName: currentPackage.name,
           platform: "TikTok",
-          pacingStrategy: selectedStrategy,
-          peakHoursEnabled: peakHoursEnabled,
-          plannedViews: currentPreset.views.enabled !== false ? plannedSchedule.views : [],
-          viewOffsets: currentPreset.views.enabled !== false ? (plannedSchedule.viewOffsets || []) : [],
-          plannedLikes: currentPreset.likes.enabled !== false ? plannedSchedule.likes : [],
-          likeOffsets: currentPreset.likes.enabled !== false ? (plannedSchedule.likeOffsets || []) : [],
-          plannedSaves: currentPreset.saves?.enabled ? plannedSchedule.saves : [],
-          saveOffsets: currentPreset.saves?.enabled ? (plannedSchedule.saveOffsets || []) : [],
-          plannedShares: currentPreset.shares?.enabled ? plannedSchedule.shares : [],
-          shareOffsets: currentPreset.shares?.enabled ? (plannedSchedule.shareOffsets || []) : [],
+          followers: followers,
+          seed: patternSeed,
+          scheduledStartTime: computedStartTime.toISOString(),
+          packagePriceInr: basePriceInr,
+          totalCostInr: totalCampaignPriceInr,
+          batches: plan.batches,
         }),
       });
 
@@ -949,6 +456,7 @@ export default function EngagementPage() {
 
       setSuccessReceipt(data);
       setTargetUrl("");
+      setPreviewData(null);
       fetchStatus();
       if (typeof window !== "undefined") {
         window.scrollTo({ top: 0, behavior: "smooth" });
@@ -967,56 +475,87 @@ export default function EngagementPage() {
     }
   }
 
+  // Finish time display
+  const finishTime = useMemo(() => {
+    return new Date(computedStartTime.getTime() + plan.totalDurationMinutes * 60 * 1000);
+  }, [computedStartTime, plan.totalDurationMinutes]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="w-12 h-12 rounded-2xl bg-[#3A4EFB]/10 flex items-center justify-center text-[#3A4EFB]">
-          <Loader2 className="w-6 h-6 animate-spin" />
-        </div>
+        <img
+          src="/brand/logos/mark-on-light.svg"
+          alt="Loading..."
+          className="w-10 h-10 animate-pulse"
+        />
       </div>
     );
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 pb-20 animate-fadeIn">
-      {/* Navigation Sub-Tabs */}
-      <div className="flex items-center gap-2 border-b border-[#DEE0ED] pb-3">
-        <Link
-          href="/engagement"
-          className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-[#3A4EFB] text-white shadow-subtle transition-all press-scale"
-        >
-          <Zap className="w-3.5 h-3.5 text-[#E3FF3B]" />
-          <span>New Campaign</span>
-        </Link>
-        <Link
-          href="/engagement/orders"
-          className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-white text-[#252943]/70 hover:text-[#252943] hover:bg-[#F8F9FD] border border-[#DEE0ED] shadow-xs transition-all press-scale"
-        >
-          <Layers className="w-3.5 h-3.5 text-[#3A4EFB]" />
-          <span>Campaign Orders</span>
-        </Link>
+    <div className="max-w-5xl mx-auto space-y-6 pb-20 animate-fadeIn font-sans">
+      {/* Navigation Sub-Tabs & Balance Header */}
+      <div className="flex items-center justify-between border-b border-[#E4E0D3] pb-3 gap-2">
+        <div className="flex items-center gap-2">
+          <Link
+            href="/engagement"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-[#D4F04F] hover:bg-[#C5E23A] text-[#111413] shadow-sm transition-all press-scale font-sans"
+          >
+            <Zap className="w-3.5 h-3.5 fill-[#111413] text-[#111413]" />
+            <span>New Campaign</span>
+          </Link>
+          <Link
+            href="/engagement/orders"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-white text-[#111413] hover:bg-[#F3F1EA] border border-[#E4E0D3] shadow-xs transition-all press-scale font-sans"
+          >
+            <Layers className="w-3.5 h-3.5 text-[#5E8C1F]" />
+            <span>Campaign Orders</span>
+          </Link>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => fetchStatus(true)}
+            disabled={refreshing}
+            className="px-2.5 py-1.5 rounded-xl border border-[#E4E0D3] bg-white hover:bg-[#F3F1EA] text-xs font-semibold text-[#111413] flex items-center gap-1.5 transition-all shadow-2xs font-sans cursor-pointer press-scale"
+            title="Refresh balance"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-[#5E8C1F] ${refreshing ? "animate-spin" : ""}`} />
+            <span className="font-bold">₹{walletBalance.toFixed(2)}</span>
+          </button>
+          <a
+            href="https://t.me/Ghostfinds"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-3 py-1.5 rounded-xl bg-[#229ED9]/10 hover:bg-[#229ED9]/15 text-[#229ED9] border border-[#229ED9]/30 text-xs font-bold flex items-center gap-1.5 transition-all font-sans"
+          >
+            <Send className="w-3 h-3" />
+            <span className="hidden sm:inline">24/7 Support</span>
+          </a>
+        </div>
       </div>
 
-      {/* Success Notification */}
+      {/* Success Receipt Banner */}
       {successReceipt && (
-        <div className="p-4 sm:p-5 rounded-3xl bg-emerald-50 border-2 border-emerald-300 text-emerald-950 space-y-3 animate-fadeIn shadow-subtle">
+        <div className="p-4 sm:p-5 rounded-3xl bg-emerald-50 border-2 border-emerald-300 text-emerald-950 space-y-3 animate-fadeIn shadow-subtle font-sans">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0">
                 <Check className="w-5 h-5 stroke-[3]" />
               </div>
               <div>
-                <h3 className="font-extrabold text-sm text-emerald-950">
-                  Engagement Campaign Launched!
+                <h3 className="font-extrabold text-sm text-emerald-950 font-sans">
+                  Campaign Successfully Scheduled!
                 </h3>
-                <p className="text-xs text-emerald-800">
-                  Order ID: <strong className="font-sans">#{successReceipt.orderRef}</strong> • Preset: <strong>{successReceipt.presetName}</strong> ({successReceipt.durationHours}h).
+                <p className="text-xs text-emerald-800 font-sans">
+                  Order ID: <strong className="font-sans">#{successReceipt.orderRef}</strong> • Package: <strong>{successReceipt.presetName}</strong> ({successReceipt.durationHours}h) • {successReceipt.runsCount} batches scheduled.
                 </p>
               </div>
             </div>
             <Link
               href={`/engagement/orders/${successReceipt.orderId}`}
-              className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition-all shadow-subtle"
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition-all shadow-subtle font-sans"
             >
               <span>Inspect Live Dashboard</span>
               <ArrowRight className="w-3.5 h-3.5" />
@@ -1030,70 +569,64 @@ export default function EngagementPage() {
         <AdminOutOfBalanceBanner
           providerName={adminOutOfBalance.providerName}
           orderType="TikTok Engagement Campaign"
-          serviceName={currentPreset.name}
+          serviceName={currentPackage.name}
           onDismiss={() => setAdminOutOfBalance(null)}
         />
       )}
 
       {/* Error Message */}
       {errorMsg && (
-        <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 flex items-center gap-3 text-xs font-semibold animate-fadeIn">
+        <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 flex items-center gap-3 text-xs font-semibold animate-fadeIn font-sans">
           <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
           <span className="flex-1">{errorMsg}</span>
         </div>
       )}
 
-      {/* MAIN GUIDED CAMPAIGN WORKSPACE (4-STEP STREAMLINED FLOW) */}
-      <form onSubmit={handleCreateOrder} className="space-y-6">
+      {/* 4-STEP STREAMLINED FLOW */}
+      <form onSubmit={handleCreateOrder} className="space-y-6 font-sans">
         {/* STEP 1: CHOOSE GROWTH PACKAGE */}
-        <div className="bg-white rounded-3xl border border-[#DEE0ED] p-5 sm:p-6 shadow-subtle space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
+        <div className="bg-white rounded-3xl border border-[#E4E0D3] p-5 sm:p-6 shadow-subtle space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-[#E4E0D3]">
             <div className="flex items-center gap-2.5">
-              <span className="w-7 h-7 rounded-xl bg-[#3A4EFB] text-white text-xs font-black flex items-center justify-center shadow-xs">
+              <span className="w-7 h-7 rounded-full bg-[#111413] text-[#D4F04F] text-xs font-black flex items-center justify-center shadow-xs font-sans shrink-0">
                 1
               </span>
               <div>
-                <h2 className="text-sm font-bold text-[#1A1D31]">
+                <h2 className="text-sm font-bold text-[#111413] font-sans">
                   Choose Growth Package
                 </h2>
-                <p className="text-[11px] text-[#64748B]">
-                  Select your target video reach — all packages deliver organic, human-paced engagement
+                <p className="text-[11px] text-[#5B625F] font-sans">
+                  Exact views delivered on an organic 15-minute schedule
                 </p>
               </div>
             </div>
-            <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200/80 hidden sm:inline-flex items-center gap-1">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Anti-Bot Protected</span>
+            <span className="text-[11px] font-bold text-[#5E8C1F] bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200/80 hidden sm:inline-flex items-center gap-1 font-sans">
+              <ShieldCheck className="w-3.5 h-3.5 text-[#5E8C1F]" />
+              <span>Gradual, view-paced delivery</span>
             </span>
           </div>
 
+          {/* Package Cards Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
-            {Object.values(activePresets).map((preset, idx) => {
-              const isSelected = selectedPresetId === preset.id;
-              const viewsEnabled = preset.views.enabled !== false;
-              const likesEnabled = preset.likes.enabled !== false;
-              const estViews = preset.targetViews || (preset.views.count * ((preset.views.min + preset.views.max) / 2));
-              const estLikes = preset.targetLikes || (preset.likes.count * ((preset.likes.min + preset.likes.max) / 2));
-              const estSaves = preset.targetSaves || (preset.saves?.enabled ? preset.saves.count * 10 : 0);
-              const estShares = preset.targetShares || (preset.shares?.enabled ? preset.shares.count * 10 : 0);
-              const basePrice = getPresetPrice(preset);
-              const visuals = getPresetVisuals(preset);
+            {Object.values(DEFAULT_PACKAGES).map((pkg, idx) => {
+              const isSelected = selectedPackageId === pkg.id;
+              const visuals = getPresetVisuals(pkg);
               const IconComponent = visuals.icon;
 
               return (
                 <button
-                  key={preset.id}
+                  key={pkg.id}
                   type="button"
-                  onClick={() => switchPreset(preset.id)}
-                  className={`group relative p-3 rounded-2xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between press-scale ${
+                  onClick={() => handleSelectPackage(pkg.id)}
+                  className={`group relative p-3 rounded-2xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between press-scale font-sans ${
                     idx === 4 ? "col-span-2 sm:col-span-1 lg:col-span-1" : "col-span-1"
                   } ${
                     isSelected
-                      ? "bg-white border-[#3A4EFB] shadow-md ring-2 ring-[#3A4EFB]/20 -translate-y-0.5"
-                      : "bg-[#F8F9FD] border-[#DEE0ED] hover:bg-white hover:border-[#3A4EFB]/40 hover:shadow-xs"
+                      ? "bg-[#D4F04F]/[0.08] border-2 border-[#D4F04F] shadow-sm ring-2 ring-[#D4F04F]/20 -translate-y-0.5"
+                      : "bg-white border-[#E4E0D3] hover:border-[#111413]/30 hover:shadow-xs"
                   }`}
                 >
-                  {/* Top: Tier Icon + Duration Badge */}
+                  {/* Top: Icon + Duration */}
                   <div className="w-full flex items-center justify-between gap-1 mb-2">
                     <div
                       className={`w-7 h-7 rounded-xl flex items-center justify-center border transition-transform duration-200 group-hover:scale-105 shrink-0 ${visuals.iconBg}`}
@@ -1101,7 +634,7 @@ export default function EngagementPage() {
                       <IconComponent className={`w-3.5 h-3.5 ${visuals.iconColor}`} />
                     </div>
 
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 font-sans">
                       {visuals.isPopular && !isSelected && (
                         <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-rose-50 text-rose-600 border border-rose-200/60 font-sans">
                           Hot
@@ -1110,102 +643,217 @@ export default function EngagementPage() {
                       <span
                         className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider font-sans ${
                           isSelected
-                            ? "bg-[#3A4EFB] text-white shadow-2xs"
-                            : "bg-gray-200/70 text-gray-700"
+                            ? "bg-[#111413] text-[#D4F04F] shadow-2xs"
+                            : "bg-[#F3F1EA] text-[#5B625F]"
                         }`}
                       >
-                        {visuals.durationShort}
+                        About {pkg.base_duration_hours}h
                       </span>
                     </div>
                   </div>
 
-                  {/* Middle: Reach Number & Tier Name */}
+                  {/* Middle: Exact Views & Package Name */}
                   <div className="space-y-1">
                     <div>
-                      <div className="flex items-baseline gap-1">
-                        <span className="text-base sm:text-lg font-black text-[#1A1D31] font-sans tracking-tight leading-none">
-                          ~{Math.round(estViews).toLocaleString()}
+                      <div className="flex items-baseline gap-1 font-sans">
+                        <span className="text-base sm:text-lg font-black text-[#111413] font-sans tracking-tight leading-none">
+                          {pkg.views_total.toLocaleString()}
                         </span>
-                        <span className="text-[10px] font-bold text-[#3A4EFB] font-sans">Views</span>
+                        <span className="text-[10px] font-bold text-[#5E8C1F] font-sans">Views</span>
                       </div>
-                      <div className="text-[11px] font-bold text-[#1A1D31] truncate mt-1 font-sans">
+                      <div className="text-[11px] font-bold text-[#111413] truncate mt-1 font-sans">
                         {visuals.tierBadge} {visuals.shortTitle}
                       </div>
                     </div>
 
-                    {/* Micro-Metrics Badges */}
-                    <div className="flex items-center flex-wrap gap-1 text-[10px] font-semibold text-[#64748B] pt-0.5 font-sans">
-                      {likesEnabled && (
+                    {/* Follower Note */}
+                    {pkg.min_followers_note && (
+                      <div className="text-[10px] font-medium text-[#5B625F] flex items-center gap-1 font-sans">
+                        <Users className="w-3 h-3 text-[#5B625F]/70 shrink-0" />
+                        <span className="truncate">{pkg.min_followers_note}</span>
+                      </div>
+                    )}
+
+                    {/* Included Metrics */}
+                    <div className="flex items-center flex-wrap gap-1 text-[10px] font-semibold text-[#5B625F] pt-0.5 font-sans">
+                      {pkg.likes > 0 && (
                         <span className="inline-flex items-center gap-0.5 text-rose-600 font-sans font-bold bg-rose-50/80 px-1.5 py-0.5 rounded border border-rose-200/50">
                           <Heart className="w-2.5 h-2.5 fill-rose-500 text-rose-500" />
-                          <span>+{Math.round(estLikes)}</span>
+                          <span>+{pkg.likes}</span>
                         </span>
                       )}
-                      {Boolean(preset.saves?.enabled && estSaves > 0) && (
+                      {pkg.saves > 0 && (
                         <span className="inline-flex items-center gap-0.5 text-amber-600 font-sans font-bold bg-amber-50/80 px-1.5 py-0.5 rounded border border-amber-200/50">
                           <Bookmark className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
-                          <span>+{estSaves}</span>
+                          <span>+{pkg.saves}</span>
                         </span>
                       )}
-                      {Boolean(preset.shares?.enabled && estShares > 0) && (
+                      {pkg.shares > 0 && (
                         <span className="inline-flex items-center gap-0.5 text-purple-600 font-sans font-bold bg-purple-50/80 px-1.5 py-0.5 rounded border border-purple-200/50">
                           <Share2 className="w-2.5 h-2.5 text-purple-500" />
-                          <span>+{estShares}</span>
+                          <span>+{pkg.shares}</span>
                         </span>
                       )}
                     </div>
                   </div>
 
-                  {/* Bottom: Price + Selection Checkmark */}
-                  <div className="pt-2 mt-2 border-t border-[#DEE0ED]/60 flex items-center justify-between w-full">
+                  {/* Bottom: Exact Price */}
+                  <div className="pt-2 mt-2 border-t border-[#E4E0D3]/60 flex items-center justify-between w-full font-sans">
                     <div>
-                      <span className="text-[9px] uppercase font-bold text-[#64748B] block leading-none font-sans">Price</span>
-                      <span className="text-xs sm:text-sm font-black text-[#1A1D31] font-sans">
-                        ₹{basePrice.toFixed(2)}
+                      <span className="text-[9px] uppercase font-bold text-[#5B625F] block leading-none font-sans">Price</span>
+                      <span className="text-xs sm:text-sm font-black text-[#111413] font-sans">
+                        ₹{pkg.price_inr}
                       </span>
                     </div>
 
                     <div
                       className={`w-4 h-4 rounded-full flex items-center justify-center border transition-all ${
                         isSelected
-                          ? "bg-[#3A4EFB] border-[#3A4EFB] text-white shadow-2xs"
-                          : "border-[#CBD5E1] bg-white group-hover:border-[#3A4EFB]/60"
+                          ? "bg-[#111413] border-[#111413] text-[#D4F04F] shadow-2xs"
+                          : "border-[#E4E0D3] bg-white group-hover:border-[#111413]/50"
                       }`}
                     >
-                      {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                      {isSelected && <Check className="w-2.5 h-2.5 stroke-[3] text-[#D4F04F]" />}
                     </div>
                   </div>
                 </button>
               );
             })}
           </div>
+
+          {/* Live Add-ons Configuration */}
+          <div className="pt-3 border-t border-[#E4E0D3] space-y-2">
+            <span className="text-xs font-bold text-[#111413] block font-sans">
+              Customize Engagement Add-ons (Included & Optional)
+            </span>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-sans">
+              {/* Likes Toggle */}
+              <label
+                className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
+                  addOnLikes
+                    ? "bg-rose-50/60 border-rose-200 text-rose-950"
+                    : "bg-white border-[#E4E0D3] text-[#5B625F] opacity-70"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Heart className={`w-3.5 h-3.5 ${addOnLikes ? "fill-rose-500 text-rose-500" : "text-gray-400"}`} />
+                  <div>
+                    <span className="font-bold block text-xs">Likes</span>
+                    <span className="text-[10px] text-[#5B625F]">+{currentPackage.likes} (Included)</span>
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={addOnLikes}
+                  onChange={(e) => setAddOnLikes(e.target.checked)}
+                  className="rounded text-[#111413] focus:ring-0 cursor-pointer"
+                />
+              </label>
+
+              {/* Saves Toggle */}
+              <label
+                className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
+                  addOnSaves
+                    ? "bg-amber-50/60 border-amber-200 text-amber-950"
+                    : "bg-white border-[#E4E0D3] text-[#5B625F] opacity-70"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Bookmark className={`w-3.5 h-3.5 ${addOnSaves ? "fill-amber-500 text-amber-500" : "text-gray-400"}`} />
+                  <div>
+                    <span className="font-bold block text-xs">Saves</span>
+                    <span className="text-[10px] text-[#5B625F]">
+                      {currentPackage.saves > 0 ? `+${currentPackage.saves} (Included)` : "+20 (+₹15)"}
+                    </span>
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={addOnSaves}
+                  onChange={(e) => setAddOnSaves(e.target.checked)}
+                  className="rounded text-[#111413] focus:ring-0 cursor-pointer"
+                />
+              </label>
+
+              {/* Shares Toggle */}
+              <label
+                className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
+                  addOnShares
+                    ? "bg-purple-50/60 border-purple-200 text-purple-950"
+                    : "bg-white border-[#E4E0D3] text-[#5B625F] opacity-70"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Share2 className={`w-3.5 h-3.5 ${addOnShares ? "text-purple-600" : "text-gray-400"}`} />
+                  <div>
+                    <span className="font-bold block text-xs">Shares</span>
+                    <span className="text-[10px] text-[#5B625F]">
+                      {currentPackage.shares > 0 ? `+${currentPackage.shares} (Included)` : "+10 (+₹15)"}
+                    </span>
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={addOnShares}
+                  onChange={(e) => setAddOnShares(e.target.checked)}
+                  className="rounded text-[#111413] focus:ring-0 cursor-pointer"
+                />
+              </label>
+
+              {/* Comments Toggle (Optional Add-on) */}
+              <label
+                className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
+                  addOnComments
+                    ? "bg-sky-50/60 border-sky-200 text-sky-950"
+                    : "bg-white border-[#E4E0D3] text-[#5B625F]"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <MessageCircle className={`w-3.5 h-3.5 ${addOnComments ? "text-sky-600" : "text-gray-400"}`} />
+                  <div>
+                    <span className="font-bold block text-xs">Comments</span>
+                    <span className="text-[10px] text-[#5B625F]">
+                      {addOnComments ? `+${commentsCount} (+₹${commentsAddOnCost})` : "Optional (+₹25)"}
+                    </span>
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={addOnComments}
+                  onChange={(e) => setAddOnComments(e.target.checked)}
+                  className="rounded text-[#111413] focus:ring-0 cursor-pointer"
+                />
+              </label>
+            </div>
+          </div>
         </div>
 
-        {/* STEP 2: VIDEO LINK */}
-        <div className="bg-white rounded-3xl border border-[#DEE0ED] p-5 sm:p-6 shadow-subtle space-y-3">
-          <div className="flex items-center justify-between pb-2 border-b border-[#DEE0ED]">
+        {/* STEP 2: VIDEO LINK & TARGET PROFILE */}
+        <div className="bg-white rounded-3xl border border-[#E4E0D3] p-5 sm:p-6 shadow-subtle space-y-4">
+          <div className="flex items-center justify-between pb-2 border-b border-[#E4E0D3]">
             <div className="flex items-center gap-2.5">
-              <span className="w-7 h-7 rounded-xl bg-[#3A4EFB] text-white text-xs font-black flex items-center justify-center shadow-xs">
+              <span className="w-7 h-7 rounded-full bg-[#111413] text-[#D4F04F] text-xs font-black flex items-center justify-center shadow-xs font-sans shrink-0">
                 2
               </span>
               <div>
-                <h2 className="text-sm font-bold text-[#1A1D31]">
-                  TikTok Post URL
+                <h2 className="text-sm font-bold text-[#111413] font-sans">
+                  TikTok Post URL & Target Profile
                 </h2>
-                <p className="text-[11px] text-[#64748B]">
-                  Paste your public TikTok video or carousel link
+                <p className="text-[11px] text-[#5B625F] font-sans">
+                  Paste your public TikTok video link and account details
                 </p>
               </div>
             </div>
 
             {targetUrl.toLowerCase().includes("tiktok.com") ? (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-[#5E8C1F] border border-emerald-200 font-sans">
                 <Check className="w-3 h-3 stroke-[3]" />
                 <span>Link Ready</span>
               </span>
             ) : (
-              <span className="text-[11px] text-[#64748B] font-medium hidden sm:inline">
-                Supports video, photo carousel & sound links
+              <span className="text-[11px] text-[#5B625F] font-medium hidden sm:inline font-sans">
+                Supports video, carousel & short links
               </span>
             )}
           </div>
@@ -1217,174 +865,278 @@ export default function EngagementPage() {
               placeholder="https://www.tiktok.com/@username/video/1234567890..."
               value={targetUrl}
               onChange={(e) => setTargetUrl(e.target.value)}
-              className="w-full pl-11 pr-4 py-3.5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] text-xs sm:text-sm font-semibold text-[#1A1D31] placeholder-[#64748B]/50 focus:outline-none focus:border-[#3A4EFB] focus:bg-white focus:ring-2 focus:ring-[#3A4EFB]/15 transition-all shadow-inner font-sans"
+              className="w-full pl-11 pr-10 py-3.5 rounded-2xl bg-white border border-[#E4E0D3] text-xs sm:text-sm font-semibold text-[#111413] placeholder-[#5B625F]/50 focus:outline-none focus:border-[#111413] focus:bg-white focus:ring-2 focus:ring-[#111413]/10 transition-all shadow-inner font-sans"
             />
-            <Link2 className="w-4 h-4 text-[#64748B] absolute left-4 top-1/2 -translate-y-1/2" />
-          </div>
-        </div>
-
-        {/* STEP 3: LIVE ORGANIC GROWTH PREVIEW (Named Anti-Radar Stepped S-Curve) */}
-        <div className="space-y-3">
-          <LiveOrganicGrowthPreview
-            initialTemplateId={activeTemplateId}
-            targetViews={currentPreset.targetViews || 2960}
-            durationHours={currentPreset.durationHours}
-            targetLikes={currentPreset.targetLikes}
-            targetSaves={currentPreset.targetSaves}
-            targetShares={currentPreset.targetShares}
-            providerMinViews={currentPreset.views.min || 100}
-            planTimestamp={planTimestamp}
-            onScheduleChange={handlePatternScheduleChange}
-          />
-
-          {/* Schedule Inspector Button */}
-          <div className="flex justify-end px-2">
-            <button
-              type="button"
-              onClick={() => setShowTimeline(!showTimeline)}
-              className="px-3.5 py-1.5 rounded-xl bg-white hover:bg-gray-50 border border-[#DEE0ED] text-[11px] font-bold text-[#1A1D31] transition-all flex items-center gap-1.5 cursor-pointer press-scale shadow-2xs font-sans"
-            >
-              <span>{showTimeline ? "Hide Detailed Batch Schedule" : `Inspect Batch Schedule (${plannedSchedule.views.length} Batches)`}</span>
-              {showTimeline ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-            </button>
+            <Link2 className="w-4 h-4 text-[#5B625F] absolute left-4 top-1/2 -translate-y-1/2" />
+            {previewLoading && (
+              <Loader2 className="w-4 h-4 text-[#5E8C1F] animate-spin absolute right-4 top-1/2 -translate-y-1/2" />
+            )}
           </div>
 
-          {/* Collapsible Detailed Timeline Accordion */}
-          {showTimeline && (
-            <div className="border border-[#DEE0ED] rounded-2xl overflow-hidden bg-white animate-fadeIn font-sans shadow-subtle">
-              <div className="p-3 bg-[#F8F9FD] border-b border-[#DEE0ED] flex items-center justify-between text-xs font-sans">
-                <span className="font-bold text-[#1A1D31]">Complete Batch Distribution ({plannedSchedule.views.length} Batches)</span>
-                <span className="text-[11px] text-[#64748B]">Non-round quantities, zero multiples of 5, anti-spike clamped</span>
-              </div>
-              <div className="divide-y divide-[#DEE0ED]/60 max-h-[320px] overflow-y-auto font-sans">
-                {scheduleRows.map((row) => (
-                  <div
-                    key={row.runNumber}
-                    className={`p-2.5 sm:px-3 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 transition-colors font-sans ${
-                      row.likeQty ? "bg-rose-50/20 hover:bg-rose-50/50" : "hover:bg-[#F8F9FD]"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="w-5 h-5 rounded-md bg-gray-100 text-[#1A1D31] font-bold text-[10px] flex items-center justify-center shrink-0 font-sans">
-                        #{row.runNumber}
-                      </span>
-                      <span className="font-semibold text-[#1A1D31] font-sans">+{row.minuteOffset}m</span>
-                      <span className="text-[10px] text-[#64748B] font-sans">({row.clockTime})</span>
-                    </div>
-
-                    <div className="flex items-center flex-wrap gap-1.5 self-end sm:self-auto shrink-0 font-sans text-[11px]">
-                      {row.viewQty > 0 && currentPreset.views.enabled !== false && (
-                        <span className="px-2 py-0.5 rounded-md font-bold bg-blue-50 text-blue-700 border border-blue-200/60 font-sans">
-                          {row.viewQty} views
-                        </span>
-                      )}
-                      {(row.likeQty ?? 0) > 0 && currentPreset.likes.enabled !== false && (
-                        <span className="px-2 py-0.5 rounded-md font-bold bg-rose-50 text-rose-700 border border-rose-200/60 font-sans flex items-center gap-1">
-                          <Heart className="w-3 h-3 fill-rose-500 text-rose-500" />
-                          <span>+{row.likeQty} likes</span>
-                        </span>
-                      )}
-                      {(row.saveQty ?? 0) > 0 && currentPreset.saves?.enabled && (
-                        <span className="px-2 py-0.5 rounded-md font-bold bg-amber-50 text-amber-700 border border-amber-200/60 font-sans">
-                          +{row.saveQty} saves
-                        </span>
-                      )}
-                      {(row.shareQty ?? 0) > 0 && currentPreset.shares?.enabled && (
-                        <span className="px-2 py-0.5 rounded-md font-bold bg-purple-50 text-purple-700 border border-purple-200/60 font-sans">
-                          +{row.shareQty} reposts
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
+          {/* Post Preview Card */}
+          {previewData && (
+            <div className="p-3 sm:p-4 rounded-2xl bg-[#F3F1EA]/50 border border-[#E4E0D3] flex items-center gap-3.5 animate-fadeIn font-sans">
+              {previewData.thumbnailUrl ? (
+                <img
+                  src={previewData.thumbnailUrl}
+                  alt={previewData.authorName || "TikTok Post"}
+                  className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl object-cover shrink-0 border border-gray-200 shadow-2xs"
+                />
+              ) : (
+                <div className="w-14 h-14 rounded-xl bg-gray-200 flex items-center justify-center shrink-0 text-gray-500 font-bold text-xs">
+                  TikTok
+                </div>
+              )}
+              <div className="flex-1 min-w-0 space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-black text-[#111413] font-sans truncate">
+                    {previewData.authorName || previewData.authorHandle}
+                  </span>
+                  <span className="text-[10px] font-bold text-[#5E8C1F] bg-[#5E8C1F]/10 px-2 py-0.5 rounded-full font-sans">
+                    {previewData.authorHandle}
+                  </span>
+                </div>
+                <p className="text-[11px] text-[#5B625F] truncate font-sans">
+                  {previewData.title || "TikTok Video"}
+                </p>
+                {typeof previewData.views === "number" && (
+                  <span className="text-[10px] font-semibold text-[#5E8C1F] bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-sans inline-block">
+                    Current: ~{previewData.views.toLocaleString()} views
+                  </span>
+                )}
               </div>
             </div>
           )}
+
+          {/* Profile Followers & Timing Options */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+            {/* Followers Field */}
+            <div className="space-y-1.5 font-sans">
+              <label className="text-xs font-bold text-[#111413] block font-sans">
+                Account Follower Count (Tunes initial push pace)
+              </label>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="number"
+                  min="0"
+                  step="50"
+                  value={followers}
+                  onChange={(e) => setFollowers(Math.max(0, parseInt(e.target.value) || 0))}
+                  className="w-full px-3 py-2 rounded-xl bg-white border border-[#E4E0D3] text-xs font-semibold text-[#111413] focus:outline-none focus:border-[#111413] font-sans"
+                />
+                <div className="flex items-center gap-1 shrink-0 font-sans">
+                  <button
+                    type="button"
+                    onClick={() => setFollowers(500)}
+                    className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition-colors ${
+                      followers < 1000 ? "bg-[#111413] text-[#D4F04F] border-[#111413]" : "bg-white text-[#5B625F] border-[#E4E0D3] hover:bg-[#F3F1EA]"
+                    }`}
+                  >
+                    &lt;1k
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFollowers(3500)}
+                    className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition-colors ${
+                      followers >= 1000 && followers <= 10000 ? "bg-[#111413] text-[#D4F04F] border-[#111413]" : "bg-white text-[#5B625F] border-[#E4E0D3] hover:bg-[#F3F1EA]"
+                    }`}
+                  >
+                    1k–10k
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFollowers(15000)}
+                    className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition-colors ${
+                      followers > 10000 ? "bg-[#111413] text-[#D4F04F] border-[#111413]" : "bg-white text-[#5B625F] border-[#E4E0D3] hover:bg-[#F3F1EA]"
+                    }`}
+                  >
+                    &gt;10k
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Timing Selector */}
+            <div className="space-y-1.5 font-sans">
+              <label className="text-xs font-bold text-[#111413] block font-sans">
+                Campaign Start Timing
+              </label>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setStartMode("now")}
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer font-sans ${
+                    startMode === "now"
+                      ? "bg-[#111413] text-[#D4F04F] border-[#111413] shadow-xs"
+                      : "bg-white text-[#5B625F] border-[#E4E0D3] hover:bg-[#F3F1EA]"
+                  }`}
+                >
+                  Start Now
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStartMode("schedule")}
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer font-sans ${
+                    startMode === "schedule"
+                      ? "bg-[#111413] text-[#D4F04F] border-[#111413] shadow-xs"
+                      : "bg-white text-[#5B625F] border-[#E4E0D3] hover:bg-[#F3F1EA]"
+                  }`}
+                >
+                  Schedule Start
+                </button>
+              </div>
+
+              {startMode === "schedule" && (
+                <div className="flex items-center gap-2 pt-1 font-sans">
+                  <input
+                    type="date"
+                    value={scheduledDate}
+                    onChange={(e) => setScheduledDate(e.target.value)}
+                    className="flex-1 px-2.5 py-1.5 rounded-xl bg-white border border-[#E4E0D3] text-xs font-semibold text-[#111413] font-sans"
+                  />
+                  <input
+                    type="time"
+                    step="900"
+                    value={scheduledTime}
+                    onChange={(e) => setScheduledTime(e.target.value)}
+                    className="w-28 px-2.5 py-1.5 rounded-xl bg-white border border-[#E4E0D3] text-xs font-semibold text-[#111413] font-sans"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
-        {/* STEP 4: CONFIRM & LAUNCH */}
-        <div className="bg-white rounded-3xl border border-[#DEE0ED] p-5 sm:p-6 shadow-subtle space-y-4 font-sans">
-          <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
+        {/* STEP 3: LIVE ORGANIC GROWTH PREVIEW */}
+        <div className="space-y-3 font-sans">
+          <LiveOrganicGrowthPreview
+            plan={plan}
+            startDate={computedStartTime}
+            isAdmin={isAdmin}
+            onNewPattern={handleNewPattern}
+          />
+        </div>
+
+        {/* STEP 4: REVIEW & LAUNCH */}
+        <div className="bg-white rounded-3xl border border-[#E4E0D3] p-5 sm:p-6 shadow-subtle space-y-4 font-sans">
+          <div className="flex items-center justify-between pb-3 border-b border-[#E4E0D3]">
             <div className="flex items-center gap-2.5">
-              <span className="w-7 h-7 rounded-xl bg-[#3A4EFB] text-white text-xs font-black flex items-center justify-center shadow-xs">
+              <span className="w-7 h-7 rounded-full bg-[#111413] text-[#D4F04F] text-xs font-black flex items-center justify-center shadow-xs font-sans shrink-0">
                 4
               </span>
               <div>
-                <h2 className="text-sm font-bold text-[#1A1D31]">
+                <h2 className="text-sm font-bold text-[#111413] font-sans">
                   Review & Launch
                 </h2>
-                <p className="text-[11px] text-[#64748B]">
-                  Instant processing with automatic upstream fulfillment
+                <p className="text-[11px] text-[#5B625F] font-sans">
+                  Verified organic delivery schedule • Exact itemized pricing
                 </p>
               </div>
             </div>
 
-            <div className="text-right">
-              <span className="text-[10px] uppercase font-bold text-[#64748B] block leading-none font-sans">Your Balance</span>
-              <span className="text-sm font-bold font-sans text-[#1A1D31]">
+            <div className="text-right font-sans">
+              <span className="text-[10px] uppercase font-bold text-[#5B625F] block leading-none font-sans">Your Balance</span>
+              <span className="text-sm font-bold font-sans text-[#111413]">
                 ₹{walletBalance.toFixed(2)}
               </span>
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] font-sans">
-            <div className="space-y-1">
-              <span className="text-[10px] uppercase font-bold text-[#64748B] block font-sans">Total Campaign Price</span>
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl sm:text-3xl font-black text-[#1A1D31] font-sans tracking-tight">
-                  ₹{exactTotalCost.toFixed(2)}
-                </span>
-                <span className="text-xs text-[#64748B] font-sans">
-                  ({currentPreset.name} • {currentPreset.durationLabel})
-                </span>
+          {/* Itemized Price & Delivery Schedule Box */}
+          <div className="p-4 rounded-2xl bg-[#F3F1EA]/50 border border-[#E4E0D3] space-y-3 font-sans">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#E4E0D3]/70">
+              <div className="space-y-0.5">
+                <span className="text-[10px] uppercase font-bold text-[#5B625F] block font-sans">Total Campaign Price</span>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl sm:text-3xl font-black text-[#111413] font-sans tracking-tight">
+                    ₹{totalCampaignPriceInr.toFixed(2)}
+                  </span>
+                  <span className="text-xs text-[#5B625F] font-sans">
+                    ({currentPackage.name} • {plan.durationLabel})
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 self-start sm:self-auto">
+                {hasSufficientFunds ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 text-[#5E8C1F] border border-emerald-200 text-xs font-bold font-sans">
+                    <Check className="w-3.5 h-3.5 stroke-[3] text-[#5E8C1F]" />
+                    <span>Sufficient Funds</span>
+                  </span>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 text-rose-800 border border-rose-200 text-xs font-bold font-sans">
+                      <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                      <span>Need ₹{(totalCampaignPriceInr - walletBalance).toFixed(2)} More</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddFundsModal(true)}
+                      className="px-3 py-1.5 rounded-xl bg-[#F0B90B] hover:bg-[#e0a800] text-[#1E2329] text-xs font-black shadow-subtle flex items-center gap-1 transition-all press-scale cursor-pointer font-sans"
+                    >
+                      <Zap className="w-3 h-3 fill-[#1E2329]" />
+                      <span>Add Funds</span>
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="flex items-center gap-2 self-start sm:self-auto">
-              {hasSufficientFunds ? (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold">
-                  <Check className="w-3.5 h-3.5 stroke-[3] text-emerald-600" />
-                  <span>Sufficient Funds</span>
-                </span>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 text-rose-800 border border-rose-200 text-xs font-bold">
-                    <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
-                    <span>Need ₹{(exactTotalCost - walletBalance).toFixed(2)} More</span>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setShowAddFundsModal(true)}
-                    className="px-3 py-1.5 rounded-xl bg-[#F0B90B] hover:bg-[#e0a800] text-[#1E2329] text-xs font-black shadow-subtle flex items-center gap-1 transition-all press-scale cursor-pointer"
-                  >
-                    <Zap className="w-3 h-3 fill-[#1E2329]" />
-                    <span>Add Funds</span>
-                  </button>
-                </div>
-              )}
+            {/* Itemized Cost Breakdown */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-sans text-[#5B625F]">
+              <div>
+                <span className="block text-[10px] font-bold uppercase text-[#5B625F]/80">Base Package</span>
+                <span className="font-extrabold text-[#111413]">₹{basePriceInr.toFixed(2)}</span>
+              </div>
+              <div>
+                <span className="block text-[10px] font-bold uppercase text-[#5B625F]/80">Add-ons Total</span>
+                <span className="font-extrabold text-[#111413]">₹{addOnsTotalInr.toFixed(2)}</span>
+              </div>
+              <div>
+                <span className="block text-[10px] font-bold uppercase text-[#5B625F]/80">Starts</span>
+                <span className="font-semibold text-[#111413]">{formatBdTime(computedStartTime)}</span>
+              </div>
+              <div>
+                <span className="block text-[10px] font-bold uppercase text-[#5B625F]/80">Finishes In</span>
+                <span className="font-semibold text-[#111413]">{plan.durationLabel}</span>
+              </div>
             </div>
+          </div>
+
+          {/* Terms Checkbox */}
+          <div className="flex items-start gap-2.5 pt-1">
+            <input
+              type="checkbox"
+              id="engagementTerms"
+              checked={agreedToTerms}
+              onChange={(e) => setAgreedToTerms(e.target.checked)}
+              className="mt-0.5 rounded text-[#111413] focus:ring-0 cursor-pointer"
+            />
+            <label htmlFor="engagementTerms" className="text-xs text-[#5B625F] font-medium leading-relaxed cursor-pointer font-sans">
+              I confirm this order for <strong>{currentPackage.views_total.toLocaleString()} views</strong>. I understand delivery is gradual, view-paced, and synchronized across a 15-minute grid.
+            </label>
           </div>
 
           {/* Primary Action Button */}
           {hasSufficientFunds ? (
             <button
               type="submit"
-              disabled={submitting}
-              className={`w-full py-4 rounded-2xl text-sm font-black tracking-wide transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer press-scale ${
-                submitting
-                  ? "bg-gray-200 text-gray-500 cursor-not-allowed"
-                  : "bg-[#3A4EFB] hover:bg-[#2C3FE0] text-white shadow-[#3A4EFB]/25 active:scale-[0.98]"
+              disabled={submitting || !agreedToTerms}
+              className={`w-full py-4 rounded-xl text-sm font-black tracking-wide transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer press-scale font-sans ${
+                submitting || !agreedToTerms
+                  ? "bg-[#E4E0D3] text-[#5B625F] cursor-not-allowed opacity-60"
+                  : "bg-[#D4F04F] hover:bg-[#C5E23A] text-[#111413] shadow-[#D4F04F]/25 active:scale-[0.98]"
               }`}
             >
               {submitting ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  <Loader2 className="w-4 h-4 animate-spin text-[#111413]" />
                   <span>Launching Campaign...</span>
                 </>
               ) : (
                 <>
-                  <Play className="w-4 h-4 fill-white" />
-                  <span>Launch Campaign • ₹{exactTotalCost.toFixed(2)}</span>
+                  <Play className="w-4 h-4 fill-[#111413] text-[#111413]" />
+                  <span>Launch Campaign • ₹{totalCampaignPriceInr.toFixed(2)}</span>
                 </>
               )}
             </button>
@@ -1392,19 +1144,19 @@ export default function EngagementPage() {
             <button
               type="button"
               onClick={() => setShowAddFundsModal(true)}
-              className="w-full py-4 rounded-2xl text-sm font-black tracking-wide bg-[#F0B90B] hover:bg-[#e0a800] text-[#1E2329] shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 transition-all press-scale cursor-pointer active:scale-[0.98]"
+              className="w-full py-4 rounded-xl text-sm font-black tracking-wide bg-[#F0B90B] hover:bg-[#e0a800] text-[#1E2329] shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 transition-all press-scale cursor-pointer active:scale-[0.98] font-sans"
             >
               <Zap className="w-4 h-4 fill-[#1E2329]" />
-              <span>Add Funds (Need ₹{(exactTotalCost - walletBalance).toFixed(2)})</span>
+              <span>Add Funds (Need ₹{(totalCampaignPriceInr - walletBalance).toFixed(2)})</span>
             </button>
           )}
 
-          <div className="pt-2 text-center text-xs text-[#64748B] flex items-center justify-center gap-3">
-            <span>✓ Anti-Bot Protected</span>
+          <div className="pt-2 text-center text-xs text-[#5B625F] flex items-center justify-center gap-3 font-sans">
+            <span>✓ Gradual, view-paced delivery</span>
             <span>•</span>
-            <span>✓ Views-First Synchronized</span>
+            <span>✓ Views-first synchronized</span>
             <span>•</span>
-            <a href="https://t.me/Ghostfinds" target="_blank" rel="noopener noreferrer" className="text-[#3A4EFB] hover:underline font-bold">
+            <a href="https://t.me/Ghostfinds" target="_blank" rel="noopener noreferrer" className="text-[#5E8C1F] hover:text-[#3F6212] font-bold font-sans">
               24/7 Telegram Support
             </a>
           </div>
@@ -1412,14 +1164,14 @@ export default function EngagementPage() {
       </form>
 
       {/* 24/7 Live Support Banner */}
-      <div className="p-3.5 rounded-2xl bg-white border border-[#DEE0ED] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 text-xs shadow-xs">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-[#0088cc]/10 text-[#0088cc] flex items-center justify-center shrink-0">
+      <div className="p-3.5 rounded-2xl bg-white border border-[#E4E0D3] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 text-xs shadow-xs font-sans">
+        <div className="flex items-center gap-2.5 font-sans">
+          <div className="w-8 h-8 rounded-xl bg-[#229ED9]/10 text-[#229ED9] flex items-center justify-center shrink-0">
             <Send className="w-4 h-4" />
           </div>
           <div>
-            <span className="font-bold text-[#252943] block">Need Assistance or Instant Approval?</span>
-            <span className="text-[11px] text-[#252943]/60 font-normal">Our team is active 24/7 on Telegram.</span>
+            <span className="font-bold text-[#111413] block">Need Assistance or Instant Approval?</span>
+            <span className="text-[11px] text-[#5B625F] font-normal">Our team is active 24/7 on Telegram.</span>
           </div>
         </div>
 
@@ -1427,7 +1179,7 @@ export default function EngagementPage() {
           href="https://t.me/Ghostfinds"
           target="_blank"
           rel="noopener noreferrer"
-          className="px-3.5 py-2 sm:py-1.5 rounded-xl bg-[#0088cc] hover:bg-[#0077b5] text-white text-xs font-bold transition-all shadow-subtle flex items-center justify-center gap-1.5 press-scale shrink-0 text-center"
+          className="px-3.5 py-2 sm:py-1.5 rounded-xl bg-[#229ED9] hover:bg-[#0077b5] text-white text-xs font-bold transition-all shadow-subtle flex items-center justify-center gap-1.5 press-scale shrink-0 text-center font-sans"
         >
           <Send className="w-3.5 h-3.5" />
           <span>Telegram @Ghostfinds</span>

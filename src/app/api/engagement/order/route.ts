@@ -17,6 +17,11 @@ import {
   generateOrganicDeliveryPlan,
   generateTikTokAlgorithmicPlan,
 } from "@/lib/engagement/organic-pacing-engine";
+import {
+  DEFAULT_PACKAGES,
+  generatePattern,
+  PackageConfig,
+} from "@/lib/engagement/deterministic-pattern-engine";
 import { z } from "zod";
 
 const createEngagementOrderSchema = z.object({
@@ -24,6 +29,22 @@ const createEngagementOrderSchema = z.object({
   presetId: z.string().optional().default("tiktok_2k"),
   presetName: z.string().optional(),
   platform: z.string().default("TikTok"),
+  followers: z.number().int().min(0).optional().default(500),
+  seed: z.string().optional(),
+  scheduledStartTime: z.string().optional(),
+  packagePriceInr: z.number().optional(),
+  totalCostInr: z.number().optional(),
+  batches: z.array(
+    z.object({
+      id: z.string().optional(),
+      service: z.enum(["views", "likes", "saves", "shares", "comments"]),
+      tick: z.number().optional().default(0),
+      minuteOffset: z.number(),
+      clockTime: z.string().optional(),
+      quantity: z.number(),
+      cumulativeAfter: z.number().optional(),
+    })
+  ).optional(),
   plannedViews: z.array(z.number().int()).optional(),
   viewOffsets: z.array(z.number().int()).optional(),
   plannedLikes: z.array(z.number().int()).optional(),
@@ -32,6 +53,8 @@ const createEngagementOrderSchema = z.object({
   saveOffsets: z.array(z.number().int()).optional(),
   plannedShares: z.array(z.number().int()).optional(),
   shareOffsets: z.array(z.number().int()).optional(),
+  plannedComments: z.array(z.number().int()).optional(),
+  commentOffsets: z.array(z.number().int()).optional(),
   pacingStrategy: z.enum(["s_curve", "burst", "normal", "peak_hours", "stealth"]).optional().default("s_curve"),
   peakHoursEnabled: z.boolean().optional().default(true),
 });
@@ -209,7 +232,7 @@ export async function POST(request: Request) {
     }
 
     let zeofameSharesService: any = null;
-    if (preset.shares?.enabled) {
+    if (preset.shares?.enabled || (parsed.batches && parsed.batches.some((b) => b.service === "shares"))) {
       zeofameSharesService = await resolveService(zeofameConn.id, sharesServiceId, zeofameAdapter, {
         name: "TikTok Shares / Reposts",
         category: "TikTok Shares",
@@ -219,12 +242,30 @@ export async function POST(request: Request) {
       });
     }
 
+    // Comments service (optional engagement add-on)
+    let zeofameCommentsService: any = null;
+    const commentsServiceId = config.comments?.serviceId || "950";
+    const hasComments =
+      (parsed.batches && parsed.batches.some((b) => b.service === "comments")) ||
+      (parsed.plannedComments && parsed.plannedComments.length > 0);
+
+    if (hasComments) {
+      zeofameCommentsService = await resolveService(zeofameConn.id, commentsServiceId, zeofameAdapter, {
+        name: "TikTok Comments",
+        category: "TikTok Comments",
+        ratePer1000: 15.00,
+        minQuantity: 1,
+        maxQuantity: 10000,
+      });
+    }
+
     // 3. Build Batch Runs - Calculated with Admin Configured Selling Rates
     const now = Date.now();
     const viewsRate = config.pricing?.viewsUserRate ?? (xmediaViewsService?.ratePer1000 ? xmediaViewsService.ratePer1000 * 1.5 : 4.50);
     const likesRate = config.pricing?.likesUserRate ?? (zeofameLikesService?.ratePer1000 ? zeofameLikesService.ratePer1000 * 2.0 : 2.00);
     const savesRate = config.pricing?.savesUserRate ?? (zeofameSavesService?.ratePer1000 ? zeofameSavesService.ratePer1000 * 2.5 : 0.80);
     const sharesRate = config.pricing?.sharesUserRate ?? (zeofameSharesService?.ratePer1000 ? zeofameSharesService.ratePer1000 * 2.5 : 0.80);
+    const commentsRate = config.pricing?.commentsUserRate ?? 15.00;
 
     // A. Views Runs (if enabled)
     const viewsRuns: Array<{ runNumber: number; scheduledAt: Date; quantity: number; cost: number }> = [];
@@ -390,7 +431,74 @@ export async function POST(request: Request) {
       }
     }
 
-    const totalCost = Number((totalViewsCost + totalLikesCost + totalSavesCost + totalSharesCost).toFixed(2));
+    // E. Comments Runs (if any)
+    const commentsRuns: Array<{ runNumber: number; scheduledAt: Date; quantity: number; cost: number }> = [];
+    let totalPlannedComments = 0;
+    let totalCommentsCost = 0;
+
+    // Check if deterministic batches are supplied from the pattern engine
+    const baseStartTime = parsed.scheduledStartTime ? new Date(parsed.scheduledStartTime) : new Date(now);
+
+    if (parsed.batches && parsed.batches.length > 0) {
+      viewsRuns.length = 0;
+      likesRuns.length = 0;
+      savesRuns.length = 0;
+      sharesRuns.length = 0;
+      commentsRuns.length = 0;
+      totalPlannedViews = 0;
+      totalViewsCost = 0;
+      totalPlannedLikes = 0;
+      totalLikesCost = 0;
+      totalPlannedSaves = 0;
+      totalSavesCost = 0;
+      totalPlannedShares = 0;
+      totalSharesCost = 0;
+      totalPlannedComments = 0;
+      totalCommentsCost = 0;
+
+      let vIdx = 1;
+      let lIdx = 1;
+      let sIdx = 1;
+      let shIdx = 1;
+      let cIdx = 1;
+
+      for (const b of parsed.batches) {
+        const batchScheduledAt = new Date(baseStartTime.getTime() + b.minuteOffset * 60 * 1000);
+        if (b.service === "views") {
+          const runCost = Number(((b.quantity / 1000) * viewsRate).toFixed(4));
+          viewsRuns.push({ runNumber: vIdx++, scheduledAt: batchScheduledAt, quantity: b.quantity, cost: runCost });
+          totalPlannedViews += b.quantity;
+          totalViewsCost += runCost;
+        } else if (b.service === "likes") {
+          const runCost = Number(((b.quantity / 1000) * likesRate).toFixed(4));
+          likesRuns.push({ runNumber: lIdx++, scheduledAt: batchScheduledAt, quantity: b.quantity, cost: runCost });
+          totalPlannedLikes += b.quantity;
+          totalLikesCost += runCost;
+        } else if (b.service === "saves") {
+          const runCost = Number(((b.quantity / 1000) * savesRate).toFixed(4));
+          savesRuns.push({ runNumber: sIdx++, scheduledAt: batchScheduledAt, quantity: b.quantity, cost: runCost });
+          totalPlannedSaves += b.quantity;
+          totalSavesCost += runCost;
+        } else if (b.service === "shares") {
+          const runCost = Number(((b.quantity / 1000) * sharesRate).toFixed(4));
+          sharesRuns.push({ runNumber: shIdx++, scheduledAt: batchScheduledAt, quantity: b.quantity, cost: runCost });
+          totalPlannedShares += b.quantity;
+          totalSharesCost += runCost;
+        } else if (b.service === "comments") {
+          const runCost = Number(((b.quantity / 1000) * commentsRate).toFixed(4));
+          commentsRuns.push({ runNumber: cIdx++, scheduledAt: batchScheduledAt, quantity: b.quantity, cost: runCost });
+          totalPlannedComments += b.quantity;
+          totalCommentsCost += runCost;
+        }
+      }
+    }
+
+    let totalCost: number;
+    if (typeof parsed.totalCostInr === "number" && parsed.totalCostInr > 0) {
+      totalCost = Number(parsed.totalCostInr.toFixed(2));
+    } else {
+      totalCost = Number((totalViewsCost + totalLikesCost + totalSavesCost + totalSharesCost + totalCommentsCost).toFixed(2));
+    }
     const currentBalance = user.walletBalance ?? 0;
 
     // 4. Wallet Balance Check (User balance check only)
@@ -470,6 +578,11 @@ export async function POST(request: Request) {
       });
 
       // B. Create wallet audit transaction
+      const descriptionParts = [`${totalPlannedViews} Views`, `${totalPlannedLikes} Likes`];
+      if (totalPlannedSaves > 0) descriptionParts.push(`${totalPlannedSaves} Saves`);
+      if (totalPlannedShares > 0) descriptionParts.push(`${totalPlannedShares} Reposts`);
+      if (totalPlannedComments > 0) descriptionParts.push(`${totalPlannedComments} Comments`);
+
       await tx.walletTransaction.create({
         data: {
           userId: user.id,
@@ -477,7 +590,7 @@ export async function POST(request: Request) {
           amount: -totalCost,
           balanceAfter: newBalance,
           referenceId: orderRef,
-          description: `TikTok Engagement (${preset.name}): ${totalPlannedViews} Views, ${totalPlannedLikes} Likes${totalPlannedSaves ? `, ${totalPlannedSaves} Saves` : ""}${totalPlannedShares ? `, ${totalPlannedShares} Reposts` : ""}`,
+          description: `TikTok Engagement (${preset.name}): ${descriptionParts.join(", ")}`,
         },
       });
 
@@ -486,6 +599,7 @@ export async function POST(request: Request) {
       if (totalPlannedLikes > 0) enabledTypes.push("likes");
       if (totalPlannedSaves > 0) enabledTypes.push("saves");
       if (totalPlannedShares > 0) enabledTypes.push("shares");
+      if (totalPlannedComments > 0) enabledTypes.push("comments");
 
       // C. Create EngagementOrder
       const engagementOrder = await tx.engagementOrder.create({
@@ -498,7 +612,7 @@ export async function POST(request: Request) {
           presetKey: preset.name,
           baseViews: totalPlannedViews,
           durationHours: Math.ceil(preset.durationHours),
-          seed: `aurasmm_${Date.now()}`,
+          seed: parsed.seed || `aurasmm_${Date.now()}`,
           status: "PROCESSING",
           totalCost,
           refundedAmount: 0,
@@ -506,15 +620,16 @@ export async function POST(request: Request) {
           plannedLikes: totalPlannedLikes,
           plannedSaves: totalPlannedSaves,
           plannedShares: totalPlannedShares,
+          plannedComments: totalPlannedComments,
           enabledTypes: JSON.stringify(enabledTypes),
           planParams: JSON.stringify({
-            version: "organicsmm_v2",
-            pacingEngine: "organic_anti_bot_v2",
+            version: "aurasmm_deterministic_v1",
+            pacingEngine: "deterministic_anti_radar",
+            seed: parsed.seed || null,
+            followers: parsed.followers || 500,
+            scheduledStartTime: parsed.scheduledStartTime || null,
             pacingStrategy: parsed.pacingStrategy || "s_curve",
             peakHoursEnabled: parsed.peakHoursEnabled ?? true,
-            avgHumanScore: fallbackViewsPlan?.avgHumanScore ?? 84,
-            varietyIndex: fallbackViewsPlan?.varietyIndex ?? 42,
-            patternBreakCount: fallbackViewsPlan?.patternBreakCount ?? 0,
             presetId: preset.id,
             presetName: preset.name,
             durationHours: preset.durationHours,
@@ -522,12 +637,12 @@ export async function POST(request: Request) {
             likesRuns: likesRuns.length,
             savesRuns: savesRuns.length,
             sharesRuns: sharesRuns.length,
+            commentsRuns: commentsRuns.length,
           }),
         },
       });
 
       // Safe resolution of Provider.id to prevent Foreign Key Constraint Violations on EngagementRun_providerId_fkey
-      // EngagementRun.providerId strictly references the Provider table (not UserProviderConnection).
       const validProviders = new Set(
         (await tx.provider.findMany({ select: { id: true } })).map((p) => p.id)
       );
@@ -550,6 +665,11 @@ export async function POST(request: Request) {
       const sharesProviderId =
         zeofameSharesService?.providerId && validProviders.has(zeofameSharesService.providerId)
           ? zeofameSharesService.providerId
+          : null;
+
+      const commentsProviderId =
+        zeofameCommentsService?.providerId && validProviders.has(zeofameCommentsService.providerId)
+          ? zeofameCommentsService.providerId
           : null;
 
       // D. Create Views Runs
@@ -596,9 +716,9 @@ export async function POST(request: Request) {
           data: {
             engagementOrderId: engagementOrder.id,
             engagementType: "saves",
-            serviceId: zeofameSavesService.id,
+            serviceId: zeofameSavesService?.id ?? null,
             providerId: savesProviderId,
-            providerServiceId: String(zeofameSavesService.providerServiceId || zeofameSavesService.externalId),
+            providerServiceId: String(zeofameSavesService?.providerServiceId || zeofameSavesService?.externalId || "807"),
             runNumber: sr.runNumber,
             scheduledAt: sr.scheduledAt,
             quantity: sr.quantity,
@@ -615,9 +735,9 @@ export async function POST(request: Request) {
           data: {
             engagementOrderId: engagementOrder.id,
             engagementType: "shares",
-            serviceId: zeofameSharesService.id,
+            serviceId: zeofameSharesService?.id ?? null,
             providerId: sharesProviderId,
-            providerServiceId: String(zeofameSharesService.providerServiceId || zeofameSharesService.externalId),
+            providerServiceId: String(zeofameSharesService?.providerServiceId || zeofameSharesService?.externalId || "718"),
             runNumber: shr.runNumber,
             scheduledAt: shr.scheduledAt,
             quantity: shr.quantity,
@@ -628,7 +748,26 @@ export async function POST(request: Request) {
         });
       }
 
-      // H. Create corresponding parent Order entry for the main Orders tab
+      // H. Create Comments Runs (if any)
+      for (const cr of commentsRuns) {
+        await tx.engagementRun.create({
+          data: {
+            engagementOrderId: engagementOrder.id,
+            engagementType: "comments",
+            serviceId: zeofameCommentsService?.id ?? null,
+            providerId: commentsProviderId,
+            providerServiceId: String(zeofameCommentsService?.providerServiceId || zeofameCommentsService?.externalId || "950"),
+            runNumber: cr.runNumber,
+            scheduledAt: cr.scheduledAt,
+            quantity: cr.quantity,
+            plannedCumulative: 0,
+            status: "scheduled",
+            cost: cr.cost,
+          },
+        });
+      }
+
+      // I. Create corresponding parent Order entry for the main Orders tab
       const mainOrder = await tx.order.create({
         data: {
           orderRef,
@@ -648,6 +787,7 @@ export async function POST(request: Request) {
             totalPlannedLikes,
             totalPlannedSaves,
             totalPlannedShares,
+            totalPlannedComments,
             durationHours: preset.durationHours,
           }),
         },
@@ -659,7 +799,7 @@ export async function POST(request: Request) {
       };
     });
 
-    const totalRunsCount = viewsRuns.length + likesRuns.length + savesRuns.length + sharesRuns.length;
+    const totalRunsCount = viewsRuns.length + likesRuns.length + savesRuns.length + sharesRuns.length + commentsRuns.length;
 
     // Log Creation Event
     await logOrderEvent({
@@ -672,14 +812,18 @@ export async function POST(request: Request) {
         plannedLikes: totalPlannedLikes,
         plannedSaves: totalPlannedSaves,
         plannedShares: totalPlannedShares,
+        plannedComments: totalPlannedComments,
         durationHours: preset.durationHours,
       },
     });
 
-    // Execute first immediate tick asynchronously in background
-    runEngagementTick().catch((tickErr) => {
-      console.warn("[ENGAGEMENT] Immediate tick execution caught non-fatal error:", tickErr.message);
-    });
+    // Execute first immediate tick asynchronously in background if scheduled starting now
+    const isStartingNow = Math.abs(baseStartTime.getTime() - Date.now()) < 5 * 60 * 1000;
+    if (isStartingNow) {
+      runEngagementTick().catch((tickErr) => {
+        console.warn("[ENGAGEMENT] Immediate tick execution caught non-fatal error:", tickErr.message);
+      });
+    }
 
     return NextResponse.json({
       success: true,
@@ -691,6 +835,7 @@ export async function POST(request: Request) {
       totalPlannedLikes,
       totalPlannedSaves,
       totalPlannedShares,
+      totalPlannedComments,
       runsCount: totalRunsCount,
       durationHours: preset.durationHours,
       remainingBalance: newBalance,

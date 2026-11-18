@@ -262,8 +262,8 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
       return (
         <>
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED] text-xs font-bold text-[#252943] shadow-subtle">
-              <Wallet className="w-3.5 h-3.5 text-[#3A4EFB]" />
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#E4E0D3] text-xs font-bold text-[#111413] shadow-subtle">
+              <Wallet className="w-3.5 h-3.5 text-[#5E8C1F]" />
               <span>Balance: ₹{walletBalance.toFixed(2)}</span>
             </div>
             <Link
@@ -282,14 +282,14 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
     // Non-Admin Sidebar Card
     return (
       <>
-        <div className="mx-3.5 mt-4 p-3.5 rounded-2xl bg-[#1A1D31] border border-[#323758] flex flex-col gap-2.5 shadow-subtle">
+        <div className="mx-3.5 mt-4 p-3.5 rounded-2xl bg-[#1B201E] border border-[#222826] flex flex-col gap-2.5 shadow-subtle">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-[#3A4EFB]/20 border border-[#3A4EFB]/30 text-[#E3FF3B] flex items-center justify-center shrink-0">
+              <div className="w-8 h-8 rounded-xl bg-[#D4F04F]/15 border border-[#D4F04F]/30 text-[#D4F04F] flex items-center justify-center shrink-0">
                 <Wallet className="w-4 h-4" />
               </div>
               <div>
-                <span className="text-[10px] uppercase tracking-wider text-[#DEE0ED]/60 font-semibold block leading-none mb-1">
+                <span className="text-[10px] uppercase tracking-wider text-[#9AA39F] font-semibold block leading-none mb-1">
                   Account Balance
                 </span>
                 <span className="text-sm font-black text-white tracking-tight">
@@ -302,10 +302,10 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
               onClick={() => loadBalanceData(true)}
               disabled={refreshing}
               title="Refresh wallet balance"
-              className="p-1.5 rounded-lg text-[#DEE0ED]/70 hover:text-white hover:bg-[#323758] transition-colors press-scale"
+              className="p-1.5 rounded-lg text-[#9AA39F] hover:text-white hover:bg-[#222826] transition-colors press-scale"
             >
               <RefreshCw
-                className={`w-3.5 h-3.5 text-[#E3FF3B] ${refreshing ? "animate-spin" : ""}`}
+                className={`w-3.5 h-3.5 text-[#D4F04F] ${refreshing ? "animate-spin" : ""}`}
               />
             </button>
           </div>
@@ -329,8 +329,8 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
   if (variant === "header") {
     if (loading) {
       return (
-        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED] text-xs font-semibold text-[#252943]/60">
-          <Wallet className="w-3.5 h-3.5 text-[#3A4EFB]" />
+        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#E4E0D3] text-xs font-semibold text-[#5B625F]">
+          <Wallet className="w-3.5 h-3.5 text-[#5E8C1F]" />
           <span>...</span>
         </div>
       );
@@ -353,7 +353,7 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
 
     return (
       <div className="relative" ref={dropdownRef}>
-        <div className="flex items-center bg-[#F8F9FD] border border-[#DEE0ED] hover:border-[#3A4EFB]/50 rounded-xl shadow-subtle transition-all">
+        <div className="flex items-center bg-white border border-[#E4E0D3] hover:border-[#111413]/40 rounded-xl shadow-subtle transition-all">
           <button
             type="button"
             onClick={() => loadBalanceData(true)}
@@ -363,22 +363,17 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
                 ? "Balance may be stale. Click to refresh live."
                 : "Refresh live balance"
             }
-            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-bold text-[#252943] hover:text-[#3A4EFB] transition-colors"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-bold text-[#111413] hover:text-[#5E8C1F] transition-colors"
           >
-            <Wallet className="w-3.5 h-3.5 text-[#3A4EFB] shrink-0" />
+            <Wallet className="w-3.5 h-3.5 text-[#5E8C1F] shrink-0" />
             <span className="truncate">Balance:</span>
             {isUnavailable ? (
               <span className="text-amber-700 font-semibold">Unavailable</span>
             ) : (
               <span>{formatProviderBalance(activeProvider.balance, activeProvider.currency)}</span>
             )}
-            {activeProvider.stale && !isUnavailable && (
-              <span className="text-[10px] font-bold text-amber-600 px-1 rounded bg-amber-50 border border-amber-200">
-                Stale
-              </span>
-            )}
             <RefreshCw
-              className={`w-3 h-3 text-[#252943]/40 ${refreshing ? "animate-spin text-[#3A4EFB]" : ""}`}
+              className={`w-3 h-3 text-[#111413]/40 ${refreshing ? "animate-spin text-[#5E8C1F]" : ""}`}
             />
           </button>
 
@@ -389,11 +384,11 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
               onClick={() => setDropdownOpen(!dropdownOpen)}
               title="Switch active balance"
               id="header-provider-switcher-btn"
-              className="px-2 py-1.5 border-l border-[#DEE0ED] text-[#252943]/60 hover:text-[#3A4EFB] hover:bg-white rounded-r-xl transition-colors"
+              className="px-2 py-1.5 border-l border-[#E4E0D3] text-[#5B625F] hover:text-[#111413] hover:bg-[#F3F1EA] rounded-r-xl transition-colors"
             >
               <ChevronDown
                 className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                  dropdownOpen ? "rotate-180 text-[#3A4EFB]" : ""
+                  dropdownOpen ? "rotate-180 text-[#5E8C1F]" : ""
                 }`}
               />
             </button>
@@ -402,10 +397,10 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
 
         {/* Dropdown Menu for 2+ providers */}
         {dropdownOpen && hasMultiple && (
-          <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl border border-[#DEE0ED] shadow-xl p-2 z-50 animate-scaleUp">
-            <div className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[#252943]/50 border-b border-[#DEE0ED]/60 mb-1 flex items-center justify-between">
+          <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl border border-[#E4E0D3] shadow-xl p-2 z-50 animate-scaleUp">
+            <div className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[#5B625F] border-b border-[#E4E0D3] mb-1 flex items-center justify-between">
               <span>Switch Active Balance</span>
-              <span className="text-[9px] text-[#3A4EFB] font-semibold">{providers.length} Accounts</span>
+              <span className="text-[9px] text-[#5E8C1F] font-semibold">{providers.length} Accounts</span>
             </div>
             <div className="space-y-1 max-h-56 overflow-y-auto">
               {providers.map((p, idx) => {
@@ -419,25 +414,23 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
                     disabled={switching}
                     className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs transition-colors text-left ${
                       isSelected
-                        ? "bg-[#3A4EFB]/10 text-[#3A4EFB] font-bold"
-                        : "hover:bg-[#F8F9FD] text-[#252943] font-medium"
+                        ? "bg-[#D4F04F]/20 text-[#111413] font-bold"
+                        : "hover:bg-[#F3F1EA] text-[#111413] font-medium"
                     }`}
                   >
                     <div className="flex flex-col min-w-0 pr-2">
                       <div className="flex items-center gap-1.5">
                         <span className="truncate">{getSafeEngineLabel(p.name, idx)}</span>
-                        {isSelected && <Check className="w-3.5 h-3.5 text-[#3A4EFB] shrink-0" />}
+                        {isSelected && <Check className="w-3.5 h-3.5 text-[#111413] shrink-0" />}
                       </div>
-                      <span className="text-[11px] font-bold text-[#252943]/70">
+                      <span className="text-[11px] font-bold text-[#5B625F]">
                         {pUnavailable
                           ? "Unavailable"
                           : formatProviderBalance(p.balance, p.currency)}
-                        {p.stale && !pUnavailable && (
-                          <span className="text-[9px] font-normal text-amber-600 ml-1">(Stale)</span>
-                        )}
+                        {/* Balance display without stale tag */}
                       </span>
                     </div>
-                    <span className="text-[10px] font-mono uppercase text-[#252943]/40 shrink-0">
+                    <span className="text-[10px] font-mono uppercase text-[#5B625F]/60 shrink-0">
                       {p.currency}
                     </span>
                   </button>
@@ -445,11 +438,11 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
               })}
             </div>
             {isAdmin && (
-              <div className="pt-2 mt-1 border-t border-[#DEE0ED]/60 px-1">
+              <div className="pt-2 mt-1 border-t border-[#E4E0D3] px-1">
                 <Link
                   href="/admin"
                   onClick={() => setDropdownOpen(false)}
-                  className="text-[11px] text-[#3A4EFB] hover:underline font-semibold flex items-center justify-between"
+                  className="text-[11px] text-[#5E8C1F] hover:underline font-semibold flex items-center justify-between"
                 >
                   <span>Admin Provider Settings</span>
                   <ExternalLink className="w-3 h-3" />
@@ -465,31 +458,31 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
   // Admin Sidebar Card
   if (loading && !activeProvider) {
     return (
-      <div className="mx-3.5 mt-4 p-3.5 rounded-2xl bg-[#1A1D31] border border-[#323758] animate-pulse flex items-center justify-between">
+      <div className="mx-3.5 mt-4 p-3.5 rounded-2xl bg-[#1B201E] border border-[#222826] animate-pulse flex items-center justify-between">
         <div className="space-y-1.5">
-          <div className="h-2 w-14 bg-[#323758] rounded" />
-          <div className="h-4 w-20 bg-[#323758] rounded" />
+          <div className="h-2 w-14 bg-[#222826] rounded" />
+          <div className="h-4 w-20 bg-[#222826] rounded" />
         </div>
-        <div className="w-6 h-6 rounded-lg bg-[#323758]" />
+        <div className="w-6 h-6 rounded-lg bg-[#222826]" />
       </div>
     );
   }
 
   if (!activeProvider) {
     return (
-      <div className="mx-3.5 mt-4 p-3.5 rounded-2xl bg-[#1A1D31] border border-[#323758] flex items-center justify-between shadow-subtle">
+      <div className="mx-3.5 mt-4 p-3.5 rounded-2xl bg-[#1B201E] border border-[#222826] flex items-center justify-between shadow-subtle">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-[#3A4EFB]/20 border border-[#3A4EFB]/30 text-[#E3FF3B] flex items-center justify-center shrink-0">
+          <div className="w-8 h-8 rounded-xl bg-[#D4F04F]/15 border border-[#D4F04F]/30 text-[#D4F04F] flex items-center justify-center shrink-0">
             <Wallet className="w-4 h-4" />
           </div>
           <div>
-            <span className="text-[10px] uppercase tracking-wider text-[#DEE0ED]/60 font-semibold block leading-none mb-1">
+            <span className="text-[10px] uppercase tracking-wider text-[#9AA39F] font-semibold block leading-none mb-1">
               Account Balance
             </span>
             {isAdmin ? (
               <Link
                 href="/admin"
-                className="text-xs font-bold text-[#E3FF3B] hover:underline flex items-center gap-1"
+                className="text-xs font-bold text-[#D4F04F] hover:underline flex items-center gap-1"
               >
                 Configure Providers →
               </Link>
@@ -508,14 +501,14 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
 
   return (
     <div className="mx-3.5 mt-4 relative" ref={dropdownRef}>
-      <div className="p-3.5 rounded-2xl bg-[#1A1D31] border border-[#323758] flex items-center justify-between shadow-subtle">
+      <div className="p-3.5 rounded-2xl bg-[#1B201E] border border-[#222826] flex items-center justify-between shadow-subtle">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 rounded-xl bg-[#3A4EFB]/20 border border-[#3A4EFB]/30 text-[#E3FF3B] flex items-center justify-center shrink-0">
+          <div className="w-8 h-8 rounded-xl bg-[#D4F04F]/15 border border-[#D4F04F]/30 text-[#D4F04F] flex items-center justify-center shrink-0">
             <Wallet className="w-4 h-4" />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
-              <span className="text-[10px] uppercase tracking-wider text-[#DEE0ED]/60 font-semibold block leading-none truncate max-w-[120px]">
+              <span className="text-[10px] uppercase tracking-wider text-[#9AA39F] font-semibold block leading-none truncate max-w-[120px]">
                 {getSafeEngineLabel(activeProvider.name, providers.findIndex((p) => p.id === activeProvider.id))}
               </span>
               {hasMultiple && (
@@ -524,11 +517,11 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
                   onClick={() => setDropdownOpen(!dropdownOpen)}
                   title="Switch account balance"
                   id="sidebar-provider-switcher-btn"
-                  className="p-0.5 rounded text-[#DEE0ED]/70 hover:text-white hover:bg-[#323758] transition-colors"
+                  className="p-0.5 rounded text-[#9AA39F] hover:text-white hover:bg-[#222826] transition-colors"
                 >
                   <ChevronDown
                     className={`w-3 h-3 transition-transform ${
-                      dropdownOpen ? "rotate-180 text-[#E3FF3B]" : ""
+                      dropdownOpen ? "rotate-180 text-[#D4F04F]" : ""
                     }`}
                   />
                 </button>
@@ -543,11 +536,7 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
                   {formatProviderBalance(activeProvider.balance, activeProvider.currency)}
                 </span>
               )}
-              {activeProvider.stale && !isUnavailable && (
-                <span className="text-[9px] font-bold text-amber-300 ml-1">
-                  (Stale)
-                </span>
-              )}
+              {/* Active balance cleanly rendered */}
             </div>
           </div>
         </div>
@@ -557,20 +546,20 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
           onClick={() => loadBalanceData(true)}
           disabled={refreshing}
           title="Refresh live balance"
-          className="p-1.5 rounded-lg text-[#DEE0ED]/70 hover:text-white hover:bg-[#323758] transition-colors press-scale"
+          className="p-1.5 rounded-lg text-[#9AA39F] hover:text-white hover:bg-[#222826] transition-colors press-scale"
         >
           <RefreshCw
-            className={`w-3.5 h-3.5 text-[#E3FF3B] ${refreshing ? "animate-spin" : ""}`}
+            className={`w-3.5 h-3.5 text-[#D4F04F] ${refreshing ? "animate-spin" : ""}`}
           />
         </button>
       </div>
 
       {/* Sidebar Dropdown Menu */}
       {dropdownOpen && hasMultiple && (
-        <div className="absolute left-0 right-0 mt-2 bg-[#1A1D31] border border-[#323758] rounded-2xl shadow-2xl p-2 z-50 animate-scaleUp">
-          <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[#DEE0ED]/50 border-b border-[#323758] mb-1 flex items-center justify-between">
+        <div className="absolute left-0 right-0 mt-2 bg-[#1B201E] border border-[#222826] rounded-2xl shadow-2xl p-2 z-50 animate-scaleUp">
+          <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[#9AA39F] border-b border-[#222826] mb-1 flex items-center justify-between">
             <span>Select Account</span>
-            <span className="text-[#E3FF3B]">{providers.length} Accounts</span>
+            <span className="text-[#D4F04F]">{providers.length} Accounts</span>
           </div>
           <div className="space-y-1 max-h-48 overflow-y-auto">
             {providers.map((p, idx) => {
@@ -584,29 +573,29 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
                   disabled={switching}
                   className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-xs transition-colors text-left ${
                     isSelected
-                      ? "bg-[#3A4EFB] text-white font-bold"
-                      : "hover:bg-[#252943] text-[#DEE0ED] font-medium"
+                      ? "bg-[#D4F04F] text-[#111413] font-bold"
+                      : "hover:bg-[#222826] text-[#F3F1EA] font-medium"
                   }`}
                 >
                   <div className="flex flex-col min-w-0 pr-1">
                     <span className="truncate">{p.name || `Account #${idx + 1}`}</span>
-                    <span className="text-[10px] text-[#DEE0ED]/70 font-semibold">
+                    <span className={`text-[10px] font-semibold ${isSelected ? "text-[#111413]/80" : "text-[#9AA39F]"}`}>
                       {pUnavailable
                         ? "Unavailable"
                         : formatProviderBalance(p.balance, p.currency)}
                     </span>
                   </div>
-                  {isSelected && <Check className="w-3.5 h-3.5 text-[#E3FF3B] shrink-0" />}
+                  {isSelected && <Check className="w-3.5 h-3.5 text-[#111413] shrink-0" />}
                 </button>
               );
             })}
           </div>
           {isAdmin && (
-            <div className="pt-2 mt-1 border-t border-[#323758] px-1 text-center">
+            <div className="pt-2 mt-1 border-t border-[#222826] px-1 text-center">
               <Link
                 href="/admin"
                 onClick={() => setDropdownOpen(false)}
-                className="text-[10px] text-[#E3FF3B] hover:underline font-semibold"
+                className="text-[10px] text-[#D4F04F] hover:underline font-semibold"
               >
                 Configure Providers →
               </Link>
