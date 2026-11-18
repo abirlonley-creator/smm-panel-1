@@ -24,6 +24,9 @@ export interface TikTokTierPreset {
   targetShares: number;
   durationHours: number;
   totalDurationMinutes: number;
+  price_inr?: number;
+  views_total?: number;
+  base_duration_hours?: number;
   views: MetricSpec & { intervalMinutes: number };
   likes: MetricSpec & { waveOffsets: number[] };
   saves?: MetricSpec & { waveOffsets: number[] };

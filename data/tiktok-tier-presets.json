@@ -9,7 +9,7 @@
     "base_duration_hours": 6,
     "durationHours": 6,
     "totalDurationMinutes": 360,
-    "price_inr": 299,
+    "price_inr": 16.91,
     "targetLikes": 42,
     "likes": {
       "enabled": true,
@@ -70,7 +70,7 @@
     "base_duration_hours": 24,
     "durationHours": 24,
     "totalDurationMinutes": 1440,
-    "price_inr": 699,
+    "price_inr": 29.24,
     "targetLikes": 180,
     "likes": {
       "enabled": true,
@@ -148,7 +148,7 @@
     "base_duration_hours": 48,
     "durationHours": 48,
     "totalDurationMinutes": 2880,
-    "price_inr": 1299,
+    "price_inr": 60.24,
     "targetLikes": 420,
     "likes": {
       "enabled": true,
@@ -238,7 +238,7 @@
     "base_duration_hours": 72,
     "durationHours": 72,
     "totalDurationMinutes": 4320,
-    "price_inr": 1899,
+    "price_inr": 87.24,
     "targetLikes": 650,
     "likes": {
       "enabled": true,
@@ -332,7 +332,7 @@
     "base_duration_hours": 120,
     "durationHours": 120,
     "totalDurationMinutes": 7200,
-    "price_inr": 5499,
+    "price_inr": 290.75,
     "targetLikes": 2600,
     "likes": {
       "enabled": true,

@@ -164,6 +164,23 @@ export async function PUT(request: Request) {
               data: { ratePer1000: updatedConfig.pricing.sharesUserRate },
             });
           }
+
+          // Automatically sync package prices to match the admin's live rates ("Customer Pays")
+          const vRate = updatedConfig.pricing.viewsUserRate ?? 4.5;
+          const lRate = updatedConfig.pricing.likesUserRate ?? 2.0;
+          const sRate = updatedConfig.pricing.savesUserRate ?? 0.8;
+          const shRate = updatedConfig.pricing.sharesUserRate ?? 0.8;
+
+          const currentPresets = await getAllTikTokPresetsRecordAsync(true);
+          for (const key of Object.keys(currentPresets)) {
+            const p = currentPresets[key];
+            const vC = (p.targetViews / 1000) * vRate;
+            const lC = (p.targetLikes / 1000) * lRate;
+            const sC = p.saves?.enabled ? (p.targetSaves / 1000) * sRate : 0;
+            const shC = p.shares?.enabled ? (p.targetShares / 1000) * shRate : 0;
+            p.price_inr = Number((vC + lC + sC + shC).toFixed(2));
+          }
+          await saveAllTikTokPresetsAsync(currentPresets, actor);
         }
       } catch (syncErr) {
         console.warn("Failed to sync pricing to catalog services:", syncErr);

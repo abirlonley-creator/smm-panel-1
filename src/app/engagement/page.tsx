@@ -229,36 +229,42 @@ export default function EngagementPage() {
   const [successReceipt, setSuccessReceipt] = useState<any | null>(null);
   const [showAddFundsModal, setShowAddFundsModal] = useState(false);
 
+  // Memoized packages list combining defaults with live database preset prices & metrics
+  const packagesList: PackageConfig[] = useMemo(() => {
+    return Object.values(DEFAULT_PACKAGES).map((defaultPkg) => {
+      if (Array.isArray(statusData?.presets)) {
+        const match = statusData.presets.find((p: any) => p.id === defaultPkg.id);
+        if (match) {
+          return {
+            ...defaultPkg,
+            price_inr: typeof match.price_inr === "number" ? match.price_inr : defaultPkg.price_inr,
+            views_total: match.views_total || match.targetViews || defaultPkg.views_total,
+            base_duration_hours: match.base_duration_hours || match.durationHours || defaultPkg.base_duration_hours,
+            likes: match.targetLikes ?? defaultPkg.likes,
+            saves: match.targetSaves ?? defaultPkg.saves,
+            shares: match.targetShares ?? defaultPkg.shares,
+            min_followers_note: match.min_followers_note || defaultPkg.min_followers_note,
+          };
+        }
+      }
+      return defaultPkg;
+    });
+  }, [statusData?.presets]);
+
   // Active package definition
   const currentPackage: PackageConfig = useMemo(() => {
-    const defaultPkg = DEFAULT_PACKAGES[selectedPackageId] || DEFAULT_PACKAGES.tiktok_2k;
-    // Check if database presets from statusData override price or fields
-    if (Array.isArray(statusData?.presets)) {
-      const match = statusData.presets.find((p: any) => p.id === selectedPackageId);
-      if (match) {
-        return {
-          ...defaultPkg,
-          price_inr: typeof match.price_inr === "number" ? match.price_inr : defaultPkg.price_inr,
-          views_total: match.views_total || match.targetViews || defaultPkg.views_total,
-          base_duration_hours: match.base_duration_hours || match.durationHours || defaultPkg.base_duration_hours,
-          likes: match.targetLikes ?? defaultPkg.likes,
-          saves: match.targetSaves ?? defaultPkg.saves,
-          shares: match.targetShares ?? defaultPkg.shares,
-          min_followers_note: match.min_followers_note || defaultPkg.min_followers_note,
-        };
-      }
-    }
-    return defaultPkg;
-  }, [selectedPackageId, statusData?.presets]);
+    const found = packagesList.find((p) => p.id === selectedPackageId);
+    return found || packagesList[0] || DEFAULT_PACKAGES.tiktok_2k;
+  }, [packagesList, selectedPackageId]);
 
   // When switching package, configure default add-ons matching package specs
   const handleSelectPackage = useCallback((pkgId: string) => {
     setSelectedPackageId(pkgId);
-    const targetPkg = DEFAULT_PACKAGES[pkgId] || DEFAULT_PACKAGES.tiktok_2k;
+    const targetPkg = packagesList.find((p) => p.id === pkgId) || DEFAULT_PACKAGES[pkgId] || DEFAULT_PACKAGES.tiktok_2k;
     setAddOnLikes(targetPkg.likes > 0);
     setAddOnSaves(targetPkg.saves > 0);
     setAddOnShares(targetPkg.shares > 0);
-  }, []);
+  }, [packagesList]);
 
   // Compute calculated start time
   const computedStartTime = useMemo(() => {
@@ -608,7 +614,7 @@ export default function EngagementPage() {
 
           {/* Package Cards Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
-            {Object.values(DEFAULT_PACKAGES).map((pkg, idx) => {
+            {packagesList.map((pkg, idx) => {
               const isSelected = selectedPackageId === pkg.id;
               const visuals = getPresetVisuals(pkg);
               const IconComponent = visuals.icon;
@@ -702,7 +708,7 @@ export default function EngagementPage() {
                     <div>
                       <span className="text-[9px] uppercase font-bold text-[#5B625F] block leading-none font-sans">Price</span>
                       <span className="text-xs sm:text-sm font-black text-[#111413] font-sans">
-                        ₹{pkg.price_inr}
+                        ₹{Number(pkg.price_inr).toFixed(2)}
                       </span>
                     </div>
 
