@@ -37,7 +37,7 @@ const createEngagementOrderSchema = z.object({
   batches: z.array(
     z.object({
       id: z.string().optional(),
-      service: z.enum(["views", "likes", "saves", "shares", "comments"]),
+      service: z.enum(["views", "likes", "saves", "reposts", "shares", "comments"]),
       tick: z.number().optional().default(0),
       minuteOffset: z.number(),
       clockTime: z.string().optional(),
@@ -242,7 +242,10 @@ export async function POST(request: Request) {
     }
 
     let zeofameSharesService: any = null;
-    if (preset.shares?.enabled || (parsed.batches && parsed.batches.some((b) => b.service === "shares"))) {
+    if (
+      preset.shares?.enabled ||
+      (parsed.batches && parsed.batches.some((b) => b.service === "shares" || b.service === "reposts"))
+    ) {
       zeofameSharesService = await resolveService(zeofameConn.id, sharesServiceId, zeofameAdapter, {
         name: "TikTok Shares / Reposts",
         category: "TikTok Shares",
@@ -493,7 +496,7 @@ export async function POST(request: Request) {
           savesRuns.push({ runNumber: sIdx++, scheduledAt: batchScheduledAt, quantity: b.quantity, cost: runCost });
           totalPlannedSaves += b.quantity;
           totalSavesCost += runCost;
-        } else if (b.service === "shares") {
+        } else if (b.service === "shares" || b.service === "reposts") {
           const runCost = Number(((b.quantity / 1000) * sharesRate).toFixed(4));
           sharesRuns.push({ runNumber: shIdx++, scheduledAt: batchScheduledAt, quantity: b.quantity, cost: runCost });
           totalPlannedShares += b.quantity;
