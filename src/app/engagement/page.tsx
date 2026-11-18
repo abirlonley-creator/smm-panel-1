@@ -274,9 +274,9 @@ export default function EngagementPage() {
   const handleSelectPackage = useCallback((pkgId: string) => {
     setSelectedPackageId(pkgId);
     const targetPkg = packagesList.find((p) => p.id === pkgId) || DEFAULT_PACKAGES[pkgId] || DEFAULT_PACKAGES.tiktok_2k;
-    setAddOnLikes(targetPkg.likes > 0);
-    setAddOnSaves(targetPkg.saves > 0);
-    setAddOnShares(targetPkg.shares > 0);
+    setAddOnLikes((targetPkg.likes ?? 0) > 0);
+    setAddOnSaves((targetPkg.saves ?? 0) > 0);
+    setAddOnShares((targetPkg.shares ?? 0) > 0);
   }, [packagesList]);
 
   // Compute calculated start time
@@ -299,8 +299,8 @@ export default function EngagementPage() {
     return {
       ...currentPackage,
       likes: addOnLikes ? currentPackage.likes : 0,
-      saves: addOnSaves ? (currentPackage.saves > 0 ? currentPackage.saves : 20) : 0,
-      shares: addOnShares ? (currentPackage.shares > 0 ? currentPackage.shares : 10) : 0,
+      saves: addOnSaves ? ((currentPackage.saves ?? 0) > 0 ? (currentPackage.saves ?? 0) : 20) : 0,
+      shares: addOnShares ? ((currentPackage.shares ?? 0) > 0 ? (currentPackage.shares ?? 0) : 10) : 0,
       comments: addOnComments ? commentsCount : 0,
     };
   }, [currentPackage, addOnLikes, addOnSaves, addOnShares, addOnComments, commentsCount]);
@@ -311,13 +311,15 @@ export default function EngagementPage() {
       effectivePackage,
       followers,
       patternSeed,
-      DEFAULT_PROVIDER_MINIMUMS,
-      computedStartTime
+      {
+        providerMinimums: DEFAULT_PROVIDER_MINIMUMS,
+        startDate: computedStartTime,
+      }
     );
   }, [effectivePackage, followers, patternSeed, computedStartTime]);
 
   // Price calculation: package price + add-ons = total price
-  const basePriceInr = currentPackage.price_inr;
+  const basePriceInr = currentPackage.price_inr ?? 0;
   const commentsAddOnCost = addOnComments ? Math.round(commentsCount * 2.5) : 0;
   // If 2K package (which has 0 saves/shares included), adding saves or shares has small add-on fee
   const savesAddOnCost = currentPackage.saves === 0 && addOnSaves ? 15 : 0;
@@ -452,11 +454,12 @@ export default function EngagementPage() {
           presetName: currentPackage.name,
           platform: "TikTok",
           followers: followers,
-          seed: patternSeed,
+          seed: plan.seed,
           scheduledStartTime: computedStartTime.toISOString(),
           packagePriceInr: basePriceInr,
           totalCostInr: totalCampaignPriceInr,
           batches: plan.batches,
+          rows: plan.rows,
         }),
       });
 
@@ -681,9 +684,9 @@ export default function EngagementPage() {
                     <div>
                       <div className="flex items-baseline gap-1 font-sans">
                         <span className="text-base sm:text-lg font-black text-[#111413] font-sans tracking-tight leading-none">
-                          {pkg.views_total.toLocaleString()}
+                          {(pkg.views_total ?? 0).toLocaleString()}
                         </span>
-                        <span className="text-[10px] font-bold text-[#5E8C1F] font-sans">Views</span>
+                        <span className="text-[10px] font-bold text-[#5E8C1F] font-sans">+ buffer</span>
                       </div>
                       <div className="text-[11px] font-bold text-[#111413] truncate mt-1 font-sans">
                         {visuals.tierBadge} {visuals.shortTitle}
@@ -700,19 +703,19 @@ export default function EngagementPage() {
 
                     {/* Included Metrics */}
                     <div className="flex items-center flex-wrap gap-1 text-[10px] font-semibold text-[#5B625F] pt-0.5 font-sans">
-                      {pkg.likes > 0 && (
+                      {(pkg.likes ?? 0) > 0 && (
                         <span className="inline-flex items-center gap-0.5 text-rose-600 font-sans font-bold bg-rose-50/80 px-1.5 py-0.5 rounded border border-rose-200/50">
                           <Heart className="w-2.5 h-2.5 fill-rose-500 text-rose-500" />
                           <span>+{pkg.likes}</span>
                         </span>
                       )}
-                      {pkg.saves > 0 && (
+                      {(pkg.saves ?? 0) > 0 && (
                         <span className="inline-flex items-center gap-0.5 text-amber-600 font-sans font-bold bg-amber-50/80 px-1.5 py-0.5 rounded border border-amber-200/50">
                           <Bookmark className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
                           <span>+{pkg.saves}</span>
                         </span>
                       )}
-                      {pkg.shares > 0 && (
+                      {(pkg.shares ?? 0) > 0 && (
                         <span className="inline-flex items-center gap-0.5 text-purple-600 font-sans font-bold bg-purple-50/80 px-1.5 py-0.5 rounded border border-purple-200/50">
                           <Share2 className="w-2.5 h-2.5 text-purple-500" />
                           <span>+{pkg.shares}</span>
@@ -788,7 +791,7 @@ export default function EngagementPage() {
                   <div>
                     <span className="font-bold block text-xs">Saves</span>
                     <span className="text-[10px] text-[#5B625F]">
-                      {currentPackage.saves > 0 ? `+${currentPackage.saves} (Included)` : "+20 (+₹15)"}
+                      {(currentPackage.saves ?? 0) > 0 ? `+${currentPackage.saves} (Included)` : "+20 (+₹15)"}
                     </span>
                   </div>
                 </div>
@@ -813,7 +816,7 @@ export default function EngagementPage() {
                   <div>
                     <span className="font-bold block text-xs">Shares</span>
                     <span className="text-[10px] text-[#5B625F]">
-                      {currentPackage.shares > 0 ? `+${currentPackage.shares} (Included)` : "+10 (+₹15)"}
+                      {(currentPackage.shares ?? 0) > 0 ? `+${currentPackage.shares} (Included)` : "+10 (+₹15)"}
                     </span>
                   </div>
                 </div>
@@ -1137,7 +1140,7 @@ export default function EngagementPage() {
               className="mt-0.5 rounded text-[#111413] focus:ring-0 cursor-pointer"
             />
             <label htmlFor="engagementTerms" className="text-xs text-[#5B625F] font-medium leading-relaxed cursor-pointer font-sans">
-              I confirm this order for <strong>{currentPackage.views_total.toLocaleString()} views</strong>. I understand delivery is gradual, view-paced, and synchronized across a 15-minute grid.
+              I confirm this order for <strong>{plan.viewsTotal.toLocaleString()} views</strong> ({(currentPackage.views_total ?? 0).toLocaleString()} + buffer). I understand delivery is gradual, view-paced, and synchronized across a 15-minute grid.
             </label>
           </div>
 

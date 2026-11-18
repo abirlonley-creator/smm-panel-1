@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Navigation } from "@/components/Navigation";
 import { AppHeader } from "@/components/AppHeader";
+import { AnnouncementTicker } from "@/components/AnnouncementTicker";
 import { MaintenanceScreen } from "@/components/MaintenanceScreen";
 import { ShieldAlert, ArrowRight } from "lucide-react";
 
@@ -90,7 +91,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         )}
 
-        <AppHeader />
+        <div className="lg:sticky lg:top-0 lg:z-40">
+          <AnnouncementTicker />
+          <AppHeader />
+        </div>
         <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
           {children}
         </main>

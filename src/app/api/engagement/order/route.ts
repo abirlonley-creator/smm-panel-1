@@ -45,6 +45,7 @@ const createEngagementOrderSchema = z.object({
       cumulativeAfter: z.number().optional(),
     })
   ).optional(),
+  rows: z.array(z.any()).optional(),
   plannedViews: z.array(z.number().int()).optional(),
   viewOffsets: z.array(z.number().int()).optional(),
   plannedLikes: z.array(z.number().int()).optional(),
@@ -647,6 +648,7 @@ export async function POST(request: Request) {
             savesRuns: savesRuns.length,
             sharesRuns: sharesRuns.length,
             commentsRuns: commentsRuns.length,
+            rows: parsed.rows || null,
           }),
         },
       });

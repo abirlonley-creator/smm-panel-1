@@ -46,6 +46,7 @@ import {
   Wrench,
   Hammer,
   LogOut,
+  Megaphone,
 } from "lucide-react";
 import { formatProviderBalance } from "@/lib/currency";
 import { OrderMonitorTab } from "@/components/admin/OrderMonitorTab";
@@ -53,6 +54,7 @@ import { AlertsHealthTab } from "@/components/admin/AlertsHealthTab";
 import { BinanceDepositsTab } from "@/components/admin/BinanceDepositsTab";
 import { RevenueProfitTab } from "@/components/admin/RevenueProfitTab";
 import { UsersLiveActivityTab } from "@/components/admin/UsersLiveActivityTab";
+import { SiteAnnouncementTab } from "@/components/admin/SiteAnnouncementTab";
 
 interface PasskeyData {
   id: string;
@@ -78,12 +80,15 @@ export type AdminCategory = "customers" | "financials" | "operations" | "setting
 export type CustomersSubTab = "directory" | "passkeys";
 export type FinancialsSubTab = "revenue" | "deposits";
 export type OperationsSubTab = "orders" | "alerts";
-export type SettingsSubTab = "engagement" | "provider";
+export type SettingsSubTab = "engagement" | "provider" | "announcement";
 
 export default function AdminPage() {
   const router = useRouter();
   const [session, setSession] = useState<{ authenticated: boolean; label?: string; role?: string } | null>(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
+
+  // Announcement Active State for Quick Header Pill
+  const [announcementActive, setAnnouncementActive] = useState<boolean>(false);
 
   // Login form state
   const [accessKeyInput, setAccessKeyInput] = useState("");
@@ -245,7 +250,7 @@ export default function AdminPage() {
   }, []);
 
   // Direct Category & Sub-tab Navigator
-  const navigateTo = (target: "directory" | "passkeys" | "revenue" | "deposits" | "orders" | "alerts" | "engagement" | "provider") => {
+  const navigateTo = (target: "directory" | "passkeys" | "revenue" | "deposits" | "orders" | "alerts" | "engagement" | "provider" | "announcement") => {
     if (target === "directory" || target === "passkeys") {
       setCategory("customers");
       setCustomersSubTab(target);
@@ -256,11 +261,26 @@ export default function AdminPage() {
       setCategory("operations");
       setOperationsSubTab(target);
       if (target === "alerts") loadAlerts();
-    } else if (target === "engagement" || target === "provider") {
+    } else if (target === "engagement" || target === "provider" || target === "announcement") {
       setCategory("settings");
       setSettingsSubTab(target);
     }
   };
+
+  useEffect(() => {
+    const handleAnnUpdate = () => {
+      fetch("/api/admin/announcement")
+        .then((r) => r.json())
+        .then((data) => {
+          if (data?.success && data?.announcement) {
+            setAnnouncementActive(Boolean(data.announcement.enabled));
+          }
+        })
+        .catch(() => {});
+    };
+    window.addEventListener("announcement-updated", handleAnnUpdate);
+    return () => window.removeEventListener("announcement-updated", handleAnnUpdate);
+  }, []);
 
   // Auto-refresh alerts
   useEffect(() => {
@@ -350,7 +370,7 @@ export default function AdminPage() {
   async function loadAllAdminData() {
     setLoadingData(true);
     try {
-      const [keysRes, provRes, engRes, alertsRes, engOrdersRes, tiktokRes, maintRes] = await Promise.all([
+      const [keysRes, provRes, engRes, alertsRes, engOrdersRes, tiktokRes, maintRes, annRes] = await Promise.all([
         fetch("/api/admin/keys").then((r) => r.json()),
         fetch("/api/admin/provider").then((r) => r.json()),
         fetch("/api/admin/engagement-profiles").then((r) => r.json()).catch(() => ({ success: false })),
@@ -358,7 +378,12 @@ export default function AdminPage() {
         fetch("/api/engagement/orders").then((r) => r.json()).catch(() => ({ success: false })),
         fetch("/api/admin/engagement-config").then((r) => r.json()).catch(() => ({ success: false })),
         fetch("/api/admin/maintenance").then((r) => r.json()).catch(() => ({ success: false })),
+        fetch("/api/admin/announcement").then((r) => r.json()).catch(() => ({ success: false })),
       ]);
+
+      if (annRes?.success && annRes.announcement) {
+        setAnnouncementActive(Boolean(annRes.announcement.enabled));
+      }
 
       if (maintRes?.success && maintRes.maintenance) {
         setMaintenance(maintRes.maintenance);
@@ -717,6 +742,21 @@ export default function AdminPage() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Announcement Quick Pill */}
+          <button
+            type="button"
+            onClick={() => navigateTo("announcement")}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border flex items-center gap-1.5 ${
+              announcementActive
+                ? "bg-emerald-50 border-emerald-300 text-emerald-800 font-bold"
+                : "bg-white border-[#DEE0ED] text-[#252943]/70 hover:text-[#252943]"
+            }`}
+            title="Configure Site Announcement Header Ticker"
+          >
+            <Megaphone className={`w-3.5 h-3.5 ${announcementActive ? "text-emerald-600" : "text-[#252943]/50"}`} />
+            <span>Announcement: {announcementActive ? "LIVE" : "OFF"}</span>
+          </button>
+
           {/* Under Update toggle button */}
           <button
             type="button"
@@ -990,6 +1030,21 @@ export default function AdminPage() {
                 }`}
               >
                 Provider API
+              </button>
+              <button
+                type="button"
+                onClick={() => setSettingsSubTab("announcement")}
+                className={`px-3 py-1.5 rounded-xl font-semibold transition-all flex items-center gap-1.5 ${
+                  settingsSubTab === "announcement"
+                    ? "bg-[#252943] text-white"
+                    : "text-[#252943]/70 hover:bg-gray-100"
+                }`}
+              >
+                <Megaphone className="w-3.5 h-3.5" />
+                <span>Site Announcement</span>
+                {announcementActive && (
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                )}
               </button>
             </>
           )}
@@ -2572,11 +2627,12 @@ export default function AdminPage() {
                   {(() => {
                     const vOrig = originalRates?.views ?? 2.23;
                     const lOrig = originalRates?.likes ?? 0.88;
-                    const vUser = Number(tiktokConfig.pricing?.viewsUserRate ?? 4.50);
-                    const lUser = Number(tiktokConfig.pricing?.likesUserRate ?? 2.00);
 
-                    // 2K Starter (2960 views + 42 likes)
-                    const cost2kUser = Number(((2960 / 1000) * vUser + (42 / 1000) * lUser).toFixed(2));
+                    // 2K Starter — use the admin-set price_inr as "Customer Pays"
+                    const preset2k = tiktokTierPresets?.tiktok_2k;
+                    const cost2kUser = typeof preset2k?.price_inr === "number" && preset2k.price_inr > 0
+                      ? preset2k.price_inr
+                      : Number(((2960 / 1000) * Number(tiktokConfig.pricing?.viewsUserRate ?? 4.50) + (42 / 1000) * Number(tiktokConfig.pricing?.likesUserRate ?? 2.00)).toFixed(2));
                     const cost2kWholesale = Number(((2960 / 1000) * vOrig + (42 / 1000) * lOrig).toFixed(2));
                     const profit2k = Number((cost2kUser - cost2kWholesale).toFixed(2));
                     const margin2k = cost2kWholesale > 0 ? Math.round((profit2k / cost2kWholesale) * 100) : 0;
@@ -2891,7 +2947,7 @@ export default function AdminPage() {
             </div>
           </div>
         </div>
-      ) : (
+      ) : settingsSubTab === "provider" ? (
             <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 sm:p-8 shadow-subtle space-y-6 animate-fadeIn">
               <div className="pb-4 border-b border-[#DEE0ED]">
                 <div className="flex items-center gap-2 mb-1">
@@ -2963,6 +3019,8 @@ export default function AdminPage() {
                 </button>
               </form>
             </div>
+          ) : (
+            <SiteAnnouncementTab />
           )}
         </div>
       )}

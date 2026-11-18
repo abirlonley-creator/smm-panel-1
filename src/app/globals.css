@@ -117,3 +117,49 @@ body, input, button, select, textarea {
 .bg-white\/8  { background-color: rgba(255,255,255,0.08); }
 .bg-white\/12 { background-color: rgba(255,255,255,0.12); }
 .bg-white\/6  { background-color: rgba(255,255,255,0.06); }
+
+/* ── Announcement Marquee Ticker ────────────────── */
+@keyframes marqueeLoop {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+.animate-marquee {
+  display: flex;
+  width: max-content;
+  will-change: transform;
+  animation: marqueeLoop 30s linear infinite;
+}
+
+.animate-marquee-slow {
+  display: flex;
+  width: max-content;
+  will-change: transform;
+  animation: marqueeLoop 48s linear infinite;
+}
+
+.animate-marquee-fast {
+  display: flex;
+  width: max-content;
+  will-change: transform;
+  animation: marqueeLoop 18s linear infinite;
+}
+
+.animate-marquee:hover,
+.animate-marquee-slow:hover,
+.animate-marquee-fast:hover {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-marquee,
+  .animate-marquee-slow,
+  .animate-marquee-fast {
+    animation-play-state: paused;
+  }
+}
+

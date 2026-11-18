@@ -1,58 +1,46 @@
 /**
- * Deterministic Organic Anti-Radar Pattern Engine for AuraSMM
+ * AuraSMM TikTok Deterministic Organic Plan Engine
  * 
- * Generates mathematically verified, reproducible engagement schedules
- * on a 15-minute grid with:
- * 
- * VIEWS SMOOTHNESS (apply to every tick, including the tail):
- * - Adjacent batches may differ by at most 25%.
- * - Never two adjacent equal values.
- * - No value used more than twice across schedule.
- * - No alternating high/low pattern (sawtooth detection).
- * - Ramp up gradually from the minimum (for example 101, 128, 165, 210...).
- * - Never jump from the minimum to 2-3x in a single step.
- * - Final asymptotic easing at the tail (zero cliff drops, zero end spikes).
- * - Strict exact total conservation (zero drift).
- * 
- * ENGAGEMENT PLACEMENT:
- * - First likes within 2-3 ticks of the seed (15-30 min lag), sized about 3-5% of
- *   seed views (above provider minimum).
- * - Saves: first batch by 15-20% of cumulative views.
- * - Shares/reposts: first batch by 25-30% of views. Never later than that, even for small totals.
- * - Small totals (< 6x provider minimum): schedule floor(total/min) batches at evenly
- *   spread points of the views curve (for 3 batches, about 20%, 50%, 80% of views),
- *   not bunched at the end. Last batch of each service <= 85% of views.
- * - Batch sizes vary at least +-20% around the average, sum exactly to the total,
- *   and respect the minimum. No size repeats more than twice in a service. No fixed clamp value.
- * - Gaps between engagement batches: no gap over 4 hours for likes, 8 hours for saves,
- *   12 hours for shares (on 24h+ packages).
- * - Never send engagement before its views exist (cumulative engagement <= cumulative views).
- * 
- * FINAL VALIDATOR:
- * - Any rule broken = automatically regenerate with the next deterministic seed.
+ * 1) THE GOLDEN RULE: ONE PLAN OBJECT
+ * generatePlan(package, followers, seed) returns one object:
+ * views_total, totals and rates per service, duration, rows[], trend curve, chips, pattern ID.
+ * - The graph is computed by accumulating rows[]. Graph point N = the cumulative sum through batch N,
+ *   plotted at batch N's timestamp. The graph never has its own data or its own curve.
+ * - The batch table prints rows[], one row per batch. Row N in the table is exactly point N on the graph.
+ * - Hovering a graph point shows that batch's row. Clicking a row highlights its point.
+ * - The chips (total views, runs, duration, per-service counts) are sums of rows[]. The CSV prints rows[].
+ * - At Launch, store the plan (seed + every row). The executor sends exactly those rows.
+ * - "New Pattern" = new random seed = a completely new plan. Same seed = same plan.
+ * - FORBIDDEN: fixed demo values, a separate graph generator, a separate batch generator, numbers typed into the UI,
+ *   or any recomputation of the totals outside the plan.
  */
 
 export interface PackageConfig {
   id: string;
   name: string;
-  views_total: number;
-  base_duration_hours: number;
-  price_inr: number;
-  likes: number;
-  saves: number;
-  shares: number;
-  comments?: number;
+  base_views?: number;
+  views_total?: number; // fallback alias for base_views
+  base_duration_hours?: number;
+  duration_hours?: number; // fallback alias
+  push_range?: [number, number];
+  price_inr?: number;
   min_followers_note?: string;
   tagline?: string;
   badge?: string;
   enabled?: boolean;
   disabled?: boolean;
+  // Deprecated fields kept for typing compatibility:
+  likes?: number;
+  saves?: number;
+  shares?: number;
+  comments?: number;
 }
 
 export interface ProviderMinimums {
   views: number;
   likes: number;
   saves: number;
+  reposts: number;
   shares: number;
   comments: number;
 }
@@ -61,89 +49,155 @@ export const DEFAULT_PROVIDER_MINIMUMS: ProviderMinimums = {
   views: 100,
   likes: 10,
   saves: 10,
+  reposts: 10,
   shares: 10,
-  comments: 1,
+  comments: 1, // provider minimum 1, batching min is 2
+};
+
+export const DEFAULT_RATE_RANGES = {
+  likes: [0.046, 0.078] as [number, number],
+  saves: [0.0065, 0.0135] as [number, number],
+  reposts: [0.0025, 0.0075] as [number, number],
+  comments: [0.0018, 0.0055] as [number, number],
+  shares: [0.0035, 0.0095] as [number, number],
 };
 
 export const DEFAULT_PACKAGES: Record<string, PackageConfig> = {
   tiktok_2k: {
     id: "tiktok_2k",
     name: "2K Starter",
+    base_views: 2000,
     views_total: 2000,
     base_duration_hours: 6,
+    push_range: [500, 700],
     price_inr: 16.91,
-    likes: 42,
-    saves: 0,
-    shares: 0,
-    comments: 0,
     min_followers_note: "< 1k followers",
-    tagline: "6-hour initial watch-time push & seed pool momentum",
+    tagline: "Gradual, view-paced delivery",
     badge: "6 Hours",
   },
   tiktok_5k: {
     id: "tiktok_5k",
     name: "5K Velocity",
+    base_views: 5000,
     views_total: 5000,
     base_duration_hours: 24,
+    push_range: [300, 500],
     price_inr: 29.24,
-    likes: 180,
-    saves: 40,
-    shares: 20,
-    comments: 0,
     min_followers_note: "Any follower count",
-    tagline: "24-hour natural FYP momentum with synchronized engagement waves",
+    tagline: "Gradual, view-paced delivery",
     badge: "24 Hours (1 Day)",
   },
   tiktok_10k: {
     id: "tiktok_10k",
     name: "10K Breakthrough",
+    base_views: 10000,
     views_total: 10000,
     base_duration_hours: 48,
+    push_range: [300, 500],
     price_inr: 60.24,
-    likes: 420,
-    saves: 80,
-    shares: 40,
-    comments: 0,
     min_followers_note: "Any follower count",
-    tagline: "2-day algorithmic breakout with circadian evening momentum",
+    tagline: "Gradual, view-paced delivery",
     badge: "2 Days (48h)",
   },
   tiktok_15k: {
     id: "tiktok_15k",
     name: "15K Acceleration",
+    base_views: 15000,
     views_total: 15000,
     base_duration_hours: 72,
+    push_range: [300, 500],
     price_inr: 87.24,
-    likes: 650,
-    saves: 100,
-    shares: 60,
-    comments: 0,
     min_followers_note: "Any follower count",
-    tagline: "3-day organic algorithm surge with gradual view-paced delivery",
+    tagline: "Gradual, view-paced delivery",
     badge: "3 Days (72h)",
   },
   tiktok_50k: {
     id: "tiktok_50k",
     name: "50K Mega Viral",
+    base_views: 50000,
     views_total: 50000,
     base_duration_hours: 120,
+    push_range: [300, 500],
     price_inr: 290.75,
-    likes: 2600,
-    saves: 200,
-    shares: 120,
-    comments: 0,
-    min_followers_note: "Accounts with active posting",
-    tagline: "5-day full FYP virality curve with soft asymptotic tail",
+    min_followers_note: "Active posting accounts",
+    tagline: "Gradual, view-paced delivery",
     badge: "5 Days (120h)",
   },
 };
 
-export type ServiceType = "views" | "likes" | "saves" | "shares" | "comments";
+export type ServiceType = "views" | "likes" | "saves" | "reposts" | "shares" | "comments";
+
+export interface PlanRow {
+  index: number; // 0, 1, 2, ...
+  tick: number; // grid tick (0, 1, 2, ...)
+  minuteOffset: number; // tick * 15 (always :00, :15, :30, :45)
+  clockTime: string; // "14:00", "14:15", ... (BD time UTC+6)
+  views: number; // always > 0
+  likes: number; // 0 or >= min
+  saves: number; // 0 or >= min
+  reposts: number; // 0 or >= min
+  shares: number; // 0 or >= min
+  comments: number; // 0 or >= min
+  cumulativeViews: number;
+  cumulativeLikes: number;
+  cumulativeSaves: number;
+  cumulativeReposts: number;
+  cumulativeShares: number;
+  cumulativeComments: number;
+}
+
+export interface PlanTotals {
+  views: number;
+  likes: number;
+  saves: number;
+  reposts: number;
+  shares: number;
+  comments: number;
+}
+
+export interface PlanRates {
+  likes: number;
+  saves: number;
+  reposts: number;
+  shares: number;
+  comments: number;
+}
+
+export interface PlanChips {
+  totalViews: number;
+  totalBatches: number; // runs count
+  durationHours: number;
+  durationLabel: string;
+  likes: number;
+  saves: number;
+  reposts: number;
+  shares: number;
+  comments: number;
+}
+
+export interface TrendPoint {
+  pointIndex: number;
+  tick: number;
+  minuteOffset: number;
+  clockTime: string;
+  views: number;
+  cumulativeViews: number;
+  likes: number;
+  cumulativeLikes: number;
+  saves: number;
+  cumulativeSaves: number;
+  reposts: number;
+  cumulativeReposts: number;
+  shares: number;
+  cumulativeShares: number;
+  comments: number;
+  cumulativeComments: number;
+}
 
 export interface ScheduledBatch {
   id?: string;
-  tick: number; // 0, 1, 2, ...
-  minuteOffset: number; // tick * 15 (always sitting on :00, :15, :30, :45)
+  tick: number;
+  minuteOffset: number;
   clockTime?: string;
   service: ServiceType;
   quantity: number;
@@ -152,7 +206,7 @@ export interface ScheduledBatch {
 }
 
 export interface CurvePoint {
-  t: number; // 0..1
+  t: number;
   minute: number;
   minuteOffset: number;
   cumulativeViews: number;
@@ -163,50 +217,68 @@ export interface CurvePoint {
   saves: number;
   cumulativeShares: number;
   shares: number;
+  cumulativeReposts?: number;
+  reposts?: number;
   cumulativeComments: number;
   comments: number;
   clockTime?: string;
 }
 
-export interface GeneratedScheduleResult {
+export interface PlanObject {
+  patternId: string;
   seed: string;
+  packageId: string;
+  packageName: string;
+  viewsTotal: number;
+  durationHours: number;
+  durationLabel: string;
+  totalDurationMinutes: number;
+  CAP: number;
+  totals: PlanTotals;
+  rates: PlanRates;
+  chips: PlanChips;
+  rows: PlanRow[];
+  trendCurve: TrendPoint[];
+
+  // Backward compatibility fields:
+  batches: ScheduledBatch[];
+  curvePoints: CurvePoint[];
   templateId: number;
   patternName: string;
-  packageId: string;
-  viewsTotal: number;
-  likesTotal: number;
-  savesTotal: number;
-  sharesTotal: number;
-  commentsTotal: number;
   followers: number;
   baseDurationHours: number;
   actualDurationHours: number;
-  totalDurationMinutes: number;
-  durationLabel: string; // "X days Y hours"
-  batches: ScheduledBatch[];
-  curvePoints: CurvePoint[];
+  likesTotal: number;
+  savesTotal: number;
+  sharesTotal: number;
+  repostsTotal: number;
+  commentsTotal: number;
   viewsBatchesCount: number;
   likesBatchesCount: number;
   savesBatchesCount: number;
   sharesBatchesCount: number;
+  repostsBatchesCount?: number;
   commentsBatchesCount: number;
   totalBatchesCount: number;
   peakHourlyViewsRate: number;
   avgHourlyViewsRate: number;
 }
 
-export type DeterministicPlan = GeneratedScheduleResult;
+export type DeterministicPlan = PlanObject;
 
-export interface ScheduleValidationResult {
-  valid: boolean;
-  error?: string;
-  ruleBroken?: string;
+export interface PlanOptions {
+  startDate?: Date;
+  overshootRange?: [number, number]; // default [1.00, 1.30]
+  durationRange?: [number, number]; // default [0.85, 1.15]
+  providerMinimums?: ProviderMinimums;
+  rateRanges?: typeof DEFAULT_RATE_RANGES;
+  likeStartRate?: number; // default 0.025 (2.5%)
 }
 
-/**
- * Deterministic pseudo-random number generator (Mulberry32).
- * Produces identical sequences for the same seed.
- */
+// ---------------------------------------------------------------------------
+// PRNG & Math Helpers
+// ---------------------------------------------------------------------------
+
 export function createRng(seedInput: string | number): () => number {
   let s: number;
   if (typeof seedInput === "number") {
@@ -228,817 +300,1046 @@ export function createRng(seedInput: string | number): () => number {
   };
 }
 
-/**
- * Evaluates the continuous Base Cumulative Curve F_base(t) = 0.04t + 0.96t^4
- */
-export function baseCurveF(t: number): number {
-  const clamped = Math.max(0, Math.min(1, t));
-  return 0.04 * clamped + 0.96 * Math.pow(clamped, 4);
+export function randUniform(rng: () => number, min: number, max: number): number {
+  return min + (max - min) * rng();
 }
 
-/**
- * Derivative of base curve: dF/dt = 0.04 + 3.84t^3
- */
-export function baseCurveFPrime(t: number): number {
-  const clamped = Math.max(0, Math.min(1, t));
-  return 0.04 + 3.84 * Math.pow(clamped, 3);
+export function randInt(rng: () => number, min: number, max: number): number {
+  return Math.floor(min + (max - min + 1) * rng());
 }
 
-/**
- * Formats duration as "X days Y hours"
- */
-export function formatDurationDaysHours(totalHours: number): string {
-  const roundedHours = Math.round(totalHours);
-  const days = Math.floor(roundedHours / 24);
-  const hours = roundedHours % 24;
-  return `${days} days ${hours} hours`;
+export function randGauss(rng: () => number, mean = 0, stdDev = 1): number {
+  let u = 0, v = 0;
+  while (u === 0) u = rng();
+  while (v === 0) v = rng();
+  return mean + stdDev * Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
 }
 
-/**
- * Partitions engagement totals into K batches with:
- * - At least +-20% variation around average (where mathematically possible)
- * - Exact total conservation
- * - Respects provider minimum
- * - No size repeats more than twice
- * - Non-round (avoids multiples of 5 where possible)
- */
-function partitionEngagement(
-  total: number,
-  k: number,
-  minVal: number,
+export function randChoiceWeighted<T>(rng: () => number, items: T[], weights: number[]): T {
+  const total = weights.reduce((a, b) => a + b, 0);
+  let r = rng() * total;
+  for (let i = 0; i < items.length; i++) {
+    if (r < weights[i]) return items[i];
+    r -= weights[i];
+  }
+  return items[items.length - 1];
+}
+
+export function smoothstep(edge0: number, edge1: number, x: number): number {
+  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
+
+export function formatDurationDaysHours(hours: number): string {
+  let days = Math.floor(hours / 24);
+  let remHours = Math.round(hours % 24);
+  if (remHours === 24) {
+    days += 1;
+    remHours = 0;
+  }
+  return `${days} days ${remHours} hours`;
+}
+
+export function getClockTimeBD(startDate: Date, minuteOffset: number): string {
+  const d = new Date(startDate.getTime() + minuteOffset * 60 * 1000);
+  // Convert to Bangladesh Time (UTC+6)
+  const utc = d.getTime() + d.getTimezoneOffset() * 60000;
+  const bdDate = new Date(utc + 6 * 3600000);
+  const hh = String(bdDate.getHours()).padStart(2, "0");
+  const mm = String(bdDate.getMinutes()).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
+// ---------------------------------------------------------------------------
+// Single-Attempt Generation Algorithm
+// ---------------------------------------------------------------------------
+
+const GAP_CHOICES = [1, 2, 3, 4, 5, 6];
+const GAP_WEIGHTS = [0.12, 0.20, 0.22, 0.20, 0.15, 0.11];
+
+function generateSingleAttempt(
+  pkg: PackageConfig,
+  followers: number,
+  rng: () => number,
+  options?: PlanOptions
+): PlanObject {
+  const startDate = options?.startDate || new Date();
+  const minDefs = options?.providerMinimums || DEFAULT_PROVIDER_MINIMUMS;
+  const rateRanges = options?.rateRanges || DEFAULT_RATE_RANGES;
+
+  const baseViews = pkg.base_views || pkg.views_total || 2000;
+  const baseHours = pkg.base_duration_hours || pkg.duration_hours || 6;
+
+  // 1. Random views_total = base_views * U(1.00..1.30), a non-round integer
+  const overshootRange = options?.overshootRange || [1.00, 1.30];
+  const overshoot = randUniform(rng, overshootRange[0], overshootRange[1]);
+  let viewsTotal = Math.round(baseViews * overshoot);
+  if (viewsTotal % 50 === 0) {
+    const jitter = [ -7, -3, 3, 7, 11, 13 ][randInt(rng, 0, 5)];
+    viewsTotal += jitter;
+  }
+  viewsTotal = Math.max(baseViews, viewsTotal);
+
+  // 2. Duration = base_hours * U(0.85..1.15) on 15-minute grid
+  const durationRange = options?.durationRange || [0.85, 1.15];
+  const durFactor = randUniform(rng, durationRange[0], durationRange[1]);
+  const rawHours = baseHours * durFactor;
+  let T = Math.round(rawHours * 4); // 15-minute ticks
+  T = Math.max(12, T); // at least 3 hours
+  const actualDurationHours = T / 4.0;
+  const totalDurationMinutes = T * 15;
+  const durationLabel = formatDurationDaysHours(actualDurationHours);
+
+  // 3. Service rates and totals
+  const rates: PlanRates = {
+    likes: randUniform(rng, rateRanges.likes[0], rateRanges.likes[1]),
+    saves: randUniform(rng, rateRanges.saves[0], rateRanges.saves[1]),
+    reposts: randUniform(rng, rateRanges.reposts[0], rateRanges.reposts[1]),
+    comments: randUniform(rng, rateRanges.comments[0], rateRanges.comments[1]),
+    shares: randUniform(rng, rateRanges.shares[0], rateRanges.shares[1]),
+  };
+
+  const totals: PlanTotals = {
+    views: viewsTotal,
+    likes: Math.round(viewsTotal * rates.likes),
+    saves: Math.round(viewsTotal * rates.saves),
+    reposts: Math.round(viewsTotal * rates.reposts),
+    comments: Math.round(viewsTotal * rates.comments),
+    shares: Math.round(viewsTotal * rates.shares),
+  };
+
+  // Skip services below provider minimum
+  if (totals.likes < minDefs.likes) totals.likes = 0;
+  if (totals.saves < minDefs.saves) totals.saves = 0;
+  if (totals.reposts < minDefs.reposts) totals.reposts = 0;
+  if (totals.shares < minDefs.shares) totals.shares = 0;
+  if (totals.comments < minDefs.comments) totals.comments = 0;
+
+  // 4. Push range by followers
+  const pushRange: [number, number] = pkg.push_range || (baseViews <= 2000 ? [500, 700] : [300, 500]);
+  let pLow = pushRange[0];
+  let pHigh = pushRange[1];
+  const pSpan = pHigh - pLow;
+  if (followers < 1000) {
+    pHigh = pLow + pSpan / 3.0;
+  } else if (followers <= 10000) {
+    pLow = pLow + pSpan / 3.0;
+    pHigh = pLow + pSpan / 3.0;
+  } else {
+    pLow = pLow + (2.0 * pSpan) / 3.0;
+  }
+  let pushTotal = Math.round(randUniform(rng, pLow, pHigh));
+  pushTotal = Math.max(200, Math.min(pushTotal, viewsTotal - 200));
+
+  // Row 1 = 50-65% of push at tick 0; leave at least 100 for row 2
+  let r1 = Math.round(pushTotal * randUniform(rng, 0.50, 0.65));
+  r1 = Math.max(100, Math.min(r1, pushTotal - 100));
+  const r2 = pushTotal - r1;
+  const t2 = randUniform(rng, 0, 1) < 0.5 ? 1 : 2;
+
+  // 5. Views curve: g(t) base rate and m(t) modulation
+  const numWaves = randInt(rng, 2, 4);
+  const waves: Array<{ depth: number; width: number; center: number }> = [];
+  for (let w = 0; w < numWaves; w++) {
+    waves.push({
+      depth: randUniform(rng, 0.15, 0.50),
+      width: randUniform(rng, 0.03, 0.07),
+      center: randUniform(rng, 0.12, 0.85),
+    });
+  }
+
+  const startHour = 14.0; // Reference starting hour
+  const ratesTick: number[] = [];
+
+  for (let i = 0; i <= T; i++) {
+    const t = i / T;
+    // g(t) = 0.18 + 2.46 t^2
+    const g = 0.18 + 2.46 * (t * t);
+
+    let waveSum = 0.0;
+    for (const w of waves) {
+      waveSum += w.depth * Math.exp(-0.5 * Math.pow((t - w.center) / w.width, 2));
+    }
+
+    const currHour = (startHour + i * 0.25) % 24.0;
+    const diurnal = 0.15 * Math.sin((2.0 * Math.PI * (currHour - 14.0)) / 24.0);
+    let m = Math.max(0.4, 1.0 - waveSum + diurnal);
+
+    // Easing down smoothly over last 8% of duration to 70%
+    if (t > 0.92) {
+      const s = (t - 0.92) / 0.08;
+      const smooth = smoothstep(0.0, 1.0, s);
+      const ease = 1.0 - 0.30 * smooth;
+      m *= ease;
+    }
+
+    ratesTick.push(g * m);
+  }
+
+  // Target cumulative curve C(t)
+  const cumRates = [0.0];
+  for (let i = 1; i <= T; i++) {
+    cumRates.push(cumRates[cumRates.length - 1] + ratesTick[i]);
+  }
+  const totalRateSum = cumRates[cumRates.length - 1];
+
+  const targetC: number[] = [];
+  for (let i = 0; i <= T; i++) {
+    const frac = cumRates[i] / totalRateSum;
+    targetC.push(pushTotal + (viewsTotal - pushTotal) * frac);
+  }
+
+  // 6. Row loop
+  // CAP = max(3% of views_total, 300)
+  const CAP = Math.max(Math.round(0.03 * viewsTotal), 300);
+
+  const rawRows: Array<{ tick: number; views: number }> = [
+    { tick: 0, views: r1 },
+    { tick: t2, views: r2 },
+  ];
+  let delivered = r1 + r2;
+  let currTick = t2;
+
+  while (currTick < T) {
+    let k = randChoiceWeighted(rng, GAP_CHOICES, GAP_WEIGHTS);
+
+    // Extend k while C(t+k) - delivered < 150, up to 16 ticks (4h)
+    while (currTick + k < T && targetC[Math.min(currTick + k, T)] - delivered < 150 && k < 16) {
+      k += 1;
+    }
+
+    // Shrink k while C(t+k) - delivered > 0.67 * CAP
+    while (k > 1 && targetC[Math.min(currTick + k, T)] - delivered > 0.67 * CAP) {
+      k -= 1;
+    }
+
+    if (currTick + k >= T) break;
+
+    const targetInc = targetC[currTick + k] - delivered;
+    let noise = Math.exp(randGauss(rng, 0, 0.4));
+    noise = Math.max(0.55, Math.min(1.7, noise));
+
+    let rowViews = Math.round(targetInc * noise);
+    rowViews = Math.max(100, Math.min(CAP, rowViews));
+
+    // If size <= 112, use 100 + rand(0..74)
+    if (rowViews <= 112) {
+      rowViews = 100 + randInt(rng, 0, 74);
+    }
+
+    // Avoid overshooting remainder below 100
+    const remAfter = viewsTotal - (delivered + rowViews);
+    if (remAfter < 100) break;
+
+    rawRows.push({ tick: currTick + k, views: rowViews });
+    delivered += rowViews;
+    currTick += k;
+  }
+
+  // Last row sits at tick T with the remainder
+  const rem = viewsTotal - delivered;
+  if (rem < 100) {
+    rawRows[rawRows.length - 1].views += rem;
+    rawRows[rawRows.length - 1].tick = T;
+  } else {
+    rawRows.push({ tick: T, views: rem });
+  }
+
+  // Rebalance views: no equal neighbours, no duplicates > 2, sum equals viewsTotal exactly
+  const rebalancedRows = rebalanceViews(rawRows, viewsTotal, CAP, rng);
+
+  // 7. Engagement: distributed inside the exact same rows as views
+  const completeRows = distributeEngagement(
+    rebalancedRows,
+    viewsTotal,
+    pushTotal,
+    rates,
+    totals,
+    minDefs,
+    startDate,
+    rng,
+    options?.likeStartRate ?? 0.025
+  );
+
+  // Compute Trend Curve (point N = cumulative sum through batch N)
+  const trendCurve: TrendPoint[] = completeRows.map((r) => ({
+    pointIndex: r.index,
+    tick: r.tick,
+    minuteOffset: r.minuteOffset,
+    clockTime: r.clockTime,
+    views: r.views,
+    cumulativeViews: r.cumulativeViews,
+    likes: r.likes,
+    cumulativeLikes: r.cumulativeLikes,
+    saves: r.saves,
+    cumulativeSaves: r.cumulativeSaves,
+    reposts: r.reposts,
+    cumulativeReposts: r.cumulativeReposts,
+    shares: r.shares,
+    cumulativeShares: r.cumulativeShares,
+    comments: r.comments,
+    cumulativeComments: r.cumulativeComments,
+  }));
+
+  // Chips: sums of rows
+  const chips: PlanChips = {
+    totalViews: viewsTotal,
+    totalBatches: completeRows.length,
+    durationHours: actualDurationHours,
+    durationLabel,
+    likes: totals.likes,
+    saves: totals.saves,
+    reposts: totals.reposts,
+    shares: totals.shares,
+    comments: totals.comments,
+  };
+
+  // Batches (for backwards compatibility)
+  const batches: ScheduledBatch[] = [];
+  for (const r of completeRows) {
+    batches.push({
+      service: "views",
+      tick: r.tick,
+      minuteOffset: r.minuteOffset,
+      clockTime: r.clockTime,
+      quantity: r.views,
+      cumulativeSoFar: r.cumulativeViews - r.views,
+      cumulativeAfter: r.cumulativeViews,
+    });
+    if (r.likes > 0) {
+      batches.push({
+        service: "likes",
+        tick: r.tick,
+        minuteOffset: r.minuteOffset,
+        clockTime: r.clockTime,
+        quantity: r.likes,
+        cumulativeSoFar: r.cumulativeLikes - r.likes,
+        cumulativeAfter: r.cumulativeLikes,
+      });
+    }
+    if (r.saves > 0) {
+      batches.push({
+        service: "saves",
+        tick: r.tick,
+        minuteOffset: r.minuteOffset,
+        clockTime: r.clockTime,
+        quantity: r.saves,
+        cumulativeSoFar: r.cumulativeSaves - r.saves,
+        cumulativeAfter: r.cumulativeSaves,
+      });
+    }
+    if (r.reposts > 0) {
+      batches.push({
+        service: "reposts",
+        tick: r.tick,
+        minuteOffset: r.minuteOffset,
+        clockTime: r.clockTime,
+        quantity: r.reposts,
+        cumulativeSoFar: r.cumulativeReposts - r.reposts,
+        cumulativeAfter: r.cumulativeReposts,
+      });
+    }
+    if (r.shares > 0) {
+      batches.push({
+        service: "shares",
+        tick: r.tick,
+        minuteOffset: r.minuteOffset,
+        clockTime: r.clockTime,
+        quantity: r.shares,
+        cumulativeSoFar: r.cumulativeShares - r.shares,
+        cumulativeAfter: r.cumulativeShares,
+      });
+    }
+    if (r.comments > 0) {
+      batches.push({
+        service: "comments",
+        tick: r.tick,
+        minuteOffset: r.minuteOffset,
+        clockTime: r.clockTime,
+        quantity: r.comments,
+        cumulativeSoFar: r.cumulativeComments - r.comments,
+        cumulativeAfter: r.cumulativeComments,
+      });
+    }
+  }
+
+  // Curve points (for backward compatibility)
+  const curvePoints: CurvePoint[] = completeRows.map((r) => ({
+    t: r.minuteOffset / totalDurationMinutes,
+    minute: r.minuteOffset,
+    minuteOffset: r.minuteOffset,
+    cumulativeViews: r.cumulativeViews,
+    views: r.views,
+    cumulativeLikes: r.cumulativeLikes,
+    likes: r.likes,
+    cumulativeSaves: r.cumulativeSaves,
+    saves: r.saves,
+    cumulativeShares: r.cumulativeShares,
+    shares: r.shares,
+    cumulativeReposts: r.cumulativeReposts,
+    reposts: r.reposts,
+    cumulativeComments: r.cumulativeComments,
+    comments: r.comments,
+    clockTime: r.clockTime,
+  }));
+
+  const patternHash = Math.abs(randInt(rng, 100000, 999999)).toString(16);
+  const patternId = `aurasmm_${patternHash}`;
+
+  return {
+    patternId,
+    seed: String(randInt(rng, 1000, 999999)),
+    packageId: pkg.id,
+    packageName: pkg.name,
+    viewsTotal,
+    durationHours: actualDurationHours,
+    durationLabel,
+    totalDurationMinutes,
+    CAP,
+    totals,
+    rates,
+    chips,
+    rows: completeRows,
+    trendCurve,
+    batches,
+    curvePoints,
+    templateId: randInt(rng, 100, 999),
+    patternName: `${durationLabel} organic surge`,
+    followers,
+    baseDurationHours: baseHours,
+    actualDurationHours,
+    likesTotal: totals.likes,
+    savesTotal: totals.saves,
+    sharesTotal: totals.shares,
+    repostsTotal: totals.reposts,
+    commentsTotal: totals.comments,
+    viewsBatchesCount: completeRows.length,
+    likesBatchesCount: completeRows.filter((r) => r.likes > 0).length,
+    savesBatchesCount: completeRows.filter((r) => r.saves > 0).length,
+    sharesBatchesCount: completeRows.filter((r) => r.shares > 0).length,
+    repostsBatchesCount: completeRows.filter((r) => r.reposts > 0).length,
+    commentsBatchesCount: completeRows.filter((r) => r.comments > 0).length,
+    totalBatchesCount: completeRows.length,
+    peakHourlyViewsRate: (viewsTotal / actualDurationHours) * 2.1,
+    avgHourlyViewsRate: viewsTotal / actualDurationHours,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Views Rebalance Implementation
+// ---------------------------------------------------------------------------
+
+function rebalanceViews(
+  rows: Array<{ tick: number; views: number }>,
+  viewsTotal: number,
+  CAP: number,
   rng: () => number
-): number[] {
-  if (k <= 1) return [total];
-  const avg = total / k;
-  const allowVary = total >= 2.4 * minVal && k >= 2;
-
-  for (let attempt = 0; attempt < 1000; attempt++) {
-    let raw: number[] = [];
-    let curSum = 0;
-    for (let i = 0; i < k; i++) {
-      let factor = allowVary ? 0.72 + rng() * 0.56 : 1.0;
-      let val = Math.max(minVal, Math.round(avg * factor));
-      raw.push(val);
-      curSum += val;
+): Array<{ tick: number; views: number }> {
+  // Step 1: Remove equal adjacent values and duplicate values > 2
+  for (let pass = 0; pass < 50; pass++) {
+    let hasIssue = false;
+    const valCounts: Record<number, number> = {};
+    for (const r of rows) {
+      valCounts[r.views] = (valCounts[r.views] || 0) + 1;
     }
 
-    let diff = total - curSum;
-    let guard = 0;
-    while (diff !== 0 && guard < 500) {
-      guard++;
-      let idx = Math.floor(rng() * k);
-      let step = diff > 0 ? 1 : -1;
-      if (raw[idx] + step >= minVal) {
-        raw[idx] += step;
-        diff -= step;
+    for (let i = 0; i < rows.length; i++) {
+      if (i > 0 && rows[i].views === rows[i - 1].views) {
+        hasIssue = true;
+        const delta = [-5, -3, 3, 5][randInt(rng, 0, 3)];
+        if (rows[i].views + delta >= 100 && rows[i].views + delta <= CAP) {
+          rows[i].views += delta;
+        }
       }
-    }
-    if (diff !== 0) continue;
 
-    // Desaturate multiples of 5
-    if (total > minVal * 2.5) {
-      for (let i = 0; i < k; i++) {
-        if (raw[i] % 5 === 0) {
-          let o = (i + 1) % k;
-          if (raw[i] + 1 >= minVal && raw[o] - 1 >= minVal && (raw[i] + 1) % 5 !== 0 && (raw[o] - 1) % 5 !== 0) {
-            raw[i] += 1;
-            raw[o] -= 1;
-          } else if (raw[i] - 1 >= minVal && raw[o] + 1 >= minVal && (raw[i] - 1) % 5 !== 0 && (raw[o] + 1) % 5 !== 0) {
-            raw[i] -= 1;
-            raw[o] += 1;
-          }
+      if ((valCounts[rows[i].views] || 0) > 2 && i > 1 && i < rows.length - 1) {
+        hasIssue = true;
+        const delta = [-7, -4, 4, 7][randInt(rng, 0, 3)];
+        if (rows[i].views + delta >= 100 && rows[i].views + delta <= CAP) {
+          valCounts[rows[i].views] -= 1;
+          rows[i].views += delta;
+          valCounts[rows[i].views] = (valCounts[rows[i].views] || 0) + 1;
         }
       }
     }
+    if (!hasIssue) break;
+  }
 
-    // Check frequency strictly <= 2
-    let freq = new Map<number, number>();
-    let maxF = 0;
-    for (let v of raw) {
-      let f = (freq.get(v) || 0) + 1;
-      freq.set(v, f);
-      if (f > maxF) maxF = f;
-    }
+  // Step 2: Rebalance difference in steps of 1-7 over interior rows
+  let diff = viewsTotal - rows.reduce((s, r) => s + r.views, 0);
+  let attempts = 0;
+  const interiorIndices = rows.length > 2 ? Array.from({ length: rows.length - 2 }, (_, i) => i + 1) : [0];
 
-    // Attempt redistribution if any value repeats > 2
-    if (maxF > 2) {
-      for (let i = 0; i < k && maxF > 2; i++) {
-        if ((freq.get(raw[i]) || 0) > 2) {
-          for (let j = 0; j < k; j++) {
-            if (i !== j && (freq.get(raw[j]) || 0) < 2) {
-              let candI = raw[i] + 1;
-              let candJ = raw[j] - 1;
-              if (candJ >= minVal && candI % 5 !== 0 && candJ % 5 !== 0 && (freq.get(candI) || 0) < 2 && (freq.get(candJ) || 0) < 2) {
-                raw[i] = candI;
-                raw[j] = candJ;
-                break;
-              }
-            }
-          }
+  while (diff !== 0 && attempts < 1000) {
+    attempts++;
+    const idx = interiorIndices[randInt(rng, 0, interiorIndices.length - 1)];
+    const step = Math.min(Math.abs(diff), randInt(rng, 1, 7));
+    const sign = diff > 0 ? 1 : -1;
+    const candidate = rows[idx].views + sign * step;
+
+    if (candidate >= 100 && candidate <= CAP) {
+      const prevVal = idx > 0 ? rows[idx - 1].views : -1;
+      const nextVal = idx < rows.length - 1 ? rows[idx + 1].views : -1;
+      if (candidate !== prevVal && candidate !== nextVal) {
+        const count = rows.filter((r) => r.views === candidate).length;
+        if (count < 2) {
+          rows[idx].views = candidate;
+          diff -= sign * step;
         }
       }
-      freq.clear();
-      maxF = 0;
-      for (let v of raw) {
-        let f = (freq.get(v) || 0) + 1;
-        freq.set(v, f);
-        if (f > maxF) maxF = f;
-      }
     }
+  }
 
-    if (maxF > 2) continue;
-    if (raw.some(v => v < minVal)) continue;
+  return rows;
+}
 
-    if (allowVary) {
-      let minB = Math.min(...raw);
-      let maxB = Math.max(...raw);
-      if ((maxB - avg) / avg < 0.16 || (avg - minB) / avg < 0.16) {
+// ---------------------------------------------------------------------------
+// Engagement Distribution Implementation
+// ---------------------------------------------------------------------------
+
+function distributeEngagement(
+  rows: Array<{ tick: number; views: number }>,
+  viewsTotal: number,
+  pushTotal: number,
+  rates: PlanRates,
+  totals: PlanTotals,
+  minDefs: ProviderMinimums,
+  startDate: Date,
+  rng: () => number,
+  likeStartRate = 0.025
+): PlanRow[] {
+  type EngSvc = "likes" | "saves" | "reposts" | "shares" | "comments";
+  const services: EngSvc[] = ["likes", "saves", "reposts", "shares", "comments"];
+
+  // Likes rate curve: start at LIKE_START (2.5%) during push,
+  // then ramp over first 30% post-push views to plateau R
+  const p = pushTotal / viewsTotal;
+  const avgLikes = rates.likes;
+  const RLikes = (avgLikes - p * likeStartRate - (1 - p) * 0.15 * likeStartRate) / Math.max(0.001, (1 - p) * 0.85);
+
+  const servicePhases: Record<string, number> = {
+    saves: randUniform(rng, 0, 2 * Math.PI),
+    reposts: randUniform(rng, 0, 2 * Math.PI),
+    shares: randUniform(rng, 0, 2 * Math.PI),
+    comments: randUniform(rng, 0, 2 * Math.PI),
+  };
+
+  // 1. Inflow per service per row
+  // inflow = counted_views * rate * lognormal(0, 0.25)
+  // counted_views = 0.5 * views_this_row + 0.5 * views_previous_row (last row adds 0.5 * own views)
+  const rawInflows: Record<string, number[]> = {
+    likes: [],
+    saves: [],
+    reposts: [],
+    shares: [],
+    comments: [],
+  };
+
+  let cumV = 0;
+  for (let i = 0; i < rows.length; i++) {
+    const vCurr = rows[i].views;
+    const vPrev = i > 0 ? rows[i - 1].views : 0;
+    let countedV = 0.5 * vCurr + 0.5 * vPrev;
+    if (i === rows.length - 1) {
+      countedV += 0.5 * vCurr;
+    }
+    cumV += vCurr;
+    const fViews = cumV / viewsTotal;
+
+    for (const s of services) {
+      if (totals[s] === 0) {
+        rawInflows[s].push(0.0);
         continue;
       }
-    }
 
-    return raw;
-  }
+      let rS = rates[s];
+      if (s === "likes") {
+        if (cumV <= pushTotal) {
+          rS = likeStartRate;
+        } else {
+          const fPost = (cumV - pushTotal) / Math.max(1, viewsTotal - pushTotal);
+          if (fPost <= 0.30) {
+            rS = likeStartRate + (fPost / 0.30) * (RLikes - likeStartRate);
+          } else {
+            rS = RLikes;
+          }
+        }
+      } else {
+        rS = rates[s] * (1.0 + 0.2 * Math.sin(2.0 * Math.PI * fViews + servicePhases[s]));
+      }
 
-  // Fallback partition
-  let base = Math.floor(total / k);
-  let rem = total % k;
-  let res: number[] = [];
-  for (let i = 0; i < k; i++) res.push(base + (i < rem ? 1 : 0));
-  return res;
-}
-
-/**
- * Validates a generated candidate schedule against all platform radar rules.
- */
-export function validateSchedule(
-  plan: GeneratedScheduleResult,
-  pkg: PackageConfig,
-  minimums: ProviderMinimums = DEFAULT_PROVIDER_MINIMUMS
-): ScheduleValidationResult {
-  const vBatches = plan.batches.filter(b => b.service === "views").map(b => b.quantity);
-  const vSum = vBatches.reduce((a, b) => a + b, 0);
-  if (vSum !== pkg.views_total) {
-    return { valid: false, error: `Views sum: ${vSum} !== ${pkg.views_total}`, ruleBroken: "views_total" };
-  }
-
-  // 1. Ramp up gradually from minimum (starts near minimum, e.g. <= 130)
-  if (vBatches[0] > minimums.views * 1.30) {
-    return { valid: false, error: `V[0] (${vBatches[0]}) does not ramp up from minimum (${minimums.views})`, ruleBroken: "views_ramp_up" };
-  }
-
-  // 2. Adjacent batches differ by at most 25% & never two adjacent equal values
-  for (let i = 0; i < vBatches.length - 1; i++) {
-    const c = vBatches[i];
-    const n = vBatches[i + 1];
-    if (c === n) {
-      return { valid: false, error: `Adjacent equal values at ${i}: ${c}`, ruleBroken: "views_adjacent_equal" };
-    }
-    const diff = Math.abs(n - c);
-    if (diff / c > 0.2501 || diff / n > 0.2501) {
-      return { valid: false, error: `Adjacent difference at ${i} exceeds 25%: ${c} -> ${n} (diff: ${diff})`, ruleBroken: "views_adjacent_diff_25pct" };
+      const noise = Math.exp(randGauss(rng, 0, 0.25));
+      rawInflows[s].push(countedV * rS * noise);
     }
   }
 
-  // 3. No multiples of 5 & no value repeated more than twice
-  const vFreq = new Map<number, number>();
-  for (const v of vBatches) {
-    if (v < minimums.views) {
-      return { valid: false, error: `Views batch ${v} < minViews ${minimums.views}`, ruleBroken: "views_min" };
-    }
-    if (v % 5 === 0) {
-      return { valid: false, error: `Multiple of 5 in views batch: ${v}`, ruleBroken: "views_no_multiple_5" };
-    }
-    let f = (vFreq.get(v) || 0) + 1;
-    vFreq.set(v, f);
-    if (f > 2) {
-      return { valid: false, error: `Views value ${v} repeated ${f} times (> 2)`, ruleBroken: "views_max_freq_2" };
+  // Scale inflows so each service sums to total_X exactly
+  const scaledInflows: Record<string, number[]> = {
+    likes: [],
+    saves: [],
+    reposts: [],
+    shares: [],
+    comments: [],
+  };
+
+  for (const s of services) {
+    const tot = totals[s];
+    if (tot === 0) {
+      scaledInflows[s] = new Array(rows.length).fill(0.0);
+    } else {
+      const sumRaw = rawInflows[s].reduce((a, b) => a + b, 0);
+      const factor = sumRaw > 0 ? tot / sumRaw : 1.0;
+      scaledInflows[s] = rawInflows[s].map((v) => v * factor);
     }
   }
 
-  // 4. No alternating high/low pattern
-  for (let i = 0; i <= vBatches.length - 5; i++) {
-    const d0 = Math.sign(vBatches[i + 1] - vBatches[i]);
-    const d1 = Math.sign(vBatches[i + 2] - vBatches[i + 1]);
-    const d2 = Math.sign(vBatches[i + 3] - vBatches[i + 2]);
-    const d3 = Math.sign(vBatches[i + 4] - vBatches[i + 3]);
-    if (d0 !== d1 && d1 !== d2 && d2 !== d3) {
-      return { valid: false, error: `Alternating high/low pattern detected at index ${i}`, ruleBroken: "views_alternating_high_low" };
-    }
-  }
+  // 2. Services with total_X < 3 * mn:
+  // schedule floor(total_X / mn) releases at ~25%, 55%, 85% of views (a single release at 40-60%)
+  const smallScheduled: Record<string, Record<number, number>> = {
+    likes: {},
+    saves: {},
+    reposts: {},
+    shares: {},
+    comments: {},
+  };
 
-  // 5. Build cumulative views map for engagement checks
-  const cumViewsAtTick: Record<number, number> = {};
-  let curViews = 0;
-  for (const b of plan.batches) {
-    if (b.service === "views") {
-      curViews += b.quantity;
-      cumViewsAtTick[b.tick] = curViews;
-    }
-  }
-  let lastCum = 0;
-  const fullCumViews: number[] = [];
-  for (let t = 0; t <= plan.totalDurationMinutes / 15; t++) {
-    if (cumViewsAtTick[t] !== undefined) lastCum = cumViewsAtTick[t];
-    fullCumViews[t] = lastCum;
-  }
+  for (const s of services) {
+    const tot = totals[s];
+    const mn = minDefs[s];
+    const batchMn = s === "comments" ? 2 : mn;
 
-  // 6. Check Engagement Services
-  for (const s of ["likes", "saves", "shares", "comments"] as const) {
-    const target = pkg[s] || 0;
-    if (target === 0) continue;
-    const sBatches = plan.batches.filter(b => b.service === s);
-    const sSum = sBatches.reduce((a, b) => a + b.quantity, 0);
-    if (sSum !== target) {
-      return { valid: false, error: `${s} sum ${sSum} !== ${target}`, ruleBroken: `${s}_total` };
-    }
+    if (tot > 0 && tot < 3 * batchMn) {
+      const numRel = Math.max(1, Math.floor(tot / batchMn));
+      let targetFracs: number[];
+      if (numRel === 1) {
+        targetFracs = [randUniform(rng, 0.40, 0.60)];
+      } else if (numRel === 2) {
+        targetFracs = [randUniform(rng, 0.25, 0.35), randUniform(rng, 0.65, 0.75)];
+      } else {
+        targetFracs = [
+          randUniform(rng, 0.21, 0.29),
+          randUniform(rng, 0.51, 0.59),
+          randUniform(rng, 0.81, 0.85),
+        ];
+      }
 
-    if (sBatches.some(b => b.quantity < minimums[s])) {
-      return { valid: false, error: `${s} batch < provider minimum`, ruleBroken: `${s}_min` };
-    }
+      let cv = 0;
+      const chosenRows: number[] = [];
+      for (let idx = 0; idx < rows.length; idx++) {
+        cv += rows[idx].views;
+        const frac = cv / viewsTotal;
+        if (targetFracs.length > 0 && frac >= targetFracs[0]) {
+          chosenRows.push(idx);
+          targetFracs.shift();
+        }
+      }
+      while (chosenRows.length < numRel) {
+        chosenRows.push(Math.min(rows.length - 2, Math.floor(rows.length / 2)));
+      }
 
-    // Cumulative views gating: engagement must never lead views
-    for (const b of sBatches) {
-      const viewsAtThisTick = fullCumViews[b.tick] || 0;
-      if (viewsAtThisTick < b.quantity) {
-        return { valid: false, error: `${s} batch at tick ${b.tick} exceeds available views (${viewsAtThisTick})`, ruleBroken: "engagement_views_gating" };
+      let remTot = tot;
+      const parts: number[] = [];
+      for (let relI = 0; relI < numRel - 1; relI++) {
+        const pVal = batchMn + randInt(rng, 0, Math.max(0, Math.floor((remTot - (numRel - relI) * batchMn) / 2)));
+        parts.push(pVal);
+        remTot -= pVal;
+      }
+      parts.push(remTot);
+
+      for (let i = 0; i < chosenRows.length; i++) {
+        smallScheduled[s][chosenRows[i]] = parts[i];
       }
     }
+  }
 
-    // Gaps on 24h+ packages
-    if (plan.actualDurationHours >= 24 && sBatches.length > 1) {
-      const maxGapH = s === "likes" ? 4 : (s === "saves" ? 8 : (s === "shares" ? 12 : 24));
-      const maxGapTicks = maxGapH * 4;
-      for (let i = 0; i < sBatches.length - 1; i++) {
-        const gap = sBatches[i + 1].tick - sBatches[i].tick;
-        if (gap > maxGapTicks) {
-          return { valid: false, error: `${s} gap ${gap} ticks > ${maxGapTicks} ticks (${maxGapH} hours)`, ruleBroken: `${s}_max_gap` };
+  // 3. Buffer and release gate loop
+  const buffers: Record<string, number> = {
+    likes: 0.0,
+    saves: 0.0,
+    reposts: 0.0,
+    shares: 0.0,
+    comments: 0.0,
+  };
+
+  const servicePrevRelease: Record<string, number | null> = {
+    likes: null,
+    saves: null,
+    reposts: null,
+    shares: null,
+    comments: null,
+  };
+
+  const serviceValCounts: Record<string, Record<number, number>> = {
+    likes: {},
+    saves: {},
+    reposts: {},
+    shares: {},
+    comments: {},
+  };
+
+  let prevCombo: string | null = null;
+  let comboRepeatCount = 0;
+
+  const planRows: PlanRow[] = [];
+  let cumViews = 0;
+  let cumLikes = 0;
+  let cumSaves = 0;
+  let cumReposts = 0;
+  let cumShares = 0;
+  let cumComments = 0;
+
+  for (let i = 0; i < rows.length; i++) {
+    const vCurr = rows[i].views;
+    const tick = rows[i].tick;
+    const isLastRow = i === rows.length - 1;
+    const minuteOffset = tick * 15;
+    const clockTime = getClockTimeBD(startDate, minuteOffset);
+
+    const releasedInRow: Record<string, number> = {
+      likes: 0,
+      saves: 0,
+      reposts: 0,
+      shares: 0,
+      comments: 0,
+    };
+
+    const rowServices: string[] = [];
+
+    for (const s of services) {
+      const tot = totals[s];
+      if (tot === 0) continue;
+
+      const mn = minDefs[s];
+      const batchMn = s === "comments" ? 2 : mn;
+
+      // Small service handled separately
+      if (tot < 3 * batchMn) {
+        if (smallScheduled[s][i] !== undefined) {
+          releasedInRow[s] = smallScheduled[s][i];
+          rowServices.push(s);
+        }
+        continue;
+      }
+
+      buffers[s] += scaledInflows[s][i];
+
+      // Gate probability: row views < 200 -> 0.25, 200-349 -> 0.55, 350+ -> 0.85
+      let gateP = 0.85;
+      if (vCurr < 200) gateP = 0.25;
+      else if (vCurr < 350) gateP = 0.55;
+
+      const gatePasses = rng() < gateP;
+      const shouldRelease =
+        buffers[s] >= batchMn && (buffers[s] >= 1.6 * batchMn || gatePasses);
+
+      if (shouldRelease && !isLastRow) {
+        let relSize = Math.max(batchMn, Math.round(buffers[s] * randUniform(rng, 0.80, 1.00)));
+        relSize = Math.min(Math.floor(buffers[s]), relSize);
+
+        // Variety: no repeated release size in consecutive releases (comments exempt)
+        const maxRepeats = Math.max(2, Math.ceil(0.15 * Math.max(10, Math.floor(tot / batchMn))));
+        if (s !== "comments" && relSize === servicePrevRelease[s]) {
+          relSize += [1, 2, 3, 4, 5, 6][randInt(rng, 0, 5)];
+        }
+        if ((serviceValCounts[s][relSize] || 0) >= maxRepeats) {
+          relSize += [1, 2, 3, 4, 5, 6][randInt(rng, 0, 5)];
+        }
+
+        if (relSize >= batchMn && relSize <= Math.floor(buffers[s])) {
+          releasedInRow[s] = relSize;
+          buffers[s] -= relSize;
+          servicePrevRelease[s] = relSize;
+          serviceValCounts[s][relSize] = (serviceValCounts[s][relSize] || 0) + 1;
+          rowServices.push(s);
         }
       }
     }
 
-    // Last batch <= 85% views
-    const lastB = sBatches[sBatches.length - 1];
-    const cumAtLast = fullCumViews[lastB.tick];
-    if (cumAtLast > pkg.views_total * 0.85) {
-      return { valid: false, error: `${s} last batch at ${cumAtLast} views > 85% of total (${pkg.views_total * 0.85})`, ruleBroken: `${s}_last_batch_85pct` };
+    // Combo repeat rule: same combination of services in at most 2 rows in a row
+    const comboKey = rowServices.slice().sort().join(",");
+    if (comboKey === prevCombo) {
+      comboRepeatCount++;
+      if (comboRepeatCount >= 2) {
+        if (rowServices.length === 0) {
+          // Force one ready service to release
+          for (const s of services) {
+            const mn = minDefs[s];
+            const batchMn = s === "comments" ? 2 : mn;
+            if (totals[s] >= 3 * batchMn && buffers[s] >= batchMn && !isLastRow) {
+              releasedInRow[s] = batchMn;
+              buffers[s] -= batchMn;
+              rowServices.push(s);
+              break;
+            }
+          }
+        } else if (rowServices.length > 1) {
+          // Drop one non-forced release
+          const dropS = rowServices.pop()!;
+          buffers[dropS] += releasedInRow[dropS];
+          releasedInRow[dropS] = 0;
+        }
+        comboRepeatCount = 0;
+      }
+    } else {
+      prevCombo = comboKey;
+      comboRepeatCount = 0;
     }
 
-    // First batch timing
-    if (s === "likes") {
-      const firstL = sBatches[0];
-      if (firstL.tick > 3) {
-        return { valid: false, error: `First likes at tick ${firstL.tick} > 3 (15-30m lag)`, ruleBroken: "likes_first_tick" };
-      }
-    } else if (s === "saves") {
-      const firstS = sBatches[0];
-      const cumAtFirst = fullCumViews[firstS.tick];
-      if (cumAtFirst > pkg.views_total * 0.22) {
-        return { valid: false, error: `First saves at ${cumAtFirst} views > 20% total views`, ruleBroken: "saves_first_timing" };
-      }
-    } else if (s === "shares") {
-      const firstSh = sBatches[0];
-      const cumAtFirst = fullCumViews[firstSh.tick];
-      if (cumAtFirst > pkg.views_total * 0.32) {
-        return { valid: false, error: `First shares at ${cumAtFirst} views > 30% total views`, ruleBroken: "shares_first_timing" };
-      }
-    }
+    cumViews += vCurr;
+    cumLikes += releasedInRow.likes;
+    cumSaves += releasedInRow.saves;
+    cumReposts += releasedInRow.reposts;
+    cumShares += releasedInRow.shares;
+    cumComments += releasedInRow.comments;
 
-    // Frequency <= 2 in service
-    const sFreq = new Map<number, number>();
-    for (const b of sBatches) {
-      let f = (sFreq.get(b.quantity) || 0) + 1;
-      sFreq.set(b.quantity, f);
-      if (f > 2) {
-        return { valid: false, error: `${s} batch size ${b.quantity} repeated ${f} times (> 2)`, ruleBroken: `${s}_max_freq_2` };
+    planRows.push({
+      index: i,
+      tick,
+      minuteOffset,
+      clockTime,
+      views: vCurr,
+      likes: releasedInRow.likes,
+      saves: releasedInRow.saves,
+      reposts: releasedInRow.reposts,
+      shares: releasedInRow.shares,
+      comments: releasedInRow.comments,
+      cumulativeViews: cumViews,
+      cumulativeLikes: cumLikes,
+      cumulativeSaves: cumSaves,
+      cumulativeReposts: cumReposts,
+      cumulativeShares: cumShares,
+      cumulativeComments: cumComments,
+    });
+  }
+
+  // 4. Last row tops up each service to its exact total
+  for (const s of services) {
+    const tot = totals[s];
+    if (tot === 0) continue;
+
+    const mn = minDefs[s];
+    const batchMn = s === "comments" ? 2 : mn;
+    let deliveredS = planRows.reduce((sum, r) => sum + (r[s] as number), 0);
+    let remS = tot - deliveredS;
+
+    if (remS > 0) {
+      if (remS >= batchMn) {
+        planRows[planRows.length - 1][s] += remS;
+      } else {
+        // Merge into the latest release
+        for (let rIdx = planRows.length - 2; rIdx >= 0; rIdx--) {
+          if ((planRows[rIdx][s] as number) > 0) {
+            planRows[rIdx][s] += remS;
+            remS = 0;
+            break;
+          }
+        }
+        if (remS > 0) {
+          planRows[planRows.length - 1][s] += remS;
+        }
       }
     }
   }
 
-  // 7. Peak hourly views rate <= 3x average
-  if (plan.peakHourlyViewsRate > plan.avgHourlyViewsRate * 3.0 + 10) {
-    return {
-      valid: false,
-      error: `Peak hourly views ${plan.peakHourlyViewsRate} exceeded 3x avg (${plan.avgHourlyViewsRate * 3.0})`,
-      ruleBroken: "peak_hourly_views_rate",
-    };
+  // Re-accumulate cumulative engagement values to be 100% exact through all rows
+  let runningLikes = 0;
+  let runningSaves = 0;
+  let runningReposts = 0;
+  let runningShares = 0;
+  let runningComments = 0;
+
+  for (let i = 0; i < planRows.length; i++) {
+    runningLikes += planRows[i].likes;
+    runningSaves += planRows[i].saves;
+    runningReposts += planRows[i].reposts;
+    runningShares += planRows[i].shares;
+    runningComments += planRows[i].comments;
+
+    planRows[i].cumulativeLikes = runningLikes;
+    planRows[i].cumulativeSaves = runningSaves;
+    planRows[i].cumulativeReposts = runningReposts;
+    planRows[i].cumulativeShares = runningShares;
+    planRows[i].cumulativeComments = runningComments;
+  }
+
+  return planRows;
+}
+
+// ---------------------------------------------------------------------------
+// Final Plan Validator (All 10 Rules)
+// ---------------------------------------------------------------------------
+
+export function validatePlan(
+  plan: PlanObject,
+  pkg: PackageConfig,
+  minDefs: ProviderMinimums = DEFAULT_PROVIDER_MINIMUMS
+): { valid: boolean; error?: string } {
+  const { viewsTotal, rows, durationHours, CAP, totals } = plan;
+
+  // 1. Totals exact for views and every service
+  const sumViews = rows.reduce((s, r) => s + r.views, 0);
+  if (sumViews !== viewsTotal) {
+    return { valid: false, error: `Views total mismatch: ${sumViews} != ${viewsTotal}` };
+  }
+
+  for (const s of ["likes", "saves", "reposts", "shares", "comments"] as const) {
+    const sumS = rows.reduce((sum, r) => sum + r[s], 0);
+    if (sumS !== totals[s]) {
+      return { valid: false, error: `${s} total mismatch: ${sumS} != ${totals[s]}` };
+    }
+  }
+
+  // 2. Each realized rate inside its range
+  for (const s of ["likes", "saves", "reposts", "comments", "shares"] as const) {
+    if (totals[s] > 0) {
+      const realRate = totals[s] / viewsTotal;
+      const [rMin, rMax] = DEFAULT_RATE_RANGES[s];
+      if (realRate < rMin - 0.001 || realRate > rMax + 0.001) {
+        return { valid: false, error: `Rate ${s} (${realRate.toFixed(4)}) out of range [${rMin}, ${rMax}]` };
+      }
+    }
+  }
+
+  // 3. Every batch views >= 100 and <= CAP (post-push rows <= CAP, push rows <= push_range[1])
+  const pushMax = (pkg.push_range && pkg.push_range[1]) || (pkg.base_views && pkg.base_views <= 2000 ? 700 : 500);
+  for (let i = 0; i < rows.length; i++) {
+    const limit = i < 2 ? pushMax : CAP;
+    if (rows[i].views < 100 || rows[i].views > limit) {
+      return { valid: false, error: `Batch #${i} views ${rows[i].views} out of bounds [100, ${limit}]` };
+    }
+  }
+
+  // 4. No engagement-only rows
+  for (const r of rows) {
+    if (r.views <= 0) {
+      return { valid: false, error: "Engagement-only row found" };
+    }
+  }
+
+  // 5. No equal adjacent view batches
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i].views === rows[i - 1].views) {
+      return { valid: false, error: `Equal adjacent view batches: ${rows[i].views} at row #${i}` };
+    }
+  }
+
+  // 6. No release below provider minimum
+  for (const r of rows) {
+    for (const s of ["likes", "saves", "reposts", "shares", "comments"] as const) {
+      if (r[s] > 0 && r[s] < minDefs[s]) {
+        return { valid: false, error: `Release for ${s} (${r[s]}) below provider minimum (${minDefs[s]})` };
+      }
+    }
+  }
+
+  // 7. No gap over 4 hours (16 ticks)
+  for (let i = 1; i < rows.length; i++) {
+    const gapTicks = rows[i].tick - rows[i - 1].tick;
+    if (gapTicks > 16) {
+      return { valid: false, error: `Gap of ${gapTicks} ticks (> 16 ticks / 4h) between row #${i - 1} and #${i}` };
+    }
+  }
+
+  // 8. All times on grid and strictly increasing
+  for (let i = 0; i < rows.length; i++) {
+    if (rows[i].tick < 0) {
+      return { valid: false, error: "Negative tick found" };
+    }
+    if (i > 0 && rows[i].tick <= rows[i - 1].tick) {
+      return { valid: false, error: `Ticks not strictly increasing at row #${i}` };
+    }
+  }
+
+  // 9. Same service combination in at most 2 rows in a row
+  let prevCombo: string | null = null;
+  let rep = 0;
+  for (const r of rows) {
+    const combo = (["views", "likes", "saves", "reposts", "shares", "comments"] as const)
+      .filter((s) => r[s] > 0)
+      .sort()
+      .join(",");
+    if (combo === prevCombo) {
+      rep++;
+      if (rep > 2) {
+        return { valid: false, error: `Same service combination repeated ${rep} times in a row` };
+      }
+    } else {
+      prevCombo = combo;
+      rep = 0;
+    }
+  }
+
+  // 10. Peak window rate <= 3x average rate, window = max(1 hour, duration / 8)
+  const winHours = Math.max(1.0, durationHours / 8.0);
+  const winTicks = Math.round(winHours * 4);
+  const avgHourlyRate = viewsTotal / durationHours;
+
+  for (let i = 0; i < rows.length; i++) {
+    const startTick = rows[i].tick;
+    const endTick = startTick + winTicks;
+    const winViews = rows
+      .filter((r) => r.tick >= startTick && r.tick <= endTick)
+      .reduce((sum, r) => sum + r.views, 0);
+    const winRate = winViews / winHours;
+    if (winRate > 3.0 * avgHourlyRate + 1.0) {
+      return { valid: false, error: `Peak window rate (${winRate.toFixed(1)}) > 3x average (${avgHourlyRate.toFixed(1)})` };
+    }
   }
 
   return { valid: true };
 }
 
-/**
- * Builds a candidate schedule from a specific deterministic seed.
- */
-function buildCandidateSchedule(
-  pkg: PackageConfig,
-  followers: number = 500,
-  seedInput: string | number,
-  minimums: ProviderMinimums,
-  startTime: Date,
-  originalSeedStr: string
-): GeneratedScheduleResult {
-  const seedStr = String(seedInput);
-  const rng = createRng(seedStr);
+export const validateSchedule = validatePlan;
 
-  let hashNum = 0;
-  for (let i = 0; i < originalSeedStr.length; i++) {
-    hashNum = (hashNum * 31 + originalSeedStr.charCodeAt(i)) >>> 0;
-  }
-  const templateId = (hashNum % 550) + 1;
-  const patternNames = ["sunrise-curve", "cautious-ascent", "algorithmic-surge", "viral-momentum", "balanced-flow", "high-velocity"];
-  const patternName = patternNames[templateId % patternNames.length];
+// ---------------------------------------------------------------------------
+// Main Public Function: generatePlan (with Seed Retry Loop)
+// ---------------------------------------------------------------------------
 
-  const viewsTotal = Math.max(100, Math.round(pkg.views_total));
-  const baseDuration = Math.max(1, pkg.base_duration_hours);
-  const likesTotal = Math.max(0, Math.round(pkg.likes));
-  const savesTotal = Math.max(0, Math.round(pkg.saves));
-  const sharesTotal = Math.max(0, Math.round(pkg.shares));
-  const commentsTotal = Math.max(0, Math.round(pkg.comments || 0));
-
-  // 1. Duration on 15-minute grid: base_duration_hours * random(0.85 .. 1.15)
-  const durationFactor = 0.85 + rng() * 0.30;
-  const rawDurationHours = baseDuration * durationFactor;
-  const totalTicks = Math.max(4, Math.round(rawDurationHours * 4));
-  const actualDurationHours = totalTicks / 4;
-  const totalDurationMinutes = totalTicks * 15;
-  const durationLabel = formatDurationDaysHours(actualDurationHours);
-
-  // 2. Determine target batch count N based on duration and views
-  let targetN = 12;
-  if (totalTicks >= 80) {
-    targetN = 3 + Math.round((totalTicks - 4) / 4.6);
-  } else if (viewsTotal >= 4000 && viewsTotal < 8000) {
-    targetN = 22;
-  } else if (viewsTotal >= 8000 && viewsTotal < 12000) {
-    targetN = 34;
+export function generatePlan(
+  packageConfig: PackageConfig,
+  followers: number = 1000,
+  seed: string | number = "aurasmm_seed",
+  optionsOrMin?: PlanOptions | ProviderMinimums,
+  legacyStartDate?: Date
+): PlanObject {
+  let options: PlanOptions | undefined;
+  if (optionsOrMin && "views" in optionsOrMin && typeof (optionsOrMin as any).views === "number") {
+    options = {
+      providerMinimums: optionsOrMin as ProviderMinimums,
+      startDate: legacyStartDate,
+    };
+  } else {
+    options = optionsOrMin as PlanOptions | undefined;
   }
 
-  // 3. Select irregular view ticks on 15-min grid (1-6 ticks gap)
-  const viewTicks: number[] = [0, 1, 2];
-  let curT = 2;
-  const remainingTicksCount = targetN - 3;
-  const avgGap = (totalTicks - 4) / remainingTicksCount;
-  const minG = totalTicks >= 80 ? 4 : 1;
-
-  for (let i = 0; i < remainingTicksCount - 1; i++) {
-    let gap = Math.max(minG, Math.min(6, Math.round(avgGap + (rng() * 2 - 1))));
-    curT += gap;
-    if (curT >= totalTicks - 2) {
-      break;
+  let seedNum: number;
+  if (typeof seed === "number") {
+    seedNum = seed;
+  } else {
+    // Generate deterministic 32-bit integer from string
+    let h = 2166136261 >>> 0;
+    for (let i = 0; i < seed.length; i++) {
+      h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
     }
-    viewTicks.push(curT);
+    seedNum = h >>> 0;
   }
 
-  let lastT = viewTicks[viewTicks.length - 1];
-  while (totalTicks - 1 - lastT > 6) {
-    let step = Math.min(6, Math.max(minG, Math.floor((totalTicks - 1 - lastT) / 2)));
-    lastT += step;
-    viewTicks.push(lastT);
-  }
-  if (totalTicks - 1 - lastT > 0) {
-    viewTicks.push(totalTicks - 1);
-  }
-  const N = viewTicks.length;
+  let lastError = "Validation failed";
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const currentSeedNum = (seedNum + attempt) >>> 0;
+    const rng = createRng(currentSeedNum);
+    const plan = generateSingleAttempt(packageConfig, followers, rng, options);
+    plan.seed = attempt === 0 ? String(seed) : `${seed}_${attempt}`;
+    plan.patternId = `Pattern #${plan.seed.slice(0, 8)}`;
 
-  // 4. Smooth Views Curve Generation
-  let b0 = 101 + Math.floor(rng() * 12);
-  if (b0 % 5 === 0) b0 += 1;
-  let tailTarget = 103 + Math.floor(rng() * 14);
-  if (tailTarget % 5 === 0) tailTarget += 1;
-  let peakIdx = Math.floor(N * (0.50 + rng() * 0.08));
-
-  function generateWithPeak(peakTarget: number): number[] {
-    let raw = new Array(N);
-    raw[0] = b0;
-    for (let i = 1; i <= peakIdx; i++) {
-      let t = i / peakIdx;
-      let s = t * t * (3 - 2 * t);
-      let target = b0 + (peakTarget - b0) * s;
-      let val = Math.round(target);
-      if (val > Math.round(raw[i - 1] * 1.23)) val = Math.round(raw[i - 1] * 1.23);
-      if (val < Math.round(raw[i - 1] * 1.03)) val = Math.round(raw[i - 1] * 1.04);
-      if (val === raw[i - 1]) val += 1;
-      raw[i] = val;
+    const check = validatePlan(plan, packageConfig, options?.providerMinimums);
+    if (check.valid) {
+      return plan;
     }
-    let peakVal = raw[peakIdx];
-    for (let i = peakIdx + 1; i < N; i++) {
-      let t = (i - peakIdx) / (N - 1 - peakIdx);
-      let s = t * t * (3 - 2 * t);
-      let target = peakVal - (peakVal - tailTarget) * s;
-      let val = Math.round(target);
-      if (val < Math.round(raw[i - 1] * 0.82)) val = Math.round(raw[i - 1] * 0.82);
-      if (val > Math.round(raw[i - 1] * 0.97)) val = Math.round(raw[i - 1] * 0.95);
-      if (val === raw[i - 1]) val -= 1;
-      if (val < minimums.views) val = minimums.views;
-      raw[i] = val;
-    }
-    return raw;
+    lastError = check.error || lastError;
   }
 
-  const avgHourlyRateVal = viewsTotal / Math.max(1, actualDurationHours);
-  const maxHourlyCap = avgHourlyRateVal * 2.7;
-  let lowPeak = minimums.views * 1.05;
-  let highPeak = Math.min((viewsTotal / N) * 2.8, maxHourlyCap);
-  let bestCurve: number[] = [];
-  let bestDiff = Infinity;
-
-  for (let iter = 0; iter < 40; iter++) {
-    let midPeak = (lowPeak + highPeak) / 2;
-    let c = generateWithPeak(midPeak);
-    let sum = c.reduce((a, b) => a + b, 0);
-    let diff = sum - viewsTotal;
-    if (Math.abs(diff) < Math.abs(bestDiff)) {
-      bestDiff = diff;
-      bestCurve = c;
-    }
-    if (diff > 0) highPeak = midPeak;
-    else lowPeak = midPeak;
-  }
-
-  let viewsBatches = [...bestCurve];
-  for (let i = 0; i < N; i++) {
-    if (viewsBatches[i] % 5 === 0) {
-      viewsBatches[i] += (i === 0 ? 1 : (viewsBatches[i] > viewsBatches[i - 1] ? 1 : -1));
-    }
-  }
-
-  for (let pass = 0; pass < 3; pass++) {
-    for (let i = 1; i < N; i++) {
-      if (viewsBatches[i] > Math.round(viewsBatches[i - 1] * 1.23)) viewsBatches[i] = Math.round(viewsBatches[i - 1] * 1.23);
-      if (viewsBatches[i] < Math.round(viewsBatches[i - 1] * 0.82)) viewsBatches[i] = Math.round(viewsBatches[i - 1] * 0.82);
-      if (viewsBatches[i] === viewsBatches[i - 1]) viewsBatches[i] += (i <= peakIdx ? 1 : -1);
-      if (viewsBatches[i] % 5 === 0) viewsBatches[i] += 1;
-    }
-  }
-
-  const vFreq = new Map<number, number>();
-  for (const v of viewsBatches) {
-    vFreq.set(v, (vFreq.get(v) || 0) + 1);
-  }
-
-  // Adjust any value repeated > 2
-  for (let i = 1; i < N - 1; i++) {
-    let v = viewsBatches[i];
-    if ((vFreq.get(v) || 0) > 2) {
-      for (const d of [1, -1, 2, -2]) {
-        let cand = v + d;
-        if (cand >= minimums.views && cand % 5 !== 0 && (vFreq.get(cand) || 0) < 2) {
-          const prev = viewsBatches[i - 1];
-          const next = viewsBatches[i + 1];
-          if (cand === prev || cand === next) continue;
-          if (Math.abs(cand - prev) / prev > 0.245 || Math.abs(cand - prev) / cand > 0.245) continue;
-          if (Math.abs(next - cand) / cand > 0.245 || Math.abs(next - cand) / next > 0.245) continue;
-
-          vFreq.set(v, Math.max(0, (vFreq.get(v) || 1) - 1));
-          viewsBatches[i] = cand;
-          vFreq.set(cand, (vFreq.get(cand) || 0) + 1);
-          break;
-        }
-      }
-    }
-  }
-
-  let vSum = viewsBatches.reduce((a, b) => a + b, 0);
-  let vRem = viewsTotal - vSum;
-  let vGuard = 0;
-  while (vRem !== 0 && vGuard < 5000) {
-    vGuard++;
-    let step = vRem > 0 ? 1 : -1;
-    let changed = false;
-    for (let i = 1; i < N - 1 && vRem !== 0; i++) {
-      let cand = viewsBatches[i] + step;
-      if (cand < minimums.views || cand > maxHourlyCap || cand % 5 === 0) continue;
-      if ((vFreq.get(cand) || 0) >= 2) continue; // STRICT: max freq 2
-      let prev = viewsBatches[i - 1];
-      let next = viewsBatches[i + 1];
-      if (cand === prev || cand === next) continue;
-      if (Math.abs(cand - prev) / prev > 0.245 || Math.abs(cand - prev) / cand > 0.245) continue;
-      if (Math.abs(next - cand) / cand > 0.245 || Math.abs(next - cand) / next > 0.245) continue;
-
-      vFreq.set(viewsBatches[i], Math.max(0, (vFreq.get(viewsBatches[i]) || 1) - 1));
-      viewsBatches[i] = cand;
-      vFreq.set(cand, (vFreq.get(cand) || 0) + 1);
-      vRem -= step;
-      changed = true;
-    }
-    if (!changed) break;
-  }
-
-  // 5. Build cumulative views timeline for engagement gating
-  const fullCumViews = new Array(totalTicks + 1).fill(0);
-  let rV = 0;
-  let curVIdx = 0;
-  for (let t = 0; t <= totalTicks; t++) {
-    while (curVIdx < viewTicks.length && viewTicks[curVIdx] <= t) {
-      rV += viewsBatches[curVIdx];
-      curVIdx++;
-    }
-    fullCumViews[t] = rV;
-  }
-
-  const seedViews = fullCumViews[2] || (viewsBatches[0] + viewsBatches[1]);
-
-  // Exact tick where views <= 84% (to guarantee <= 85%)
-  let tick85 = 0;
-  for (let t = 0; t <= totalTicks; t++) {
-    if (fullCumViews[t] <= viewsTotal * 0.84) {
-      tick85 = t;
-    }
-  }
-
-  // 6. Compile Batches
-  const allBatches: ScheduledBatch[] = [];
-  for (let i = 0; i < N; i++) {
-    allBatches.push({
-      tick: viewTicks[i],
-      minuteOffset: viewTicks[i] * 15,
-      service: "views",
-      quantity: viewsBatches[i],
-      cumulativeSoFar: 0,
-    });
-  }
-
-  // A. LIKES
-  if (likesTotal > 0) {
-    const firstLikesTick = 2; // tick 2 (30 min lag)
-    let firstLikesQty = Math.round(seedViews * (0.035 + rng() * 0.015));
-    firstLikesQty = Math.max(minimums.likes, firstLikesQty);
-    if (firstLikesQty % 5 === 0) firstLikesQty += 1;
-    if (firstLikesQty >= likesTotal) firstLikesQty = Math.max(minimums.likes, Math.round(likesTotal * 0.35));
-
-    const remLikes = likesTotal - firstLikesQty;
-    let kLikes = likesTotal < 6 * minimums.likes
-      ? 2
-      : Math.min(15, Math.max(3, actualDurationHours >= 24 ? Math.ceil(tick85 / 14) : 4));
-    let likeParts = partitionEngagement(remLikes, kLikes, minimums.likes, rng);
-
-    const likesBatches = [{ tick: firstLikesTick, quantity: firstLikesQty }];
-    const spanL = Math.max(1, tick85 - firstLikesTick);
-    const maxGapTicksL = 16; // 4 hours
-
-    let prevLTick = firstLikesTick;
-    for (let i = 0; i < kLikes; i++) {
-      let idealTick = firstLikesTick + Math.round(((i + 1) / kLikes) * spanL);
-      if (actualDurationHours >= 24 && idealTick - prevLTick > maxGapTicksL) {
-        idealTick = prevLTick + maxGapTicksL;
-      }
-      idealTick = Math.min(tick85, Math.max(prevLTick + 1, idealTick));
-      likesBatches.push({ tick: idealTick, quantity: likeParts[i] });
-      prevLTick = idealTick;
-    }
-
-    likesBatches.forEach(b => allBatches.push({
-      tick: b.tick,
-      minuteOffset: b.tick * 15,
-      service: "likes",
-      quantity: b.quantity,
-      cumulativeSoFar: 0,
-    }));
-  }
-
-  // B. SAVES
-  if (savesTotal >= minimums.saves) {
-    let tickFirstSaves = fullCumViews.findIndex(v => v >= viewsTotal * 0.16);
-    if (tickFirstSaves < 0 || tickFirstSaves >= tick85) {
-      tickFirstSaves = Math.min(tick85 - 2, Math.max(2, Math.floor(totalTicks * 0.15)));
-    }
-
-    let kSaves = savesTotal < 6 * minimums.saves
-      ? (savesTotal <= 40 ? 3 : Math.floor(savesTotal / minimums.saves))
-      : Math.min(10, Math.max(3, actualDurationHours >= 24 ? Math.ceil(tick85 / 28) : 4));
-    let saveParts = partitionEngagement(savesTotal, kSaves, minimums.saves, rng);
-
-    const savesBatches = [{ tick: tickFirstSaves, quantity: saveParts[0] }];
-    const spanS = Math.max(1, tick85 - tickFirstSaves);
-    const maxGapTicksS = 32; // 8 hours
-
-    let prevSTick = tickFirstSaves;
-    for (let i = 1; i < kSaves; i++) {
-      let idealTick = tickFirstSaves + Math.round((i / (kSaves - 1)) * spanS);
-      if (actualDurationHours >= 24 && idealTick - prevSTick > maxGapTicksS) {
-        idealTick = prevSTick + maxGapTicksS;
-      }
-      idealTick = Math.min(tick85, Math.max(prevSTick + 1, idealTick));
-      savesBatches.push({ tick: idealTick, quantity: saveParts[i] });
-      prevSTick = idealTick;
-    }
-
-    savesBatches.forEach(b => allBatches.push({
-      tick: b.tick,
-      minuteOffset: b.tick * 15,
-      service: "saves",
-      quantity: b.quantity,
-      cumulativeSoFar: 0,
-    }));
-  }
-
-  // C. SHARES
-  if (sharesTotal >= minimums.shares) {
-    let tickFirstShares = fullCumViews.findIndex(v => v >= viewsTotal * 0.26);
-    if (tickFirstShares < 0 || tickFirstShares >= tick85) {
-      tickFirstShares = Math.min(tick85 - 2, Math.max(3, Math.floor(totalTicks * 0.25)));
-    }
-
-    let kShares = sharesTotal < 6 * minimums.shares
-      ? (sharesTotal <= 20 ? 2 : 3)
-      : Math.min(8, Math.max(2, actualDurationHours >= 24 ? Math.ceil(tick85 / 44) : 3));
-    let shareParts = partitionEngagement(sharesTotal, kShares, minimums.shares, rng);
-
-    const sharesBatches = [{ tick: tickFirstShares, quantity: shareParts[0] }];
-    const spanSh = Math.max(1, tick85 - tickFirstShares);
-    const maxGapTicksSh = 48; // 12 hours
-
-    let prevShTick = tickFirstShares;
-    for (let i = 1; i < kShares; i++) {
-      let idealTick = tickFirstShares + Math.round((i / (kShares - 1)) * spanSh);
-      if (actualDurationHours >= 24 && idealTick - prevShTick > maxGapTicksSh) {
-        idealTick = prevShTick + maxGapTicksSh;
-      }
-      idealTick = Math.min(tick85, Math.max(prevShTick + 1, idealTick));
-      sharesBatches.push({ tick: idealTick, quantity: shareParts[i] });
-      prevShTick = idealTick;
-    }
-
-    sharesBatches.forEach(b => allBatches.push({
-      tick: b.tick,
-      minuteOffset: b.tick * 15,
-      service: "shares",
-      quantity: b.quantity,
-      cumulativeSoFar: 0,
-    }));
-  }
-
-  // D. COMMENTS
-  if (commentsTotal >= minimums.comments) {
-    const commentsBatches = [{ tick: Math.min(tick85, 4), quantity: commentsTotal }];
-    commentsBatches.forEach(b => allBatches.push({
-      tick: b.tick,
-      minuteOffset: b.tick * 15,
-      service: "comments",
-      quantity: b.quantity,
-      cumulativeSoFar: 0,
-    }));
-  }
-
-  // Sort batches by tick, then views first
-  const serviceSortOrder: Record<ServiceType, number> = {
-    views: 0,
-    likes: 1,
-    saves: 2,
-    shares: 3,
-    comments: 4,
-  };
-
-  allBatches.sort((a, b) => {
-    if (a.tick !== b.tick) return a.tick - b.tick;
-    return serviceSortOrder[a.service] - serviceSortOrder[b.service];
-  });
-
-  // Calculate cumulative counts
-  const cumCounts: Record<ServiceType, number> = {
-    views: 0,
-    likes: 0,
-    saves: 0,
-    shares: 0,
-    comments: 0,
-  };
-
-  for (let idx = 0; idx < allBatches.length; idx++) {
-    const b = allBatches[idx];
-    cumCounts[b.service] += b.quantity;
-    b.id = `batch_${idx + 1}`;
-    b.cumulativeSoFar = cumCounts[b.service];
-    b.cumulativeAfter = cumCounts[b.service];
-    const bDate = new Date(startTime.getTime() + b.minuteOffset * 60 * 1000);
-    b.clockTime = new Intl.DateTimeFormat("en-US", {
-      timeZone: "Asia/Dhaka",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    }).format(bDate);
-  }
-
-  // Sample 100 points for chart visualization
-  const curvePoints: CurvePoint[] = [];
-  const CURVE_SAMPLES = 100;
-  for (let i = 0; i <= CURVE_SAMPLES; i++) {
-    const t = i / CURVE_SAMPLES;
-    const min = Math.round(t * totalDurationMinutes);
-
-    let cViews = 0;
-    let cLikes = 0;
-    let cSaves = 0;
-    let cShares = 0;
-    let cComments = 0;
-
-    for (const b of allBatches) {
-      if (b.minuteOffset <= min) {
-        if (b.service === "views") cViews += b.quantity;
-        else if (b.service === "likes") cLikes += b.quantity;
-        else if (b.service === "saves") cSaves += b.quantity;
-        else if (b.service === "shares") cShares += b.quantity;
-        else if (b.service === "comments") cComments += b.quantity;
-      }
-    }
-
-    const ptDate = new Date(startTime.getTime() + min * 60 * 1000);
-    const clockTime = new Intl.DateTimeFormat("en-US", {
-      timeZone: "Asia/Dhaka",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    }).format(ptDate);
-
-    curvePoints.push({
-      t,
-      minute: min,
-      minuteOffset: min,
-      cumulativeViews: cViews,
-      views: cViews,
-      cumulativeLikes: cLikes,
-      likes: cLikes,
-      cumulativeSaves: cSaves,
-      saves: cSaves,
-      cumulativeShares: cShares,
-      shares: cShares,
-      cumulativeComments: cComments,
-      comments: cComments,
-      clockTime,
-    });
-  }
-
-  // Peak hourly views rate
-  const avgHourlyViews = viewsTotal / Math.max(1, actualDurationHours);
-  let peakHourly = 0;
-  const hoursCount = Math.ceil(actualDurationHours);
-  for (let h = 0; h < hoursCount; h++) {
-    const hStart = h * 60;
-    const hEnd = (h + 1) * 60;
-    const viewsInH = allBatches
-      .filter((b) => b.service === "views" && b.minuteOffset >= hStart && b.minuteOffset < hEnd)
-      .reduce((sum, b) => sum + b.quantity, 0);
-    if (viewsInH > peakHourly) peakHourly = viewsInH;
-  }
-
-  return {
-    seed: originalSeedStr,
-    templateId,
-    patternName,
-    packageId: pkg.id,
-    viewsTotal,
-    likesTotal,
-    savesTotal,
-    sharesTotal,
-    commentsTotal,
-    followers,
-    baseDurationHours: baseDuration,
-    actualDurationHours,
-    totalDurationMinutes,
-    durationLabel,
-    batches: allBatches,
-    curvePoints,
-    viewsBatchesCount: viewTicks.length,
-    likesBatchesCount: allBatches.filter(b => b.service === "likes").length,
-    savesBatchesCount: allBatches.filter(b => b.service === "saves").length,
-    sharesBatchesCount: allBatches.filter(b => b.service === "shares").length,
-    commentsBatchesCount: allBatches.filter(b => b.service === "comments").length,
-    totalBatchesCount: allBatches.length,
-    peakHourlyViewsRate: peakHourly,
-    avgHourlyViewsRate: Math.round(avgHourlyViews),
-  };
+  throw new Error(`Failed to generate a valid organic plan after 50 attempts: ${lastError}`);
 }
 
-/**
- * Generates an Anti-Radar Delivery Pattern strictly meeting all user requirements.
- * Runs a final validator: any rule broken = regenerate with the next deterministic seed.
- */
-export function generatePattern(
-  pkg: PackageConfig,
-  followers: number = 500,
-  seedInput: string | number = "aurasmm_seed",
-  minimums: ProviderMinimums = DEFAULT_PROVIDER_MINIMUMS,
-  startTime: Date = new Date()
-): GeneratedScheduleResult {
-  const seedStr = String(seedInput);
-  let attempt = 0;
-  let bestCandidate: GeneratedScheduleResult | null = null;
-
-  while (attempt < 100) {
-    const currentSeed = attempt === 0 ? seedStr : `${seedStr}_retry${attempt}`;
-    const candidate = buildCandidateSchedule(pkg, followers, currentSeed, minimums, startTime, seedStr);
-    const validation = validateSchedule(candidate, pkg, minimums);
-
-    if (validation.valid) {
-      return candidate;
-    }
-
-    if (!bestCandidate) {
-      bestCandidate = candidate;
-    }
-
-    attempt++;
-  }
-
-  return bestCandidate!;
-}
+export const generatePattern = generatePlan;

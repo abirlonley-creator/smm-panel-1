@@ -1,29 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  generatePattern,
-  validateSchedule,
+  generatePlan,
+  validatePlan,
   DEFAULT_PACKAGES,
   DEFAULT_PROVIDER_MINIMUMS,
-  baseCurveF,
-  baseCurveFPrime,
+  DEFAULT_RATE_RANGES,
   formatDurationDaysHours,
 } from "../src/lib/engagement/deterministic-pattern-engine";
 
-test("Deterministic Anti-Radar Pattern Engine tests", async (t) => {
-  await t.test("base curve F(t) = 0.04t + 0.96t^4 satisfies boundary conditions", () => {
-    assert.equal(baseCurveF(0), 0);
-    assert.equal(baseCurveF(1), 1.0);
-    assert.equal(baseCurveFPrime(0), 0.04);
-    assert.equal(baseCurveFPrime(1), 3.88);
-    // Monotonicity
-    for (let i = 0; i < 100; i++) {
-      const t1 = i / 100;
-      const t2 = (i + 1) / 100;
-      assert.ok(baseCurveF(t2) >= baseCurveF(t1));
-    }
-  });
-
+test("AuraSMM TikTok Engagement Planner - Acceptance Tests", async (t) => {
   await t.test("formats duration as 'X days Y hours'", () => {
     assert.equal(formatDurationDaysHours(6), "0 days 6 hours");
     assert.equal(formatDurationDaysHours(24), "1 days 0 hours");
@@ -32,241 +18,199 @@ test("Deterministic Anti-Radar Pattern Engine tests", async (t) => {
     assert.equal(formatDurationDaysHours(120), "5 days 0 hours");
   });
 
-  await t.test("same seed produces 100% identical schedule (deterministic)", () => {
+  await t.test("The Golden Rule: ONE plan object where graph, table, chips, and CSV share exact data", () => {
+    const pkg = DEFAULT_PACKAGES.tiktok_10k;
+    const plan = generatePlan(pkg, 2500, "golden_rule_seed_101");
+
+    // 1. Chips are sums of rows
+    const sumViews = plan.rows.reduce((s, r) => s + r.views, 0);
+    const sumLikes = plan.rows.reduce((s, r) => s + r.likes, 0);
+    const sumSaves = plan.rows.reduce((s, r) => s + r.saves, 0);
+    const sumReposts = plan.rows.reduce((s, r) => s + r.reposts, 0);
+    const sumShares = plan.rows.reduce((s, r) => s + r.shares, 0);
+    const sumComments = plan.rows.reduce((s, r) => s + r.comments, 0);
+
+    assert.equal(plan.chips.totalViews, sumViews);
+    assert.equal(plan.chips.totalBatches, plan.rows.length);
+    assert.equal(plan.chips.likes, sumLikes);
+    assert.equal(plan.chips.saves, sumSaves);
+    assert.equal(plan.chips.reposts, sumReposts);
+    assert.equal(plan.chips.shares, sumShares);
+    assert.equal(plan.chips.comments, sumComments);
+
+    // 2. Trend curve points correspond 1:1 to rows
+    assert.equal(plan.trendCurve.length, plan.rows.length);
+    for (let i = 0; i < plan.rows.length; i++) {
+      const row = plan.rows[i];
+      const pt = plan.trendCurve[i];
+      assert.equal(pt.pointIndex, row.index);
+      assert.equal(pt.tick, row.tick);
+      assert.equal(pt.minuteOffset, row.minuteOffset);
+      assert.equal(pt.views, row.views);
+      assert.equal(pt.cumulativeViews, row.cumulativeViews);
+      assert.equal(pt.likes, row.likes);
+      assert.equal(pt.cumulativeLikes, row.cumulativeLikes);
+      assert.equal(pt.saves, row.saves);
+      assert.equal(pt.cumulativeSaves, row.cumulativeSaves);
+      assert.equal(pt.reposts, row.reposts);
+      assert.equal(pt.cumulativeReposts, row.cumulativeReposts);
+      assert.equal(pt.shares, row.shares);
+      assert.equal(pt.cumulativeShares, row.cumulativeShares);
+      assert.equal(pt.comments, row.comments);
+      assert.equal(pt.cumulativeComments, row.cumulativeComments);
+    }
+
+    // 3. Last point equals total
+    const lastRow = plan.rows[plan.rows.length - 1];
+    assert.equal(lastRow.cumulativeViews, plan.viewsTotal);
+    assert.equal(lastRow.cumulativeLikes, plan.totals.likes);
+    assert.equal(lastRow.cumulativeSaves, plan.totals.saves);
+    assert.equal(lastRow.cumulativeReposts, plan.totals.reposts);
+    assert.equal(lastRow.cumulativeShares, plan.totals.shares);
+    assert.equal(lastRow.cumulativeComments, plan.totals.comments);
+  });
+
+  await t.test("Determinism: same seed produces identical plan, different seeds produce new plan", () => {
     const pkg = DEFAULT_PACKAGES.tiktok_5k;
-    const planA = generatePattern(pkg, 1500, "seed_alpha_123");
-    const planB = generatePattern(pkg, 1500, "seed_alpha_123");
+    const planA = generatePlan(pkg, 1500, "same_seed_42");
+    const planB = generatePlan(pkg, 1500, "same_seed_42");
+    assert.equal(planA.viewsTotal, planB.viewsTotal);
+    assert.equal(planA.rows.length, planB.rows.length);
+    assert.deepEqual(planA.totals, planB.totals);
+    assert.deepEqual(planA.rows, planB.rows);
 
-    assert.equal(planA.totalBatchesCount, planB.totalBatchesCount);
-    assert.equal(planA.actualDurationHours, planB.actualDurationHours);
-    assert.deepEqual(planA.batches, planB.batches);
+    const planC = generatePlan(pkg, 1500, "different_seed_99");
+    assert.notDeepEqual(planA.rows, planC.rows);
   });
 
-  await t.test("different seeds produce unique schedules", () => {
-    const pkg = DEFAULT_PACKAGES.tiktok_5k;
-    const planA = generatePattern(pkg, 1500, "seed_1");
-    const planB = generatePattern(pkg, 1500, "seed_2");
-
-    assert.notDeepEqual(planA.batches, planB.batches);
-  });
-
-  await t.test("2K Starter package matches all specifications", () => {
-    const pkg = DEFAULT_PACKAGES.tiktok_2k;
-    const plan = generatePattern(pkg, 500, "seed_2k_test");
-
-    // Exact totals
-    assert.equal(plan.viewsTotal, 2000);
-    assert.equal(plan.likesTotal, 42);
-    assert.equal(plan.savesTotal, 0);
-    assert.equal(plan.sharesTotal, 0);
-
-    const sumViews = plan.batches.filter((b) => b.service === "views").reduce((a, b) => a + b.quantity, 0);
-    assert.equal(sumViews, 2000, "Views sum must equal 2000 exactly");
-
-    const sumLikes = plan.batches.filter((b) => b.service === "likes").reduce((a, b) => a + b.quantity, 0);
-    assert.equal(sumLikes, 42, "Likes sum must equal 42 exactly");
-
-    // Likes in 3 batches at evenly spread points
-    const likesBatches = plan.batches.filter((b) => b.service === "likes");
-    assert.equal(likesBatches.length, 3, "2K must have exactly 3 likes batches");
-
-    // All on 15-minute grid (:00, :15, :30, :45)
-    for (const b of plan.batches) {
-      assert.equal(b.minuteOffset % 15, 0, `Batch minute ${b.minuteOffset} must be divisible by 15`);
-    }
-
-    // Provider minimums met (views >= 100, likes >= 10)
-    for (const b of plan.batches) {
-      if (b.service === "views") assert.ok(b.quantity >= 100, `View batch ${b.quantity} >= 100`);
-      if (b.service === "likes") assert.ok(b.quantity >= 10, `Like batch ${b.quantity} >= 10`);
-    }
-  });
-
-  await t.test("5K Velocity package matches all specifications", () => {
-    const pkg = DEFAULT_PACKAGES.tiktok_5k;
-    const plan = generatePattern(pkg, 2500, "seed_5k_test");
-
-    // Exact totals
-    assert.equal(plan.viewsTotal, 5000);
-    assert.equal(plan.likesTotal, 180);
-    assert.equal(plan.savesTotal, 40);
-    assert.equal(plan.sharesTotal, 20);
-
-    const sumViews = plan.batches.filter((b) => b.service === "views").reduce((a, b) => a + b.quantity, 0);
-    const sumLikes = plan.batches.filter((b) => b.service === "likes").reduce((a, b) => a + b.quantity, 0);
-    const sumSaves = plan.batches.filter((b) => b.service === "saves").reduce((a, b) => a + b.quantity, 0);
-    const sumShares = plan.batches.filter((b) => b.service === "shares").reduce((a, b) => a + b.quantity, 0);
-
-    assert.equal(sumViews, 5000);
-    assert.equal(sumLikes, 180);
-    assert.equal(sumSaves, 40);
-    assert.equal(sumShares, 20);
-
-    // Engagement never ahead of views
-    let runningViews = 0;
-    for (const b of plan.batches) {
-      if (b.service === "views") runningViews += b.quantity;
-      if (b.service === "likes" || b.service === "saves" || b.service === "shares") {
-        assert.ok(runningViews > 0, "Engagement batch sent before any views arrived");
-      }
-    }
-  });
-
-  await t.test("10K, 15K, and 50K packages have exact totals and provider minimums", () => {
-    for (const key of ["tiktok_10k", "tiktok_15k", "tiktok_50k"] as const) {
+  await t.test("All 10 validator rules pass for every default package", () => {
+    for (const key of Object.keys(DEFAULT_PACKAGES)) {
       const pkg = DEFAULT_PACKAGES[key];
-      const plan = generatePattern(pkg, 8000, `seed_${key}`);
-
-      const sumViews = plan.batches.filter((b) => b.service === "views").reduce((a, b) => a + b.quantity, 0);
-      const sumLikes = plan.batches.filter((b) => b.service === "likes").reduce((a, b) => a + b.quantity, 0);
-      const sumSaves = plan.batches.filter((b) => b.service === "saves").reduce((a, b) => a + b.quantity, 0);
-      const sumShares = plan.batches.filter((b) => b.service === "shares").reduce((a, b) => a + b.quantity, 0);
-
-      assert.equal(sumViews, pkg.views_total, `Views total exact for ${key}`);
-      assert.equal(sumLikes, pkg.likes, `Likes total exact for ${key}`);
-      assert.equal(sumSaves, pkg.saves, `Saves total exact for ${key}`);
-      assert.equal(sumShares, pkg.shares, `Shares total exact for ${key}`);
-
-      // All batches on 15m grid
-      for (const b of plan.batches) {
-        assert.equal(b.minuteOffset % 15, 0);
-      }
+      const plan = generatePlan(pkg, 2500, `val_test_${key}`);
+      const check = validatePlan(plan, pkg, DEFAULT_PROVIDER_MINIMUMS);
+      assert.ok(check.valid, `Plan for ${key} failed validation: ${check.error}`);
     }
   });
 
-  await t.test("VIEWS SMOOTHNESS: <= 25% adjacent diff, ramp up from min, no adjacent equals, no mult of 5, no alternating pattern", () => {
-    for (const key of ["tiktok_2k", "tiktok_5k", "tiktok_10k", "tiktok_15k", "tiktok_50k"] as const) {
-      const pkg = DEFAULT_PACKAGES[key];
-      const plan = generatePattern(pkg, 5000, `seed_smooth_${key}`);
-      const vBatches = plan.batches.filter((b) => b.service === "views").map((b) => b.quantity);
+  await t.test("Acceptance Test: 200 seeds per package satisfy expected distributions", () => {
+    const packages = ["tiktok_2k", "tiktok_5k", "tiktok_10k", "tiktok_15k", "tiktok_50k"] as const;
 
-      // 1. Ramp up gradually from minimum (starts near minimum, e.g. <= 130)
-      assert.ok(vBatches[0] <= DEFAULT_PROVIDER_MINIMUMS.views * 1.30, `Batch 0 (${vBatches[0]}) not near min`);
+    for (const pkgKey of packages) {
+      const pkg = DEFAULT_PACKAGES[pkgKey];
+      let firstTryPasses = 0;
+      let repostsDroppedCount = 0;
+      let sharesDroppedCount = 0;
 
-      // 2. Adjacent batches differ by at most 25% & never two adjacent equal values
-      for (let i = 0; i < vBatches.length - 1; i++) {
-        const c = vBatches[i];
-        const n = vBatches[i + 1];
-        assert.notEqual(c, n, `Adjacent equal values at ${i}: ${c}`);
-        const diff = Math.abs(n - c);
-        const maxPct = Math.max(diff / c, diff / n);
-        assert.ok(maxPct <= 0.2501, `Adjacent difference at ${i} (${c} -> ${n}) was ${(maxPct * 100).toFixed(1)}% > 25%`);
-      }
+      const viewsArr: number[] = [];
+      const batchesArr: number[] = [];
+      const gapsArr: number[] = [];
+      const firstLikesArr: number[] = [];
 
-      // 3. No multiples of 5 & no value repeated more than twice
-      const freq = new Map<number, number>();
-      for (const v of vBatches) {
-        assert.ok(v % 5 !== 0, `Batch ${v} is a multiple of 5`);
-        freq.set(v, (freq.get(v) || 0) + 1);
-        assert.ok(freq.get(v)! <= 2, `Value ${v} repeated ${freq.get(v)} times (> 2)`);
-      }
+      for (let s = 100; s < 300; s++) {
+        const seed = `seed_${pkgKey}_${s}`;
+        const plan = generatePlan(pkg, 2500, seed);
 
-      // 4. No alternating high/low pattern
-      for (let i = 0; i <= vBatches.length - 5; i++) {
-        const d0 = Math.sign(vBatches[i + 1] - vBatches[i]);
-        const d1 = Math.sign(vBatches[i + 2] - vBatches[i + 1]);
-        const d2 = Math.sign(vBatches[i + 3] - vBatches[i + 2]);
-        const d3 = Math.sign(vBatches[i + 4] - vBatches[i + 3]);
-        const isAlternating = d0 !== d1 && d1 !== d2 && d2 !== d3;
-        assert.ok(!isAlternating, `Alternating high/low pattern found at index ${i}`);
-      }
+        viewsArr.push(plan.viewsTotal);
+        batchesArr.push(plan.rows.length);
 
-      // 5. Irregular gaps (1-6 ticks)
-      const vTicks = plan.batches.filter((b) => b.service === "views").map((b) => b.tick);
-      for (let i = 1; i < vTicks.length; i++) {
-        const gap = vTicks[i] - vTicks[i - 1];
-        assert.ok(gap >= 1 && gap <= 6, `Gap ${gap} between ticks outside 1-6`);
-      }
-    }
-  });
-
-  await t.test("Peak hourly rate <= 3x average views rate", () => {
-    for (const key of ["tiktok_5k", "tiktok_10k", "tiktok_15k", "tiktok_50k"] as const) {
-      const pkg = DEFAULT_PACKAGES[key];
-      const plan = generatePattern(pkg, 5000, `seed_peak_${key}`);
-      assert.ok(
-        plan.peakHourlyViewsRate <= plan.avgHourlyViewsRate * 3.0 + 10,
-        `Peak hourly rate ${plan.peakHourlyViewsRate} exceeded 3x avg ${plan.avgHourlyViewsRate}`
-      );
-    }
-  });
-
-  await t.test("ENGAGEMENT PLACEMENT: first likes within 2-3 ticks sized 3-5% seed views, saves first batch by 15-20% views, shares first batch by 25-30% views, last batch <= 85% views", () => {
-    for (const key of ["tiktok_5k", "tiktok_10k", "tiktok_15k", "tiktok_50k"] as const) {
-      const pkg = DEFAULT_PACKAGES[key];
-      const plan = generatePattern(pkg, 5000, `seed_timing_${key}`);
-
-      // First likes within 2-3 ticks of seed (tick <= 3)
-      const likesBatches = plan.batches.filter((b) => b.service === "likes");
-      assert.ok(likesBatches.length > 0);
-      assert.ok(likesBatches[0].tick <= 3, `First likes tick was ${likesBatches[0].tick}`);
-
-      // First saves by 15-20% of views
-      const savesBatches = plan.batches.filter((b) => b.service === "saves");
-      assert.ok(savesBatches.length > 0);
-      const cumAtFirstSave = plan.batches
-        .filter((b) => b.service === "views" && b.tick <= savesBatches[0].tick)
-        .reduce((sum, b) => sum + b.quantity, 0);
-      assert.ok(cumAtFirstSave <= pkg.views_total * 0.22, `First saves at ${cumAtFirstSave} > 20% total views`);
-
-      // First shares by 25-30% of views
-      const sharesBatches = plan.batches.filter((b) => b.service === "shares");
-      assert.ok(sharesBatches.length > 0);
-      const cumAtFirstShare = plan.batches
-        .filter((b) => b.service === "views" && b.tick <= sharesBatches[0].tick)
-        .reduce((sum, b) => sum + b.quantity, 0);
-      assert.ok(cumAtFirstShare <= pkg.views_total * 0.32, `First shares at ${cumAtFirstShare} > 30% total views`);
-
-      // Last batch of each service <= 85% of views
-      for (const s of [likesBatches, savesBatches, sharesBatches]) {
-        const lastBatch = s[s.length - 1];
-        const cumAtLast = plan.batches
-          .filter((b) => b.service === "views" && b.tick <= lastBatch.tick)
-          .reduce((sum, b) => sum + b.quantity, 0);
-        assert.ok(cumAtLast <= pkg.views_total * 0.85, `Last batch at ${cumAtLast} > 85% of total views (${pkg.views_total * 0.85})`);
-      }
-    }
-  });
-
-  await t.test("ENGAGEMENT GAPS: on 24h+ packages: likes <= 4h, saves <= 8h, shares <= 12h", () => {
-    for (const key of ["tiktok_5k", "tiktok_10k", "tiktok_15k", "tiktok_50k"] as const) {
-      const pkg = DEFAULT_PACKAGES[key];
-      const plan = generatePattern(pkg, 5000, `seed_gaps_${key}`);
-
-      if (plan.actualDurationHours >= 24) {
-        // Likes <= 4h (16 ticks)
-        const lBatches = plan.batches.filter((b) => b.service === "likes");
-        for (let i = 0; i < lBatches.length - 1; i++) {
-          const gap = lBatches[i + 1].tick - lBatches[i].tick;
-          assert.ok(gap <= 16, `Likes gap ${gap} ticks > 16 ticks (4 hours)`);
+        // Longest gap in minutes
+        let maxGapTicks = 0;
+        for (let i = 1; i < plan.rows.length; i++) {
+          const g = plan.rows[i].tick - plan.rows[i - 1].tick;
+          if (g > maxGapTicks) maxGapTicks = g;
         }
+        gapsArr.push(maxGapTicks * 15);
 
-        // Saves <= 8h (32 ticks)
-        const sBatches = plan.batches.filter((b) => b.service === "saves");
-        for (let i = 0; i < sBatches.length - 1; i++) {
-          const gap = sBatches[i + 1].tick - sBatches[i].tick;
-          assert.ok(gap <= 32, `Saves gap ${gap} ticks > 32 ticks (8 hours)`);
+        // First likes appear at
+        let firstLikeViews = 0;
+        for (const r of plan.rows) {
+          if (r.likes > 0) {
+            firstLikeViews = r.cumulativeViews;
+            break;
+          }
         }
+        firstLikesArr.push(firstLikeViews);
 
-        // Shares <= 12h (48 ticks)
-        const shBatches = plan.batches.filter((b) => b.service === "shares");
-        for (let i = 0; i < shBatches.length - 1; i++) {
-          const gap = shBatches[i + 1].tick - shBatches[i].tick;
-          assert.ok(gap <= 48, `Shares gap ${gap} ticks > 48 ticks (12 hours)`);
+        if (plan.totals.reposts === 0) repostsDroppedCount++;
+        if (plan.totals.shares === 0) sharesDroppedCount++;
+
+        // Assert realized rates inside bounds
+        for (const sName of ["likes", "saves", "reposts", "shares", "comments"] as const) {
+          if (plan.totals[sName] > 0) {
+            const r = plan.totals[sName] / plan.viewsTotal;
+            const [minR, maxR] = DEFAULT_RATE_RANGES[sName];
+            assert.ok(
+              r >= minR - 0.0015 && r <= maxR + 0.0015,
+              `${sName} rate ${r} out of range [${minR}, ${maxR}] on seed ${seed}`
+            );
+          }
         }
       }
+
+      // Assert views range
+      const baseV = pkg.base_views!;
+      assert.ok(Math.min(...viewsArr) >= baseV, `Views below base ${baseV}`);
+      assert.ok(Math.max(...viewsArr) <= Math.round(baseV * 1.30) + 20, `Views above 1.30x overshoot`);
+
+      // Assert no gap over 240 minutes (4 hours)
+      assert.ok(Math.max(...gapsArr) <= 240, `Gap exceeded 240 minutes: ${Math.max(...gapsArr)}`);
+
+      if (pkgKey === "tiktok_2k") {
+        // 2K drops reposts in ~29% and shares in ~11%
+        const repostsPct = (repostsDroppedCount / 200) * 100;
+        const sharesPct = (sharesDroppedCount / 200) * 100;
+        assert.ok(repostsPct >= 20 && repostsPct <= 45, `2K reposts dropped ${repostsPct}% expected ~29%`);
+        assert.ok(sharesPct >= 5 && sharesPct <= 25, `2K shares dropped ${sharesPct}% expected ~11%`);
+      }
     }
   });
 
-  await t.test("Schedule passes final validator across all default packages and multiple seeds", () => {
-    for (let s = 1; s <= 10; s++) {
-      const seed = `seed_val_${s}`;
-      for (const key of Object.keys(DEFAULT_PACKAGES)) {
-        const pkg = DEFAULT_PACKAGES[key];
-        const plan = generatePattern(pkg, 5000, seed);
-        const res = validateSchedule(plan, pkg, DEFAULT_PROVIDER_MINIMUMS);
-        assert.ok(res.valid, `Package ${key} failed validation on seed ${seed}: ${res.error}`);
+  await t.test("Engagement Timing on 10K+: likes at 1200 views (median ~25-30) and pacing at 25%, 50%, 75%", () => {
+    const likesAt1200: number[] = [];
+    const savesAt25: number[] = [];
+    const savesAt50: number[] = [];
+    const savesAt75: number[] = [];
+
+    for (let s = 200; s < 300; s++) {
+      const plan = generatePlan(DEFAULT_PACKAGES.tiktok_10k, 5000, `timing_seed_${s}`);
+      let recorded1200 = false;
+      let s25: number | null = null;
+      let s50: number | null = null;
+      let s75: number | null = null;
+
+      for (const r of plan.rows) {
+        if (r.cumulativeViews >= 1200 && !recorded1200) {
+          likesAt1200.push(r.cumulativeLikes);
+          recorded1200 = true;
+        }
+
+        const frac = r.cumulativeViews / plan.viewsTotal;
+        if (frac >= 0.25 && s25 === null && plan.totals.saves > 0) {
+          s25 = (r.cumulativeSaves / plan.totals.saves) * 100;
+        }
+        if (frac >= 0.50 && s50 === null && plan.totals.saves > 0) {
+          s50 = (r.cumulativeSaves / plan.totals.saves) * 100;
+        }
+        if (frac >= 0.75 && s75 === null && plan.totals.saves > 0) {
+          s75 = (r.cumulativeSaves / plan.totals.saves) * 100;
+        }
       }
+
+      if (s25 !== null) savesAt25.push(s25);
+      if (s50 !== null) savesAt50.push(s50);
+      if (s75 !== null) savesAt75.push(s75);
     }
+
+    likesAt1200.sort((a, b) => a - b);
+    const medianLikes = likesAt1200[Math.floor(likesAt1200.length / 2)];
+    assert.ok(medianLikes >= 20 && medianLikes <= 35, `Median likes at 1200 views was ${medianLikes}, expected ~25-30`);
+
+    const avg25 = savesAt25.reduce((a, b) => a + b, 0) / savesAt25.length;
+    const avg50 = savesAt50.reduce((a, b) => a + b, 0) / savesAt50.length;
+    const avg75 = savesAt75.reduce((a, b) => a + b, 0) / savesAt75.length;
+
+    assert.ok(avg25 >= 17 && avg25 <= 26, `Saves % at 25% views was ${avg25.toFixed(1)}%, expected ~17-25%`);
+    assert.ok(avg50 >= 38 && avg50 <= 52, `Saves % at 50% views was ${avg50.toFixed(1)}%, expected ~38-50%`);
+    assert.ok(avg75 >= 64 && avg75 <= 78, `Saves % at 75% views was ${avg75.toFixed(1)}%, expected ~64-75%`);
   });
 });

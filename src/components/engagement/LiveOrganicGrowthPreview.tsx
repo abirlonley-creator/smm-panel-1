@@ -17,57 +17,17 @@ import {
   Share2,
   MessageCircle,
   Eye,
-  Zap,
+  Repeat,
+  Info,
 } from "lucide-react";
 import {
-  DeterministicPlan,
-  ScheduledBatch,
-  formatDurationDaysHours,
+  PlanObject,
+  PlanRow,
+  TrendPoint,
 } from "@/lib/engagement/deterministic-pattern-engine";
 
-interface Point {
-  x: number;
-  y: number;
-}
-
-/**
- * Catmull-Rom to Cubic Bézier spline generator for 100% smooth, anti-radar non-spiked curves.
- * Guarantees zero perpendicular spikes or staircase jumps, matching organic TikTok FYP trajectory.
- */
-function getSmoothSplinePath(points: Point[], tension: number = 0.22): string {
-  if (!points || points.length === 0) return "";
-  if (points.length === 1) return `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
-  if (points.length === 2) {
-    return `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)} L ${points[1].x.toFixed(1)} ${points[1].y.toFixed(1)}`;
-  }
-
-  let d = `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
-  for (let i = 0; i < points.length - 1; i++) {
-    const p0 = points[Math.max(0, i - 1)];
-    const p1 = points[i];
-    const p2 = points[i + 1];
-    const p3 = points[Math.min(points.length - 1, i + 2)];
-
-    const cp1x = p1.x + (p2.x - p0.x) * tension;
-    const cp1y = p1.y + (p2.y - p0.y) * tension;
-    const cp2x = p2.x - (p3.x - p1.x) * tension;
-    const cp2y = p2.y - (p3.y - p1.y) * tension;
-
-    d += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
-  }
-  return d;
-}
-
-function getClosedAreaPath(points: Point[], baselineY: number, tension: number = 0.22): string {
-  const lineD = getSmoothSplinePath(points, tension);
-  if (!lineD || points.length === 0) return "";
-  const first = points[0];
-  const last = points[points.length - 1];
-  return `${lineD} L ${last.x.toFixed(1)} ${baselineY.toFixed(1)} L ${first.x.toFixed(1)} ${baselineY.toFixed(1)} Z`;
-}
-
 export interface LiveOrganicGrowthPreviewProps {
-  plan: DeterministicPlan;
+  plan: PlanObject;
   startDate?: Date;
   isAdmin?: boolean;
   onNewPattern?: () => void;
@@ -82,45 +42,42 @@ export function LiveOrganicGrowthPreview({
   onSelectTemplate,
 }: LiveOrganicGrowthPreviewProps) {
   const [showEngagementOverlay, setShowEngagementOverlay] = useState(true);
-  const [showScheduleModal, setShowScheduleModal] = useState(false);
-  const [filterService, setFilterService] = useState<string>("ALL");
+  const [showScheduleModal, setShowScheduleModal] = useState(true);
+  const [filterType, setFilterType] = useState<
+    "ALL" | "VIEWS_ONLY" | "LIKES" | "SAVES" | "REPOSTS" | "SHARES" | "COMMENTS"
+  >("ALL");
+  const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null);
+  const [hoveredRowIndex, setHoveredRowIndex] = useState<number | null>(null);
   const [templateInput, setTemplateInput] = useState<string>("335");
   const [isGenerating, setIsGenerating] = useState(false);
   const svgRef = useRef<SVGSVGElement | null>(null);
 
-  // SVG dimensions
-  const SVG_WIDTH = 800;
-  const SVG_HEIGHT = 260;
-  const padLeft = 50;
-  const padRight = 25;
-  const padTop = 25;
-  const padBottom = 35;
+  // SVG dimensions (Spec: 900 x 320)
+  const SVG_WIDTH = 900;
+  const SVG_HEIGHT = 320;
+  const padLeft = 60;
+  const padRight = 55;
+  const padTop = 35;
+  const padBottom = 45;
 
   const plotWidth = SVG_WIDTH - padLeft - padRight;
   const plotHeight = SVG_HEIGHT - padTop - padBottom;
   const baselineY = padTop + plotHeight;
   const totalMinutes = Math.max(60, plan.totalDurationMinutes);
 
-  // Separate batches by service
-  const viewBatches = useMemo(
-    () => plan.batches.filter((b) => b.service === "views"),
-    [plan.batches]
+  const viewsTotal = Math.max(1, plan.totals.views);
+  const maxEngagement = Math.max(
+    10,
+    plan.totals.likes,
+    plan.totals.saves,
+    plan.totals.reposts,
+    plan.totals.shares,
+    plan.totals.comments
   );
-  const likeBatches = useMemo(
-    () => plan.batches.filter((b) => b.service === "likes"),
-    [plan.batches]
-  );
-  const saveBatches = useMemo(
-    () => plan.batches.filter((b) => b.service === "saves"),
-    [plan.batches]
-  );
-  const shareBatches = useMemo(
-    () => plan.batches.filter((b) => b.service === "shares"),
-    [plan.batches]
-  );
-  const commentBatches = useMemo(
-    () => plan.batches.filter((b) => b.service === "comments"),
-    [plan.batches]
+
+  const peakViewBatch = useMemo(
+    () => Math.max(1, ...plan.rows.map((r) => r.views)),
+    [plan.rows]
   );
 
   // Coordinate mappers
@@ -134,178 +91,134 @@ export function LiveOrganicGrowthPreview({
 
   const getYViews = useCallback(
     (val: number) => {
-      const fraction = Math.max(0, Math.min(1, val / Math.max(1, plan.viewsTotal)));
+      const fraction = Math.max(0, Math.min(1, val / viewsTotal));
       return baselineY - fraction * plotHeight;
     },
-    [plan.viewsTotal, baselineY, plotHeight]
+    [viewsTotal, baselineY, plotHeight]
   );
 
-  const getYAux = useCallback(
-    (val: number, maxAux: number) => {
-      const fraction = maxAux > 0 ? Math.max(0, Math.min(1, val / maxAux)) : 0;
-      return baselineY - fraction * (plotHeight * 0.16);
+  const getYEng = useCallback(
+    (val: number) => {
+      const fraction = maxEngagement > 0 ? Math.max(0, Math.min(1, val / maxEngagement)) : 0;
+      return baselineY - fraction * (plotHeight * 0.88);
     },
-    [baselineY, plotHeight]
+    [maxEngagement, baselineY, plotHeight]
   );
 
-  // Build Spline Curve Points from plan.curvePoints
-  const viewPoints: Point[] = useMemo(() => {
-    if (!plan.curvePoints || plan.curvePoints.length === 0) {
-      return [{ x: padLeft, y: baselineY }, { x: padLeft + plotWidth, y: getYViews(plan.viewsTotal) }];
+  // 1. Continuous faint background trend curve C(t)
+  const trendCurvePath = useMemo(() => {
+    if (!plan.trendCurve || plan.trendCurve.length === 0) return "";
+    let d = `M ${padLeft.toFixed(1)} ${baselineY.toFixed(1)}`;
+    for (const pt of plan.trendCurve) {
+      d += ` L ${getX(pt.minuteOffset).toFixed(1)} ${getYViews(pt.cumulativeViews).toFixed(1)}`;
     }
-    const pts: Point[] = [{ x: padLeft, y: baselineY }];
-    for (const cp of plan.curvePoints) {
-      pts.push({
-        x: getX(cp.minuteOffset),
-        y: getYViews(cp.views),
-      });
+    return d;
+  }, [plan.trendCurve, getX, getYViews, padLeft, baselineY]);
+
+  // 2. Monotonic Cumulative Views Line directly through each row's batch point
+  const viewsLinePath = useMemo(() => {
+    if (!plan.rows || plan.rows.length === 0) return "";
+    let d = `M ${padLeft.toFixed(1)} ${baselineY.toFixed(1)}`;
+    for (const r of plan.rows) {
+      d += ` L ${getX(r.minuteOffset).toFixed(1)} ${getYViews(r.cumulativeViews).toFixed(1)}`;
     }
-    const lastX = padLeft + plotWidth;
-    if (pts[pts.length - 1].x < lastX) {
-      pts.push({ x: lastX, y: getYViews(plan.viewsTotal) });
+    return d;
+  }, [plan.rows, getX, getYViews, padLeft, baselineY]);
+
+  // Area under views curve
+  const viewsAreaPath = useMemo(() => {
+    if (!viewsLinePath || plan.rows.length === 0) return "";
+    const lastRow = plan.rows[plan.rows.length - 1];
+    const lastX = getX(lastRow.minuteOffset);
+    return `${viewsLinePath} L ${lastX.toFixed(1)} ${baselineY.toFixed(1)} L ${padLeft.toFixed(1)} ${baselineY.toFixed(1)} Z`;
+  }, [viewsLinePath, plan.rows, getX, baselineY, padLeft]);
+
+  // 3. Engagement Cumulative Lines (plotted against Right Y-axis)
+  const likesPath = useMemo(() => {
+    if (plan.totals.likes === 0 || !plan.rows || plan.rows.length === 0) return "";
+    let d = `M ${padLeft.toFixed(1)} ${baselineY.toFixed(1)}`;
+    for (const r of plan.rows) {
+      d += ` L ${getX(r.minuteOffset).toFixed(1)} ${getYEng(r.cumulativeLikes).toFixed(1)}`;
     }
-    return pts;
-  }, [plan.curvePoints, plan.viewsTotal, getX, getYViews, padLeft, baselineY, plotWidth]);
+    return d;
+  }, [plan.rows, plan.totals.likes, getX, getYEng, padLeft, baselineY]);
 
-  const viewsSmoothPath = useMemo(() => getSmoothSplinePath(viewPoints, 0.22), [viewPoints]);
-  const viewsSmoothArea = useMemo(() => getClosedAreaPath(viewPoints, baselineY, 0.22), [viewPoints, baselineY]);
-
-  // Engagement auxiliary spline curves
-  const likePoints: Point[] = useMemo(() => {
-    if (plan.likesTotal === 0 || !plan.curvePoints) return [];
-    const pts: Point[] = [{ x: padLeft, y: baselineY }];
-    for (const cp of plan.curvePoints) {
-      pts.push({
-        x: getX(cp.minuteOffset),
-        y: getYAux(cp.likes, plan.likesTotal),
-      });
+  const savesPath = useMemo(() => {
+    if (plan.totals.saves === 0 || !plan.rows || plan.rows.length === 0) return "";
+    let d = `M ${padLeft.toFixed(1)} ${baselineY.toFixed(1)}`;
+    for (const r of plan.rows) {
+      d += ` L ${getX(r.minuteOffset).toFixed(1)} ${getYEng(r.cumulativeSaves).toFixed(1)}`;
     }
-    const lastX = padLeft + plotWidth;
-    if (pts[pts.length - 1].x < lastX) {
-      pts.push({ x: lastX, y: getYAux(plan.likesTotal, plan.likesTotal) });
+    return d;
+  }, [plan.rows, plan.totals.saves, getX, getYEng, padLeft, baselineY]);
+
+  const repostsPath = useMemo(() => {
+    if (plan.totals.reposts === 0 || !plan.rows || plan.rows.length === 0) return "";
+    let d = `M ${padLeft.toFixed(1)} ${baselineY.toFixed(1)}`;
+    for (const r of plan.rows) {
+      d += ` L ${getX(r.minuteOffset).toFixed(1)} ${getYEng(r.cumulativeReposts).toFixed(1)}`;
     }
-    return pts;
-  }, [plan.curvePoints, plan.likesTotal, getX, getYAux, padLeft, baselineY, plotWidth]);
+    return d;
+  }, [plan.rows, plan.totals.reposts, getX, getYEng, padLeft, baselineY]);
 
-  const likesSmoothPath = useMemo(() => getSmoothSplinePath(likePoints, 0.20), [likePoints]);
-
-  const savePoints: Point[] = useMemo(() => {
-    if (plan.savesTotal === 0 || !plan.curvePoints) return [];
-    const pts: Point[] = [{ x: padLeft, y: baselineY }];
-    for (const cp of plan.curvePoints) {
-      pts.push({
-        x: getX(cp.minuteOffset),
-        y: getYAux(cp.saves, plan.savesTotal) - 2,
-      });
+  const sharesPath = useMemo(() => {
+    if (plan.totals.shares === 0 || !plan.rows || plan.rows.length === 0) return "";
+    let d = `M ${padLeft.toFixed(1)} ${baselineY.toFixed(1)}`;
+    for (const r of plan.rows) {
+      d += ` L ${getX(r.minuteOffset).toFixed(1)} ${getYEng(r.cumulativeShares).toFixed(1)}`;
     }
-    const lastX = padLeft + plotWidth;
-    if (pts[pts.length - 1].x < lastX) {
-      pts.push({ x: lastX, y: getYAux(plan.savesTotal, plan.savesTotal) - 2 });
+    return d;
+  }, [plan.rows, plan.totals.shares, getX, getYEng, padLeft, baselineY]);
+
+  const commentsPath = useMemo(() => {
+    if (plan.totals.comments === 0 || !plan.rows || plan.rows.length === 0) return "";
+    let d = `M ${padLeft.toFixed(1)} ${baselineY.toFixed(1)}`;
+    for (const r of plan.rows) {
+      d += ` L ${getX(r.minuteOffset).toFixed(1)} ${getYEng(r.cumulativeComments).toFixed(1)}`;
     }
-    return pts;
-  }, [plan.curvePoints, plan.savesTotal, getX, getYAux, padLeft, baselineY, plotWidth]);
+    return d;
+  }, [plan.rows, plan.totals.comments, getX, getYEng, padLeft, baselineY]);
 
-  const savesSmoothPath = useMemo(() => getSmoothSplinePath(savePoints, 0.20), [savePoints]);
-
-  const sharePoints: Point[] = useMemo(() => {
-    if (plan.sharesTotal === 0 || !plan.curvePoints) return [];
-    const pts: Point[] = [{ x: padLeft, y: baselineY }];
-    for (const cp of plan.curvePoints) {
-      pts.push({
-        x: getX(cp.minuteOffset),
-        y: getYAux(cp.shares, plan.sharesTotal) - 4,
-      });
-    }
-    const lastX = padLeft + plotWidth;
-    if (pts[pts.length - 1].x < lastX) {
-      pts.push({ x: lastX, y: getYAux(plan.sharesTotal, plan.sharesTotal) - 4 });
-    }
-    return pts;
-  }, [plan.curvePoints, plan.sharesTotal, getX, getYAux, padLeft, baselineY, plotWidth]);
-
-  const sharesSmoothPath = useMemo(() => getSmoothSplinePath(sharePoints, 0.20), [sharePoints]);
-
-  // Interactive Hover Tooltip State
-  const [hoveredPoint, setHoveredPoint] = useState<{
-    x: number;
-    y: number;
-    timeLabel: string;
-    views: number;
-    likes: number;
-    saves: number;
-    shares: number;
-    comments: number;
-  } | null>(null);
-
-  const handlePointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
-    if (!svgRef.current) return;
-    const rect = svgRef.current.getBoundingClientRect();
-    const svgX = ((e.clientX - rect.left) / rect.width) * SVG_WIDTH;
-
-    if (svgX < padLeft || svgX > padLeft + plotWidth) {
-      setHoveredPoint(null);
-      return;
-    }
-
-    const minute = Math.round(((svgX - padLeft) / plotWidth) * totalMinutes);
-
-    // Cumulative at this specific minute
-    let vAtMinute = 0;
-    let lAtMinute = 0;
-    let sAtMinute = 0;
-    let shAtMinute = 0;
-    let cAtMinute = 0;
-
-    for (const b of plan.batches) {
-      if (b.minuteOffset <= minute) {
-        if (b.service === "views") vAtMinute += b.quantity;
-        if (b.service === "likes") lAtMinute += b.quantity;
-        if (b.service === "saves") sAtMinute += b.quantity;
-        if (b.service === "shares") shAtMinute += b.quantity;
-        if (b.service === "comments") cAtMinute += b.quantity;
+  // Left Y-Axis Ticks (Views)
+  const leftYTicks = useMemo(() => {
+    return [0, 0.25, 0.5, 0.75, 1.0].map((frac) => {
+      const val = Math.round(viewsTotal * frac);
+      let label = `${val}`;
+      if (val >= 1000) {
+        label = frac === 1.0 || val % 1000 === 0
+          ? `${(val / 1000).toFixed(0)}k`
+          : `${(val / 1000).toFixed(1)}k`;
       }
-    }
-
-    const timeDate = new Date(startDate.getTime() + minute * 60 * 1000);
-    const timeLabel = new Intl.DateTimeFormat("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    }).format(timeDate);
-
-    setHoveredPoint({
-      x: svgX,
-      y: getYViews(vAtMinute),
-      timeLabel,
-      views: vAtMinute,
-      likes: lAtMinute,
-      saves: sAtMinute,
-      shares: shAtMinute,
-      comments: cAtMinute,
+      return {
+        val,
+        label,
+        y: baselineY - frac * plotHeight,
+      };
     });
-  };
+  }, [viewsTotal, baselineY, plotHeight]);
 
-  // Horizontal Grid Ticks (0, 25%, 50%, 75%, 100%)
-  const yTicks = useMemo(() => {
-    return [0.25, 0.5, 0.75, 1.0].map((frac) => ({
-      val: Math.round(plan.viewsTotal * frac),
-      label:
-        frac === 1.0 && plan.viewsTotal >= 1000
-          ? `${(plan.viewsTotal / 1000).toFixed(0)}K`
-          : `${Math.round(plan.viewsTotal * frac)}`,
-      y: baselineY - frac * plotHeight,
-    }));
-  }, [plan.viewsTotal, baselineY, plotHeight]);
+  // Right Y-Axis Ticks (Engagement)
+  const rightYTicks = useMemo(() => {
+    return [0, 0.33, 0.66, 1.0].map((frac) => {
+      const val = Math.round(maxEngagement * frac);
+      return {
+        val,
+        label: `${val}`,
+        y: baselineY - frac * (plotHeight * 0.88),
+      };
+    });
+  }, [maxEngagement, baselineY, plotHeight]);
 
   // Bottom Timeline Labels
   const timeLabels = useMemo(() => {
-    const count = 10;
+    const count = 9;
     const labels: Array<{ x: number; text: string }> = [];
     for (let i = 0; i < count; i++) {
       const frac = i / (count - 1);
       const minute = frac * totalMinutes;
       const targetDate = new Date(startDate.getTime() + minute * 60 * 1000);
       const text = new Intl.DateTimeFormat("en-US", {
+        timeZone: "Asia/Dhaka",
         hour: "2-digit",
         minute: "2-digit",
         hour12: false,
@@ -315,45 +228,148 @@ export function LiveOrganicGrowthPreview({
     return labels;
   }, [totalMinutes, startDate, getX]);
 
-  // Filtered batches for Schedule Panel
-  const filteredBatches = useMemo(() => {
-    if (filterService === "ALL") return plan.batches;
-    return plan.batches.filter((b) => b.service === filterService.toLowerCase());
-  }, [plan.batches, filterService]);
+  // Row filtering counts and list
+  const filteredRows = useMemo(() => {
+    if (filterType === "ALL") return plan.rows;
+    if (filterType === "VIEWS_ONLY") {
+      return plan.rows.filter(
+        (r) =>
+          r.likes === 0 &&
+          r.saves === 0 &&
+          r.reposts === 0 &&
+          r.shares === 0 &&
+          r.comments === 0
+      );
+    }
+    if (filterType === "LIKES") return plan.rows.filter((r) => r.likes > 0);
+    if (filterType === "SAVES") return plan.rows.filter((r) => r.saves > 0);
+    if (filterType === "REPOSTS") return plan.rows.filter((r) => r.reposts > 0);
+    if (filterType === "SHARES") return plan.rows.filter((r) => r.shares > 0);
+    if (filterType === "COMMENTS") return plan.rows.filter((r) => r.comments > 0);
+    return plan.rows;
+  }, [plan.rows, filterType]);
 
-  // CSV Export
+  const countsByFilter = useMemo(() => {
+    const viewsOnly = plan.rows.filter(
+      (r) =>
+        r.likes === 0 &&
+        r.saves === 0 &&
+        r.reposts === 0 &&
+        r.shares === 0 &&
+        r.comments === 0
+    ).length;
+    return {
+      all: plan.rows.length,
+      viewsOnly,
+      likes: plan.rows.filter((r) => r.likes > 0).length,
+      saves: plan.rows.filter((r) => r.saves > 0).length,
+      reposts: plan.rows.filter((r) => r.reposts > 0).length,
+      shares: plan.rows.filter((r) => r.shares > 0).length,
+      comments: plan.rows.filter((r) => r.comments > 0).length,
+    };
+  }, [plan.rows]);
+
+  // Check if a row matches the current filter
+  const isRowMatchingFilter = useCallback(
+    (r: PlanRow) => {
+      if (filterType === "ALL") return true;
+      if (filterType === "VIEWS_ONLY") {
+        return (
+          r.likes === 0 &&
+          r.saves === 0 &&
+          r.reposts === 0 &&
+          r.shares === 0 &&
+          r.comments === 0
+        );
+      }
+      if (filterType === "LIKES") return r.likes > 0;
+      if (filterType === "SAVES") return r.saves > 0;
+      if (filterType === "REPOSTS") return r.reposts > 0;
+      if (filterType === "SHARES") return r.shares > 0;
+      if (filterType === "COMMENTS") return r.comments > 0;
+      return true;
+    },
+    [filterType]
+  );
+
+  // Active highlighted row (hovered takes priority, else selected)
+  const activeRow = useMemo(() => {
+    const idx = hoveredRowIndex ?? selectedRowIndex;
+    if (idx === null || idx === undefined) return null;
+    return plan.rows.find((r) => r.index === idx) || null;
+  }, [hoveredRowIndex, selectedRowIndex, plan.rows]);
+
+  // Pointer hover on SVG to find nearest row
+  const handlePointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (!svgRef.current) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    const svgX = ((e.clientX - rect.left) / rect.width) * SVG_WIDTH;
+
+    if (svgX < padLeft - 10 || svgX > padLeft + plotWidth + 10) {
+      setHoveredRowIndex(null);
+      return;
+    }
+
+    // Find nearest row by x
+    let nearestIdx = 0;
+    let minDiff = Infinity;
+    for (const r of plan.rows) {
+      const rx = getX(r.minuteOffset);
+      const diff = Math.abs(rx - svgX);
+      if (diff < minDiff) {
+        minDiff = diff;
+        nearestIdx = r.index;
+      }
+    }
+    setHoveredRowIndex(nearestIdx);
+  };
+
+  // CSV Export (Section 5)
   const handleDownloadCsv = () => {
-    const headers = ["Batch Number", "Time Offset (min)", "Scheduled Clock Time", "Service", "Quantity", "15m Grid Snapped"];
-    const rows = plan.batches.map((b, i) => {
-      const batchTime = new Date(startDate.getTime() + b.minuteOffset * 60 * 1000);
-      const timeStr = new Intl.DateTimeFormat("en-US", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: false,
-      }).format(batchTime);
+    const headers = [
+      "batch_number",
+      "minute_offset",
+      "clock_time_bd",
+      "views",
+      "cum_views",
+      "likes",
+      "cum_likes",
+      "saves",
+      "cum_saves",
+      "reposts",
+      "cum_reposts",
+      "shares",
+      "cum_shares",
+      "comments",
+      "cum_comments",
+    ];
 
-      return [
-        i + 1,
-        `+${b.minuteOffset}m`,
-        timeStr,
-        b.service,
-        b.quantity,
-        b.minuteOffset % 15 === 0 ? "YES (:00/:15/:30/:45)" : "NO",
-      ];
-    });
+    const csvRows = plan.rows.map((r) => [
+      r.index + 1,
+      r.minuteOffset,
+      r.clockTime,
+      r.views,
+      r.cumulativeViews,
+      r.likes,
+      r.cumulativeLikes,
+      r.saves,
+      r.cumulativeSaves,
+      r.reposts,
+      r.cumulativeReposts,
+      r.shares,
+      r.cumulativeShares,
+      r.comments,
+      r.cumulativeComments,
+    ]);
 
     const csvContent =
       "data:text/csv;charset=utf-8," +
-      [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
+      [headers.join(","), ...csvRows.map((e) => e.join(","))].join("\n");
 
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `aurasmm-schedule-${plan.seed}.csv`);
+    link.setAttribute("download", `aurasmm-plan-${plan.seed.slice(0, 8)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -378,7 +394,7 @@ export function LiveOrganicGrowthPreview({
               Live Growth Preview
             </h2>
             <p className="text-xs text-[#5B625F] font-medium font-sans">
-              Gradual, view-paced delivery • Monotonic continuous S-curve
+              Gradual, view-paced delivery • Monotonic continuous plan execution
             </p>
           </div>
         </div>
@@ -391,7 +407,11 @@ export function LiveOrganicGrowthPreview({
             className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white hover:bg-[#F3F1EA] border border-[#E4E0D3] text-[#111413] flex items-center gap-1.5 shadow-2xs hover:border-[#111413]/40 transition-all press-scale cursor-pointer"
             title="Generate a fresh, unique delivery pattern schedule"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isGenerating ? "animate-spin text-[#5E8C1F]" : "text-[#5B625F]"}`} />
+            <RefreshCw
+              className={`w-3.5 h-3.5 ${
+                isGenerating ? "animate-spin text-[#5E8C1F]" : "text-[#5B625F]"
+              }`}
+            />
             <span>New Pattern</span>
           </button>
 
@@ -407,7 +427,7 @@ export function LiveOrganicGrowthPreview({
       <div className="flex items-center justify-between flex-wrap gap-2 pt-0.5">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="px-3 py-1 rounded-full text-xs font-bold bg-white text-[#111413] border border-[#E4E0D3] shadow-2xs font-sans">
-            Pattern #{plan.seed.slice(-8)}
+            Pattern #{plan.seed.slice(0, 8)}
           </span>
 
           <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-[#5E8C1F] border border-emerald-200/60 shadow-2xs font-sans flex items-center gap-1">
@@ -427,9 +447,15 @@ export function LiveOrganicGrowthPreview({
           >
             {showEngagementOverlay ? "Engagement: Shown" : "Engagement: Hidden"}
           </button>
+
+          {isAdmin && (
+            <span className="text-[11px] font-mono text-[#5B625F] bg-[#F3F1EA] px-2 py-0.5 rounded border border-[#E4E0D3]">
+              rebalanced: views exact
+            </span>
+          )}
         </div>
 
-        {/* Admin Only: Template Number & Count */}
+        {/* Admin Template Selector */}
         {isAdmin && (
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-[#5B625F] font-sans"># Template:</span>
@@ -453,74 +479,105 @@ export function LiveOrganicGrowthPreview({
         )}
       </div>
 
-      {/* 3. METRIC CHIPS SUMMARY ROW */}
+      {/* 3. METRIC CHIPS SUMMARY ROW (Section 6: Exact sums of rows[]) */}
       <div className="flex items-center flex-wrap gap-2 text-xs font-sans">
         {/* Total Views Chip */}
         <span className="px-3 py-1 rounded-xl bg-[#2F6B3A] text-white font-bold flex items-center gap-1.5 shadow-2xs font-sans">
           <Eye className="w-3.5 h-3.5 fill-white" />
-          <span>{plan.viewsTotal.toLocaleString()} Views</span>
+          <span>{plan.totals.views.toLocaleString()} Views</span>
         </span>
 
         {/* Likes Chip */}
-        <span className="px-3 py-1 rounded-xl bg-white border border-[#C4552D]/30 text-[#C4552D] font-bold flex items-center gap-1.5 shadow-2xs font-sans">
-          <Heart className="w-3.5 h-3.5 fill-[#C4552D] text-[#C4552D]" />
-          <span>{plan.likesTotal.toLocaleString()} Likes</span>
-        </span>
+        {plan.totals.likes > 0 ? (
+          <span className="px-3 py-1 rounded-xl bg-white border border-[#C4552D]/30 text-[#C4552D] font-bold flex items-center gap-1.5 shadow-2xs font-sans">
+            <Heart className="w-3.5 h-3.5 fill-[#C4552D] text-[#C4552D]" />
+            <span>{plan.totals.likes.toLocaleString()} Likes</span>
+          </span>
+        ) : (
+          <span className="px-2.5 py-1 rounded-xl bg-[#F3F1EA] text-[#5B625F] border border-[#E4E0D3] font-semibold text-[11px] font-sans">
+            Likes: not included in this order (below min 10)
+          </span>
+        )}
 
         {/* Saves Chip */}
-        {plan.savesTotal > 0 && (
+        {plan.totals.saves > 0 ? (
           <span className="px-3 py-1 rounded-xl bg-white border border-[#E0A030]/30 text-[#E0A030] font-bold flex items-center gap-1.5 shadow-2xs font-sans">
             <Bookmark className="w-3.5 h-3.5 fill-[#E0A030] text-[#E0A030]" />
-            <span>{plan.savesTotal.toLocaleString()} Saves</span>
+            <span>{plan.totals.saves.toLocaleString()} Saves</span>
+          </span>
+        ) : (
+          <span className="px-2.5 py-1 rounded-xl bg-[#F3F1EA] text-[#5B625F] border border-[#E4E0D3] font-semibold text-[11px] font-sans">
+            Saves: not included in this order (below min 10)
+          </span>
+        )}
+
+        {/* Reposts Chip */}
+        {plan.totals.reposts > 0 ? (
+          <span className="px-3 py-1 rounded-xl bg-white border border-[#2A9D8F]/30 text-[#2A9D8F] font-bold flex items-center gap-1.5 shadow-2xs font-sans">
+            <Repeat className="w-3.5 h-3.5 text-[#2A9D8F]" />
+            <span>{plan.totals.reposts.toLocaleString()} Reposts</span>
+          </span>
+        ) : (
+          <span className="px-2.5 py-1 rounded-xl bg-[#F3F1EA] text-[#5B625F] border border-[#E4E0D3] font-semibold text-[11px] font-sans">
+            Reposts: not included in this order (below min 10)
           </span>
         )}
 
         {/* Shares Chip */}
-        {plan.sharesTotal > 0 && (
+        {plan.totals.shares > 0 ? (
           <span className="px-3 py-1 rounded-xl bg-white border border-[#7C5CBF]/30 text-[#7C5CBF] font-bold flex items-center gap-1.5 shadow-2xs font-sans">
             <Share2 className="w-3.5 h-3.5 text-[#7C5CBF]" />
-            <span>{plan.sharesTotal.toLocaleString()} Shares</span>
+            <span>{plan.totals.shares.toLocaleString()} Shares</span>
+          </span>
+        ) : (
+          <span className="px-2.5 py-1 rounded-xl bg-[#F3F1EA] text-[#5B625F] border border-[#E4E0D3] font-semibold text-[11px] font-sans">
+            Shares: not included in this order (below min 10)
           </span>
         )}
 
         {/* Comments Chip */}
-        {plan.commentsTotal > 0 && (
-          <span className="px-3 py-1 rounded-xl bg-white border border-[#2A9D8F]/30 text-[#2A9D8F] font-bold flex items-center gap-1.5 shadow-2xs font-sans">
-            <MessageCircle className="w-3.5 h-3.5 text-[#2A9D8F]" />
-            <span>{plan.commentsTotal.toLocaleString()} Comments</span>
+        {plan.totals.comments > 0 ? (
+          <span className="px-3 py-1 rounded-xl bg-white border border-[#3D82A2]/30 text-[#3D82A2] font-bold flex items-center gap-1.5 shadow-2xs font-sans">
+            <MessageCircle className="w-3.5 h-3.5 text-[#3D82A2]" />
+            <span>{plan.totals.comments.toLocaleString()} Comments</span>
           </span>
-        )}
+        ) : null}
 
-        {/* Batches Count Chip */}
+        {/* Runs Count Chip */}
         <span className="px-2.5 py-1 rounded-xl bg-white border border-[#E4E0D3] text-[#111413] font-bold shadow-2xs flex items-center gap-1 font-sans ml-auto">
           <TrendingUp className="w-3.5 h-3.5 text-[#5E8C1F]" />
-          <span>{plan.totalBatchesCount} batches on 15m grid</span>
+          <span>{plan.rows.length} batches on 15m grid</span>
         </span>
       </div>
 
-      {/* 4. THE GRAPH SVG (100% Smooth Anti-Radar Non-Spiked S-Curve) */}
+      {/* 4. THE GRAPH SVG (Section 4: Direct render of rows[], viewBox 0 0 900 320) */}
       <div className="relative w-full overflow-hidden bg-gradient-to-b from-[#F3F1EA]/40 to-white rounded-2xl border border-[#E4E0D3] p-2 sm:p-3">
         <svg
           ref={svgRef}
           viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
-          className="w-full h-56 sm:h-64 touch-none cursor-crosshair font-sans overflow-visible"
+          className="w-full h-64 sm:h-72 touch-none cursor-crosshair font-sans overflow-visible"
           onPointerMove={handlePointerMove}
-          onPointerLeave={() => setHoveredPoint(null)}
+          onPointerLeave={() => setHoveredRowIndex(null)}
+          onClick={() => {
+            if (hoveredRowIndex !== null) {
+              setSelectedRowIndex(hoveredRowIndex);
+            }
+          }}
         >
           <defs>
-            <linearGradient id="viewsAreaGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#2F6B3A" stopOpacity="0.12" />
+            <linearGradient id="viewsGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#2F6B3A" stopOpacity="0.14" />
               <stop offset="100%" stopColor="#2F6B3A" stopOpacity="0.01" />
             </linearGradient>
 
             <filter id="tooltipShadow" x="-20%" y="-20%" width="140%" height="140%">
-              <feDropShadow dx="0" dy="2" stdDeviation="4" floodOpacity="0.12" />
+              <feDropShadow dx="0" dy="2" stdDeviation="4" floodOpacity="0.15" />
             </filter>
           </defs>
 
-          {/* Horizontal Grid Lines */}
-          {yTicks.map((tick, i) => (
-            <g key={i}>
+          {/* Left Y-Axis Horizontal Grid Lines (Views) */}
+          {leftYTicks.map((tick, i) => (
+            <g key={`ly-${i}`}>
               <line
                 x1={padLeft}
                 y1={tick.y}
@@ -541,6 +598,21 @@ export function LiveOrganicGrowthPreview({
             </g>
           ))}
 
+          {/* Right Y-Axis Grid Labels (Engagement) */}
+          {showEngagementOverlay &&
+            rightYTicks.map((tick, i) => (
+              <g key={`ry-${i}`}>
+                <text
+                  x={padLeft + plotWidth + 8}
+                  y={tick.y + 3.5}
+                  textAnchor="start"
+                  className="fill-[#C4552D] text-[9.5px] font-mono font-bold"
+                >
+                  {tick.label}
+                </text>
+              </g>
+            ))}
+
           {/* Baseline Axis */}
           <line
             x1={padLeft}
@@ -551,55 +623,185 @@ export function LiveOrganicGrowthPreview({
             strokeWidth="1.5"
           />
 
-          {/* 1. SMOOTH VIEWS AREA FILL & LINE */}
-          {viewsSmoothArea && <path d={viewsSmoothArea} fill="url(#viewsAreaGrad)" />}
-          {viewsSmoothPath && (
+          {/* Axis Labels */}
+          <text
+            x={padLeft - 8}
+            y={padTop - 12}
+            textAnchor="end"
+            className="fill-[#2F6B3A] text-[10px] font-black uppercase tracking-wider font-sans"
+          >
+            Views
+          </text>
+          {showEngagementOverlay && (
+            <text
+              x={padLeft + plotWidth + 8}
+              y={padTop - 12}
+              textAnchor="start"
+              className="fill-[#C4552D] text-[10px] font-black uppercase tracking-wider font-sans"
+            >
+              Engagement
+            </text>
+          )}
+
+          {/* A. FAINT CONTINUOUS TREND CURVE C(t) */}
+          {trendCurvePath && (
             <path
-              d={viewsSmoothPath}
+              d={trendCurvePath}
               fill="none"
-              stroke="#2F6B3A"
-              strokeWidth="2.4"
-              strokeLinecap="round"
+              stroke="#D8D4C7"
+              strokeWidth="1.5"
+              strokeDasharray="2 2"
+              opacity="0.75"
             />
           )}
 
-          {/* 2. SMOOTH AUXILIARY METRIC LINES (when overlay enabled) */}
+          {/* B. VIEWS AREA GRADIENT & CUMULATIVE LINE */}
+          {viewsAreaPath && <path d={viewsAreaPath} fill="url(#viewsGrad)" />}
+          {viewsLinePath && (
+            <path
+              d={viewsLinePath}
+              fill="none"
+              stroke="#2F6B3A"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          )}
+
+          {/* C. ENGAGEMENT SERIES DASHED LINES (overlay enabled) */}
           {showEngagementOverlay && (
             <>
-              {sharesSmoothPath && (
+              {/* Reposts: #2A9D8F */}
+              {repostsPath && (
                 <path
-                  d={sharesSmoothPath}
+                  d={repostsPath}
+                  fill="none"
+                  stroke="#2A9D8F"
+                  strokeWidth="1.6"
+                  strokeDasharray="4 3"
+                />
+              )}
+              {/* Shares: #7C5CBF */}
+              {sharesPath && (
+                <path
+                  d={sharesPath}
                   fill="none"
                   stroke="#7C5CBF"
                   strokeWidth="1.6"
-                  strokeDasharray="3 2"
+                  strokeDasharray="4 3"
                 />
               )}
-              {savesSmoothPath && (
+              {/* Saves: #E0A030 */}
+              {savesPath && (
                 <path
-                  d={savesSmoothPath}
+                  d={savesPath}
                   fill="none"
                   stroke="#E0A030"
                   strokeWidth="1.6"
-                  strokeDasharray="3 2"
+                  strokeDasharray="4 3"
                 />
               )}
-              {likesSmoothPath && (
+              {/* Comments: #3D82A2 */}
+              {commentsPath && (
                 <path
-                  d={likesSmoothPath}
+                  d={commentsPath}
+                  fill="none"
+                  stroke="#3D82A2"
+                  strokeWidth="1.6"
+                  strokeDasharray="4 3"
+                />
+              )}
+              {/* Likes: #C4552D */}
+              {likesPath && (
+                <path
+                  d={likesPath}
                   fill="none"
                   stroke="#C4552D"
                   strokeWidth="1.8"
-                  strokeDasharray="3 2"
+                  strokeDasharray="4 3"
                 />
               )}
             </>
           )}
 
-          {/* Bottom Time Labels */}
+          {/* D. BOTTOM BARS: view size of each batch at bottom */}
+          {plan.rows.map((r) => {
+            const bx = getX(r.minuteOffset) - 2;
+            const barHeight = Math.max(2, (r.views / peakViewBatch) * 36);
+            const by = baselineY - barHeight;
+            const isSelected = selectedRowIndex === r.index;
+            const isHovered = hoveredRowIndex === r.index;
+            const matchesFilter = isRowMatchingFilter(r);
+
+            return (
+              <rect
+                key={`bar-${r.index}`}
+                x={bx}
+                y={by}
+                width="4"
+                height={barHeight}
+                rx="1"
+                fill={
+                  isSelected
+                    ? "#111413"
+                    : isHovered
+                    ? "#2F6B3A"
+                    : "rgba(47, 107, 58, 0.38)"
+                }
+                opacity={matchesFilter ? 1 : 0.25}
+                className="transition-colors cursor-pointer"
+                onClick={() => setSelectedRowIndex(r.index)}
+                onMouseEnter={() => setHoveredRowIndex(r.index)}
+              />
+            );
+          })}
+
+          {/* E. BATCH DATA POINTS on Views Cumulative Line */}
+          {plan.rows.map((r) => {
+            const cx = getX(r.minuteOffset);
+            const cy = getYViews(r.cumulativeViews);
+            const isSelected = selectedRowIndex === r.index;
+            const isHovered = hoveredRowIndex === r.index;
+            const matchesFilter = isRowMatchingFilter(r);
+
+            let radius = 3.5;
+            let fill = "#2F6B3A";
+            let stroke = "#FFFFFF";
+            let strokeWidth = 1.5;
+
+            if (isSelected) {
+              radius = 6.5;
+              fill = "#D4F04F";
+              stroke = "#111413";
+              strokeWidth = 3;
+            } else if (isHovered) {
+              radius = 5.5;
+              fill = "#2F6B3A";
+              stroke = "#111413";
+              strokeWidth = 2;
+            }
+
+            return (
+              <circle
+                key={`pt-${r.index}`}
+                cx={cx}
+                cy={cy}
+                r={radius}
+                fill={fill}
+                stroke={stroke}
+                strokeWidth={strokeWidth}
+                opacity={matchesFilter ? 1 : 0.25}
+                className="cursor-pointer transition-transform"
+                onClick={() => setSelectedRowIndex(r.index)}
+                onMouseEnter={() => setHoveredRowIndex(r.index)}
+              />
+            );
+          })}
+
+          {/* F. BOTTOM TIME LABELS */}
           {timeLabels.map((lbl, idx) => (
             <text
-              key={idx}
+              key={`time-${idx}`}
               x={lbl.x}
               y={baselineY + 18}
               textAnchor="middle"
@@ -609,73 +811,164 @@ export function LiveOrganicGrowthPreview({
             </text>
           ))}
 
-          {/* Interactive Hover Crosshair & Tooltip */}
-          {hoveredPoint && (
+          {/* G. INTERACTIVE CROSSHAIR & TOOLTIP */}
+          {activeRow && (
             <g>
+              {/* Vertical Guide Line */}
               <line
-                x1={hoveredPoint.x}
+                x1={getX(activeRow.minuteOffset)}
                 y1={padTop}
-                x2={hoveredPoint.x}
+                x2={getX(activeRow.minuteOffset)}
                 y2={baselineY}
-                stroke="#2F6B3A"
+                stroke="#111413"
                 strokeWidth="1.2"
                 strokeDasharray="2 2"
-                opacity="0.8"
-              />
-              <circle
-                cx={hoveredPoint.x}
-                cy={hoveredPoint.y}
-                r="4.5"
-                fill="#2F6B3A"
-                stroke="#FFFFFF"
-                strokeWidth="2"
+                opacity="0.75"
               />
 
               {/* Tooltip Card */}
               <g
                 transform={`translate(${
-                  hoveredPoint.x > SVG_WIDTH - 160
-                    ? hoveredPoint.x - 145
-                    : hoveredPoint.x + 12
-                }, ${Math.max(padTop + 10, Math.min(baselineY - 100, hoveredPoint.y - 45))})`}
+                  getX(activeRow.minuteOffset) > SVG_WIDTH - 200
+                    ? getX(activeRow.minuteOffset) - 185
+                    : getX(activeRow.minuteOffset) + 12
+                }, ${Math.max(
+                  padTop + 5,
+                  Math.min(baselineY - 145, getYViews(activeRow.cumulativeViews) - 60)
+                )})`}
                 filter="url(#tooltipShadow)"
               >
                 <rect
-                  width="135"
-                  height="115"
+                  width="175"
+                  height="138"
                   rx="14"
                   fill="#FFFFFF"
                   stroke="#E4E0D3"
+                  strokeWidth="1.2"
+                />
+                <text
+                  x="12"
+                  y="18"
+                  className="fill-[#111413] text-[11px] font-black font-sans"
+                >
+                  Batch #{activeRow.index + 1} • +{activeRow.minuteOffset}m ({activeRow.clockTime} BD)
+                </text>
+                <line
+                  x1="12"
+                  y1="25"
+                  x2="163"
+                  y2="25"
+                  stroke="#E4E0D3"
                   strokeWidth="1"
                 />
-                <text x="12" y="20" className="fill-[#111413] text-[11px] font-black font-sans">
-                  {hoveredPoint.timeLabel}
-                </text>
-                <line x1="12" y1="26" x2="123" y2="26" stroke="#E4E0D3" strokeWidth="1" />
 
-                <circle cx="16" cy="40" r="3" fill="#2F6B3A" />
-                <text x="24" y="43" className="fill-[#5B625F] text-[10px] font-semibold font-sans">Views</text>
-                <text x="123" y="43" textAnchor="end" className="fill-[#2F6B3A] text-[10px] font-bold font-sans">
-                  {hoveredPoint.views.toLocaleString()}
+                {/* Views */}
+                <circle cx="16" cy="38" r="3" fill="#2F6B3A" />
+                <text x="24" y="41" className="fill-[#5B625F] text-[10px] font-semibold font-sans">
+                  Views Batch
                 </text>
-
-                <circle cx="16" cy="58" r="3" fill="#C4552D" />
-                <text x="24" y="61" className="fill-[#5B625F] text-[10px] font-semibold font-sans">Likes</text>
-                <text x="123" y="61" textAnchor="end" className="fill-[#C4552D] text-[10px] font-bold font-sans">
-                  {hoveredPoint.likes.toLocaleString()}
+                <text
+                  x="163"
+                  y="41"
+                  textAnchor="end"
+                  className="fill-[#2F6B3A] text-[10px] font-bold font-sans"
+                >
+                  {activeRow.views.toLocaleString()} (+{activeRow.cumulativeViews.toLocaleString()})
                 </text>
 
-                <circle cx="16" cy="76" r="3" fill="#E0A030" />
-                <text x="24" y="79" className="fill-[#5B625F] text-[10px] font-semibold font-sans">Saves</text>
-                <text x="123" y="79" textAnchor="end" className="fill-[#E0A030] text-[10px] font-bold font-sans">
-                  {hoveredPoint.saves.toLocaleString()}
+                {/* Likes */}
+                <circle cx="16" cy="56" r="3" fill="#C4552D" />
+                <text x="24" y="59" className="fill-[#5B625F] text-[10px] font-semibold font-sans">
+                  Likes
+                </text>
+                <text
+                  x="163"
+                  y="59"
+                  textAnchor="end"
+                  className={`text-[10px] font-bold font-sans ${
+                    activeRow.likes > 0 ? "fill-[#C4552D]" : "fill-[#5B625F]/40"
+                  }`}
+                >
+                  {activeRow.likes > 0
+                    ? `${activeRow.likes} (cum ${activeRow.cumulativeLikes})`
+                    : "—"}
                 </text>
 
-                <circle cx="16" cy="94" r="3" fill="#7C5CBF" />
-                <text x="24" y="97" className="fill-[#5B625F] text-[10px] font-semibold font-sans">Shares</text>
-                <text x="123" y="97" textAnchor="end" className="fill-[#7C5CBF] text-[10px] font-bold font-sans">
-                  {hoveredPoint.shares.toLocaleString()}
+                {/* Saves */}
+                <circle cx="16" cy="74" r="3" fill="#E0A030" />
+                <text x="24" y="77" className="fill-[#5B625F] text-[10px] font-semibold font-sans">
+                  Saves
                 </text>
+                <text
+                  x="163"
+                  y="77"
+                  textAnchor="end"
+                  className={`text-[10px] font-bold font-sans ${
+                    activeRow.saves > 0 ? "fill-[#E0A030]" : "fill-[#5B625F]/40"
+                  }`}
+                >
+                  {activeRow.saves > 0
+                    ? `${activeRow.saves} (cum ${activeRow.cumulativeSaves})`
+                    : "—"}
+                </text>
+
+                {/* Reposts */}
+                <circle cx="16" cy="92" r="3" fill="#2A9D8F" />
+                <text x="24" y="95" className="fill-[#5B625F] text-[10px] font-semibold font-sans">
+                  Reposts
+                </text>
+                <text
+                  x="163"
+                  y="95"
+                  textAnchor="end"
+                  className={`text-[10px] font-bold font-sans ${
+                    activeRow.reposts > 0 ? "fill-[#2A9D8F]" : "fill-[#5B625F]/40"
+                  }`}
+                >
+                  {activeRow.reposts > 0
+                    ? `${activeRow.reposts} (cum ${activeRow.cumulativeReposts})`
+                    : "—"}
+                </text>
+
+                {/* Shares */}
+                <circle cx="16" cy="110" r="3" fill="#7C5CBF" />
+                <text x="24" y="113" className="fill-[#5B625F] text-[10px] font-semibold font-sans">
+                  Shares
+                </text>
+                <text
+                  x="163"
+                  y="113"
+                  textAnchor="end"
+                  className={`text-[10px] font-bold font-sans ${
+                    activeRow.shares > 0 ? "fill-[#7C5CBF]" : "fill-[#5B625F]/40"
+                  }`}
+                >
+                  {activeRow.shares > 0
+                    ? `${activeRow.shares} (cum ${activeRow.cumulativeShares})`
+                    : "—"}
+                </text>
+
+                {/* Comments (if any) */}
+                {plan.totals.comments > 0 && (
+                  <>
+                    <circle cx="16" cy="126" r="3" fill="#3D82A2" />
+                    <text x="24" y="129" className="fill-[#5B625F] text-[9px] font-semibold font-sans">
+                      Comments
+                    </text>
+                    <text
+                      x="163"
+                      y="129"
+                      textAnchor="end"
+                      className={`text-[9px] font-bold font-sans ${
+                        activeRow.comments > 0 ? "fill-[#3D82A2]" : "fill-[#5B625F]/40"
+                      }`}
+                    >
+                      {activeRow.comments > 0
+                        ? `${activeRow.comments} (cum ${activeRow.cumulativeComments})`
+                        : "—"}
+                    </text>
+                  </>
+                )}
               </g>
             </g>
           )}
@@ -690,96 +983,220 @@ export function LiveOrganicGrowthPreview({
           className="px-3.5 py-2 rounded-xl bg-white hover:bg-[#F3F1EA] border border-[#E4E0D3] text-xs font-bold text-[#111413] flex items-center gap-2 shadow-2xs transition-all press-scale cursor-pointer"
         >
           <Layers className="w-3.5 h-3.5 text-[#5E8C1F]" />
-          <span>View Schedule ({plan.totalBatchesCount} Batches)</span>
-          {showScheduleModal ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          <span>Batch Schedule ({plan.rows.length} Rows)</span>
+          {showScheduleModal ? (
+            <ChevronUp className="w-3.5 h-3.5" />
+          ) : (
+            <ChevronDown className="w-3.5 h-3.5" />
+          )}
         </button>
 
         <button
           type="button"
           onClick={handleDownloadCsv}
           className="px-3.5 py-2 rounded-xl bg-white hover:bg-[#F3F1EA] border border-[#E4E0D3] text-xs font-bold text-[#111413] flex items-center gap-1.5 shadow-2xs hover:border-[#111413]/40 transition-all press-scale cursor-pointer"
-          title="Download schedule CSV"
+          title="Download schedule CSV with exact row data"
         >
           <Download className="w-3.5 h-3.5 text-[#5B625F]" />
           <span>Download CSV</span>
         </button>
       </div>
 
-      {/* SCHEDULE PANEL (Filters & Table) */}
+      {/* 6. THE BATCH TABLE (Section 5: Scrollable table rendered directly from rows[]) */}
       {showScheduleModal && (
-        <div className="p-4 rounded-2xl bg-[#F3F1EA]/50 border border-[#E4E0D3] space-y-3 animate-fadeIn">
-          {/* Filter Chips */}
+        <div className="p-4 rounded-2xl bg-[#F3F1EA]/50 border border-[#E4E0D3] space-y-3 animate-fadeIn font-sans">
+          {/* Filter Pills */}
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-[11px] font-bold text-[#5B625F] mr-1 flex items-center gap-1">
               <Filter className="w-3 h-3" /> Filter:
             </span>
-            {["ALL", "VIEWS", "LIKES", "SAVES", "SHARES", "COMMENTS"].map((svc) => (
+            <button
+              type="button"
+              onClick={() => setFilterType("ALL")}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                filterType === "ALL"
+                  ? "bg-[#111413] text-[#D4F04F] shadow-2xs"
+                  : "bg-white text-[#5B625F] border border-[#E4E0D3] hover:bg-[#F3F1EA]"
+              }`}
+            >
+              All ({countsByFilter.all})
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterType("VIEWS_ONLY")}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                filterType === "VIEWS_ONLY"
+                  ? "bg-[#111413] text-[#D4F04F] shadow-2xs"
+                  : "bg-white text-[#5B625F] border border-[#E4E0D3] hover:bg-[#F3F1EA]"
+              }`}
+            >
+              Views only ({countsByFilter.viewsOnly})
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterType("LIKES")}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                filterType === "LIKES"
+                  ? "bg-[#111413] text-[#D4F04F] shadow-2xs"
+                  : "bg-white text-[#5B625F] border border-[#E4E0D3] hover:bg-[#F3F1EA]"
+              }`}
+            >
+              With Likes ({countsByFilter.likes})
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterType("SAVES")}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                filterType === "SAVES"
+                  ? "bg-[#111413] text-[#D4F04F] shadow-2xs"
+                  : "bg-white text-[#5B625F] border border-[#E4E0D3] hover:bg-[#F3F1EA]"
+              }`}
+            >
+              With Saves ({countsByFilter.saves})
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterType("REPOSTS")}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                filterType === "REPOSTS"
+                  ? "bg-[#111413] text-[#D4F04F] shadow-2xs"
+                  : "bg-white text-[#5B625F] border border-[#E4E0D3] hover:bg-[#F3F1EA]"
+              }`}
+            >
+              With Reposts ({countsByFilter.reposts})
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterType("SHARES")}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                filterType === "SHARES"
+                  ? "bg-[#111413] text-[#D4F04F] shadow-2xs"
+                  : "bg-white text-[#5B625F] border border-[#E4E0D3] hover:bg-[#F3F1EA]"
+              }`}
+            >
+              With Shares ({countsByFilter.shares})
+            </button>
+            {plan.totals.comments > 0 && (
               <button
-                key={svc}
                 type="button"
-                onClick={() => setFilterService(svc)}
+                onClick={() => setFilterType("COMMENTS")}
                 className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-                  filterService === svc
+                  filterType === "COMMENTS"
                     ? "bg-[#111413] text-[#D4F04F] shadow-2xs"
                     : "bg-white text-[#5B625F] border border-[#E4E0D3] hover:bg-[#F3F1EA]"
                 }`}
               >
-                {svc}
+                With Comments ({countsByFilter.comments})
               </button>
-            ))}
+            )}
           </div>
 
-          {/* Schedule Table */}
-          <div className="max-h-64 overflow-y-auto rounded-xl border border-[#E4E0D3] bg-white divide-y divide-[#E4E0D3]/60 font-sans text-xs">
-            {filteredBatches.map((b, idx) => {
-              const batchDate = new Date(startDate.getTime() + b.minuteOffset * 60 * 1000);
-              const clockTime = new Intl.DateTimeFormat("en-US", {
-                hour: "2-digit",
-                minute: "2-digit",
-                hour12: false,
-              }).format(batchDate);
+          {/* Table Container */}
+          <div className="max-h-72 overflow-y-auto rounded-xl border border-[#E4E0D3] bg-white">
+            <table className="w-full text-left text-xs font-sans border-collapse">
+              <thead className="bg-[#F3F1EA] text-[#5B625F] sticky top-0 z-10 border-b border-[#E4E0D3] text-[11px] uppercase tracking-wider font-bold">
+                <tr>
+                  <th className="py-2.5 px-3 w-12 text-center">#</th>
+                  <th className="py-2.5 px-3">Offset</th>
+                  <th className="py-2.5 px-3">Clock Time (BD)</th>
+                  <th className="py-2.5 px-3 text-right">Views</th>
+                  <th className="py-2.5 px-3 text-right">Likes</th>
+                  <th className="py-2.5 px-3 text-right">Saves</th>
+                  <th className="py-2.5 px-3 text-right">Reposts</th>
+                  <th className="py-2.5 px-3 text-right">Shares</th>
+                  <th className="py-2.5 px-3 text-right">Comments</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#E4E0D3]/60">
+                {filteredRows.map((r) => {
+                  const isSelected = selectedRowIndex === r.index;
+                  const isHovered = hoveredRowIndex === r.index;
 
-              return (
-                <div
-                  key={b.id || idx}
-                  className="px-3.5 py-2.5 flex items-center justify-between gap-2 hover:bg-[#F3F1EA] transition-colors"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-md bg-[#F3F1EA] text-[#111413] font-bold text-[10px] flex items-center justify-center shrink-0">
-                      #{idx + 1}
-                    </span>
-                    <span className="font-semibold text-[#111413]">+{b.minuteOffset}m</span>
-                    <span className="text-[10px] text-[#5B625F]">({clockTime})</span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${
-                        b.service === "views"
-                          ? "bg-emerald-50 text-[#2F6B3A] border border-emerald-200"
-                          : b.service === "likes"
-                          ? "bg-rose-50 text-[#C4552D] border border-rose-200"
-                          : b.service === "saves"
-                          ? "bg-amber-50 text-[#E0A030] border border-amber-200"
-                          : b.service === "shares"
-                          ? "bg-purple-50 text-[#7C5CBF] border border-purple-200"
-                          : "bg-teal-50 text-[#2A9D8F] border border-teal-200"
+                  return (
+                    <tr
+                      key={`row-${r.index}`}
+                      onClick={() => setSelectedRowIndex(r.index)}
+                      onMouseEnter={() => setHoveredRowIndex(r.index)}
+                      onMouseLeave={() => setHoveredRowIndex(null)}
+                      className={`cursor-pointer transition-colors ${
+                        isSelected
+                          ? "bg-[#D4F04F]/20 font-bold border-l-4 border-l-[#111413]"
+                          : isHovered
+                          ? "bg-[#F3F1EA]"
+                          : "hover:bg-[#F3F1EA]/60"
                       }`}
                     >
-                      {b.service}
-                    </span>
+                      <td className="py-2 px-3 text-center font-mono text-[11px] text-[#5B625F]">
+                        #{r.index + 1}
+                      </td>
+                      <td className="py-2 px-3 font-semibold text-[#111413]">
+                        +{r.minuteOffset}m
+                      </td>
+                      <td className="py-2 px-3 font-mono text-[11px] text-[#5B625F]">
+                        {r.clockTime}
+                      </td>
+                      <td className="py-2 px-3 text-right font-bold text-[#2F6B3A]">
+                        {r.views.toLocaleString()}
+                      </td>
+                      <td className="py-2 px-3 text-right font-medium">
+                        {r.likes > 0 ? (
+                          <span className="text-[#C4552D] font-bold font-mono">
+                            {r.likes.toLocaleString()}
+                          </span>
+                        ) : (
+                          <span className="text-[#5B625F]/40 font-mono">-</span>
+                        )}
+                      </td>
+                      <td className="py-2 px-3 text-right font-medium">
+                        {r.saves > 0 ? (
+                          <span className="text-[#E0A030] font-bold font-mono">
+                            {r.saves.toLocaleString()}
+                          </span>
+                        ) : (
+                          <span className="text-[#5B625F]/40 font-mono">-</span>
+                        )}
+                      </td>
+                      <td className="py-2 px-3 text-right font-medium">
+                        {r.reposts > 0 ? (
+                          <span className="text-[#2A9D8F] font-bold font-mono">
+                            {r.reposts.toLocaleString()}
+                          </span>
+                        ) : (
+                          <span className="text-[#5B625F]/40 font-mono">-</span>
+                        )}
+                      </td>
+                      <td className="py-2 px-3 text-right font-medium">
+                        {r.shares > 0 ? (
+                          <span className="text-[#7C5CBF] font-bold font-mono">
+                            {r.shares.toLocaleString()}
+                          </span>
+                        ) : (
+                          <span className="text-[#5B625F]/40 font-mono">-</span>
+                        )}
+                      </td>
+                      <td className="py-2 px-3 text-right font-medium">
+                        {r.comments > 0 ? (
+                          <span className="text-[#3D82A2] font-bold font-mono">
+                            {r.comments.toLocaleString()}
+                          </span>
+                        ) : (
+                          <span className="text-[#5B625F]/40 font-mono">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
 
-                    <span className="font-black text-[#111413] min-w-[50px] text-right">
-                      {b.quantity.toLocaleString()}
-                    </span>
-
-                    <span className="text-[9px] font-bold text-[#5E8C1F] bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/50 hidden sm:inline-block">
-                      :{(b.minuteOffset % 60).toString().padStart(2, "0")} grid
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
+          <div className="flex items-center justify-between text-[11px] text-[#5B625F] pt-1">
+            <span>
+              Click any row to pinpoint its batch in the graph above. Hovering shows live sync.
+            </span>
+            <span className="font-mono font-bold">
+              {filteredRows.length} of {plan.rows.length} rows displayed
+            </span>
           </div>
         </div>
       )}
