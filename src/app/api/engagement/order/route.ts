@@ -277,13 +277,17 @@ export async function POST(request: Request) {
     const sharesRate = config.pricing?.sharesUserRate ?? (zeofameSharesService?.ratePer1000 ? zeofameSharesService.ratePer1000 * 2.5 : 0.80);
     const commentsRate = config.pricing?.commentsUserRate ?? 15.00;
 
-    // A. Views Runs (if enabled)
+    // A–D. Build Runs — ALWAYS use deterministic plan batches when provided.
+    // The legacy min/max/interval/runsCount fields in admin are no longer used for ordering.
     const viewsRuns: Array<{ runNumber: number; scheduledAt: Date; quantity: number; cost: number }> = [];
     let totalPlannedViews = 0;
     let totalViewsCost = 0;
+
+    // Only run the legacy path if no deterministic batches were submitted
+    const hasDeterministicBatches = Array.isArray(parsed.batches) && parsed.batches.length > 0;
     let fallbackViewsPlan: any = null;
 
-    if (preset.views.enabled !== false) {
+    if (!hasDeterministicBatches && preset.views.enabled !== false) {
       const minV = Math.min(preset.views.minQuantity, preset.views.maxQuantity);
       const maxV = Math.max(preset.views.minQuantity, preset.views.maxQuantity);
       const targetViews = preset.targetViews || 2960;
@@ -333,11 +337,11 @@ export async function POST(request: Request) {
       }
     }
 
-    // B. Likes Runs (if enabled)
+    // B. Likes Runs (if enabled — legacy path only, overridden below by deterministic batches)
     const likesRuns: Array<{ runNumber: number; scheduledAt: Date; quantity: number; cost: number }> = [];
     let totalPlannedLikes = 0;
     let totalLikesCost = 0;
-    if (preset.likes.enabled !== false) {
+    if (!hasDeterministicBatches && preset.likes.enabled !== false) {
       const minL = Math.min(preset.likes.minQuantity, preset.likes.maxQuantity);
       const maxL = Math.max(preset.likes.minQuantity, preset.likes.maxQuantity);
       const likesOffsets = preset.likes.waveOffsets || [120, 200, 280];
@@ -369,11 +373,11 @@ export async function POST(request: Request) {
       }
     }
 
-    // C. Saves Runs (if enabled)
+    // C. Saves Runs (legacy path only — overridden by deterministic batches below)
     const savesRuns: Array<{ runNumber: number; scheduledAt: Date; quantity: number; cost: number }> = [];
     let totalPlannedSaves = 0;
     let totalSavesCost = 0;
-    if (preset.saves?.enabled) {
+    if (!hasDeterministicBatches && preset.saves?.enabled) {
       const minS = Math.min(preset.saves.minQuantity, preset.saves.maxQuantity);
       const maxS = Math.max(preset.saves.minQuantity, preset.saves.maxQuantity);
       const savesOffsets = preset.saves.waveOffsets || [180, 360, 600];
@@ -405,11 +409,11 @@ export async function POST(request: Request) {
       }
     }
 
-    // D. Shares/Reposts Runs (if enabled)
+    // D. Shares/Reposts Runs (legacy path only — overridden by deterministic batches below)
     const sharesRuns: Array<{ runNumber: number; scheduledAt: Date; quantity: number; cost: number }> = [];
     let totalPlannedShares = 0;
     let totalSharesCost = 0;
-    if (preset.shares?.enabled) {
+    if (!hasDeterministicBatches && preset.shares?.enabled) {
       const minR = Math.min(preset.shares.minQuantity, preset.shares.maxQuantity);
       const maxR = Math.max(preset.shares.minQuantity, preset.shares.maxQuantity);
       const sharesOffsets = preset.shares.waveOffsets || [300, 540];
