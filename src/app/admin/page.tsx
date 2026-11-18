@@ -1337,17 +1337,19 @@ export default function AdminPage() {
                       <span className="text-[11px] text-[#252943]/50">Edit any preset's services, turn services On/Off, or adjust quantities</span>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
                       {[
-                        { id: "tiktok_2k", defaultLabel: "2K Starter", defaultBadge: "5h", defaultDuration: "5.0 Hours" },
-                        { id: "tiktok_5k", defaultLabel: "5K Velocity", defaultBadge: "16h", defaultDuration: "16.0 Hours (1 Day)" },
-                        { id: "tiktok_10k", defaultLabel: "10K Breakthrough", defaultBadge: "22h", defaultDuration: "22.0 Hours (1 Day)" },
-                        { id: "tiktok_50k", defaultLabel: "50K Mega Viral", defaultBadge: "48h", defaultDuration: "48.0 Hours (2 Days)" },
+                        { id: "tiktok_2k", defaultLabel: "2K Starter", defaultBadge: "6h", defaultDuration: "6.0 Hours" },
+                        { id: "tiktok_5k", defaultLabel: "5K Velocity", defaultBadge: "24h", defaultDuration: "24.0 Hours (1 Day)" },
+                        { id: "tiktok_10k", defaultLabel: "10K Breakthrough", defaultBadge: "48h", defaultDuration: "48.0 Hours (2 Days)" },
+                        { id: "tiktok_15k", defaultLabel: "15K Acceleration", defaultBadge: "72h", defaultDuration: "72.0 Hours (3 Days)" },
+                        { id: "tiktok_50k", defaultLabel: "50K Mega Viral", defaultBadge: "120h", defaultDuration: "120.0 Hours (5 Days)" },
                       ].map((tab) => {
                         const isTabActive = selectedAdminPresetKey === tab.id;
                         const presetData = tiktokTierPresets[tab.id];
                         const displayName = presetData?.name || tab.defaultLabel;
                         const badgeText = presetData?.badge || tab.defaultBadge;
+                        const isPkgDisabled = presetData?.disabled === true || presetData?.enabled === false;
 
                         const viewsOn = presetData?.views ? presetData.views.enabled !== false : true;
                         const likesOn = presetData?.likes ? presetData.likes.enabled !== false : true;
@@ -1363,19 +1365,25 @@ export default function AdminPage() {
                             className={`p-3.5 rounded-2xl border text-left transition-all relative flex flex-col justify-between cursor-pointer ${
                               isTabActive
                                 ? "bg-[#3A4EFB] text-white border-[#3A4EFB] shadow-md shadow-[#3A4EFB]/20 ring-2 ring-[#3A4EFB]"
+                                : isPkgDisabled
+                                ? "bg-rose-50/50 border-rose-200 hover:bg-rose-50 text-[#252943]"
                                 : "bg-white border-[#DEE0ED] hover:bg-[#F8F9FD] text-[#252943]"
                             }`}
                           >
                             <div className="flex items-center justify-between gap-1 w-full mb-1.5">
                               <span className="font-black text-xs truncate">{displayName}</span>
-                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
-                                isTabActive ? "bg-white/20 text-white" : "bg-[#DEE0ED] text-[#252943]"
+                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
+                                isPkgDisabled
+                                  ? "bg-rose-500 text-white"
+                                  : isTabActive ? "bg-white/20 text-white" : "bg-[#DEE0ED] text-[#252943]"
                               }`}>
-                                {badgeText}
+                                {isPkgDisabled ? "Disabled" : badgeText}
                               </span>
                             </div>
                             <div className="flex items-center justify-between text-[10px] opacity-80 pt-1.5 border-t border-current/20">
-                              <span>{activeCount} / 4 Services On</span>
+                              <span className={isPkgDisabled ? "text-rose-600 font-bold" : ""}>
+                                {isPkgDisabled ? "Hidden for Users" : `${activeCount} / 4 On`}
+                              </span>
                               <span className="font-mono font-bold">{isTabActive ? "Editing" : "Select"}</span>
                             </div>
                           </button>
@@ -1389,13 +1397,15 @@ export default function AdminPage() {
                 {(() => {
                   const fallbackPreset = {
                     id: selectedAdminPresetKey,
-                    name: selectedAdminPresetKey === "tiktok_2k" ? "2K Starter" : selectedAdminPresetKey === "tiktok_5k" ? "5K Velocity" : selectedAdminPresetKey === "tiktok_10k" ? "10K Breakthrough" : "50K Mega Viral",
-                    tagline: selectedAdminPresetKey === "tiktok_2k" ? "5-hour organic pacing for new posts" : selectedAdminPresetKey === "tiktok_5k" ? "16-hour FYP push with likes & reposts" : selectedAdminPresetKey === "tiktok_10k" ? "22-hour algorithm breakout with high saves" : "48-hour multi-day viral simulation",
-                    badge: selectedAdminPresetKey === "tiktok_2k" ? "5h" : selectedAdminPresetKey === "tiktok_5k" ? "16h" : selectedAdminPresetKey === "tiktok_10k" ? "22h" : "48h",
-                    durationLabel: selectedAdminPresetKey === "tiktok_2k" ? "5.0 Hours" : selectedAdminPresetKey === "tiktok_5k" ? "16.0 Hours (1 Day)" : selectedAdminPresetKey === "tiktok_10k" ? "22.0 Hours (1 Day)" : "48.0 Hours (2 Days)",
-                    durationHours: selectedAdminPresetKey === "tiktok_2k" ? 5.0 : selectedAdminPresetKey === "tiktok_5k" ? 16.0 : selectedAdminPresetKey === "tiktok_10k" ? 22.0 : 48.0,
-                    targetViews: selectedAdminPresetKey === "tiktok_2k" ? 2000 : selectedAdminPresetKey === "tiktok_5k" ? 5000 : selectedAdminPresetKey === "tiktok_10k" ? 10000 : 50000,
-                    targetLikes: selectedAdminPresetKey === "tiktok_2k" ? 42 : selectedAdminPresetKey === "tiktok_5k" ? 175 : selectedAdminPresetKey === "tiktok_10k" ? 380 : 2000,
+                    name: selectedAdminPresetKey === "tiktok_2k" ? "2K Starter" : selectedAdminPresetKey === "tiktok_5k" ? "5K Velocity" : selectedAdminPresetKey === "tiktok_10k" ? "10K Breakthrough" : selectedAdminPresetKey === "tiktok_15k" ? "15K Acceleration" : "50K Mega Viral",
+                    tagline: selectedAdminPresetKey === "tiktok_2k" ? "6-hour initial watch-time push & seed pool momentum" : selectedAdminPresetKey === "tiktok_5k" ? "24-hour natural FYP momentum with synchronized engagement waves" : selectedAdminPresetKey === "tiktok_10k" ? "2-day algorithmic breakout with circadian evening momentum" : selectedAdminPresetKey === "tiktok_15k" ? "3-day organic algorithm surge with gradual view-paced delivery" : "5-day full FYP virality curve with soft asymptotic tail",
+                    badge: selectedAdminPresetKey === "tiktok_2k" ? "6h" : selectedAdminPresetKey === "tiktok_5k" ? "24h" : selectedAdminPresetKey === "tiktok_10k" ? "48h" : selectedAdminPresetKey === "tiktok_15k" ? "72h" : "120h",
+                    durationLabel: selectedAdminPresetKey === "tiktok_2k" ? "6.0 Hours" : selectedAdminPresetKey === "tiktok_5k" ? "24.0 Hours (1 Day)" : selectedAdminPresetKey === "tiktok_10k" ? "48.0 Hours (2 Days)" : selectedAdminPresetKey === "tiktok_15k" ? "72.0 Hours (3 Days)" : "120.0 Hours (5 Days)",
+                    durationHours: selectedAdminPresetKey === "tiktok_2k" ? 6.0 : selectedAdminPresetKey === "tiktok_5k" ? 24.0 : selectedAdminPresetKey === "tiktok_10k" ? 48.0 : selectedAdminPresetKey === "tiktok_15k" ? 72.0 : 120.0,
+                    targetViews: selectedAdminPresetKey === "tiktok_2k" ? 2000 : selectedAdminPresetKey === "tiktok_5k" ? 5000 : selectedAdminPresetKey === "tiktok_10k" ? 10000 : selectedAdminPresetKey === "tiktok_15k" ? 15000 : 50000,
+                    targetLikes: selectedAdminPresetKey === "tiktok_2k" ? 42 : selectedAdminPresetKey === "tiktok_5k" ? 180 : selectedAdminPresetKey === "tiktok_10k" ? 420 : selectedAdminPresetKey === "tiktok_15k" ? 650 : 2600,
+                    enabled: true,
+                    disabled: false,
                     views: {
                       enabled: true,
                       providerName: tiktokConfig?.views?.providerName || "Views Provider",
@@ -1487,6 +1497,77 @@ export default function AdminPage() {
                           <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800">
                             Key: {selectedAdminPresetKey}
                           </span>
+                        </div>
+
+                        {/* Package Enable / Disable Toggle Banner */}
+                        <div className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all ${
+                          activePreset.disabled === true || activePreset.enabled === false
+                            ? "bg-rose-50 border-rose-200"
+                            : "bg-emerald-50 border-emerald-200"
+                        }`}>
+                          <div className="flex items-start gap-3">
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                              activePreset.disabled === true || activePreset.enabled === false
+                                ? "bg-rose-100 text-rose-700"
+                                : "bg-emerald-100 text-emerald-700"
+                            }`}>
+                              {activePreset.disabled === true || activePreset.enabled === false ? (
+                                <XCircle className="w-4 h-4" />
+                              ) : (
+                                <CheckCircle2 className="w-4 h-4" />
+                              )}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className={`text-xs font-bold ${
+                                  activePreset.disabled === true || activePreset.enabled === false
+                                    ? "text-rose-900"
+                                    : "text-emerald-900"
+                                }`}>
+                                  Package Status: {activePreset.disabled === true || activePreset.enabled === false ? "Disabled (Hidden from Users)" : "Active & Live for Users"}
+                                </span>
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                                  activePreset.disabled === true || activePreset.enabled === false
+                                    ? "bg-rose-200 text-rose-800"
+                                    : "bg-emerald-200 text-emerald-800"
+                                }`}>
+                                  {activePreset.disabled === true || activePreset.enabled === false ? "Disabled" : "Active"}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-[#252943]/70 mt-0.5">
+                                {activePreset.disabled === true || activePreset.enabled === false
+                                  ? "Users CANNOT view, see, or order this package on /engagement. Orders for this package are blocked."
+                                  : "Users can view, select, preview, and purchase this growth package normally."}
+                              </p>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const isCurrentlyDisabled = activePreset.disabled === true || activePreset.enabled === false;
+                              const newDisabled = !isCurrentlyDisabled;
+                              updateActiveField("disabled", newDisabled);
+                              updateActiveField("enabled", !newDisabled);
+                            }}
+                            className={`px-4 py-2 rounded-xl text-xs font-black transition-all shadow-subtle shrink-0 flex items-center gap-1.5 cursor-pointer ${
+                              activePreset.disabled === true || activePreset.enabled === false
+                                ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                                : "bg-rose-600 hover:bg-rose-700 text-white"
+                            }`}
+                          >
+                            {activePreset.disabled === true || activePreset.enabled === false ? (
+                              <>
+                                <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                <span>Enable Package For Users</span>
+                              </>
+                            ) : (
+                              <>
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span>Disable / Remove For Users</span>
+                              </>
+                            )}
+                          </button>
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">

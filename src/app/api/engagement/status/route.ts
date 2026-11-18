@@ -266,9 +266,12 @@ export async function GET(request: Request) {
     const computedCost = Number((vCost + lCost + sCost + rCost).toFixed(2));
     const isLegacyPlaceholder = [299, 699, 1299, 1899, 5499].includes(preset.price_inr);
     const priceInr = (!isLegacyPlaceholder && typeof preset.price_inr === "number") ? preset.price_inr : computedCost;
+    const isPackageEnabled = preset.disabled !== true && preset.enabled !== false;
 
     return {
       ...preset,
+      enabled: isPackageEnabled,
+      disabled: !isPackageEnabled,
       price_inr: priceInr,
       views_total: preset.views_total || preset.targetViews,
       base_duration_hours: preset.base_duration_hours || preset.durationHours,
@@ -282,7 +285,12 @@ export async function GET(request: Request) {
     };
   });
 
-  const defaultPreset = presetsList[0];
+  // For regular users (non-admins), filter out disabled packages completely so they cannot view or see them
+  const visiblePresets = isAdmin
+    ? presetsList
+    : presetsList.filter((p: any) => p.enabled !== false && p.disabled !== true);
+
+  const defaultPreset = visiblePresets[0] || presetsList[0];
   const readyToOrder = Boolean(zeofameConn && xmediaConn);
 
   // Fetch all Engagement catalog services from DB (universal API source)
@@ -329,7 +337,7 @@ export async function GET(request: Request) {
           comments: originalCommentsRate,
         }
       : undefined,
-    presets: presetsList,
+    presets: visiblePresets,
     config,
     pricing: {
       totalEstimatedCost: defaultPreset.pricing.totalCost,

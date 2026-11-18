@@ -45,6 +45,8 @@ export interface PackageConfig {
   min_followers_note?: string;
   tagline?: string;
   badge?: string;
+  enabled?: boolean;
+  disabled?: boolean;
 }
 
 export interface ProviderMinimums {

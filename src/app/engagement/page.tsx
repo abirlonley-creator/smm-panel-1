@@ -231,12 +231,15 @@ export default function EngagementPage() {
 
   // Memoized packages list combining defaults with live database preset prices & metrics
   const packagesList: PackageConfig[] = useMemo(() => {
-    return Object.values(DEFAULT_PACKAGES).map((defaultPkg) => {
+    const list = Object.values(DEFAULT_PACKAGES).map((defaultPkg) => {
       if (Array.isArray(statusData?.presets)) {
         const match = statusData.presets.find((p: any) => p.id === defaultPkg.id);
         if (match) {
+          const isEnabled = match.disabled !== true && match.enabled !== false;
           return {
             ...defaultPkg,
+            enabled: isEnabled,
+            disabled: !isEnabled,
             price_inr: typeof match.price_inr === "number" ? match.price_inr : defaultPkg.price_inr,
             views_total: match.views_total || match.targetViews || defaultPkg.views_total,
             base_duration_hours: match.base_duration_hours || match.durationHours || defaultPkg.base_duration_hours,
@@ -246,16 +249,26 @@ export default function EngagementPage() {
             min_followers_note: match.min_followers_note || defaultPkg.min_followers_note,
           };
         }
+        // If statusData is loaded and user is non-admin, packages not in presets list are hidden/disabled
+        if (!statusData?.isAdmin) {
+          return null;
+        }
       }
       return defaultPkg;
-    });
-  }, [statusData?.presets]);
+    }).filter((p): p is PackageConfig => p !== null);
 
-  // Active package definition
+    // If regular user (non-admin), completely filter out disabled packages so users cannot view or see them
+    if (!statusData?.isAdmin) {
+      return list.filter((p) => p.disabled !== true && p.enabled !== false);
+    }
+    return list;
+  }, [statusData?.presets, statusData?.isAdmin]);
+
+  // Active package definition - auto-falls back to first enabled package if selected is disabled
   const currentPackage: PackageConfig = useMemo(() => {
-    const found = packagesList.find((p) => p.id === selectedPackageId);
+    const found = packagesList.find((p) => p.id === selectedPackageId && (statusData?.isAdmin || (p.disabled !== true && p.enabled !== false)));
     return found || packagesList[0] || DEFAULT_PACKAGES.tiktok_2k;
-  }, [packagesList, selectedPackageId]);
+  }, [packagesList, selectedPackageId, statusData?.isAdmin]);
 
   // When switching package, configure default add-ons matching package specs
   const handleSelectPackage = useCallback((pkgId: string) => {
@@ -641,7 +654,12 @@ export default function EngagementPage() {
                     </div>
 
                     <div className="flex items-center gap-1 font-sans">
-                      {visuals.isPopular && !isSelected && (
+                      {pkg.disabled && (
+                        <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-rose-100 text-rose-700 border border-rose-300 font-sans">
+                          Disabled
+                        </span>
+                      )}
+                      {visuals.isPopular && !isSelected && !pkg.disabled && (
                         <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-rose-50 text-rose-600 border border-rose-200/60 font-sans">
                           Hot
                         </span>

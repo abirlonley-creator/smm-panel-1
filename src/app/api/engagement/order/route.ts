@@ -166,6 +166,15 @@ export async function POST(request: Request) {
     }
 
     const preset = await getTikTokPresetByIdAsync(parsed.presetId || parsed.presetName);
+    if (preset && (preset.disabled === true || preset.enabled === false)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "This growth package is currently unavailable or has been disabled by the administrator.",
+        },
+        { status: 400 }
+      );
+    }
 
     const userId = session.user.id;
     const user = await prisma.user.findUnique({
