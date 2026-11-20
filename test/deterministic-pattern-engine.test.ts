@@ -18,6 +18,7 @@ import {
   formatDurationDaysHours,
   PlanObject,
   PlatformConfig,
+  AUXILIARY_SERVICES,
 } from "../src/lib/engagement/deterministic-pattern-engine";
 
 test("Deterministic Pattern Engine - Canonical PRNG Test Vectors (Milestone 1 Correction 8)", async (t) => {
@@ -167,6 +168,28 @@ test("Deterministic Pattern Engine - Comment Modes (Milestone 1 Correction 7)", 
     for (const r of plan.rows) {
       assert.equal(r.comments, 0);
       assert.equal(r.assignedComments?.length ?? 0, 0);
+    }
+  });
+
+  await t.test("Comment sanitizer strips HTML tags, control characters, and normalizes whitespace", () => {
+    const dirtyComments = [
+      "<b>Great video!</b>\x00\x1F",
+      "<script>alert('xss')</script>Amazing work!\x7F",
+      "Line with \t multiple    spaces \r\n and newlines  ",
+    ];
+    const plan = generatePlan(
+      DEFAULT_TIKTOK_CONFIG,
+      "tiktok_10k",
+      2500,
+      "comment_sanitizer_seed",
+      { commentsMode: "USER_ONLY", userCommentLines: dirtyComments, bdHour: 14.0 }
+    );
+    const allAssigned = plan.rows.flatMap((r) => r.assignedComments || []);
+    for (const line of allAssigned) {
+      assert.ok(!line.includes("<"), "HTML tags stripped");
+      assert.ok(!line.includes(">"), "HTML tags stripped");
+      assert.ok(!/[\x00-\x1F\x7F]/.test(line), "Control characters stripped");
+      assert.ok(!/\s{2,}/.test(line), "Whitespace normalized");
     }
   });
 });
@@ -351,6 +374,26 @@ test("Deterministic Pattern Engine - Invariant Unit Tests (Deliberately Broken P
     const res = validatePlan(plan, DEFAULT_TIKTOK_CONFIG);
     assert.equal(res.isValid, false);
     assert.ok(res.violations.some((v: string) => v.includes(`INVARIANT_13_PACING_CAP_EXCEEDED_SAVES_BATCH_${targetIdx}`)));
+  });
+
+  await t.test("Validator Fix 1: Flush additions do not reset pacing counter for subsequent regular releases", () => {
+    const plan = getBaseValidPlan();
+    assert.ok(plan.flushRows, "Plan has flushRows");
+    assert.ok(plan.flushAdds, "Plan has flushAdds");
+    const resPass = validatePlan(plan, DEFAULT_TIKTOK_CONFIG);
+    assert.equal(resPass.isValid, true, `Expected valid with flushAdds, got: ${resPass.violations.join(", ")}`);
+    assert.equal(resPass.violations.length, 0);
+
+    // Verify that every entry in flushAdds matches a row in flushRows
+    for (const s of AUXILIARY_SERVICES) {
+      const addIndices = Object.keys(plan.flushAdds?.[s] || {}).map(Number);
+      for (const idx of addIndices) {
+        assert.ok(
+          plan.flushRows[s].includes(idx),
+          `flushAdds for ${s} on row ${idx} must be tracked in flushRows`
+        );
+      }
+    }
   });
 
   await t.test("Invariant 14: Fails when views delivery in sliding window exceeds 3 * (W / duration) * viewsTotal (crafted to fail only Invariant 14)", () => {
@@ -657,6 +700,21 @@ test("Deterministic Pattern Engine - Review Round 9 Item 5: EngineParams Snapsho
     const valFail = validatePlan({ ...plan, engineParams: tighterParams }, tighterConfig);
     assert.equal(valFail.isValid, false);
     assert.ok(valFail.violations.some((v: string) => v.includes("INVARIANT_2_VIEW_ABOVE_CAP_BATCH")));
+  });
+
+  await t.test("Changing FINAL_FRACTION changes late phase threshold in generator and validator", () => {
+    const customParams: EngineParams = {
+      ...DEFAULT_ENGINE_PARAMS,
+      FINAL_FRACTION: 0.70, // Earlier late phase
+    };
+    const customConfig: PlatformConfig = {
+      ...DEFAULT_TIKTOK_CONFIG,
+      engineParams: customParams,
+    };
+    const plan = generatePlan(customConfig, "tiktok_10k", 2500, "final_fraction_test_seed", { bdHour: 14.0 });
+    assert.equal(plan.engineParams.FINAL_FRACTION, 0.70);
+    const val = validatePlan(plan, customConfig);
+    assert.equal(val.isValid, true);
   });
 });
 

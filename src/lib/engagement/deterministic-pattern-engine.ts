@@ -85,6 +85,7 @@ export interface EngineParams {
   PUSH_SPLIT_MIN: number; // default 0.50
   PUSH_SPLIT_MAX: number; // default 0.65
   SHRINK_CAP_FACTOR: number; // default 0.67
+  FINAL_FRACTION: number; // default 0.88 (late phase threshold)
 }
 
 export const DEFAULT_ENGINE_PARAMS: EngineParams = {
@@ -107,6 +108,7 @@ export const DEFAULT_ENGINE_PARAMS: EngineParams = {
   PUSH_SPLIT_MIN: 0.50,
   PUSH_SPLIT_MAX: 0.65,
   SHRINK_CAP_FACTOR: 0.67,
+  FINAL_FRACTION: 0.88,
 };
 
 export interface CommentPoolEntry {
@@ -233,6 +235,7 @@ export interface PlanObject {
   phases: Record<string, number>;
   engineParams: EngineParams;
   flushRows: Record<AuxiliaryServiceType, number[]>;
+  flushAdds?: Record<AuxiliaryServiceType, Record<number, number>>;
   violations?: string[];
 }
 
@@ -735,7 +738,8 @@ export function applyEndFlush(
   firstLikesIdx: number | null,
   releaseSizeCounts: Record<string, Record<number, number>>,
   params: EngineParams = config.engineParams || DEFAULT_ENGINE_PARAMS,
-  flushRowsOut?: Record<string, number[]>
+  flushRowsOut?: Record<AuxiliaryServiceType, number[]>,
+  flushAddsOut?: Record<AuxiliaryServiceType, Record<number, number>>
 ): boolean {
   if (firstLikesIdx === null) return false;
   const N = rows.length;
@@ -749,7 +753,7 @@ export function applyEndFlush(
   const candidates: number[] = [];
   for (let i = Math.max(0, N - 12); i < N; i++) {
     if (i > firstLikesIdx && cumArr[i] >= params.GATE_VIEWS) {
-      const isFinal12 = cumArr[i] >= 0.88 * viewsTotal;
+      const isFinal12 = cumArr[i] >= params.FINAL_FRACTION * viewsTotal;
       const minReq = isFinal12 ? params.VIEW_BATCH_ENGAGEMENT_MIN_LATE : params.VIEW_BATCH_ENGAGEMENT_MIN;
       if (rows[i].views >= minReq) {
         candidates.push(i);
@@ -764,12 +768,19 @@ export function applyEndFlush(
   candidates.sort((a, b) => rows[b].views - rows[a].views);
   const top3 = candidates.slice(0, 3);
 
-  const localFlushRows: Record<string, number[]> = {
+  const localFlushRows: Record<AuxiliaryServiceType, number[]> = {
     likes: [],
     saves: [],
     reposts: [],
     comments: [],
     shares: [],
+  };
+  const localFlushAdds: Record<AuxiliaryServiceType, Record<number, number>> = {
+    likes: {},
+    saves: {},
+    reposts: {},
+    comments: {},
+    shares: {},
   };
 
   const services: AuxiliaryServiceType[] = AUXILIARY_SERVICES;
@@ -783,7 +794,7 @@ export function applyEndFlush(
       for (const idx of top3) {
         if (rem < effMin) break;
         const r = rows[idx];
-        const isFinal12 = cumArr[idx] >= 0.88 * viewsTotal;
+        const isFinal12 = cumArr[idx] >= params.FINAL_FRACTION * viewsTotal;
         const cap = Math.floor((isFinal12 ? params.LIKES_CAP_LATE : params.LIKES_CAP_REGULAR) * r.views);
         const avail = Math.max(0, cap - r.likes);
         if (avail >= effMin) {
@@ -794,6 +805,7 @@ export function applyEndFlush(
               releaseSizeCounts.likes[alloc] = (releaseSizeCounts.likes[alloc] || 0) + 1;
               rem -= alloc;
               if (!sFlush.includes(idx)) sFlush.push(idx);
+              localFlushAdds.likes[idx] = (localFlushAdds.likes[idx] || 0) + alloc;
             }
           } else {
             const oldVal = r.likes;
@@ -804,6 +816,7 @@ export function applyEndFlush(
               releaseSizeCounts.likes[newVal] = (releaseSizeCounts.likes[newVal] || 0) + 1;
               rem -= alloc;
               if (!sFlush.includes(idx)) sFlush.push(idx);
+              localFlushAdds.likes[idx] = (localFlushAdds.likes[idx] || 0) + alloc;
             }
           }
         }
@@ -824,6 +837,7 @@ export function applyEndFlush(
                 if (s !== "comments") releaseSizeCounts[s][alloc] = (releaseSizeCounts[s][alloc] || 0) + 1;
                 rem -= alloc;
                 if (!sFlush.includes(idx)) sFlush.push(idx);
+                localFlushAdds[s][idx] = (localFlushAdds[s][idx] || 0) + alloc;
               }
             } else {
               const oldVal = r[s];
@@ -834,6 +848,7 @@ export function applyEndFlush(
                 if (s !== "comments") releaseSizeCounts[s][newVal] = (releaseSizeCounts[s][newVal] || 0) + 1;
                 rem -= alloc;
                 if (!sFlush.includes(idx)) sFlush.push(idx);
+                localFlushAdds[s][idx] = (localFlushAdds[s][idx] || 0) + alloc;
               }
             }
           }
@@ -855,7 +870,7 @@ export function applyEndFlush(
           }
           const isTop3 = top3.includes(idx);
           if (s === "likes") {
-            const isFinal = cumArr[idx] >= 0.88 * viewsTotal;
+            const isFinal = cumArr[idx] >= params.FINAL_FRACTION * viewsTotal;
             const cap = Math.floor((isFinal ? params.LIKES_CAP_LATE : params.LIKES_CAP_REGULAR) * r.views);
             if (newVal <= cap) {
               qualifying.push({ idx, r, oldVal, newVal, isTop3 });
@@ -873,6 +888,7 @@ export function applyEndFlush(
         target.r[s] = target.newVal;
         if (s !== "comments") releaseSizeCounts[s][target.newVal] = (releaseSizeCounts[s][target.newVal] || 0) + 1;
         if (!sFlush.includes(target.idx)) sFlush.push(target.idx);
+        localFlushAdds[s][target.idx] = (localFlushAdds[s][target.idx] || 0) + rem;
         rem = 0;
       } else {
         return false;
@@ -886,6 +902,11 @@ export function applyEndFlush(
   if (flushRowsOut) {
     for (const s of services) {
       flushRowsOut[s] = localFlushRows[s] || [];
+    }
+  }
+  if (flushAddsOut) {
+    for (const s of services) {
+      flushAddsOut[s] = localFlushAdds[s] || {};
     }
   }
 
@@ -907,7 +928,7 @@ export function distributeEngagement(
   pushTotal: number,
   rng: Mulberry32,
   params: EngineParams = config.engineParams || DEFAULT_ENGINE_PARAMS
-): { rows: PlanRow[]; flushRows: Record<AuxiliaryServiceType, number[]> } | null {
+): { rows: PlanRow[]; flushRows: Record<AuxiliaryServiceType, number[]>; flushAdds: Record<AuxiliaryServiceType, Record<number, number>> } | null {
   const N = batches.length;
   const rows: PlanRow[] = batches.map((b, idx) => ({
     index: idx,
@@ -978,7 +999,7 @@ export function distributeEngagement(
   for (let i = 0; i < N; i++) {
     const b = rows[i];
     cumViews += b.views;
-    const isFinal12 = cumViews >= 0.88 * viewsTotal;
+    const isFinal12 = cumViews >= params.FINAL_FRACTION * viewsTotal;
 
     const prevV = i > 0 ? rows[i - 1].views : 0;
     let counted = 0;
@@ -1161,6 +1182,13 @@ export function distributeEngagement(
     comments: [],
     shares: [],
   };
+  const flushAdds: Record<AuxiliaryServiceType, Record<number, number>> = {
+    likes: {},
+    saves: {},
+    reposts: {},
+    comments: {},
+    shares: {},
+  };
 
   const flushOk = applyEndFlush(
     rows,
@@ -1171,7 +1199,8 @@ export function distributeEngagement(
     firstLikesIdx,
     releaseSizeCounts,
     params,
-    flushRows
+    flushRows,
+    flushAdds
   );
   if (!flushOk) return null;
 
@@ -1192,7 +1221,7 @@ export function distributeEngagement(
     rows[i].cumulativeComments = cC;
   }
 
-  return { rows, flushRows };
+  return { rows, flushRows, flushAdds };
 }
 
 // ============================================================================
@@ -1211,7 +1240,7 @@ export function assignCommentsByMode(
   if (mode === "DISABLED") return false;
 
   const sanitizedUser = (userComments || [])
-    .map((l) => l.replace(/\r\n|\n/g, " ").trim())
+    .map((l) => l.replace(/<[^>]*>/g, "").replace(/[\x00-\x1F\x7F]/g, "").replace(/\r\n|\n|\s+/g, " ").trim())
     .filter((l) => l.length > 0);
   const uniqueUser = Array.from(new Set(sanitizedUser.map((l) => l.toLowerCase()))).map(
     (low) => sanitizedUser.find((l) => l.toLowerCase() === low)!
@@ -1219,7 +1248,7 @@ export function assignCommentsByMode(
 
   const activePool = pool
     .filter((c) => c.isActive !== false)
-    .map((c) => c.commentText.replace(/\r\n|\n/g, " ").trim())
+    .map((c) => c.commentText.replace(/<[^>]*>/g, "").replace(/[\x00-\x1F\x7F]/g, "").replace(/\r\n|\n|\s+/g, " ").trim())
     .filter((l) => l.length > 0);
   const uniquePool = Array.from(new Set(activePool.map((l) => l.toLowerCase()))).map(
     (low) => activePool.find((l) => l.toLowerCase() === low)!
@@ -1276,6 +1305,7 @@ export function validatePlan(
     pushTotal?: number;
     engineParams?: EngineParams;
     flushRows?: Record<string, number[]>;
+    flushAdds?: Record<AuxiliaryServiceType, Record<number, number>>;
   },
   config: PlatformConfig = DEFAULT_TIKTOK_CONFIG
 ): { isValid: boolean; violations: string[] } {
@@ -1364,7 +1394,7 @@ export function validatePlan(
       if (cumArr[idx] < params.GATE_VIEWS) {
         violations.push(`INVARIANT_5_FLUSH_ROW_BEFORE_GATE_VIEWS_${s.toUpperCase()}_${idx}`);
       }
-      const isFinal = cumArr[idx] >= 0.88 * viewsTotal;
+      const isFinal = cumArr[idx] >= params.FINAL_FRACTION * viewsTotal;
       const minReq = isFinal ? params.VIEW_BATCH_ENGAGEMENT_MIN_LATE : params.VIEW_BATCH_ENGAGEMENT_MIN;
       if (rows[idx].views < minReq) {
         violations.push(`INVARIANT_5_FLUSH_ROW_BELOW_VIEW_GATE_${s.toUpperCase()}_${idx}`);
@@ -1390,7 +1420,7 @@ export function validatePlan(
   for (let i = 0; i < N; i++) {
     const r = rows[i];
     cumV += r.views;
-    const isFinal12 = cumV >= 0.88 * viewsTotal;
+    const isFinal12 = cumV >= params.FINAL_FRACTION * viewsTotal;
 
     // 5. Batch view engagement gate
     const hasEngagement = r.likes > 0 || r.saves > 0 || r.reposts > 0 || r.comments > 0 || r.shares > 0;
@@ -1508,10 +1538,11 @@ export function validatePlan(
     }
   }
 
-  // 13. Pacing caps (excluding explicit flushRows)
+  // 13. Pacing caps (excluding explicit flush additions)
   const pushViews = plan.pushTotal || (rows.length >= 2 ? rows[0].views + rows[1].views : 0);
   const phases = plan.phases || { likes: 0, saves: 0, reposts: 0, comments: 0, shares: 0 };
   const countedViewsSinceLastRel: Record<string, number> = { likes: 0, saves: 0, reposts: 0, comments: 0, shares: 0 };
+  const flushAdds = plan.flushAdds || ({} as Record<AuxiliaryServiceType, Record<number, number>>);
 
   cumV = 0;
   for (let i = 0; i < N; i++) {
@@ -1527,32 +1558,30 @@ export function validatePlan(
       countedViewsSinceLastRel[s] += counted;
     }
 
-    const isFlushLikes = flushRows.likes?.includes(i) ?? false;
-    if (r.likes > 0) {
-      if (!isFlushLikes) {
-        const rateL = rateAt("likes", cumV, viewsTotal, pushViews, rates.likes, phases.likes, params);
-        const capDelta = Math.floor(params.GUARD * rateL * countedViewsSinceLastRel.likes);
-        const v3 = r.views + (i > 0 ? rows[i - 1].views : 0) + (i > 1 ? rows[i - 2].views : 0);
-        const cap3 = Math.floor(params.GUARD * rateL * v3);
-        if (r.likes > capDelta || r.likes > cap3) {
-          violations.push(`INVARIANT_13_PACING_CAP_EXCEEDED_LIKES_BATCH_${i}`);
-        }
+    const flushAddLikes = flushAdds.likes?.[i] ?? (plan.flushAdds ? 0 : (flushRows.likes?.includes(i) ? r.likes : 0));
+    const regularLikes = r.likes - flushAddLikes;
+    if (regularLikes > 0) {
+      const rateL = rateAt("likes", cumV, viewsTotal, pushViews, rates.likes, phases.likes, params);
+      const capDelta = Math.floor(params.GUARD * rateL * countedViewsSinceLastRel.likes);
+      const v3 = r.views + (i > 0 ? rows[i - 1].views : 0) + (i > 1 ? rows[i - 2].views : 0);
+      const cap3 = Math.floor(params.GUARD * rateL * v3);
+      if (regularLikes > capDelta || regularLikes > cap3) {
+        violations.push(`INVARIANT_13_PACING_CAP_EXCEEDED_LIKES_BATCH_${i}`);
       }
       countedViewsSinceLastRel.likes = 0;
     }
 
     for (const s of ["saves", "reposts", "comments", "shares"] as AuxiliaryServiceType[]) {
-      if (r[s] > 0) {
-        const isFlushS = flushRows[s]?.includes(i) ?? false;
-        if (!isFlushS) {
-          const effMin = config.effectiveMinimums[s] ?? config.providerMinimums[s];
-          const isSmallTotal = (totals[s] || 0) < 3 * effMin;
-          if (!isSmallTotal) {
-            const rateS = rateAt(s, cumV, viewsTotal, pushViews, rates[s], phases[s], params);
-            const capDelta = Math.floor(params.GUARD * rateS * countedViewsSinceLastRel[s]);
-            if (r[s] > capDelta) {
-              violations.push(`INVARIANT_13_PACING_CAP_EXCEEDED_${s.toUpperCase()}_BATCH_${i}`);
-            }
+      const flushAddS = flushAdds[s]?.[i] ?? (plan.flushAdds ? 0 : (flushRows[s]?.includes(i) ? r[s] : 0));
+      const regularS = r[s] - flushAddS;
+      if (regularS > 0) {
+        const effMin = config.effectiveMinimums[s] ?? config.providerMinimums[s];
+        const isSmallTotal = (totals[s] || 0) < 3 * effMin;
+        if (!isSmallTotal) {
+          const rateS = rateAt(s, cumV, viewsTotal, pushViews, rates[s], phases[s], params);
+          const capDelta = Math.floor(params.GUARD * rateS * countedViewsSinceLastRel[s]);
+          if (regularS > capDelta) {
+            violations.push(`INVARIANT_13_PACING_CAP_EXCEEDED_${s.toUpperCase()}_BATCH_${i}`);
           }
         }
         countedViewsSinceLastRel[s] = 0;
@@ -1801,7 +1830,7 @@ export function generatePlan(
     const { inflows, phases } = computeScaledInflows(batches, totals, rates, viewsTotal, pushTotal, rng, params);
     const dist = distributeEngagement(batches, totals, rates, inflows, phases, config, viewsTotal, pushTotal, rng, params);
     if (!dist) continue;
-    const { rows, flushRows } = dist;
+    const { rows, flushRows, flushAdds } = dist;
 
     // Assign comments by mode
     if (totals.comments > 0) {
@@ -1818,7 +1847,7 @@ export function generatePlan(
 
     // Validation
     const val = validatePlan(
-      { rows, totals, rates, viewsTotal, durationHours, phases, pushTotal, engineParams: params, flushRows },
+      { rows, totals, rates, viewsTotal, durationHours, phases, pushTotal, engineParams: params, flushRows, flushAdds },
       config
     );
 
@@ -1902,6 +1931,7 @@ export function generatePlan(
         phases,
         engineParams: params,
         flushRows,
+        flushAdds,
       };
     }
   }

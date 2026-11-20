@@ -17,11 +17,6 @@ import {
   generateOrganicDeliveryPlan,
   generateTikTokAlgorithmicPlan,
 } from "@/lib/engagement/organic-pacing-engine";
-import {
-  DEFAULT_PACKAGES,
-  generatePattern,
-  PackageConfig,
-} from "@/lib/engagement/deterministic-pattern-engine";
 import { z } from "zod";
 
 const createEngagementOrderSchema = z.object({
