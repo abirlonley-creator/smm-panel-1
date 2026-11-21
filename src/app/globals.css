@@ -28,6 +28,15 @@
   --aura-views: #2F6B3A; --aura-comments: #2A9D8F; --aura-likes: #C4552D; --aura-saves: #E0A030; --aura-shares: #7C5CBF;
 }
 
+html {
+  overflow-x: clip;
+}
+
+body {
+  overflow-x: clip;
+  overflow-y: auto;
+}
+
 body, input, button, select, textarea {
   font-family: var(--font-inter, system-ui), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   color: #111413;

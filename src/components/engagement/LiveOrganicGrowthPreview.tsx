@@ -593,8 +593,8 @@ export function LiveOrganicGrowthPreview({
         <div
           className={`w-full ${
             mobileGraphView === "detailed"
-              ? "overflow-x-auto overflow-y-hidden pb-1 -mx-0.5 px-0.5 scrollbar-thin"
-              : "overflow-hidden"
+              ? "overflow-x-auto pb-1 -mx-0.5 px-0.5 scrollbar-thin sm:overflow-visible sm:pb-0"
+              : "overflow-hidden sm:overflow-visible"
           }`}
         >
           <svg
@@ -602,7 +602,7 @@ export function LiveOrganicGrowthPreview({
             viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
             className={`${
               mobileGraphView === "detailed"
-                ? "min-w-[650px] sm:min-w-0 w-full h-[225px] sm:h-72 touch-pan-x"
+                ? "min-w-[650px] sm:min-w-0 w-full h-[225px] sm:h-72 touch-pan-x sm:touch-auto"
                 : "w-full h-auto aspect-[900/320]"
             } cursor-crosshair font-sans overflow-visible select-none`}
             onPointerMove={handlePointerMove}

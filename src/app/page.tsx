@@ -178,7 +178,7 @@ export default function LandingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-[#252943] relative selection:bg-[#3A4EFB]/20 overflow-x-hidden">
+    <div className="min-h-screen bg-[#F8FAFC] text-[#252943] relative selection:bg-[#3A4EFB]/20">
       {/* ── Background Subtle Glow & Radial Gradients ── */}
       <div
         aria-hidden

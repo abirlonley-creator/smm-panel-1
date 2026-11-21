@@ -73,7 +73,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <>
       <Navigation />
-      <div className="lg:pl-64 flex flex-col min-h-screen overflow-x-hidden">
+      <div className="lg:pl-64 flex flex-col min-h-screen">
         {/* Administrator Under Update Mode Alert Banner */}
         {underMaintenance && isAdmin && (
           <div className="bg-[#FBF0DC] border-b border-[#B7791F]/30 px-4 py-2.5 text-xs text-[#B7791F] flex flex-col sm:flex-row sm:items-center justify-between gap-2 z-30 animate-fadeIn">
