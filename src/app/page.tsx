@@ -273,116 +273,15 @@ export default function LandingPage() {
         </nav>
       </header>
 
-      {/* ── Main Hero Section ── */}
-      <main className="max-w-6xl mx-auto px-4 pt-12 sm:pt-20 pb-20 relative">
-        {/* Top Major Update Pill */}
-        <div className="flex justify-center mb-6 animate-fadeIn">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-50 border border-blue-200 shadow-xs text-xs">
-            <span className="px-2 py-0.5 rounded-full bg-[#3A4EFB] text-white text-[10px] font-black uppercase tracking-wider">
-              Major Update!
-            </span>
-            <span className="font-semibold text-[#252943]">
-              AuraSMM v2.0 is now online with Natural Algorithmic Pacing!
-            </span>
-          </div>
-        </div>
-
-        {/* Central Headline */}
-        <div className="text-center max-w-3xl mx-auto space-y-4">
-          <h1 className="text-3xl sm:text-5xl md:text-6xl font-black text-[#252943] tracking-tight leading-[1.12]">
-            Best SMM Tool{" "}
-            <span className="inline-block text-[#3A4EFB]">
-              ✨
-            </span>{" "}
-            for Genuine Social Media Engagement
-          </h1>
-
-          <p className="text-sm sm:text-base text-[#252943]/70 font-medium max-w-xl mx-auto leading-relaxed">
-            A perfect fit for TikTok Creators, Instagram Influencers, Businesses, Artists & Brands seeking mathematically verified, ban-proof organic momentum.
-          </p>
-
-          {/* Hero CTA & Rating */}
-          <div className="pt-4 flex flex-col items-center gap-4">
-            <button
-              type="button"
-              onClick={() => openAuth("signup")}
-              className="px-8 py-3.5 rounded-full bg-[#3A4EFB] hover:bg-[#2A3DE0] active:scale-[0.97] text-white text-sm font-black transition-all shadow-md shadow-blue-500/20 flex items-center gap-2 cursor-pointer"
-            >
-              <span>Signup for free today!</span>
-              <Users className="w-4 h-4" />
-            </button>
-
-            {/* Social Proof Star Rating & Avatar Stack */}
-            <div className="flex items-center gap-2.5 text-xs text-[#252943]/70 font-semibold pt-1">
-              <div className="flex -space-x-2 overflow-hidden">
-                <img
-                  className="inline-block h-6 w-6 rounded-full ring-2 ring-white object-cover"
-                  src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=80&q=80"
-                  alt="Reviewer"
-                />
-                <img
-                  className="inline-block h-6 w-6 rounded-full ring-2 ring-white object-cover"
-                  src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=80&q=80"
-                  alt="Reviewer"
-                />
-                <img
-                  className="inline-block h-6 w-6 rounded-full ring-2 ring-white object-cover"
-                  src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=80&q=80"
-                  alt="Reviewer"
-                />
-                <img
-                  className="inline-block h-6 w-6 rounded-full ring-2 ring-white object-cover"
-                  src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=80&q=80"
-                  alt="Reviewer"
-                />
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="flex text-amber-400">
-                  <Star className="w-3.5 h-3.5 fill-current" />
-                  <Star className="w-3.5 h-3.5 fill-current" />
-                  <Star className="w-3.5 h-3.5 fill-current" />
-                  <Star className="w-3.5 h-3.5 fill-current" />
-                  <Star className="w-3.5 h-3.5 fill-current" />
-                </div>
-                <span className="font-bold text-[#252943]">4.8 / 5</span>
-                <span className="text-[#252943]/50">Rating over 500 Reviews</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Feature Badges Row */}
-          <div className="pt-6 flex flex-wrap items-center justify-center gap-2 sm:gap-3 text-[11px] font-bold text-[#252943]">
-            <span className="px-3 py-1.5 rounded-full bg-white border border-[#DEE0ED] shadow-xs flex items-center gap-1.5">
-              <Percent className="w-3.5 h-3.5 text-[#3A4EFB]" />
-              <span>Starting at Just ₹0.84 / 1K</span>
-            </span>
-            <span className="px-3 py-1.5 rounded-full bg-white border border-[#DEE0ED] shadow-xs flex items-center gap-1.5">
-              <Zap className="w-3.5 h-3.5 text-amber-500" />
-              <span>Natural Algorithmic Pacing</span>
-            </span>
-            <span className="px-3 py-1.5 rounded-full bg-white border border-[#DEE0ED] shadow-xs flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-              <span>Non-drop services</span>
-            </span>
-            <span className="px-3 py-1.5 rounded-full bg-white border border-[#DEE0ED] shadow-xs flex items-center gap-1.5">
-              <RefreshCw className="w-3.5 h-3.5 text-blue-500" />
-              <span>Lifetime Refills</span>
-            </span>
-            <span className="px-3 py-1.5 rounded-full bg-white border border-[#DEE0ED] shadow-xs flex items-center gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5 text-teal-500" />
-              <span>24/7 Support</span>
-            </span>
-          </div>
-        </div>
-
-        {/* ── Interactive Realistic Mockup Showcase (Reference Layout) ── */}
-        <div className="mt-16 grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
-          {/* Left Floating Card: Growth & Net Follower Gain */}
-          <div className="md:col-span-4 space-y-4">
+      {/* ── Main Hero Section (Faithful to Reference Layout) ── */}
+      <main className="max-w-7xl mx-auto px-4 pt-8 sm:pt-14 pb-16 relative">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-center">
+          {/* ── Left Flank: Floating Follower & Growth Cards ── */}
+          <div className="lg:col-span-3 space-y-5 order-2 lg:order-1 flex flex-col items-center lg:items-start">
             {/* Toast Notification */}
-            <div className="p-3 bg-white/95 backdrop-blur-sm rounded-2xl border border-[#DEE0ED] shadow-subtle flex items-center gap-3 w-fit animate-fadeIn">
+            <div className="p-3 bg-white/95 backdrop-blur-sm rounded-2xl border border-[#DEE0ED] shadow-sm flex items-center gap-3 w-fit transition-transform hover:-translate-y-0.5 animate-fadeIn">
               <img
-                className="w-8 h-8 rounded-full object-cover"
+                className="w-8 h-8 rounded-full object-cover shrink-0"
                 src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=80&q=80"
                 alt="Notification avatar"
               />
@@ -392,21 +291,21 @@ export default function LandingPage() {
               </div>
             </div>
 
-            {/* Follower Gain Card */}
-            <div className="p-6 rounded-3xl bg-white border border-[#DEE0ED] shadow-subtle space-y-4">
+            {/* Net Follower Gain Card */}
+            <div className="p-5 sm:p-6 rounded-3xl bg-white border border-[#DEE0ED] shadow-sm space-y-4 w-full max-w-sm transition-transform hover:-translate-y-0.5">
               <div className="flex items-center justify-between">
                 <div>
-                  <span className="text-xs font-bold text-[#252943]/60 uppercase tracking-wider block">
-                    Net Campaign Growth
+                  <span className="text-[11px] font-bold text-[#252943]/60 uppercase tracking-wider block">
+                    Net Follower Gain
                   </span>
                   <span className="text-2xl font-black text-[#252943]">₹550,000+</span>
                 </div>
                 <div className="text-right">
-                  <span className="px-2.5 py-1 rounded-full bg-blue-100 text-[#3A4EFB] text-[10px] font-black inline-flex items-center gap-1">
+                  <span className="px-2.5 py-1 rounded-full bg-blue-50 text-[#3A4EFB] text-[10px] font-bold inline-flex items-center gap-1 border border-blue-200">
                     <span>Boost Activated</span>
-                    <Sparkles className="w-3 h-3" />
+                    <Sparkles className="w-3 h-3 text-[#3A4EFB]" />
                   </span>
-                  <span className="text-[10px] text-[#252943]/50 block mt-1">250,000 Total Views</span>
+                  <span className="text-[10px] text-[#252943]/50 block mt-1 font-semibold">250,000 Total Views</span>
                 </div>
               </div>
 
@@ -415,23 +314,23 @@ export default function LandingPage() {
                 <svg className="w-full h-full overflow-visible" viewBox="0 0 300 100">
                   <defs>
                     <linearGradient id="gradientCurve" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#3A4EFB" stopOpacity="0.25" />
+                      <stop offset="0%" stopColor="#3A4EFB" stopOpacity="0.22" />
                       <stop offset="100%" stopColor="#3A4EFB" stopOpacity="0.0" />
                     </linearGradient>
                   </defs>
                   <path
-                    d="M 0,85 Q 50,70 100,60 T 200,35 T 300,10 L 300,100 L 0,100 Z"
+                    d="M 0,85 Q 50,72 100,62 T 200,38 T 300,12 L 300,100 L 0,100 Z"
                     fill="url(#gradientCurve)"
                   />
                   <path
-                    d="M 0,85 Q 50,70 100,60 T 200,35 T 300,10"
+                    d="M 0,85 Q 50,72 100,62 T 200,38 T 300,12"
                     fill="none"
                     stroke="#3A4EFB"
                     strokeWidth="3.5"
                     strokeLinecap="round"
                   />
-                  <circle cx="200" cy="35" r="4.5" fill="#3A4EFB" />
-                  <circle cx="300" cy="10" r="5" fill="#10B981" />
+                  <circle cx="200" cy="38" r="4.5" fill="#3A4EFB" />
+                  <circle cx="300" cy="12" r="5" fill="#10B981" />
                 </svg>
                 {/* Month Indicators */}
                 <div className="flex justify-between text-[10px] font-semibold text-[#252943]/40 pt-1">
@@ -445,57 +344,114 @@ export default function LandingPage() {
             </div>
           </div>
 
-          {/* Center Showcase: Organic Engine Feature Card */}
-          <div className="md:col-span-4 p-6 sm:p-7 rounded-3xl bg-gradient-to-b from-[#1E2235] to-[#111422] text-white shadow-xl space-y-4">
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <div className="flex items-center gap-2">
-                <Zap className="w-4 h-4 text-[#D4F04F]" />
-                <span className="text-xs font-black uppercase tracking-wider text-[#D4F04F]">
-                  Algorithmic Engine
+          {/* ── Center Column: Hero Announcement, Title, Subtitle, CTA & Badges ── */}
+          <div className="lg:col-span-6 text-center space-y-4 order-1 lg:order-2">
+            {/* Top Major Update Pill */}
+            <div className="flex justify-center mb-3 animate-fadeIn">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-50 border border-blue-200 shadow-xs text-xs">
+                <span className="px-2 py-0.5 rounded-full bg-[#3A4EFB] text-white text-[10px] font-black uppercase tracking-wider">
+                  Major Update!
+                </span>
+                <span className="font-semibold text-[#252943]">
+                  AuraSMM v2.0 is now online with Natural Algorithmic Pacing!
                 </span>
               </div>
-              <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-mono font-bold">
-                100% Invariant Compliant
+            </div>
+
+            {/* Central Headline */}
+            <h1 className="text-3xl sm:text-5xl md:text-5xl lg:text-[3.25rem] font-black text-[#252943] tracking-tight leading-[1.14]">
+              Best SMM Tool{" "}
+              <span className="inline-block text-[#3A4EFB]">
+                ✨
+              </span>{" "}
+              for Genuine Social Media Engagement
+            </h1>
+
+            <p className="text-sm sm:text-base text-[#252943]/70 font-medium max-w-lg mx-auto leading-relaxed">
+              A perfect fit for TikTok Creators, Instagram Influencers, Businesses, Artists & Brands seeking mathematically verified, ban-proof organic momentum.
+            </p>
+
+            {/* Hero CTA Button */}
+            <div className="pt-3 flex flex-col items-center gap-3">
+              <button
+                type="button"
+                onClick={() => openAuth("signup")}
+                className="px-8 py-3.5 rounded-full bg-[#3A4EFB] hover:bg-[#2A3DE0] active:scale-[0.97] text-white text-sm font-black transition-all shadow-md shadow-blue-500/20 flex items-center gap-2 cursor-pointer"
+              >
+                <span>Signup for free today!</span>
+                <Users className="w-4 h-4" />
+              </button>
+
+              {/* Social Proof Star Rating & Avatar Stack */}
+              <div className="flex items-center gap-2.5 text-xs text-[#252943]/70 font-semibold pt-1">
+                <div className="flex -space-x-2 overflow-hidden">
+                  <img
+                    className="inline-block h-6 w-6 rounded-full ring-2 ring-white object-cover"
+                    src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=80&q=80"
+                    alt="Reviewer"
+                  />
+                  <img
+                    className="inline-block h-6 w-6 rounded-full ring-2 ring-white object-cover"
+                    src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=80&q=80"
+                    alt="Reviewer"
+                  />
+                  <img
+                    className="inline-block h-6 w-6 rounded-full ring-2 ring-white object-cover"
+                    src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=80&q=80"
+                    alt="Reviewer"
+                  />
+                  <img
+                    className="inline-block h-6 w-6 rounded-full ring-2 ring-white object-cover"
+                    src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=80&q=80"
+                    alt="Reviewer"
+                  />
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="flex text-amber-400">
+                    <Star className="w-3.5 h-3.5 fill-current" />
+                    <Star className="w-3.5 h-3.5 fill-current" />
+                    <Star className="w-3.5 h-3.5 fill-current" />
+                    <Star className="w-3.5 h-3.5 fill-current" />
+                    <Star className="w-3.5 h-3.5 fill-current" />
+                  </div>
+                  <span className="font-bold text-[#252943]">4.8 / 5</span>
+                  <span className="text-[#252943]/50">Rating over 500 Reviews</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Feature Badges Row */}
+            <div className="pt-4 flex flex-wrap items-center justify-center gap-2 text-[11px] font-bold text-[#252943]">
+              <span className="px-3 py-1.5 rounded-full bg-white border border-[#DEE0ED] shadow-xs flex items-center gap-1.5">
+                <Percent className="w-3.5 h-3.5 text-[#3A4EFB]" />
+                <span>Starting at Just ₹0.84 / 1K</span>
+              </span>
+              <span className="px-3 py-1.5 rounded-full bg-white border border-[#DEE0ED] shadow-xs flex items-center gap-1.5">
+                <Zap className="w-3.5 h-3.5 text-amber-500" />
+                <span>Natural Algorithmic Pacing</span>
+              </span>
+              <span className="px-3 py-1.5 rounded-full bg-white border border-[#DEE0ED] shadow-xs flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Non-drop services</span>
+              </span>
+              <span className="px-3 py-1.5 rounded-full bg-white border border-[#DEE0ED] shadow-xs flex items-center gap-1.5">
+                <RefreshCw className="w-3.5 h-3.5 text-blue-500" />
+                <span>Lifetime Refills</span>
+              </span>
+              <span className="px-3 py-1.5 rounded-full bg-white border border-[#DEE0ED] shadow-xs flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-teal-500" />
+                <span>24/7 Support</span>
               </span>
             </div>
-
-            <div className="space-y-2">
-              <h3 className="text-lg font-extrabold text-white">
-                Multi-Wave Natural Delivery
-              </h3>
-              <p className="text-xs text-white/70 leading-relaxed">
-                Views, likes, saves & shares distributed across randomized circadian curves. No sudden spikes. Zero bot detection flags.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 pt-2 text-xs">
-              <div className="p-2.5 rounded-xl bg-white/5 border border-white/10">
-                <span className="text-[10px] text-white/50 block">Views Pacing</span>
-                <span className="font-mono font-bold text-white">40-120/batch</span>
-              </div>
-              <div className="p-2.5 rounded-xl bg-white/5 border border-white/10">
-                <span className="text-[10px] text-white/50 block">Likes Lag</span>
-                <span className="font-mono font-bold text-white">Synchronized</span>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => openAuth("signup")}
-              className="w-full py-2.5 rounded-xl bg-[#3A4EFB] hover:bg-[#2A3DE0] text-white text-xs font-bold transition-all shadow-subtle flex items-center justify-center gap-1.5 cursor-pointer"
-            >
-              <span>Explore Engine Live</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
           </div>
 
-          {/* Right Floating Cards: Live Order & Sales Performance */}
-          <div className="md:col-span-4 space-y-4">
+          {/* ── Right Flank: Live Order & Sales Performance Cards ── */}
+          <div className="lg:col-span-3 space-y-5 order-3 flex flex-col items-center lg:items-end">
             {/* Live Order Card */}
-            <div className="p-5 rounded-3xl bg-white border border-[#DEE0ED] shadow-subtle space-y-3">
+            <div className="p-5 rounded-3xl bg-white border border-[#DEE0ED] shadow-sm space-y-3 w-full max-w-sm transition-transform hover:-translate-y-0.5">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-[#252943]">Order #1345</span>
-                <span className="px-2 py-0.5 rounded-full bg-blue-50 text-[#3A4EFB] text-[10px] font-bold">
+                <span className="px-2 py-0.5 rounded-full bg-blue-50 text-[#3A4EFB] text-[10px] font-bold border border-blue-200">
                   In Progress
                 </span>
               </div>
@@ -503,7 +459,7 @@ export default function LandingPage() {
               <div className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2">
                   <img
-                    className="w-7 h-7 rounded-full object-cover"
+                    className="w-7 h-7 rounded-full object-cover shrink-0"
                     src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=80&q=80"
                     alt="Target profile"
                   />
@@ -527,7 +483,7 @@ export default function LandingPage() {
             </div>
 
             {/* Sales Performance Card */}
-            <div className="p-5 rounded-3xl bg-white border border-[#DEE0ED] shadow-subtle flex items-center justify-between">
+            <div className="p-5 rounded-3xl bg-white border border-[#DEE0ED] shadow-sm flex items-center justify-between w-full max-w-sm transition-transform hover:-translate-y-0.5">
               <div>
                 <div className="flex items-center gap-1.5 text-xs text-[#252943]/60 font-semibold">
                   <span>My Clothing Brand</span>
