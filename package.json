@@ -19,6 +19,7 @@
     "test:orders": "tsx --test test/order-cancellation.test.ts",
     "worker": "tsx src/worker-bootstrap.ts",
     "test:analytics": "tsx --test test/apify-analytics.test.ts",
+    "measure:engine": "tsx scripts/measure-engine.ts",
     "db:seed": "tsx prisma/seed.ts"
   },
   "dependencies": {

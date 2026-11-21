@@ -564,15 +564,45 @@ export function generateViewsBatches(
 
     if (currTick === T) {
       const remainder = viewsTotal - delivered;
+      if (remainder <= 0) {
+        delivered = viewsTotal;
+        break;
+      }
+
       if (remainder < params.VIEW_BATCH_MIN && batches.length > 0) {
-        const merged = batches[batches.length - 1].views + remainder;
+        const lastIdx = batches.length - 1;
+        const merged = batches[lastIdx].views + remainder;
         if (merged <= CAP) {
-          batches[batches.length - 1].views = merged;
+          batches[lastIdx].views = merged;
         } else {
-          batches.push({ tick: T, views: remainder });
+          // Merging would exceed CAP: redistribute across previous batch and tick T
+          let b2 = Math.max(params.VIEW_BATCH_MIN, Math.floor(merged / 2));
+          let b1 = merged - b2;
+          if (b1 > CAP) {
+            b2 += (b1 - CAP);
+            b1 = CAP;
+          }
+          if (b2 > CAP) {
+            b1 += (b2 - CAP);
+            b2 = CAP;
+          }
+          if (b1 === b2) {
+            if (b1 < CAP) { b1++; b2--; } else { b1--; b2++; }
+          }
+          batches[lastIdx].views = b1;
+          batches.push({ tick: T, views: b2 });
         }
       } else {
-        batches.push({ tick: T, views: remainder });
+        if (remainder <= CAP) {
+          batches.push({ tick: T, views: remainder });
+        } else {
+          let rem = remainder;
+          while (rem > 0) {
+            const b = Math.min(CAP, Math.max(params.VIEW_BATCH_MIN, rem));
+            batches.push({ tick: T, views: b });
+            rem -= b;
+          }
+        }
       }
       delivered = viewsTotal;
       break;
@@ -586,15 +616,38 @@ export function generateViewsBatches(
     }
     size = Math.max(params.VIEW_BATCH_MIN, Math.min(CAP, size));
 
-    if (batches.length > 0 && size === batches[batches.length - 1].views) {
-      size = size < CAP ? size + 1 : size - 1;
+    // Avoid consecutive duplicates and limit repeated values to at most 2 across plan
+    const existingCount = batches.filter((b) => b.views === size).length;
+    if ((batches.length > 0 && size === batches[batches.length - 1].views) || existingCount >= 2) {
+      let adjusted = size;
+      for (let delta = 1; delta <= 30; delta++) {
+        const candidateDown = size - delta;
+        if (candidateDown >= params.VIEW_BATCH_MIN) {
+          const prevV = batches.length > 0 ? batches[batches.length - 1].views : -1;
+          const cnt = batches.filter((b) => b.views === candidateDown).length;
+          if (candidateDown !== prevV && cnt < 2) {
+            adjusted = candidateDown;
+            break;
+          }
+        }
+        const candidateUp = size + delta;
+        if (candidateUp <= CAP) {
+          const prevV = batches.length > 0 ? batches[batches.length - 1].views : -1;
+          const cnt = batches.filter((b) => b.views === candidateUp).length;
+          if (candidateUp !== prevV && cnt < 2) {
+            adjusted = candidateUp;
+            break;
+          }
+        }
+      }
+      size = adjusted;
     }
 
     batches.push({ tick: currTick, views: size });
     delivered += size;
   }
 
-  // Dedupe Pass BEFORE rebalance (Review Round 9 Item 2.d)
+  // Dedupe Pass BEFORE rebalance (Review Round 9 Item 2.d & Round 12 A.3)
   const valCounts: Record<number, number> = {};
   for (const b of batches) {
     valCounts[b.views] = (valCounts[b.views] || 0) + 1;
@@ -605,11 +658,36 @@ export function generateViewsBatches(
     const b = batches[i];
     while (
       (i > 0 && b.views === batches[i - 1].views) ||
+      (i + 1 < batches.length && b.views === batches[i + 1].views) ||
       valCounts[b.views] > 2
     ) {
       if (++dedupeIters > 5000) break;
       valCounts[b.views]--;
-      b.views = b.views < CAP ? b.views + 1 : b.views - 1;
+      let found = false;
+      let candidate = b.views;
+      for (let offset = 1; offset <= CAP; offset++) {
+        const down = b.views - offset;
+        if (down >= params.VIEW_BATCH_MIN) {
+          const prevV = i > 0 ? batches[i - 1].views : -1;
+          const nextV = i + 1 < batches.length ? batches[i + 1].views : -1;
+          if (down !== prevV && down !== nextV && (valCounts[down] || 0) < 2) {
+            candidate = down;
+            found = true;
+            break;
+          }
+        }
+        const up = b.views + offset;
+        if (up <= CAP) {
+          const prevV = i > 0 ? batches[i - 1].views : -1;
+          const nextV = i + 1 < batches.length ? batches[i + 1].views : -1;
+          if (up !== prevV && up !== nextV && (valCounts[up] || 0) < 2) {
+            candidate = up;
+            found = true;
+            break;
+          }
+        }
+      }
+      b.views = found ? candidate : (b.views < CAP ? b.views + 1 : b.views - 1);
       valCounts[b.views] = (valCounts[b.views] || 0) + 1;
     }
   }
@@ -655,12 +733,19 @@ export function generateViewsBatches(
     }
   }
 
-  // Final remainder merged into previous batch if < 100 and result <= CAP
+  // Final remainder merged or redistributed if < VIEW_BATCH_MIN
   if (batches.length > 1 && batches[batches.length - 1].views < params.VIEW_BATCH_MIN) {
     const lastV = batches[batches.length - 1].views;
-    if (batches[batches.length - 2].views + lastV <= CAP) {
-      batches[batches.length - 2].views += lastV;
+    const prevV = batches[batches.length - 2].views;
+    const merged = prevV + lastV;
+    if (merged <= CAP) {
+      batches[batches.length - 2].views = merged;
       batches.pop();
+    } else {
+      let b2 = Math.max(params.VIEW_BATCH_MIN, Math.floor(merged / 2));
+      let b1 = merged - b2;
+      batches[batches.length - 2].views = b1;
+      batches[batches.length - 1].views = b2;
     }
   }
 
@@ -1225,8 +1310,33 @@ export function distributeEngagement(
 }
 
 // ============================================================================
-// 8. COMMENT ASSIGNMENT BY MODE (Milestone 1 Correction 7)
+// 8. COMMENT SANITIZATION & ASSIGNMENT (Milestone 1 Correction 7 & Round 12 A.2)
 // ============================================================================
+
+export function sanitizeAndDedupeComments(lines: string[]): string[] {
+  const sanitized = (lines || [])
+    .map((l) =>
+      l
+        .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "")
+        .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, "")
+        .replace(/<[^>]*>/g, "")
+        .replace(/\s+/g, " ")
+        .replace(/[\x00-\x1F\x7F]/g, "")
+        .trim()
+    )
+    .filter((l) => l.length > 0);
+
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const line of sanitized) {
+    const lower = line.toLowerCase();
+    if (!seen.has(lower)) {
+      seen.add(lower);
+      unique.push(line);
+    }
+  }
+  return unique;
+}
 
 export function assignCommentsByMode(
   rows: PlanRow[],
@@ -1239,20 +1349,11 @@ export function assignCommentsByMode(
   if (totalComments <= 0) return true;
   if (mode === "DISABLED") return false;
 
-  const sanitizedUser = (userComments || [])
-    .map((l) => l.replace(/<[^>]*>/g, "").replace(/[\x00-\x1F\x7F]/g, "").replace(/\r\n|\n|\s+/g, " ").trim())
-    .filter((l) => l.length > 0);
-  const uniqueUser = Array.from(new Set(sanitizedUser.map((l) => l.toLowerCase()))).map(
-    (low) => sanitizedUser.find((l) => l.toLowerCase() === low)!
-  );
-
-  const activePool = pool
+  const uniqueUser = sanitizeAndDedupeComments(userComments || []);
+  const activePoolLines = (pool || [])
     .filter((c) => c.isActive !== false)
-    .map((c) => c.commentText.replace(/<[^>]*>/g, "").replace(/[\x00-\x1F\x7F]/g, "").replace(/\r\n|\n|\s+/g, " ").trim())
-    .filter((l) => l.length > 0);
-  const uniquePool = Array.from(new Set(activePool.map((l) => l.toLowerCase()))).map(
-    (low) => activePool.find((l) => l.toLowerCase() === low)!
-  );
+    .map((c) => c.commentText);
+  const uniquePool = sanitizeAndDedupeComments(activePoolLines);
 
   let finalLines: string[] = [];
   if (mode === "USER_ONLY") {
@@ -1718,9 +1819,15 @@ export function generatePlan(
 
   let pkg: PackageConfig;
   if (typeof packageInput === "string") {
-    pkg = config.packages[packageInput] || DEFAULT_PACKAGES[packageInput] || DEFAULT_PACKAGES.tiktok_2k;
-  } else {
+    const foundPkg = config.packages?.[packageInput] || DEFAULT_PACKAGES[packageInput];
+    if (!foundPkg) {
+      throw new Error(`Unknown package key: "${packageInput}". Available packages: ${Object.keys(config.packages || {}).join(", ")}`);
+    }
+    pkg = foundPkg;
+  } else if (packageInput && typeof packageInput === "object") {
     pkg = packageInput;
+  } else {
+    throw new Error(`Invalid package input: ${String(packageInput)}`);
   }
 
   // Server-generated cryptographic seeds only. Never rely on client-side Math.random() in production.
@@ -1738,22 +1845,15 @@ export function generatePlan(
   const commentsMode: CommentsMode = options?.commentsMode || config.commentsMode || "HYBRID";
   const userCommentsList: string[] = options?.userCommentLines || options?.userComments || [];
 
-  // Dedupe pool lines
+  // Dedupe pool lines & user comments with unified sanitizer (Review Round 12 Item A.2)
   const pool = config.commentPool || [];
-  const activePool = pool
+  const activePoolLines = pool
     .filter((c) => c.isActive !== false)
-    .map((c) => c.commentText.replace(/\r\n|\n/g, " ").trim())
-    .filter((l) => l.length > 0);
-  const uniquePool = Array.from(new Set(activePool.map((l) => l.toLowerCase()))).map(
-    (low) => activePool.find((l) => l.toLowerCase() === low)!
-  );
-
-  const sanitizedUser = userCommentsList
-    .map((l) => l.replace(/\r\n|\n/g, " ").trim())
-    .filter((l) => l.length > 0);
-  const uniqueUser = Array.from(new Set(sanitizedUser.map((l) => l.toLowerCase()))).map(
-    (low) => sanitizedUser.find((l) => l.toLowerCase() === low)!
-  );
+    .map((c) => c.commentText);
+  const uniquePool = sanitizeAndDedupeComments(activePoolLines);
+  const uniqueUser = sanitizeAndDedupeComments(userCommentsList);
+  const userLowers = new Set(uniqueUser.map((l) => l.toLowerCase()));
+  const nonDupePool = uniquePool.filter((p) => !userLowers.has(p.toLowerCase()));
 
   for (let attempt = 0; attempt < 50; attempt++) {
     const attemptSeedStr = `${baseSeed}:${attempt}`;
@@ -1816,7 +1916,7 @@ export function generatePlan(
         } else if (commentsMode === "POOL_ONLY") {
           tot = Math.min(tot, uniquePool.length);
         } else {
-          tot = Math.min(tot, uniquePool.length + uniqueUser.length);
+          tot = Math.min(tot, uniqueUser.length + nonDupePool.length);
         }
       }
       totals[s] = tot >= config.providerMinimums[s] ? tot : 0;

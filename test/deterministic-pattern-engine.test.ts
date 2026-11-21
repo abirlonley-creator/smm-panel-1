@@ -19,6 +19,7 @@ import {
   PlanObject,
   PlatformConfig,
   AUXILIARY_SERVICES,
+  sanitizeAndDedupeComments,
 } from "../src/lib/engagement/deterministic-pattern-engine";
 
 test("Deterministic Pattern Engine - Canonical PRNG Test Vectors (Milestone 1 Correction 8)", async (t) => {
@@ -191,6 +192,27 @@ test("Deterministic Pattern Engine - Comment Modes (Milestone 1 Correction 7)", 
       assert.ok(!/[\x00-\x1F\x7F]/.test(line), "Control characters stripped");
       assert.ok(!/\s{2,}/.test(line), "Whitespace normalized");
     }
+  });
+
+  await t.test("Comment sanitizer: sanitizeAndDedupeComments strips tags, control characters, normalizes whitespace and dedupes case-insensitively", () => {
+    const dirty = [
+      "  <script>alert('xss')</script>Hello <b>World</b>! \x00\x1F  ",
+      "hello world!", // Case-insensitive duplicate
+      "Valid comment\x07 with\t tabs\r\nand   spaces",
+      "   <p></p>   ", // Empty after tag stripping
+    ];
+    const cleaned = sanitizeAndDedupeComments(dirty);
+    assert.deepEqual(cleaned, [
+      "Hello World!",
+      "Valid comment with tabs and spaces",
+    ]);
+  });
+
+  await t.test("Unknown package key: generatePlan throws a clear error", () => {
+    assert.throws(
+      () => generatePlan(DEFAULT_TIKTOK_CONFIG, "nonexistent_package_key", 1500, "test_seed"),
+      /Unknown package key: "nonexistent_package_key"/
+    );
   });
 });
 
@@ -394,6 +416,53 @@ test("Deterministic Pattern Engine - Invariant Unit Tests (Deliberately Broken P
         );
       }
     }
+  });
+
+  await t.test("Validator Fix 1 (a): Plan with flush row followed by regular release passes Invariant 13 (old validator failed)", () => {
+    // Seed 'seed_1' produces a valid plan where flush additions sit before regular releases at batch 34 (saves) and batch 36 (likes).
+    const plan = generatePlan(DEFAULT_TIKTOK_CONFIG, "tiktok_10k", 2500, "seed_1", { bdHour: 14.0 });
+    assert.ok(plan.flushRows, "Plan has flushRows");
+    assert.ok(plan.flushAdds, "Plan has flushAdds");
+
+    // 1. New validator with flushAdds passes with zero violations
+    const resPass = validatePlan(plan, DEFAULT_TIKTOK_CONFIG);
+    assert.equal(resPass.isValid, true, `Expected valid plan under new validator, got: ${resPass.violations.join(", ")}`);
+    assert.equal(resPass.violations.length, 0);
+
+    // 2. Old validator simulation: without flushAdds, flush additions are treated as regular releases and reset the counter,
+    // causing subsequent regular releases at batch 34 (saves) and batch 36 (likes) to fail Invariant 13.
+    const oldStylePlan = JSON.parse(JSON.stringify(plan));
+    oldStylePlan.flushAdds = { likes: {}, saves: {}, reposts: {}, comments: {}, shares: {} };
+    const oldRes = validatePlan(oldStylePlan, DEFAULT_TIKTOK_CONFIG);
+    assert.equal(oldRes.isValid, false, "Old validator without flushAdds tracking should fail Invariant 13");
+    assert.ok(
+      oldRes.violations.some((v: string) => v.includes("INVARIANT_13_PACING_CAP_EXCEEDED_SAVES_BATCH_34")),
+      `Expected batch 34 saves pacing violation, got: ${oldRes.violations.join(", ")}`
+    );
+    assert.ok(
+      oldRes.violations.some((v: string) => v.includes("INVARIANT_13_PACING_CAP_EXCEEDED_LIKES_BATCH_36")),
+      `Expected batch 36 likes pacing violation, got: ${oldRes.violations.join(", ")}`
+    );
+  });
+
+  await t.test("Validator Fix 1 (b): Regular release exceeding pacing cap still fails when flush row sits between releases", () => {
+    const plan = generatePlan(DEFAULT_TIKTOK_CONFIG, "tiktok_10k", 2500, "seed_1", { bdHour: 14.0 });
+    const excessPlan = JSON.parse(JSON.stringify(plan));
+    // Batch 34 has regular release of saves; inflate it to 100 to exceed the full accumulated pacing cap
+    excessPlan.rows[34].saves = 100;
+    excessPlan.totals.saves += (100 - plan.rows[34].saves);
+    let cum = 0;
+    for (const r of excessPlan.rows) {
+      cum += r.saves;
+      r.cumulativeSaves = cum;
+    }
+
+    const res = validatePlan(excessPlan, DEFAULT_TIKTOK_CONFIG);
+    assert.equal(res.isValid, false, "Must fail when regular release exceeds combined pacing cap");
+    assert.ok(
+      res.violations.some((v: string) => v.includes("INVARIANT_13_PACING_CAP_EXCEEDED_SAVES_BATCH_34")),
+      `Expected row 34 pacing violation, got: ${res.violations.join(", ")}`
+    );
   });
 
   await t.test("Invariant 14: Fails when views delivery in sliding window exceeds 3 * (W / duration) * viewsTotal (crafted to fail only Invariant 14)", () => {
