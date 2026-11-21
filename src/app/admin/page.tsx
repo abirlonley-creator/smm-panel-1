@@ -194,6 +194,9 @@ export default function AdminPage() {
     reposts: 0.22,
   });
 
+  // Live wholesale services rate cache mapped by `${providerId}:${serviceId}`
+  const [providerServicesMap, setProviderServicesMap] = useState<Record<string, number>>({});
+
   // SMM Providers Available for Dropdown Assignment
   const [availableProviders, setAvailableProviders] = useState<any[]>([]);
 
@@ -217,31 +220,43 @@ export default function AdminPage() {
 
   function getEffectiveRate(metric: "views" | "likes" | "saves" | "shares" | "comments" | "reposts", platform: "tiktok" | "instagram", isVip: boolean) {
     if (platform === "tiktok") {
-      const orig = originalRates[metric as "views" | "likes" | "saves" | "shares" | "comments"] ?? 0;
+      let orig = originalRates[metric as "views" | "likes" | "saves" | "shares" | "comments"] ?? 0;
+      const tKey = metric as "views" | "likes" | "saves" | "shares" | "comments";
+      const pId = (tiktokConfig as any)?.[tKey]?.providerId;
+      const sId = (tiktokConfig as any)?.[tKey]?.serviceId;
+      if (pId && sId && providerServicesMap[`${pId}:${sId}`]) {
+        orig = providerServicesMap[`${pId}:${sId}`];
+      }
       if (isVip) {
-        if (tiktokConfig?.tiktokZeroProfitVip ?? true) return { rate: orig, profit: 0, margin: 0, isZero: true };
+        if (tiktokConfig?.tiktokZeroProfitVip ?? true) return { rate: orig, profit: 0, margin: 0, isZero: true, orig };
         const rate = Number(tiktokConfig?.tiktokVipPricing?.[`${metric}UserRate`] ?? orig);
         const profit = Number((rate - orig).toFixed(2));
         const margin = orig > 0 ? Math.round(((rate - orig) / orig) * 100) : 0;
-        return { rate, profit, margin, isZero: false };
+        return { rate, profit, margin, isZero: false, orig };
       }
       const rate = Number(tiktokConfig?.pricing?.[`${metric}UserRate`] ?? (metric === "views" ? 4.5 : metric === "likes" ? 2.0 : metric === "saves" ? 0.8 : metric === "shares" ? 0.8 : 15.0));
       const profit = Number((rate - orig).toFixed(2));
       const margin = orig > 0 ? Math.round(((rate - orig) / orig) * 100) : 0;
-      return { rate, profit, margin, isZero: false };
+      return { rate, profit, margin, isZero: false, orig };
     } else {
-      const orig = instagramOriginalRates[metric] ?? 0;
+      let orig = instagramOriginalRates[metric] ?? 0;
+      const igKey = metric === "views" ? "instagramViews" : metric === "likes" ? "instagramLikes" : metric === "saves" ? "instagramSaves" : metric === "shares" ? "instagramShares" : metric === "reposts" ? "instagramReposts" : "instagramComments";
+      const pId = (tiktokConfig as any)?.[igKey]?.providerId;
+      const sId = (tiktokConfig as any)?.[igKey]?.serviceId;
+      if (pId && sId && providerServicesMap[`${pId}:${sId}`]) {
+        orig = providerServicesMap[`${pId}:${sId}`];
+      }
       if (isVip) {
-        if (tiktokConfig?.instagramZeroProfitVip ?? true) return { rate: orig, profit: 0, margin: 0, isZero: true };
+        if (tiktokConfig?.instagramZeroProfitVip ?? true) return { rate: orig, profit: 0, margin: 0, isZero: true, orig };
         const rate = Number(tiktokConfig?.instagramVipPricing?.[`${metric}UserRate`] ?? orig);
         const profit = Number((rate - orig).toFixed(2));
         const margin = orig > 0 ? Math.round(((rate - orig) / orig) * 100) : 0;
-        return { rate, profit, margin, isZero: false };
+        return { rate, profit, margin, isZero: false, orig };
       }
       const rate = Number(tiktokConfig?.instagramPricing?.[`${metric}UserRate`] ?? (metric === "views" ? 3.5 : metric === "likes" ? 2.2 : metric === "saves" ? 2.5 : metric === "shares" ? 2.5 : metric === "reposts" ? 2.5 : 20.0));
       const profit = Number((rate - orig).toFixed(2));
       const margin = orig > 0 ? Math.round(((rate - orig) / orig) * 100) : 0;
-      return { rate, profit, margin, isZero: false };
+      return { rate, profit, margin, isZero: false, orig };
     }
   }
 
@@ -450,6 +465,7 @@ export default function AdminPage() {
         if (tiktokRes.presets) setTiktokTierPresets(tiktokRes.presets);
         if (tiktokRes.originalRates) setOriginalRates(tiktokRes.originalRates);
         if (tiktokRes.instagramOriginalRates) setInstagramOriginalRates(tiktokRes.instagramOriginalRates);
+        if (tiktokRes.providerServicesMap) setProviderServicesMap(tiktokRes.providerServicesMap);
         if (Array.isArray(tiktokRes.providers)) setAvailableProviders(tiktokRes.providers);
       }
       fetch("/api/admin/providers")
@@ -497,7 +513,14 @@ export default function AdminPage() {
       }
       if (data.config) setTiktokConfig(data.config);
       if (data.presets) setTiktokTierPresets(data.presets);
-      setActionMsg({ text: "TikTok Engagement presets and pricing configuration saved successfully.", type: "success" });
+      if (data.originalRates) setOriginalRates(data.originalRates);
+      if (data.instagramOriginalRates) setInstagramOriginalRates(data.instagramOriginalRates);
+      if (data.providerServicesMap) setProviderServicesMap(data.providerServicesMap);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("provider-balance-refreshed"));
+        window.dispatchEvent(new CustomEvent("balance-updated"));
+      }
+      setActionMsg({ text: "Pricing, margins, and provider services configuration saved successfully.", type: "success" });
     } catch (err: any) {
       setActionMsg({ text: err.message || "Failed to save configuration", type: "error" });
     } finally {
@@ -2279,7 +2302,7 @@ export default function AdminPage() {
                     ).map((m) => {
                       const isVip = tiktokPricingTab === "vip";
                       const effective = getEffectiveRate(m.key, "tiktok", isVip);
-                      const origCost = m.orig;
+                      const origCost = effective.orig;
                       const userRate = effective.rate;
                       const profit = effective.profit;
                       const marginPct = effective.margin;
@@ -2539,6 +2562,30 @@ export default function AdminPage() {
                         </div>
                       </div>
                       <span className="text-[10px] text-[#252943]/50 block">High retention reel & video views</span>
+                      {(() => {
+                        const pId = tiktokConfig.instagramViews?.providerId;
+                        const sId = tiktokConfig.instagramViews?.serviceId;
+                        const matchedProv = availableProviders.find((p) => p.id === pId);
+                        const liveRate = pId && sId ? providerServicesMap[`${pId}:${sId}`] : undefined;
+                        return (
+                          <div className="pt-2 border-t border-[#DEE0ED]/60 flex items-center justify-between text-[11px]">
+                            <div className="flex items-center gap-1 text-[#252943]/70 font-semibold">
+                              <span>Live Balance:</span>
+                              <span className="font-bold text-emerald-600">
+                                {matchedProv && typeof matchedProv.balance === "number"
+                                  ? `${matchedProv.currency || "INR"} ${matchedProv.balance.toFixed(2)}`
+                                  : "—"}
+                              </span>
+                            </div>
+                            {typeof liveRate === "number" && (
+                              <div className="flex items-center gap-1 text-purple-700 font-bold">
+                                <span>Wholesale:</span>
+                                <span>₹{liveRate.toFixed(2)}/1k</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* 2. Instagram Likes Service */}
@@ -2603,6 +2650,30 @@ export default function AdminPage() {
                         </div>
                       </div>
                       <span className="text-[10px] text-[#252943]/50 block">Natural wave-paced post/reel likes</span>
+                      {(() => {
+                        const pId = tiktokConfig.instagramLikes?.providerId;
+                        const sId = tiktokConfig.instagramLikes?.serviceId;
+                        const matchedProv = availableProviders.find((p) => p.id === pId);
+                        const liveRate = pId && sId ? providerServicesMap[`${pId}:${sId}`] : undefined;
+                        return (
+                          <div className="pt-2 border-t border-[#DEE0ED]/60 flex items-center justify-between text-[11px]">
+                            <div className="flex items-center gap-1 text-[#252943]/70 font-semibold">
+                              <span>Live Balance:</span>
+                              <span className="font-bold text-emerald-600">
+                                {matchedProv && typeof matchedProv.balance === "number"
+                                  ? `${matchedProv.currency || "INR"} ${matchedProv.balance.toFixed(2)}`
+                                  : "—"}
+                              </span>
+                            </div>
+                            {typeof liveRate === "number" && (
+                              <div className="flex items-center gap-1 text-rose-700 font-bold">
+                                <span>Wholesale:</span>
+                                <span>₹{liveRate.toFixed(2)}/1k</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* 3. Instagram Saves Service */}
@@ -2667,6 +2738,30 @@ export default function AdminPage() {
                         </div>
                       </div>
                       <span className="text-[10px] text-[#252943]/50 block">High algorithmic weight post saves</span>
+                      {(() => {
+                        const pId = tiktokConfig.instagramSaves?.providerId;
+                        const sId = tiktokConfig.instagramSaves?.serviceId;
+                        const matchedProv = availableProviders.find((p) => p.id === pId);
+                        const liveRate = pId && sId ? providerServicesMap[`${pId}:${sId}`] : undefined;
+                        return (
+                          <div className="pt-2 border-t border-[#DEE0ED]/60 flex items-center justify-between text-[11px]">
+                            <div className="flex items-center gap-1 text-[#252943]/70 font-semibold">
+                              <span>Live Balance:</span>
+                              <span className="font-bold text-emerald-600">
+                                {matchedProv && typeof matchedProv.balance === "number"
+                                  ? `${matchedProv.currency || "INR"} ${matchedProv.balance.toFixed(2)}`
+                                  : "—"}
+                              </span>
+                            </div>
+                            {typeof liveRate === "number" && (
+                              <div className="flex items-center gap-1 text-amber-700 font-bold">
+                                <span>Wholesale:</span>
+                                <span>₹{liveRate.toFixed(2)}/1k</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* 4. Instagram Shares Service */}
@@ -2731,6 +2826,30 @@ export default function AdminPage() {
                         </div>
                       </div>
                       <span className="text-[10px] text-[#252943]/50 block">Post & reel shares distribution</span>
+                      {(() => {
+                        const pId = tiktokConfig.instagramShares?.providerId;
+                        const sId = tiktokConfig.instagramShares?.serviceId;
+                        const matchedProv = availableProviders.find((p) => p.id === pId);
+                        const liveRate = pId && sId ? providerServicesMap[`${pId}:${sId}`] : undefined;
+                        return (
+                          <div className="pt-2 border-t border-[#DEE0ED]/60 flex items-center justify-between text-[11px]">
+                            <div className="flex items-center gap-1 text-[#252943]/70 font-semibold">
+                              <span>Live Balance:</span>
+                              <span className="font-bold text-emerald-600">
+                                {matchedProv && typeof matchedProv.balance === "number"
+                                  ? `${matchedProv.currency || "INR"} ${matchedProv.balance.toFixed(2)}`
+                                  : "—"}
+                              </span>
+                            </div>
+                            {typeof liveRate === "number" && (
+                              <div className="flex items-center gap-1 text-blue-700 font-bold">
+                                <span>Wholesale:</span>
+                                <span>₹{liveRate.toFixed(2)}/1k</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* 5. Instagram Comments Service */}
@@ -2795,6 +2914,30 @@ export default function AdminPage() {
                         </div>
                       </div>
                       <span className="text-[10px] text-[#252943]/50 block">Verified English organic comments</span>
+                      {(() => {
+                        const pId = tiktokConfig.instagramComments?.providerId;
+                        const sId = tiktokConfig.instagramComments?.serviceId;
+                        const matchedProv = availableProviders.find((p) => p.id === pId);
+                        const liveRate = pId && sId ? providerServicesMap[`${pId}:${sId}`] : undefined;
+                        return (
+                          <div className="pt-2 border-t border-[#DEE0ED]/60 flex items-center justify-between text-[11px]">
+                            <div className="flex items-center gap-1 text-[#252943]/70 font-semibold">
+                              <span>Live Balance:</span>
+                              <span className="font-bold text-emerald-600">
+                                {matchedProv && typeof matchedProv.balance === "number"
+                                  ? `${matchedProv.currency || "INR"} ${matchedProv.balance.toFixed(2)}`
+                                  : "—"}
+                              </span>
+                            </div>
+                            {typeof liveRate === "number" && (
+                              <div className="flex items-center gap-1 text-emerald-700 font-bold">
+                                <span>Wholesale:</span>
+                                <span>₹{liveRate.toFixed(2)}/1k</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* 6. Instagram Reposts Service */}
@@ -2859,6 +3002,30 @@ export default function AdminPage() {
                         </div>
                       </div>
                       <span className="text-[10px] text-[#252943]/50 block">Post & reel reposts distribution (min 10)</span>
+                      {(() => {
+                        const pId = tiktokConfig.instagramReposts?.providerId;
+                        const sId = tiktokConfig.instagramReposts?.serviceId;
+                        const matchedProv = availableProviders.find((p) => p.id === pId);
+                        const liveRate = pId && sId ? providerServicesMap[`${pId}:${sId}`] : undefined;
+                        return (
+                          <div className="pt-2 border-t border-[#DEE0ED]/60 flex items-center justify-between text-[11px]">
+                            <div className="flex items-center gap-1 text-[#252943]/70 font-semibold">
+                              <span>Live Balance:</span>
+                              <span className="font-bold text-emerald-600">
+                                {matchedProv && typeof matchedProv.balance === "number"
+                                  ? `${matchedProv.currency || "INR"} ${matchedProv.balance.toFixed(2)}`
+                                  : "—"}
+                              </span>
+                            </div>
+                            {typeof liveRate === "number" && (
+                              <div className="flex items-center gap-1 text-indigo-700 font-bold">
+                                <span>Wholesale:</span>
+                                <span>₹{liveRate.toFixed(2)}/1k</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -2961,7 +3128,7 @@ export default function AdminPage() {
                     ).map((m) => {
                       const isVip = instagramPricingTab === "vip";
                       const effective = getEffectiveRate(m.key, "instagram", isVip);
-                      const origCost = m.orig;
+                      const origCost = effective.orig;
                       const userRate = effective.rate;
                       const profit = effective.profit;
                       const marginPct = effective.margin;

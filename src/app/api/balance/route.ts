@@ -126,10 +126,12 @@ export async function GET(request: Request) {
         activeId = connections[0].id;
       }
 
-      // If forceRefresh requested, refresh the active provider
+      // If forceRefresh requested, refresh all active provider connections live
       let targetConns = connections;
       if (forceRefresh) {
-        await refreshUserBalance(userId, activeId);
+        await Promise.allSettled(
+          connections.map((c) => refreshUserBalance(userId, c.id))
+        );
         targetConns = await prisma.userProviderConnection.findMany({
           where: { userId, active: true },
           orderBy: { createdAt: "asc" },
@@ -226,9 +228,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: "providerId is required" }, { status: 400 });
     }
 
-    // Verify provider belongs to user
+    // Verify provider belongs to user or is accessible to admin
     const conn = await prisma.userProviderConnection.findFirst({
-      where: { id: providerId, userId: session.user.id },
+      where: session.user.role === "ADMIN"
+        ? { id: providerId }
+        : { id: providerId, userId: session.user.id },
     });
 
     if (!conn) {

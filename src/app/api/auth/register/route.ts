@@ -49,6 +49,12 @@ export async function POST(request: Request) {
     // Hash user password with username salt to ensure global uniqueness on Passkey.keyHash
     const keyHash = hashUserPassword(cleanUsername, password);
 
+    // Clean up any stale orphaned passkey record with this keyHash
+    const stalePasskey = await prisma.passkey.findUnique({ where: { keyHash } });
+    if (stalePasskey) {
+      await prisma.passkey.delete({ where: { id: stalePasskey.id } }).catch(() => {});
+    }
+
     // Atomically create User, Provider Connection, and Passkey
     const { user, passkeyRecord } = await prisma.$transaction(async (tx) => {
       const newUser = await tx.user.create({
