@@ -4,6 +4,7 @@ import { prisma } from "../prisma";
 
 export interface MetricSpec {
   enabled: boolean;
+  providerId?: string;
   providerName: string;
   serviceId: string;
   minQuantity: number;
@@ -604,6 +605,7 @@ export function saveAllTikTokPresets(newPresets: Record<string, TikTokTierPreset
 export interface MetricConfigItem {
   enabled: boolean;
   providerName: string;
+  providerId?: string;
   serviceId: string;
   minQuantity: number;
   maxQuantity: number;

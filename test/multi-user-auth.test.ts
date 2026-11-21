@@ -111,7 +111,7 @@ export async function runMultiUserAuthTests() {
   // Test 7: Last admin deletion safety protection
   // Ensure exactly one active admin exists for this test by deleting any extra bootstrap keys
   const extraAdminKeys = await prisma.passkey.findMany({
-    where: { role: "ADMIN", status: "ACTIVE", keyPrefix: { not: "abir90..." } },
+    where: { role: "ADMIN", status: "ACTIVE", keyPrefix: { notIn: ["abir90...", "adm_***"] } },
   });
   for (const k of extraAdminKeys) {
     await prisma.passkey.delete({ where: { id: k.id } }).catch(() => {});

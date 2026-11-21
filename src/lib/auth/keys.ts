@@ -42,8 +42,8 @@ export async function revokeAccessKey(id: string, actor: string = "Admin"): Prom
 
 /**
  * Verifies any presented credential:
- * 1. Default admin passkey `abir90`
- * 2. Bootstrap key `Abir99` (from env or fallback)
+ * 1. Default admin passkey
+ * 2. Bootstrap key (from env or fallback)
  * 3. Any active hashed access key or passkey in database
  */
 export async function verifyAdminCredential(presentedKey: string): Promise<{

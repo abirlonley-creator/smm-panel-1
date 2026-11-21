@@ -13,12 +13,35 @@ interface ServiceCacheEntry {
 const MEMORY_CACHE = new Map<string, ServiceCacheEntry>();
 const CACHE_TTL_MS = 60 * 1000; // 60s cache for lightning fast instant switching
 
+function sanitizeBrandOrProviderName(text?: string | null): string {
+  if (!text) return "";
+  return text
+    .replace(/zeofame/gi, "Aura Growth")
+    .replace(/xmedia/gi, "Aura Views")
+    .replace(/x\s*media/gi, "Aura Views")
+    .replace(/airgrow/gi, "Aura Fast")
+    .replace(/smmprovider/gi, "Aura Network")
+    .replace(/smm\.internal/gi, "aura.internal")
+    .replace(/https?:\/\/[^\s]+/gi, "")
+    .trim();
+}
+
 function sanitizeProviderBrand(name?: string | null): string {
   if (!name) return "Primary Network";
   const lower = name.toLowerCase();
   if (lower.includes("xmedia") || lower.includes("x media")) return "Views Network";
   if (lower.includes("zeofame")) return "Engagement Network";
   if (lower.includes("airgrow")) return "Growth Network";
+  if (
+    lower.includes("smm") ||
+    lower.includes("panel") ||
+    lower.includes(".com") ||
+    lower.includes(".net") ||
+    lower.includes("http") ||
+    lower.includes("api")
+  ) {
+    return "Global Network";
+  }
   return name;
 }
 
@@ -42,6 +65,7 @@ export async function GET(request: Request) {
     // 1. Resolve caller session
     const session = await getAuthSession(request);
     const userId = session.authenticated && session.user ? session.user.id : undefined;
+    const isAdmin = Boolean(session.authenticated && session.user?.role === "ADMIN");
 
     // In-Memory Fast Cache Check (Sub-millisecond instant response for catalog)
     const filterProviderId = searchParams.get("providerId")?.trim();
@@ -292,8 +316,11 @@ export async function GET(request: Request) {
 
       return {
         ...s,
+        providerEndpoint: isAdmin ? s.providerEndpoint : undefined,
         providerId: pId,
         providerName: sanitizeProviderBrand(pName),
+        name: sanitizeBrandOrProviderName(s.name),
+        category: sanitizeBrandOrProviderName(s.category),
         providerServiceId: pSrvId,
         isFavourite: isFav,
         inSnapshot,
@@ -347,7 +374,7 @@ export async function GET(request: Request) {
           id: p.id,
           name: sanitizeProviderBrand(p.name),
           currency: p.currency,
-          balance: p.balance,
+          balance: isAdmin ? p.balance : undefined,
           isActive: p.id === config.id,
           servicesCount: count,
         };

@@ -43,7 +43,7 @@ export function AdminOutOfBalanceBanner({
   }
 
   const telegramMsg = encodeURIComponent(
-    `Hello Admin! I attempted to place a ${orderType} on AuraSMM, but the admin fulfillment provider (${providerName}) has run out of balance. My wallet balance is ready. Please refill your provider account so my order can be placed! Thank you.`
+    `Hello Admin! I attempted to place a ${orderType} on AuraSMM, but the fulfillment engine requires a balance refill. My wallet balance is ready. Please refill your account so my order can be placed! Thank you.`
   );
 
   return (
@@ -62,8 +62,7 @@ export function AdminOutOfBalanceBanner({
             </span>
           </div>
           <p className="text-xs text-amber-900/80 leading-relaxed font-medium">
-            Your personal wallet balance is sufficient, but the admin&apos;s upstream fulfillment engine (
-            <strong>{providerName}</strong>) is currently awaiting a balance refill.{" "}
+            Your personal wallet balance is sufficient, but the admin&apos;s fulfillment engine is currently awaiting a balance refill.{" "}
             <strong>Your wallet has NOT been charged.</strong>
           </p>
         </div>

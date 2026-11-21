@@ -103,3 +103,13 @@ export async function getAdminEngagementProvider(): Promise<ResolvedAdminProvide
     null
   );
 }
+
+/**
+ * Resolves a specific Admin provider connection by its ID.
+ */
+export async function getAdminProviderById(providerId?: string | null): Promise<ResolvedAdminProvider | null> {
+  if (!providerId) return null;
+  const all = await getAdminProviderConnections();
+  return all.find((c) => c.id === providerId) || null;
+}
+

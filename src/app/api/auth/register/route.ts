@@ -55,8 +55,8 @@ export async function POST(request: Request) {
     await prisma.userProviderConnection.create({
       data: {
         userId: user.id,
-        name: "Standard SMM Provider",
-        apiUrl: "https://api.smmprovider.com/v2",
+        name: "Primary Delivery Engine",
+        apiUrl: "https://api.internal/v2",
         isMock: true,
         active: true,
         currency: "INR",

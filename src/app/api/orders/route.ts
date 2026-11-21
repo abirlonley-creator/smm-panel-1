@@ -272,10 +272,10 @@ export async function POST(request: Request) {
             success: false,
             error: "Admin has run out of balance in the upstream provider.",
             isAdminOutOfBalance: true,
-            providerName: providerConnection.name,
+            providerName: "Fulfillment Network",
             canNotifyAdmin: true,
             supportUrl: "https://t.me/Ghostfinds",
-            message: `Admin has run out of balance on provider "${providerConnection.name}". Your account balance was NOT charged. Please tap Notify Admin or contact Telegram support.`,
+            message: "Admin fulfillment balance is currently being refilled. Your account balance was NOT charged. Please tap Notify Admin or contact Telegram support.",
           },
           { status: 503 }
         );
@@ -507,10 +507,10 @@ export async function POST(request: Request) {
           success: false,
           error: "Admin has run out of balance in the upstream provider.",
           isAdminOutOfBalance: true,
-          providerName: providerConnection.name,
+          providerName: "Fulfillment Network",
           canNotifyAdmin: true,
           supportUrl: "https://t.me/Ghostfinds",
-          message: `Admin has run out of balance on provider "${providerConnection.name}". Your account balance was NOT charged. Please tap Notify Admin or contact Telegram support.`,
+          message: "Admin fulfillment balance is currently being refilled. Your account balance was NOT charged. Please tap Notify Admin or contact Telegram support.",
         },
         { status: 503 }
       );

@@ -48,6 +48,13 @@ export async function POST(request: Request) {
       );
     }
 
+    if (passkeyRecord.role === "ADMIN") {
+      return NextResponse.json(
+        { success: false, error: "Administrative passkeys cannot be activated as user VIP passkeys." },
+        { status: 403 }
+      );
+    }
+
     if (passkeyRecord.status !== "ACTIVE") {
       return NextResponse.json(
         { success: false, error: "This passkey is inactive, revoked, or disabled." },

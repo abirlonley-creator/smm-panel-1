@@ -191,6 +191,9 @@ export default function AdminPage() {
     comments: 5.00,
   });
 
+  // SMM Providers Available for Dropdown Assignment
+  const [availableProviders, setAvailableProviders] = useState<any[]>([]);
+
   // Maintenance (Under Update) State
   const [maintenance, setMaintenance] = useState<{
     enabled: boolean;
@@ -444,7 +447,16 @@ export default function AdminPage() {
         if (tiktokRes.presets) setTiktokTierPresets(tiktokRes.presets);
         if (tiktokRes.originalRates) setOriginalRates(tiktokRes.originalRates);
         if (tiktokRes.instagramOriginalRates) setInstagramOriginalRates(tiktokRes.instagramOriginalRates);
+        if (Array.isArray(tiktokRes.providers)) setAvailableProviders(tiktokRes.providers);
       }
+      fetch("/api/admin/providers")
+        .then((r) => r.json())
+        .then((pRes) => {
+          if (pRes?.success && Array.isArray(pRes.providers) && pRes.providers.length > 0) {
+            setAvailableProviders(pRes.providers);
+          }
+        })
+        .catch(() => {});
       if (alertsRes.success) {
         setAlerts(alertsRes.alerts || []);
         setAlertsMetrics(alertsRes.metrics || null);
@@ -1834,17 +1846,27 @@ export default function AdminPage() {
 
                           <div className="grid grid-cols-2 gap-3">
                             <div>
-                              <label className="block font-bold text-[#252943]/70 mb-1">Provider Name</label>
-                              <input
-                                type="text"
-                                value={activePreset.views?.providerName || "Views Provider"}
-                                onChange={(e) => updateServiceField("views", "providerName", e.target.value)}
-                                className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-medium"
-                                required
-                              />
+                              <label className="block font-bold text-[#252943]/70 mb-1">SMM Provider</label>
+                              <select
+                                value={activePreset.views?.providerId || ""}
+                                onChange={(e) => {
+                                  const pId = e.target.value;
+                                  const matched = availableProviders.find((p) => p.id === pId);
+                                  updateServiceField("views", "providerId", pId);
+                                  updateServiceField("views", "providerName", matched?.name || "Views Provider");
+                                }}
+                                className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] focus:border-blue-500 text-xs font-semibold text-[#252943] bg-white outline-none cursor-pointer"
+                              >
+                                <option value="">Default Views Provider ({activePreset.views?.providerName || "Auto"})</option>
+                                {availableProviders.map((prov) => (
+                                  <option key={prov.id} value={prov.id}>
+                                    {prov.name} ({prov.currency || "INR"} {typeof prov.balance === "number" ? prov.balance.toFixed(2) : "0.00"})
+                                  </option>
+                                ))}
+                              </select>
                             </div>
                             <div>
-                              <label className="block font-bold text-[#252943]/70 mb-1">Service ID</label>
+                              <label className="block font-bold text-[#252943]/70 mb-1">Provider Service ID</label>
                               <input
                                 type="text"
                                 value={activePreset.views?.serviceId || "10322"}
@@ -1927,17 +1949,27 @@ export default function AdminPage() {
 
                           <div className="grid grid-cols-2 gap-3">
                             <div>
-                              <label className="block font-bold text-[#252943]/70 mb-1">Provider Name</label>
-                              <input
-                                type="text"
-                                value={activePreset.likes?.providerName || "Likes Provider"}
-                                onChange={(e) => updateServiceField("likes", "providerName", e.target.value)}
-                                className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-medium"
-                                required
-                              />
+                              <label className="block font-bold text-[#252943]/70 mb-1">SMM Provider</label>
+                              <select
+                                value={activePreset.likes?.providerId || ""}
+                                onChange={(e) => {
+                                  const pId = e.target.value;
+                                  const matched = availableProviders.find((p) => p.id === pId);
+                                  updateServiceField("likes", "providerId", pId);
+                                  updateServiceField("likes", "providerName", matched?.name || "Likes Provider");
+                                }}
+                                className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] focus:border-rose-500 text-xs font-semibold text-[#252943] bg-white outline-none cursor-pointer"
+                              >
+                                <option value="">Default Likes Provider ({activePreset.likes?.providerName || "Auto"})</option>
+                                {availableProviders.map((prov) => (
+                                  <option key={prov.id} value={prov.id}>
+                                    {prov.name} ({prov.currency || "INR"} {typeof prov.balance === "number" ? prov.balance.toFixed(2) : "0.00"})
+                                  </option>
+                                ))}
+                              </select>
                             </div>
                             <div>
-                              <label className="block font-bold text-[#252943]/70 mb-1">Service ID</label>
+                              <label className="block font-bold text-[#252943]/70 mb-1">Provider Service ID</label>
                               <input
                                 type="text"
                                 value={activePreset.likes?.serviceId || "1123"}
@@ -2020,14 +2052,24 @@ export default function AdminPage() {
 
                           <div className="grid grid-cols-2 gap-3">
                             <div>
-                              <label className="block font-bold text-[#252943]/70 mb-1">Provider Name</label>
-                              <input
-                                type="text"
-                                value={activePreset.saves?.providerName || "Engagement Engine"}
-                                onChange={(e) => updateServiceField("saves", "providerName", e.target.value)}
-                                className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-medium"
-                                required
-                              />
+                              <label className="block font-bold text-[#252943]/70 mb-1">SMM Provider</label>
+                              <select
+                                value={activePreset.saves?.providerId || ""}
+                                onChange={(e) => {
+                                  const pId = e.target.value;
+                                  const matched = availableProviders.find((p) => p.id === pId);
+                                  updateServiceField("saves", "providerId", pId);
+                                  updateServiceField("saves", "providerName", matched?.name || "Engagement Provider");
+                                }}
+                                className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] focus:border-amber-500 text-xs font-semibold text-[#252943] bg-white outline-none cursor-pointer"
+                              >
+                                <option value="">Default Saves Provider ({activePreset.saves?.providerName || "Auto"})</option>
+                                {availableProviders.map((prov) => (
+                                  <option key={prov.id} value={prov.id}>
+                                    {prov.name} ({prov.currency || "INR"} {typeof prov.balance === "number" ? prov.balance.toFixed(2) : "0.00"})
+                                  </option>
+                                ))}
+                              </select>
                             </div>
                             <div>
                               <label className="block font-bold text-[#252943]/70 mb-1">Service ID</label>
@@ -2097,17 +2139,27 @@ export default function AdminPage() {
 
                           <div className="grid grid-cols-2 gap-3">
                             <div>
-                              <label className="block font-bold text-[#252943]/70 mb-1">Provider Name</label>
-                              <input
-                                type="text"
-                                value={activePreset.shares?.providerName || "Engagement Engine"}
-                                onChange={(e) => updateServiceField("shares", "providerName", e.target.value)}
-                                className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] bg-white text-xs font-medium"
-                                required
-                              />
+                              <label className="block font-bold text-[#252943]/70 mb-1">SMM Provider</label>
+                              <select
+                                value={activePreset.shares?.providerId || ""}
+                                onChange={(e) => {
+                                  const pId = e.target.value;
+                                  const matched = availableProviders.find((p) => p.id === pId);
+                                  updateServiceField("shares", "providerId", pId);
+                                  updateServiceField("shares", "providerName", matched?.name || "Engagement Provider");
+                                }}
+                                className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] focus:border-purple-500 text-xs font-semibold text-[#252943] bg-white outline-none cursor-pointer"
+                              >
+                                <option value="">Default Shares Provider ({activePreset.shares?.providerName || "Auto"})</option>
+                                {availableProviders.map((prov) => (
+                                  <option key={prov.id} value={prov.id}>
+                                    {prov.name} ({prov.currency || "INR"} {typeof prov.balance === "number" ? prov.balance.toFixed(2) : "0.00"})
+                                  </option>
+                                ))}
+                              </select>
                             </div>
                             <div>
-                              <label className="block font-bold text-[#252943]/70 mb-1">Service ID</label>
+                              <label className="block font-bold text-[#252943]/70 mb-1">Provider Service ID</label>
                               <input
                                 type="text"
                                 value={activePreset.shares?.serviceId || "718"}
@@ -2433,25 +2485,55 @@ export default function AdminPage() {
                           Min: 100
                         </span>
                       </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-[#252943]/70 mb-1">
-                          Provider Service ID
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="101"
-                          value={tiktokConfig.instagramViews?.serviceId ?? "101"}
-                          onChange={(e) =>
-                            setTiktokConfig({
-                              ...tiktokConfig,
-                              instagramViews: {
-                                ...(tiktokConfig.instagramViews || { enabled: true, minQuantity: 100, maxQuantity: 10000000 }),
-                                serviceId: e.target.value,
-                              },
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] focus:border-purple-500 font-mono text-xs font-bold text-[#252943] bg-white outline-none"
-                        />
+                      <div className="space-y-2">
+                        <div>
+                          <label className="block text-[11px] font-bold text-[#252943]/70 mb-1">
+                            SMM Provider
+                          </label>
+                          <select
+                            value={tiktokConfig.instagramViews?.providerId || ""}
+                            onChange={(e) => {
+                              const pId = e.target.value;
+                              const matched = availableProviders.find((p) => p.id === pId);
+                              setTiktokConfig({
+                                ...tiktokConfig,
+                                instagramViews: {
+                                  ...(tiktokConfig.instagramViews || { enabled: true, minQuantity: 100, maxQuantity: 10000000 }),
+                                  providerId: pId,
+                                  providerName: matched?.name || "Views Provider",
+                                },
+                              });
+                            }}
+                            className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] focus:border-purple-500 text-xs font-semibold text-[#252943] bg-white outline-none cursor-pointer"
+                          >
+                            <option value="">Default Views Provider ({tiktokConfig.instagramViews?.providerName || "Auto"})</option>
+                            {availableProviders.map((prov) => (
+                              <option key={prov.id} value={prov.id}>
+                                {prov.name} ({prov.currency || "INR"} {typeof prov.balance === "number" ? prov.balance.toFixed(2) : "0.00"})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-[#252943]/70 mb-1">
+                            Provider Service ID
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="101"
+                            value={tiktokConfig.instagramViews?.serviceId ?? "101"}
+                            onChange={(e) =>
+                              setTiktokConfig({
+                                ...tiktokConfig,
+                                instagramViews: {
+                                  ...(tiktokConfig.instagramViews || { enabled: true, minQuantity: 100, maxQuantity: 10000000 }),
+                                  serviceId: e.target.value,
+                                },
+                              })
+                            }
+                            className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] focus:border-purple-500 font-mono text-xs font-bold text-[#252943] bg-white outline-none"
+                          />
+                        </div>
                       </div>
                       <span className="text-[10px] text-[#252943]/50 block">High retention reel & video views</span>
                     </div>
@@ -2467,25 +2549,55 @@ export default function AdminPage() {
                           Min: 10
                         </span>
                       </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-[#252943]/70 mb-1">
-                          Provider Service ID
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="102"
-                          value={tiktokConfig.instagramLikes?.serviceId ?? "102"}
-                          onChange={(e) =>
-                            setTiktokConfig({
-                              ...tiktokConfig,
-                              instagramLikes: {
-                                ...(tiktokConfig.instagramLikes || { enabled: true, minQuantity: 10, maxQuantity: 500000 }),
-                                serviceId: e.target.value,
-                              },
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] focus:border-rose-500 font-mono text-xs font-bold text-[#252943] bg-white outline-none"
-                        />
+                      <div className="space-y-2">
+                        <div>
+                          <label className="block text-[11px] font-bold text-[#252943]/70 mb-1">
+                            SMM Provider
+                          </label>
+                          <select
+                            value={tiktokConfig.instagramLikes?.providerId || ""}
+                            onChange={(e) => {
+                              const pId = e.target.value;
+                              const matched = availableProviders.find((p) => p.id === pId);
+                              setTiktokConfig({
+                                ...tiktokConfig,
+                                instagramLikes: {
+                                  ...(tiktokConfig.instagramLikes || { enabled: true, minQuantity: 10, maxQuantity: 500000 }),
+                                  providerId: pId,
+                                  providerName: matched?.name || "Likes Provider",
+                                },
+                              });
+                            }}
+                            className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] focus:border-rose-500 text-xs font-semibold text-[#252943] bg-white outline-none cursor-pointer"
+                          >
+                            <option value="">Default Likes Provider ({tiktokConfig.instagramLikes?.providerName || "Auto"})</option>
+                            {availableProviders.map((prov) => (
+                              <option key={prov.id} value={prov.id}>
+                                {prov.name} ({prov.currency || "INR"} {typeof prov.balance === "number" ? prov.balance.toFixed(2) : "0.00"})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-[#252943]/70 mb-1">
+                            Provider Service ID
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="102"
+                            value={tiktokConfig.instagramLikes?.serviceId ?? "102"}
+                            onChange={(e) =>
+                              setTiktokConfig({
+                                ...tiktokConfig,
+                                instagramLikes: {
+                                  ...(tiktokConfig.instagramLikes || { enabled: true, minQuantity: 10, maxQuantity: 500000 }),
+                                  serviceId: e.target.value,
+                                },
+                              })
+                            }
+                            className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] focus:border-rose-500 font-mono text-xs font-bold text-[#252943] bg-white outline-none"
+                          />
+                        </div>
                       </div>
                       <span className="text-[10px] text-[#252943]/50 block">Natural wave-paced post/reel likes</span>
                     </div>
@@ -2501,25 +2613,55 @@ export default function AdminPage() {
                           Min: 1
                         </span>
                       </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-[#252943]/70 mb-1">
-                          Provider Service ID
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="103"
-                          value={tiktokConfig.instagramSaves?.serviceId ?? "103"}
-                          onChange={(e) =>
-                            setTiktokConfig({
-                              ...tiktokConfig,
-                              instagramSaves: {
-                                ...(tiktokConfig.instagramSaves || { enabled: true, minQuantity: 1, maxQuantity: 200000 }),
-                                serviceId: e.target.value,
-                              },
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] focus:border-amber-500 font-mono text-xs font-bold text-[#252943] bg-white outline-none"
-                        />
+                      <div className="space-y-2">
+                        <div>
+                          <label className="block text-[11px] font-bold text-[#252943]/70 mb-1">
+                            SMM Provider
+                          </label>
+                          <select
+                            value={tiktokConfig.instagramSaves?.providerId || ""}
+                            onChange={(e) => {
+                              const pId = e.target.value;
+                              const matched = availableProviders.find((p) => p.id === pId);
+                              setTiktokConfig({
+                                ...tiktokConfig,
+                                instagramSaves: {
+                                  ...(tiktokConfig.instagramSaves || { enabled: true, minQuantity: 1, maxQuantity: 200000 }),
+                                  providerId: pId,
+                                  providerName: matched?.name || "Saves Provider",
+                                },
+                              });
+                            }}
+                            className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] focus:border-amber-500 text-xs font-semibold text-[#252943] bg-white outline-none cursor-pointer"
+                          >
+                            <option value="">Default Saves Provider ({tiktokConfig.instagramSaves?.providerName || "Auto"})</option>
+                            {availableProviders.map((prov) => (
+                              <option key={prov.id} value={prov.id}>
+                                {prov.name} ({prov.currency || "INR"} {typeof prov.balance === "number" ? prov.balance.toFixed(2) : "0.00"})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-[#252943]/70 mb-1">
+                            Provider Service ID
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="103"
+                            value={tiktokConfig.instagramSaves?.serviceId ?? "103"}
+                            onChange={(e) =>
+                              setTiktokConfig({
+                                ...tiktokConfig,
+                                instagramSaves: {
+                                  ...(tiktokConfig.instagramSaves || { enabled: true, minQuantity: 1, maxQuantity: 200000 }),
+                                  serviceId: e.target.value,
+                                },
+                              })
+                            }
+                            className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] focus:border-amber-500 font-mono text-xs font-bold text-[#252943] bg-white outline-none"
+                          />
+                        </div>
                       </div>
                       <span className="text-[10px] text-[#252943]/50 block">High algorithmic weight post saves</span>
                     </div>
@@ -2535,25 +2677,55 @@ export default function AdminPage() {
                           Min: 10
                         </span>
                       </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-[#252943]/70 mb-1">
-                          Provider Service ID
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="104"
-                          value={tiktokConfig.instagramShares?.serviceId ?? "104"}
-                          onChange={(e) =>
-                            setTiktokConfig({
-                              ...tiktokConfig,
-                              instagramShares: {
-                                ...(tiktokConfig.instagramShares || { enabled: true, minQuantity: 10, maxQuantity: 100000 }),
-                                serviceId: e.target.value,
-                              },
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] focus:border-blue-500 font-mono text-xs font-bold text-[#252943] bg-white outline-none"
-                        />
+                      <div className="space-y-2">
+                        <div>
+                          <label className="block text-[11px] font-bold text-[#252943]/70 mb-1">
+                            SMM Provider
+                          </label>
+                          <select
+                            value={tiktokConfig.instagramShares?.providerId || ""}
+                            onChange={(e) => {
+                              const pId = e.target.value;
+                              const matched = availableProviders.find((p) => p.id === pId);
+                              setTiktokConfig({
+                                ...tiktokConfig,
+                                instagramShares: {
+                                  ...(tiktokConfig.instagramShares || { enabled: true, minQuantity: 10, maxQuantity: 100000 }),
+                                  providerId: pId,
+                                  providerName: matched?.name || "Shares Provider",
+                                },
+                              });
+                            }}
+                            className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] focus:border-blue-500 text-xs font-semibold text-[#252943] bg-white outline-none cursor-pointer"
+                          >
+                            <option value="">Default Shares Provider ({tiktokConfig.instagramShares?.providerName || "Auto"})</option>
+                            {availableProviders.map((prov) => (
+                              <option key={prov.id} value={prov.id}>
+                                {prov.name} ({prov.currency || "INR"} {typeof prov.balance === "number" ? prov.balance.toFixed(2) : "0.00"})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-[#252943]/70 mb-1">
+                            Provider Service ID
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="104"
+                            value={tiktokConfig.instagramShares?.serviceId ?? "104"}
+                            onChange={(e) =>
+                              setTiktokConfig({
+                                ...tiktokConfig,
+                                instagramShares: {
+                                  ...(tiktokConfig.instagramShares || { enabled: true, minQuantity: 10, maxQuantity: 100000 }),
+                                  serviceId: e.target.value,
+                                },
+                              })
+                            }
+                            className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] focus:border-blue-500 font-mono text-xs font-bold text-[#252943] bg-white outline-none"
+                          />
+                        </div>
                       </div>
                       <span className="text-[10px] text-[#252943]/50 block">Post & reel shares distribution</span>
                     </div>
@@ -2569,25 +2741,55 @@ export default function AdminPage() {
                           Min: 1
                         </span>
                       </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-[#252943]/70 mb-1">
-                          Provider Service ID
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="950"
-                          value={tiktokConfig.instagramComments?.serviceId ?? "950"}
-                          onChange={(e) =>
-                            setTiktokConfig({
-                              ...tiktokConfig,
-                              instagramComments: {
-                                ...(tiktokConfig.instagramComments || { enabled: true, minQuantity: 1, maxQuantity: 10000 }),
-                                serviceId: e.target.value,
-                              },
-                            })
-                          }
-                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] focus:border-emerald-500 font-mono text-xs font-bold text-[#252943] bg-white outline-none"
-                        />
+                      <div className="space-y-2">
+                        <div>
+                          <label className="block text-[11px] font-bold text-[#252943]/70 mb-1">
+                            SMM Provider
+                          </label>
+                          <select
+                            value={tiktokConfig.instagramComments?.providerId || ""}
+                            onChange={(e) => {
+                              const pId = e.target.value;
+                              const matched = availableProviders.find((p) => p.id === pId);
+                              setTiktokConfig({
+                                ...tiktokConfig,
+                                instagramComments: {
+                                  ...(tiktokConfig.instagramComments || { enabled: true, minQuantity: 1, maxQuantity: 10000 }),
+                                  providerId: pId,
+                                  providerName: matched?.name || "Comments Provider",
+                                },
+                              });
+                            }}
+                            className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] focus:border-emerald-500 text-xs font-semibold text-[#252943] bg-white outline-none cursor-pointer"
+                          >
+                            <option value="">Default Comments Provider ({tiktokConfig.instagramComments?.providerName || "Auto"})</option>
+                            {availableProviders.map((prov) => (
+                              <option key={prov.id} value={prov.id}>
+                                {prov.name} ({prov.currency || "INR"} {typeof prov.balance === "number" ? prov.balance.toFixed(2) : "0.00"})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-[#252943]/70 mb-1">
+                            Provider Service ID
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="950"
+                            value={tiktokConfig.instagramComments?.serviceId ?? "950"}
+                            onChange={(e) =>
+                              setTiktokConfig({
+                                ...tiktokConfig,
+                                instagramComments: {
+                                  ...(tiktokConfig.instagramComments || { enabled: true, minQuantity: 1, maxQuantity: 10000 }),
+                                  serviceId: e.target.value,
+                                },
+                              })
+                            }
+                            className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] focus:border-emerald-500 font-mono text-xs font-bold text-[#252943] bg-white outline-none"
+                          />
+                        </div>
                       </div>
                       <span className="text-[10px] text-[#252943]/50 block">Verified English organic comments</span>
                     </div>

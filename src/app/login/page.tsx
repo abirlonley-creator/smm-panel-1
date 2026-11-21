@@ -299,7 +299,7 @@ export default function LoginPage() {
                       setPasskey(e.target.value);
                       setError(null);
                     }}
-                    placeholder="Enter passkey (e.g. abir90)"
+                    placeholder="Enter passkey code..."
                     autoFocus
                     disabled={loading}
                     className="w-full bg-[#F8F9FD] text-[#252943] text-xs font-mono font-bold rounded-xl pl-10 pr-11 py-2.5 border border-[#DEE0ED] focus:border-[#3A4EFB] focus:bg-white outline-none transition-all"

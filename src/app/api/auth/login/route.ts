@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     // Check if Under Update / Maintenance mode is active
     const maintenance = await getMaintenanceState();
 
-    // 1. Direct Passkey Login (Admin passkey like 'abir90' or raw passkey)
+    // 1. Direct Passkey Login (Access passkey or raw passkey)
     if (passkey && passkey.trim()) {
       const cleanKey = passkey.trim();
       const verification = await verifyPasskey(cleanKey);

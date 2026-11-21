@@ -189,7 +189,7 @@ export default function SettingsPage() {
                   setPasskeyInput(e.target.value);
                   setActivationResult(null);
                 }}
-                placeholder="e.g. smm_live_... or your custom VIP key"
+                placeholder="Enter VIP passkey code..."
                 disabled={activating}
                 className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl pl-10 pr-3.5 py-2.5 text-xs font-mono font-bold text-[#252943] outline-none focus:border-[#3A4EFB] focus:bg-white transition-all disabled:opacity-50"
               />

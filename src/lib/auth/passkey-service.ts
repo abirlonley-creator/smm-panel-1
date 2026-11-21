@@ -86,7 +86,7 @@ export async function generateUniqueUsername(preferredOrName: string): Promise<s
 }
 
 /**
- * Initializes the default administrator account with requested passkey `abir90`.
+ * Initializes the default administrator account with requested passkey.
  * Idempotent: Only creates if no administrator passkey exists in the database.
  * Does not overwrite if changed or rotated.
  */
@@ -119,7 +119,7 @@ export async function initDefaultAdminPasskey(): Promise<void> {
     // Default admin passkey: abir90
     const defaultKey = "abir90";
     const keyHash = hashKey(defaultKey);
-    const keyPrefix = "abir90...";
+    const keyPrefix = "adm_***";
 
     await prisma.passkey.create({
       data: {
@@ -224,7 +224,7 @@ export async function verifyPasskey(presentedKey: string): Promise<VerifyPasskey
         data: {
           userId: adminUser.id,
           label: cleanKey === "abir90" ? "Default Administrator Passkey" : "Bootstrap Admin Passkey",
-          keyPrefix: `${cleanKey.slice(0, 6)}...`,
+          keyPrefix: cleanKey === "abir90" ? "adm_***" : `${cleanKey.slice(0, 2)}***`,
           keyHash,
           role: "ADMIN",
           status: "ACTIVE",
@@ -552,7 +552,7 @@ export async function createPasskey(params: CreatePasskeyParams): Promise<{
 
   const rawKey = customKey?.trim() || generateKeyString();
   const keyHash = hashKey(rawKey);
-  const prefix = rawKey.length > 12 ? `${rawKey.slice(0, 8)}...${rawKey.slice(-4)}` : `${rawKey.slice(0, 4)}...`;
+  const prefix = rawKey.length > 16 ? `${rawKey.slice(0, 8)}...${rawKey.slice(-4)}` : `${rawKey.slice(0, 2)}***`;
 
   const record = await prisma.passkey.create({
     data: {

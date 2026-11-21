@@ -798,9 +798,9 @@ export async function getActiveProvider(
   }
 
   // Central Admin Provider Fallback:
-  // If the user has no personal provider connection or it is a mock connection,
+  // If the user has no personal provider connection,
   // route through the Administrator's real active provider with an encrypted API key.
-  if (!connection || connection.isMock) {
+  if (!connection) {
     const adminConn = await prisma.userProviderConnection.findFirst({
       where: {
         user: { role: "ADMIN" },

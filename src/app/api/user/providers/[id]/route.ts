@@ -16,6 +16,25 @@ const updateConnectionSchema = z.object({
   active: z.boolean().optional(),
 });
 
+function sanitizeProviderName(name: string): string {
+  if (!name) return "Primary Network";
+  const lower = name.toLowerCase();
+  if (lower.includes("xmedia") || lower.includes("x media")) return "Views Network";
+  if (lower.includes("zeofame")) return "Engagement Network";
+  if (lower.includes("airgrow")) return "Growth Network";
+  if (
+    lower.includes("smm") ||
+    lower.includes("panel") ||
+    lower.includes(".com") ||
+    lower.includes(".net") ||
+    lower.includes("http") ||
+    lower.includes("api")
+  ) {
+    return "Global Network";
+  }
+  return name;
+}
+
 export async function GET(
   request: Request,
   { params }: { params: { id: string } }
@@ -64,7 +83,7 @@ export async function GET(
       success: true,
       connection: {
         id: connection.id,
-        name: connection.name,
+        name: session.role === "ADMIN" ? connection.name : sanitizeProviderName(connection.name),
         apiUrl: session.role === "ADMIN" ? connection.apiUrl : "https://api.internal/v2",
         maskedKey: "••••••••••••••••",
         currency: connection.currency,

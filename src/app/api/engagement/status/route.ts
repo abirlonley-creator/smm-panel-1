@@ -12,6 +12,19 @@ import { getAdminViewsProvider, getAdminEngagementProvider } from "@/lib/provide
 
 export const dynamic = "force-dynamic";
 
+function sanitizeBrandOrProviderName(text?: string | null): string {
+  if (!text) return "";
+  return text
+    .replace(/zeofame/gi, "Aura Growth")
+    .replace(/xmedia/gi, "Aura Views")
+    .replace(/x\s*media/gi, "Aura Views")
+    .replace(/airgrow/gi, "Aura Fast")
+    .replace(/smmprovider/gi, "Aura Network")
+    .replace(/smm\.internal/gi, "aura.internal")
+    .replace(/https?:\/\/[^\s]+/gi, "")
+    .trim();
+}
+
 export async function GET(request: Request) {
   const session = await getAuthSession(request);
   if (!session.authenticated || !session.user) {
@@ -302,15 +315,35 @@ export async function GET(request: Request) {
   const formattedCatalogServices = catalogServices.map((s) => ({
     service: s.numericId || (!isNaN(Number(s.externalId)) ? Number(s.externalId) : s.id),
     category: s.category,
-    name: s.name,
+    name: sanitizeBrandOrProviderName(s.name),
     platform: s.platform,
     type: s.type,
     rate: s.ratePer1000,
     min: s.minQuantity,
     max: s.maxQuantity,
-    description: s.description,
+    description: sanitizeBrandOrProviderName(s.description),
     active: s.active,
   }));
+
+  const userZeofame = isAdmin
+    ? zeofameStatus
+    : {
+        connected: zeofameStatus.connected,
+        valid: zeofameStatus.valid,
+        name: "Engagement Engine",
+        hasService: zeofameStatus.hasService,
+        message: zeofameStatus.connected ? "Operational" : "Temporarily Offline",
+      };
+
+  const userXmedia = isAdmin
+    ? xmediaStatus
+    : {
+        connected: xmediaStatus.connected,
+        valid: xmediaStatus.valid,
+        name: "Views Engine",
+        hasService: xmediaStatus.hasService,
+        message: xmediaStatus.connected ? "Operational" : "Temporarily Offline",
+      };
 
   return NextResponse.json({
     success: true,
@@ -318,8 +351,8 @@ export async function GET(request: Request) {
     isAdmin,
     walletBalance,
     readyToOrder,
-    zeofame: zeofameStatus,
-    xmedia: xmediaStatus,
+    zeofame: userZeofame,
+    xmedia: userXmedia,
     services: formattedCatalogServices,
     rates: {
       viewsRate,

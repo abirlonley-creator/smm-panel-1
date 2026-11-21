@@ -146,11 +146,57 @@ export async function GET(request: Request) {
     console.warn("[ADMIN_CONFIG] Could not resolve provider wholesale rates:", err);
   }
 
+  // Fetch all Admin SMM providers for dropdown mapping
+  let providersList: any[] = [];
+  try {
+    const [adminConns, legacyProviders] = await Promise.all([
+      prisma.userProviderConnection.findMany({
+        where: { user: { role: "ADMIN" } },
+        orderBy: [{ isMock: "asc" }, { createdAt: "asc" }],
+      }),
+      prisma.provider.findMany({
+        orderBy: { createdAt: "asc" },
+      }),
+    ]);
+
+    const seenProvIds = new Set<string>();
+    for (const c of adminConns) {
+      seenProvIds.add(c.id);
+      providersList.push({
+        id: c.id,
+        name: c.name,
+        apiUrl: c.apiUrl,
+        currency: c.currency || "INR",
+        balance: c.balance,
+        isMock: c.isMock,
+        active: c.active,
+      });
+    }
+
+    for (const p of legacyProviders) {
+      if (!seenProvIds.has(p.id)) {
+        seenProvIds.add(p.id);
+        providersList.push({
+          id: p.id,
+          name: p.name,
+          apiUrl: p.apiUrl,
+          currency: p.currency || "USD",
+          balance: p.balance,
+          isMock: p.isMock,
+          active: p.active,
+        });
+      }
+    }
+  } catch (err) {
+    console.warn("[ADMIN_CONFIG] Could not load providers list:", err);
+  }
+
   return NextResponse.json({
     success: true,
     config,
     presets,
     presetsList,
+    providers: providersList,
     originalRates: {
       views: viewsOriginalRate,
       likes: likesOriginalRate,

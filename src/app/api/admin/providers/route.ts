@@ -21,32 +21,65 @@ export async function GET(request: Request) {
   }
 
   try {
-    const providers = await prisma.provider.findMany({
-      orderBy: { createdAt: "asc" },
-      include: {
-        _count: {
-          select: { services: true, orders: true },
+    const [adminConns, providers] = await Promise.all([
+      prisma.userProviderConnection.findMany({
+        where: { user: { role: "ADMIN" } },
+        orderBy: [{ isMock: "asc" }, { createdAt: "asc" }],
+      }),
+      prisma.provider.findMany({
+        orderBy: { createdAt: "asc" },
+        include: {
+          _count: {
+            select: { services: true, orders: true },
+          },
         },
-      },
-    });
+      }),
+    ]);
 
-    const sanitized = providers.map((p) => ({
-      id: p.id,
-      name: p.name,
-      apiUrl: p.apiUrl,
-      maskedKey: maskApiKey(p.apiKeyEncrypted),
-      hasApiKey: Boolean(p.apiKeyEncrypted),
-      isMock: p.isMock,
-      active: p.active,
-      currency: p.currency,
-      balance: p.balance,
-      lastSyncAt: p.lastSyncAt,
-      serviceCount: p._count.services,
-      orderCount: p._count.orders,
-      createdAt: p.createdAt,
-    }));
+    const seenProvIds = new Set<string>();
+    const list: any[] = [];
 
-    return NextResponse.json({ success: true, providers: sanitized });
+    for (const c of adminConns) {
+      seenProvIds.add(c.id);
+      list.push({
+        id: c.id,
+        name: c.name,
+        apiUrl: c.apiUrl,
+        maskedKey: maskApiKey(c.apiKeyEncrypted),
+        hasApiKey: Boolean(c.apiKeyEncrypted),
+        isMock: c.isMock,
+        active: c.active,
+        currency: c.currency || "INR",
+        balance: c.balance,
+        lastSyncAt: c.lastSyncAt,
+        serviceCount: 0,
+        orderCount: 0,
+        createdAt: c.createdAt,
+      });
+    }
+
+    for (const p of providers) {
+      if (!seenProvIds.has(p.id)) {
+        seenProvIds.add(p.id);
+        list.push({
+          id: p.id,
+          name: p.name,
+          apiUrl: p.apiUrl,
+          maskedKey: maskApiKey(p.apiKeyEncrypted),
+          hasApiKey: Boolean(p.apiKeyEncrypted),
+          isMock: p.isMock,
+          active: p.active,
+          currency: p.currency || "USD",
+          balance: p.balance,
+          lastSyncAt: p.lastSyncAt,
+          serviceCount: p._count?.services || 0,
+          orderCount: p._count?.orders || 0,
+          createdAt: p.createdAt,
+        });
+      }
+    }
+
+    return NextResponse.json({ success: true, providers: list });
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message || "Failed to load providers" },

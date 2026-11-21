@@ -7,7 +7,7 @@ import {
   getTikTokEngagementConfigAsync,
   getTikTokPresetByIdAsync,
 } from "@/lib/engagement/tiktok-preset-config";
-import { getAdminViewsProvider, getAdminEngagementProvider } from "@/lib/provider/admin-provider";
+import { getAdminViewsProvider, getAdminEngagementProvider, getAdminProviderConnections } from "@/lib/provider/admin-provider";
 import { logOrderEvent } from "@/lib/engagement/event-logger";
 import { recordAdminAlert } from "@/lib/engagement/alert-service";
 import { runEngagementTick } from "@/lib/engagement/worker";
@@ -208,9 +208,10 @@ export async function POST(request: Request) {
     }
 
     // 1. Resolve System Upstream Execution Providers (Managed exclusively by Admin)
-    const [adminViews, adminEng] = await Promise.all([
+    const [adminViews, adminEng, allAdminConns] = await Promise.all([
       getAdminViewsProvider(),
       getAdminEngagementProvider(),
+      getAdminProviderConnections(),
     ]);
 
     if (!adminViews || !adminEng) {
@@ -223,10 +224,49 @@ export async function POST(request: Request) {
       );
     }
 
-    const xmediaConn = adminViews.connectionRecord;
-    const zeofameConn = adminEng.connectionRecord;
-    const xmediaAdapter = adminViews.adapter;
-    const zeofameAdapter = adminEng.adapter;
+    // Helper to resolve specific provider configured by admin or fall back to default
+    const resolveProviderForMetric = (preferredId?: string | null, fallback?: any) => {
+      if (preferredId) {
+        const found = allAdminConns.find((p) => p.id === preferredId);
+        if (found) return found;
+      }
+      return fallback;
+    };
+
+    const viewsProvId = platform === "Instagram"
+      ? config.instagramViews?.providerId
+      : (config.views?.providerId || preset.views?.providerId);
+    const viewsProv = resolveProviderForMetric(viewsProvId, adminViews);
+    const xmediaConn = viewsProv.connectionRecord;
+    const xmediaAdapter = viewsProv.adapter;
+
+    const likesProvId = platform === "Instagram"
+      ? config.instagramLikes?.providerId
+      : (config.likes?.providerId || preset.likes?.providerId);
+    const likesProv = resolveProviderForMetric(likesProvId, adminEng);
+    const likesConn = likesProv.connectionRecord;
+    const likesAdapter = likesProv.adapter;
+
+    const savesProvId = platform === "Instagram"
+      ? config.instagramSaves?.providerId
+      : (config.saves?.providerId || preset.saves?.providerId);
+    const savesProv = resolveProviderForMetric(savesProvId, adminEng);
+    const savesConn = savesProv.connectionRecord;
+    const savesAdapter = savesProv.adapter;
+
+    const sharesProvId = platform === "Instagram"
+      ? config.instagramShares?.providerId
+      : (config.shares?.providerId || preset.shares?.providerId);
+    const sharesProv = resolveProviderForMetric(sharesProvId, adminEng);
+    const sharesConn = sharesProv.connectionRecord;
+    const sharesAdapter = sharesProv.adapter;
+
+    const commentsProvId = platform === "Instagram"
+      ? config.instagramComments?.providerId
+      : (config.comments?.providerId);
+    const commentsProv = resolveProviderForMetric(commentsProvId, adminEng);
+    const commentsConn = commentsProv.connectionRecord;
+    const commentsAdapter = commentsProv.adapter;
 
     // 2. Resolve Required Services linked to Admin's Provider Connections using Admin Preset configuration
     const viewsServiceId = platform === "Instagram"
@@ -254,7 +294,7 @@ export async function POST(request: Request) {
       maxQuantity: 100000000,
     });
 
-    const zeofameLikesService = await resolveService(zeofameConn.id, likesServiceId, zeofameAdapter, {
+    const zeofameLikesService = await resolveService(likesConn.id, likesServiceId, likesAdapter, {
       name: platform === "Instagram" ? "Instagram Likes [Organic Paced]" : "TikTok Likes [Fast]",
       category: platform === "Instagram" ? "Instagram Likes" : "TikTok Likes",
       platform,
@@ -265,7 +305,7 @@ export async function POST(request: Request) {
 
     let zeofameSavesService: any = null;
     if (preset.saves?.enabled || (parsed.batches && parsed.batches.some((b) => b.service === "saves"))) {
-      zeofameSavesService = await resolveService(zeofameConn.id, savesServiceId, zeofameAdapter, {
+      zeofameSavesService = await resolveService(savesConn.id, savesServiceId, savesAdapter, {
         name: platform === "Instagram" ? "Instagram Saves & Bookmarks" : "TikTok Video Save",
         category: platform === "Instagram" ? "Instagram Saves" : "TikTok Saves",
         platform,
@@ -280,7 +320,7 @@ export async function POST(request: Request) {
       preset.shares?.enabled ||
       (parsed.batches && parsed.batches.some((b) => b.service === "shares" || b.service === "reposts"))
     ) {
-      zeofameSharesService = await resolveService(zeofameConn.id, sharesServiceId, zeofameAdapter, {
+      zeofameSharesService = await resolveService(sharesConn.id, sharesServiceId, sharesAdapter, {
         name: platform === "Instagram" ? "Instagram Shares" : "TikTok Shares / Reposts",
         category: platform === "Instagram" ? "Instagram Shares" : "TikTok Shares",
         platform,
@@ -300,7 +340,7 @@ export async function POST(request: Request) {
       (parsed.plannedComments && parsed.plannedComments.length > 0);
 
     if (hasComments) {
-      zeofameCommentsService = await resolveService(zeofameConn.id, commentsServiceId, zeofameAdapter, {
+      zeofameCommentsService = await resolveService(commentsConn.id, commentsServiceId, commentsAdapter, {
         name: platform === "Instagram" ? "Instagram Comments" : "TikTok Comments",
         category: platform === "Instagram" ? "Instagram Comments" : "TikTok Comments",
         platform,
@@ -638,26 +678,59 @@ export async function POST(request: Request) {
     }
 
     // 4.5. Admin Upstream Provider Balance Check
-    // (Only triggers when user HAS sufficient wallet balance, but ADMIN provider has run out of balance)
+    // (Only triggers when user HAS sufficient wallet balance, but an active ADMIN provider has run out of balance)
     const viewsWholesaleCost = Number(((totalPlannedViews / 1000) * (xmediaViewsService.ratePer1000 || 2.23)).toFixed(4));
-    const engWholesaleCost = Number((
-      (totalPlannedLikes / 1000) * (zeofameLikesService.ratePer1000 || 0.88) +
-      (totalPlannedSaves / 1000) * (zeofameSavesService?.ratePer1000 || 0.22) +
-      (totalPlannedShares / 1000) * (zeofameSharesService?.ratePer1000 || 0.22)
-    ).toFixed(4));
+    const likesWholesaleCost = Number(((totalPlannedLikes / 1000) * (zeofameLikesService.ratePer1000 || 0.88)).toFixed(4));
+    const savesWholesaleCost = Number(((totalPlannedSaves / 1000) * (zeofameSavesService?.ratePer1000 || 0.22)).toFixed(4));
+    const sharesWholesaleCost = Number(((totalPlannedShares / 1000) * (zeofameSharesService?.ratePer1000 || 0.22)).toFixed(4));
+    const commentsWholesaleCost = Number(((totalPlannedComments / 1000) * (zeofameCommentsService?.ratePer1000 || 15.00)).toFixed(4));
 
-    const viewsProviderBalance = typeof xmediaConn.balance === "number" ? xmediaConn.balance : null;
-    const engProviderBalance = typeof zeofameConn.balance === "number" ? zeofameConn.balance : null;
+    const checkProviderBalance = (conn: any, neededCost: number) => {
+      if (!conn || conn.isMock) return null;
+      const bal = typeof conn.balance === "number" ? conn.balance : null;
+      if (bal !== null && (bal <= 0 || bal < neededCost)) {
+        return conn.name || "Provider";
+      }
+      return null;
+    };
 
     let adminOutOfBalanceProvider: string | null = null;
-    if (totalPlannedViews > 0 && viewsProviderBalance !== null && viewsProviderBalance <= 0) {
-      adminOutOfBalanceProvider = xmediaConn.name || "Views Network";
-    } else if ((totalPlannedLikes > 0 || totalPlannedSaves > 0 || totalPlannedShares > 0) && engProviderBalance !== null && engProviderBalance <= 0) {
-      adminOutOfBalanceProvider = zeofameConn.name || "Engagement Network";
-    } else if (totalPlannedViews > 0 && viewsProviderBalance !== null && viewsProviderBalance < viewsWholesaleCost && !xmediaConn.isMock) {
-      adminOutOfBalanceProvider = xmediaConn.name || "Views Network";
-    } else if ((totalPlannedLikes > 0 || totalPlannedSaves > 0 || totalPlannedShares > 0) && engProviderBalance !== null && engProviderBalance < engWholesaleCost && !zeofameConn.isMock) {
-      adminOutOfBalanceProvider = zeofameConn.name || "Engagement Network";
+    let outOfBalanceConnId: string = xmediaConn.id;
+
+    if (totalPlannedViews > 0) {
+      const failed = checkProviderBalance(xmediaConn, viewsWholesaleCost);
+      if (failed) {
+        adminOutOfBalanceProvider = failed;
+        outOfBalanceConnId = xmediaConn.id;
+      }
+    }
+    if (!adminOutOfBalanceProvider && totalPlannedLikes > 0) {
+      const failed = checkProviderBalance(likesConn, likesWholesaleCost);
+      if (failed) {
+        adminOutOfBalanceProvider = failed;
+        outOfBalanceConnId = likesConn.id;
+      }
+    }
+    if (!adminOutOfBalanceProvider && totalPlannedSaves > 0) {
+      const failed = checkProviderBalance(savesConn, savesWholesaleCost);
+      if (failed) {
+        adminOutOfBalanceProvider = failed;
+        outOfBalanceConnId = savesConn.id;
+      }
+    }
+    if (!adminOutOfBalanceProvider && totalPlannedShares > 0) {
+      const failed = checkProviderBalance(sharesConn, sharesWholesaleCost);
+      if (failed) {
+        adminOutOfBalanceProvider = failed;
+        outOfBalanceConnId = sharesConn.id;
+      }
+    }
+    if (!adminOutOfBalanceProvider && totalPlannedComments > 0) {
+      const failed = checkProviderBalance(commentsConn, commentsWholesaleCost);
+      if (failed) {
+        adminOutOfBalanceProvider = failed;
+        outOfBalanceConnId = commentsConn.id;
+      }
     }
 
     if (adminOutOfBalanceProvider) {
@@ -666,7 +739,7 @@ export async function POST(request: Request) {
         severity: "high",
         type: "insufficient_balance",
         providerName: adminOutOfBalanceProvider,
-        providerId: xmediaConn.id,
+        providerId: outOfBalanceConnId,
         userId: user.id,
         platform,
         reason: `Admin provider "${adminOutOfBalanceProvider}" has run out of balance. User @${session.user.username} tried to place order (${preset.name}) with sufficient user wallet balance (₹${currentBalance}), but the admin upstream provider balance is depleted.`,
@@ -677,7 +750,7 @@ export async function POST(request: Request) {
           success: false,
           error: "Admin has run out of balance in the upstream provider.",
           isAdminOutOfBalance: true,
-          providerName: adminOutOfBalanceProvider,
+          providerName: "Fulfillment Engine",
           canNotifyAdmin: true,
           supportUrl: "https://t.me/Ghostfinds",
           message: "Admin has run out of balance in the fulfillment provider. Your wallet balance has NOT been charged. Please tap 'Notify Admin' or contact Telegram support so the admin can refill the provider balance.",
