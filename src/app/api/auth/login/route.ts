@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { verifyPasskey, createSession, hashKey } from "@/lib/auth/passkey-service";
+import { verifyPasskey, createSession, hashKey, hashUserPassword } from "@/lib/auth/passkey-service";
 import { SESSION_COOKIE_NAME, ADMIN_COOKIE_NAME } from "@/lib/auth/session";
 import { getMaintenanceState } from "@/lib/maintenance/maintenance-service";
 import { prisma } from "@/lib/prisma";
@@ -117,14 +117,26 @@ export async function POST(request: Request) {
     }
 
     // Match password hash against user's stored account credentials or passkeys
-    const pwdHash = hashKey(password);
-    const matchingKey = user.passkeys.find((pk) => pk.keyHash === pwdHash);
+    // Supports both globally unique salted password hash and legacy hash
+    const userPwdHash = hashUserPassword(cleanUsername, password);
+    const legacyHash = hashKey(password);
+    const matchingKey = user.passkeys.find(
+      (pk) => pk.keyHash === userPwdHash || pk.keyHash === legacyHash
+    );
 
     if (!matchingKey) {
       return NextResponse.json(
         { success: false, error: "Invalid username or password." },
         { status: 401 }
       );
+    }
+
+    // Auto-migrate legacy hash to username-salted hash for future uniqueness safety
+    if (matchingKey.keyHash === legacyHash && matchingKey.label === "Account Password") {
+      prisma.passkey.update({
+        where: { id: matchingKey.id },
+        data: { keyHash: userPwdHash },
+      }).catch(() => {});
     }
 
     if (maintenance.enabled && user.role !== "ADMIN") {

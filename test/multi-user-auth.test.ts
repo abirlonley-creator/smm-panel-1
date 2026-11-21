@@ -10,6 +10,7 @@ import {
   createSession,
   validateSession,
   invalidateSession,
+  hashUserPassword,
 } from "../src/lib/auth/passkey-service";
 import {
   saveUserProviderConfig,
@@ -277,6 +278,85 @@ export async function runMultiUserAuthTests() {
   await invalidateSession(sessionRes.token);
   const loggedOutSession = await validateSession(sessionRes.token);
   assert(!loggedOutSession.valid, "Session is immediately invalidated upon logout");
+
+  // -----------------------------------------------------------
+  // 4. Registration & Salted Password Uniqueness Tests
+  // -----------------------------------------------------------
+  console.log("\nTest Suite 19: User Registration & Salted Password Uniqueness");
+
+  const testUser1Username = `test_user_alpha_${Date.now()}`;
+  const testUser2Username = `test_user_beta_${Date.now()}`;
+  const sharedCommonPassword = "super_common_password_123";
+
+  // Simulate Registration for User 1
+  const hash1 = hashUserPassword(testUser1Username, sharedCommonPassword);
+  const regUser1 = await prisma.user.create({
+    data: {
+      username: testUser1Username,
+      role: "USER",
+      status: "ACTIVE",
+    },
+  });
+  const regPasskey1 = await prisma.passkey.create({
+    data: {
+      userId: regUser1.id,
+      label: "Account Password",
+      keyPrefix: `usr_${testUser1Username.slice(0, 4)}`,
+      keyHash: hash1,
+      role: "USER",
+      status: "ACTIVE",
+    },
+  });
+  assert(Boolean(regPasskey1.id), "User 1 registers successfully with password");
+
+  // Simulate Registration for User 2 with THE EXACT SAME PASSWORD
+  const hash2 = hashUserPassword(testUser2Username, sharedCommonPassword);
+  assert(hash1 !== hash2, "Salted password hashes are distinct across users despite identical password");
+
+  const regUser2 = await prisma.user.create({
+    data: {
+      username: testUser2Username,
+      role: "USER",
+      status: "ACTIVE",
+    },
+  });
+  let reg2PasskeyError: any = null;
+  let regPasskey2: any = null;
+  try {
+    regPasskey2 = await prisma.passkey.create({
+      data: {
+        userId: regUser2.id,
+        label: "Account Password",
+        keyPrefix: `usr_${testUser2Username.slice(0, 4)}`,
+        keyHash: hash2,
+        role: "USER",
+        status: "ACTIVE",
+      },
+    });
+  } catch (err: any) {
+    reg2PasskeyError = err;
+  }
+  assert(!reg2PasskeyError && Boolean(regPasskey2?.id), "User 2 registers successfully with same password without unique constraint failure");
+
+  // Verify Login resolution for User 1
+  const u1Found = await prisma.user.findUnique({
+    where: { username: testUser1Username },
+    include: { passkeys: true },
+  });
+  const u1KeyMatch = u1Found?.passkeys.find((pk) => pk.keyHash === hashUserPassword(testUser1Username, sharedCommonPassword));
+  assert(Boolean(u1KeyMatch), "User 1 logs in successfully using username + password");
+
+  // Verify Login resolution for User 2
+  const u2Found = await prisma.user.findUnique({
+    where: { username: testUser2Username },
+    include: { passkeys: true },
+  });
+  const u2KeyMatch = u2Found?.passkeys.find((pk) => pk.keyHash === hashUserPassword(testUser2Username, sharedCommonPassword));
+  assert(Boolean(u2KeyMatch), "User 2 logs in successfully using username + password");
+
+  // Clean up registered test users
+  await prisma.passkey.deleteMany({ where: { id: { in: [regPasskey1.id, regPasskey2?.id].filter(Boolean) } } });
+  await prisma.user.deleteMany({ where: { id: { in: [regUser1.id, regUser2.id] } } });
 
   // Clean up test users
   await prisma.userProviderConnection.deleteMany({ where: { userId: { in: [userA.id, userB.id] } } });

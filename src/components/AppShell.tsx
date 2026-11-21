@@ -14,6 +14,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const isLoginPage = pathname === "/login";
   const isSignupPage = pathname === "/signup";
   const isLandingPage = pathname === "/";
+  const isApiDocsPage = pathname === "/api-docs";
   const isMaintenancePage = pathname === "/maintenance";
 
   const [underMaintenance, setUnderMaintenance] = useState(false);
@@ -52,7 +53,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  if (isLoginPage || isSignupPage || isLandingPage || isMaintenancePage) {
+  if (isLoginPage || isSignupPage || isLandingPage || isApiDocsPage || isMaintenancePage) {
     return <>{children}</>;
   }
 

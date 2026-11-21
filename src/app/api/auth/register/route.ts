@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { hashKey, createSession } from "@/lib/auth/passkey-service";
+import { hashUserPassword, createSession } from "@/lib/auth/passkey-service";
 import { SESSION_COOKIE_NAME } from "@/lib/auth/session";
 import { cookies } from "next/headers";
 import { z } from "zod";
@@ -31,50 +31,59 @@ export async function POST(request: Request) {
     // Check if username is already taken
     const existing = await prisma.user.findUnique({
       where: { username: cleanUsername },
-      select: { id: true },
+      include: { passkeys: true },
     });
 
     if (existing) {
-      return NextResponse.json(
-        { success: false, error: "This username is already taken. Please choose another." },
-        { status: 409 }
-      );
+      if (existing.passkeys.length === 0) {
+        // Clean up orphaned user record from prior aborted attempt
+        await prisma.user.delete({ where: { id: existing.id } }).catch(() => {});
+      } else {
+        return NextResponse.json(
+          { success: false, error: "This username is already taken. Please choose another." },
+          { status: 409 }
+        );
+      }
     }
 
-    // Create the User
-    const user = await prisma.user.create({
-      data: {
-        username: cleanUsername,
-        role: "USER",
-        status: "ACTIVE",
-        walletBalance: 0.0,
-      },
-    });
+    // Hash user password with username salt to ensure global uniqueness on Passkey.keyHash
+    const keyHash = hashUserPassword(cleanUsername, password);
 
-    // Create default provider connection for user
-    await prisma.userProviderConnection.create({
-      data: {
-        userId: user.id,
-        name: "Primary Delivery Engine",
-        apiUrl: "https://api.internal/v2",
-        isMock: true,
-        active: true,
-        currency: "INR",
-      },
-    });
+    // Atomically create User, Provider Connection, and Passkey
+    const { user, passkeyRecord } = await prisma.$transaction(async (tx) => {
+      const newUser = await tx.user.create({
+        data: {
+          username: cleanUsername,
+          role: "USER",
+          status: "ACTIVE",
+          walletBalance: 0.0,
+        },
+      });
 
-    // Store user's password as their initial account passkey
-    const keyHash = hashKey(password);
-    const passkeyRecord = await prisma.passkey.create({
-      data: {
-        userId: user.id,
-        label: "Account Password",
-        keyPrefix: `usr_${cleanUsername.slice(0, 4)}`,
-        keyHash,
-        role: "USER",
-        status: "ACTIVE",
-        expiresAt: null, // User login credentials do not expire
-      },
+      await tx.userProviderConnection.create({
+        data: {
+          userId: newUser.id,
+          name: "Primary Delivery Engine",
+          apiUrl: "https://api.internal/v2",
+          isMock: true,
+          active: true,
+          currency: "INR",
+        },
+      });
+
+      const newPasskey = await tx.passkey.create({
+        data: {
+          userId: newUser.id,
+          label: "Account Password",
+          keyPrefix: `usr_${cleanUsername.slice(0, 4)}`,
+          keyHash,
+          role: "USER",
+          status: "ACTIVE",
+          expiresAt: null, // User login credentials do not expire
+        },
+      });
+
+      return { user: newUser, passkeyRecord: newPasskey };
     });
 
     // Create session and set HTTP-only cookie for immediate login
@@ -101,6 +110,12 @@ export async function POST(request: Request) {
     });
   } catch (error: any) {
     console.error("[REGISTER_ERROR]", error);
+    if (error.code === "P2002") {
+      return NextResponse.json(
+        { success: false, error: "Username or credentials already exist. Please try signing in or use another username." },
+        { status: 409 }
+      );
+    }
     return NextResponse.json(
       { success: false, error: error.message || "Failed to create account" },
       { status: 500 }

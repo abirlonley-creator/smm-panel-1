@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -45,11 +44,6 @@ import {
   DEFAULT_TIKTOK_CONFIG,
   DEFAULT_INSTAGRAM_CONFIG,
 } from "@/lib/engagement/deterministic-pattern-engine";
-
-const BackgroundCubesGrid = dynamic(
-  () => import("@/components/ui/background-cubes-grid").then((module) => module.BackgroundCubesGrid),
-  { ssr: false },
-);
 
 export default function LandingPage() {
   const router = useRouter();
@@ -396,23 +390,7 @@ export default function LandingPage() {
           </div>
 
           {/* ── Center Column: Hero Announcement, Title, Subtitle, CTA & Badges ── */}
-          <div className="lg:col-span-6 order-1 lg:order-2 hero-cube-stage">
-            <BackgroundCubesGrid
-              variant="isometric"
-              className="hero-cube-background"
-              cellSize={145}
-              gap={0.04}
-              topColor="#F8FAFC"
-              leftColor="#E4E0D3"
-              rightColor="#E4E0D3"
-              amplitude={0.16}
-              speed={4}
-              damping={0.12}
-              idleRipples={false}
-              glowColor="#D4F04F"
-              glow={0.12}
-            />
-            <div className="text-center space-y-4 hero-cube-content">
+          <div className="lg:col-span-6 text-center space-y-4 order-1 lg:order-2">
             {/* Top Major Update Pill */}
             <div className="flex justify-center mb-3 animate-fadeIn">
               <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-50 border border-blue-200 shadow-xs text-xs">
@@ -509,7 +487,6 @@ export default function LandingPage() {
                 <CheckCircle2 className="w-3.5 h-3.5 text-teal-500" />
                 <span>24/7 Support</span>
               </span>
-            </div>
             </div>
           </div>
 

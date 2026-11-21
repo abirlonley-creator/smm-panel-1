@@ -46,6 +46,16 @@ export function hashKey(key: string): string {
 }
 
 /**
+ * Deterministic cryptographic SHA-256 hash salted by username.
+ * Guaranteed to produce a globally unique hash per user even if multiple users choose identical passwords,
+ * completely preventing unique constraint collisions on Passkey.keyHash.
+ */
+export function hashUserPassword(username: string, password: string): string {
+  const cleanUser = username.toLowerCase().trim();
+  return crypto.createHash("sha256").update(`aurasmm_pwd:${cleanUser}:${password.trim()}`).digest("hex");
+}
+
+/**
  * Generates a high-entropy access passkey with format `smm_live_<48 hex chars>`.
  */
 export function generateKeyString(): string {
