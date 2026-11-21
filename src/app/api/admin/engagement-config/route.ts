@@ -32,6 +32,12 @@ export async function GET(request: Request) {
   let sharesOriginalRate = 0.22;
   let commentsOriginalRate = 5.00;
 
+  let igViewsOriginalRate = 0.84;
+  let igLikesOriginalRate = 1.10;
+  let igSavesOriginalRate = 1.45;
+  let igSharesOriginalRate = 1.50;
+  let igCommentsOriginalRate = 5.00;
+
   try {
     const [adminViews, adminEng] = await Promise.all([
       getAdminViewsProvider().catch(() => null),
@@ -43,21 +49,40 @@ export async function GET(request: Request) {
 
     if (viewsConnId) {
       const vServiceId = config.views?.serviceId || "897";
-      const srv = await prisma.service.findFirst({
-        where: {
-          userProviderId: viewsConnId,
-          OR: [
-            { providerServiceId: vServiceId },
-            { externalId: vServiceId },
-            { providerServiceId: "897" },
-            { externalId: "897" },
-            { providerServiceId: "10322" },
-            { externalId: "10322" },
-          ],
-        },
-      });
+      const igVServiceId = config.instagramViews?.serviceId || "101";
+
+      const [srv, igSrv] = await Promise.all([
+        prisma.service.findFirst({
+          where: {
+            userProviderId: viewsConnId,
+            OR: [
+              { providerServiceId: vServiceId },
+              { externalId: vServiceId },
+              { providerServiceId: "897" },
+              { externalId: "897" },
+              { providerServiceId: "10322" },
+              { externalId: "10322" },
+            ],
+          },
+        }),
+        prisma.service.findFirst({
+          where: {
+            userProviderId: viewsConnId,
+            OR: [
+              { providerServiceId: igVServiceId },
+              { externalId: igVServiceId },
+              { providerServiceId: "101" },
+              { externalId: "101" },
+            ],
+          },
+        }),
+      ]);
+
       if (srv && typeof srv.ratePer1000 === "number") {
         viewsOriginalRate = srv.ratePer1000;
+      }
+      if (igSrv && typeof igSrv.ratePer1000 === "number") {
+        igViewsOriginalRate = igSrv.ratePer1000;
       }
     }
 
@@ -66,7 +91,11 @@ export async function GET(request: Request) {
       const sServiceId = config.saves?.serviceId || "807";
       const rServiceId = config.shares?.serviceId || "718";
 
-      const [likesSrv, savesSrv, sharesSrv] = await Promise.all([
+      const igLServiceId = config.instagramLikes?.serviceId || "102";
+      const igSServiceId = config.instagramSaves?.serviceId || "103";
+      const igRServiceId = config.instagramShares?.serviceId || "104";
+
+      const [likesSrv, savesSrv, sharesSrv, igLikesSrv, igSavesSrv, igSharesSrv] = await Promise.all([
         prisma.service.findFirst({
           where: {
             userProviderId: engConnId,
@@ -85,11 +114,33 @@ export async function GET(request: Request) {
             OR: [{ providerServiceId: rServiceId }, { externalId: rServiceId }],
           },
         }),
+        prisma.service.findFirst({
+          where: {
+            userProviderId: engConnId,
+            OR: [{ providerServiceId: igLServiceId }, { externalId: igLServiceId }],
+          },
+        }),
+        prisma.service.findFirst({
+          where: {
+            userProviderId: engConnId,
+            OR: [{ providerServiceId: igSServiceId }, { externalId: igSServiceId }],
+          },
+        }),
+        prisma.service.findFirst({
+          where: {
+            userProviderId: engConnId,
+            OR: [{ providerServiceId: igRServiceId }, { externalId: igRServiceId }],
+          },
+        }),
       ]);
 
       if (likesSrv && typeof likesSrv.ratePer1000 === "number") likesOriginalRate = likesSrv.ratePer1000;
       if (savesSrv && typeof savesSrv.ratePer1000 === "number") savesOriginalRate = savesSrv.ratePer1000;
       if (sharesSrv && typeof sharesSrv.ratePer1000 === "number") sharesOriginalRate = sharesSrv.ratePer1000;
+
+      if (igLikesSrv && typeof igLikesSrv.ratePer1000 === "number") igLikesOriginalRate = igLikesSrv.ratePer1000;
+      if (igSavesSrv && typeof igSavesSrv.ratePer1000 === "number") igSavesOriginalRate = igSavesSrv.ratePer1000;
+      if (igSharesSrv && typeof igSharesSrv.ratePer1000 === "number") igSharesOriginalRate = igSharesSrv.ratePer1000;
     }
   } catch (err) {
     console.warn("[ADMIN_CONFIG] Could not resolve provider wholesale rates:", err);
@@ -106,6 +157,13 @@ export async function GET(request: Request) {
       saves: savesOriginalRate,
       shares: sharesOriginalRate,
       comments: commentsOriginalRate,
+    },
+    instagramOriginalRates: {
+      views: igViewsOriginalRate,
+      likes: igLikesOriginalRate,
+      saves: igSavesOriginalRate,
+      shares: igSharesOriginalRate,
+      comments: igCommentsOriginalRate,
     },
   });
 }
@@ -133,7 +191,20 @@ export async function PUT(request: Request) {
 
     // 3. Update global config/pricing if config or pricing is provided
     let updatedConfig = await getTikTokEngagementConfigAsync(true);
-    if (body.config || body.pricing || body.views || body.likes || body.saves || body.shares) {
+    if (
+      body.config ||
+      body.pricing ||
+      body.views ||
+      body.likes ||
+      body.saves ||
+      body.shares ||
+      body.instagramViews ||
+      body.instagramLikes ||
+      body.instagramSaves ||
+      body.instagramShares ||
+      body.instagramComments ||
+      body.instagramPricing
+    ) {
       const configPayload = body.config || body;
       updatedConfig = await saveTikTokEngagementConfigAsync(configPayload, actor);
 

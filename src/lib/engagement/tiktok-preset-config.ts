@@ -634,6 +634,12 @@ export interface TikTokEngagementPresetConfig {
     minViews: number;
     maxViews: number;
   };
+  instagramViews?: MetricConfigItem;
+  instagramLikes?: MetricConfigItem;
+  instagramSaves?: MetricConfigItem;
+  instagramShares?: MetricConfigItem;
+  instagramComments?: MetricConfigItem;
+  instagramPricing?: EngagementPricingConfig;
 }
 
 export const DEFAULT_TIKTOK_ENGAGEMENT_CONFIG: TikTokEngagementPresetConfig = {
@@ -688,6 +694,58 @@ export const DEFAULT_TIKTOK_ENGAGEMENT_CONFIG: TikTokEngagementPresetConfig = {
     minViews: 500,
     maxViews: 700,
   },
+  instagramViews: {
+    enabled: true,
+    providerName: "Views Engine",
+    serviceId: "101",
+    minQuantity: 100,
+    maxQuantity: 1000000,
+    runsCount: 16,
+    intervalMinutes: 20,
+  },
+  instagramLikes: {
+    enabled: true,
+    providerName: "Engagement Engine",
+    serviceId: "102",
+    minQuantity: 10,
+    maxQuantity: 250000,
+    runsCount: 3,
+    intervalMinutes: 120,
+  },
+  instagramSaves: {
+    enabled: true,
+    providerName: "Engagement Engine",
+    serviceId: "103",
+    minQuantity: 1,
+    maxQuantity: 100000,
+    runsCount: 4,
+    intervalMinutes: 120,
+  },
+  instagramShares: {
+    enabled: true,
+    providerName: "Engagement Engine",
+    serviceId: "104",
+    minQuantity: 10,
+    maxQuantity: 50000,
+    runsCount: 3,
+    intervalMinutes: 120,
+  },
+  instagramComments: {
+    enabled: true,
+    providerName: "Engagement Engine",
+    serviceId: "950",
+    minQuantity: 1,
+    maxQuantity: 10000,
+    runsCount: 2,
+    intervalMinutes: 180,
+  },
+  instagramPricing: {
+    viewsUserRate: 3.50,
+    likesUserRate: 2.20,
+    savesUserRate: 2.50,
+    sharesUserRate: 2.50,
+    commentsUserRate: 20.00,
+  },
 };
 
 let cachedConfig: TikTokEngagementPresetConfig | null = null;
@@ -722,6 +780,12 @@ export async function getTikTokEngagementConfigAsync(force = false): Promise<Tik
         shares: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.shares, ...(parsed.shares || {}) },
         pricing: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.pricing, ...(parsed.pricing || {}) },
         syncThreshold: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.syncThreshold, ...(parsed.syncThreshold || {}) },
+        instagramViews: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramViews, ...(parsed.instagramViews || {}) },
+        instagramLikes: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramLikes, ...(parsed.instagramLikes || {}) },
+        instagramSaves: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramSaves, ...(parsed.instagramSaves || {}) },
+        instagramShares: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramShares, ...(parsed.instagramShares || {}) },
+        instagramComments: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramComments, ...(parsed.instagramComments || {}) },
+        instagramPricing: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramPricing, ...(parsed.instagramPricing || {}) },
       };
       cachedConfig = merged;
       lastConfigFetch = now;
@@ -751,6 +815,12 @@ export async function saveTikTokEngagementConfigAsync(
     shares: { ...current.shares, ...(newConfig.shares || {}) },
     pricing: { ...current.pricing, ...(newConfig.pricing || {}) },
     syncThreshold: { ...current.syncThreshold, ...(newConfig.syncThreshold || {}) },
+    instagramViews: { ...(DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramViews!), ...(current.instagramViews || {}), ...(newConfig.instagramViews || {}) } as MetricConfigItem,
+    instagramLikes: { ...(DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramLikes!), ...(current.instagramLikes || {}), ...(newConfig.instagramLikes || {}) } as MetricConfigItem,
+    instagramSaves: { ...(DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramSaves!), ...(current.instagramSaves || {}), ...(newConfig.instagramSaves || {}) } as MetricConfigItem,
+    instagramShares: { ...(DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramShares!), ...(current.instagramShares || {}), ...(newConfig.instagramShares || {}) } as MetricConfigItem,
+    instagramComments: { ...(DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramComments!), ...(current.instagramComments || {}), ...(newConfig.instagramComments || {}) } as MetricConfigItem,
+    instagramPricing: { ...(DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramPricing!), ...(current.instagramPricing || {}), ...(newConfig.instagramPricing || {}) } as EngagementPricingConfig,
   };
 
   cachedConfig = merged;
@@ -801,6 +871,12 @@ export function getTikTokEngagementConfig(): TikTokEngagementPresetConfig {
         shares: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.shares, ...(parsed.shares || {}) },
         pricing: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.pricing, ...(parsed.pricing || {}) },
         syncThreshold: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.syncThreshold, ...(parsed.syncThreshold || {}) },
+        instagramViews: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramViews, ...(parsed.instagramViews || {}) },
+        instagramLikes: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramLikes, ...(parsed.instagramLikes || {}) },
+        instagramSaves: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramSaves, ...(parsed.instagramSaves || {}) },
+        instagramShares: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramShares, ...(parsed.instagramShares || {}) },
+        instagramComments: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramComments, ...(parsed.instagramComments || {}) },
+        instagramPricing: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramPricing, ...(parsed.instagramPricing || {}) },
       };
       return cachedConfig!;
     }

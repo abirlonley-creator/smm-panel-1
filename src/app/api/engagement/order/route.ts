@@ -229,10 +229,21 @@ export async function POST(request: Request) {
     const zeofameAdapter = adminEng.adapter;
 
     // 2. Resolve Required Services linked to Admin's Provider Connections using Admin Preset configuration
-    const viewsServiceId = config.views?.serviceId || preset.views.serviceId || "897";
-    const likesServiceId = config.likes?.serviceId || preset.likes.serviceId || "1123";
-    const savesServiceId = config.saves?.serviceId || preset.saves?.serviceId || "807";
-    const sharesServiceId = config.shares?.serviceId || preset.shares?.serviceId || "718";
+    const viewsServiceId = platform === "Instagram"
+      ? (config.instagramViews?.serviceId || "101")
+      : (config.views?.serviceId || preset.views.serviceId || "897");
+
+    const likesServiceId = platform === "Instagram"
+      ? (config.instagramLikes?.serviceId || "102")
+      : (config.likes?.serviceId || preset.likes.serviceId || "1123");
+
+    const savesServiceId = platform === "Instagram"
+      ? (config.instagramSaves?.serviceId || "103")
+      : (config.saves?.serviceId || preset.saves?.serviceId || "807");
+
+    const sharesServiceId = platform === "Instagram"
+      ? (config.instagramShares?.serviceId || "104")
+      : (config.shares?.serviceId || preset.shares?.serviceId || "718");
 
     const xmediaViewsService = await resolveService(xmediaConn.id, viewsServiceId, xmediaAdapter, {
       name: platform === "Instagram" ? "Instagram Reel Views [High Retention]" : "TikTok Video Views [Medium Fast]",
@@ -281,7 +292,9 @@ export async function POST(request: Request) {
 
     // Comments service (optional engagement add-on)
     let zeofameCommentsService: any = null;
-    const commentsServiceId = config.comments?.serviceId || "950";
+    const commentsServiceId = platform === "Instagram"
+      ? (config.instagramComments?.serviceId || "950")
+      : (config.comments?.serviceId || "950");
     const hasComments =
       (parsed.batches && parsed.batches.some((b) => b.service === "comments")) ||
       (parsed.plannedComments && parsed.plannedComments.length > 0);
@@ -299,11 +312,25 @@ export async function POST(request: Request) {
 
     // 3. Build Batch Runs - Calculated with Admin Configured Selling Rates
     const now = Date.now();
-    const viewsRate = config.pricing?.viewsUserRate ?? (xmediaViewsService?.ratePer1000 ? xmediaViewsService.ratePer1000 * 1.5 : 4.50);
-    const likesRate = config.pricing?.likesUserRate ?? (zeofameLikesService?.ratePer1000 ? zeofameLikesService.ratePer1000 * 2.0 : 2.00);
-    const savesRate = config.pricing?.savesUserRate ?? (zeofameSavesService?.ratePer1000 ? zeofameSavesService.ratePer1000 * 2.5 : 0.80);
-    const sharesRate = config.pricing?.sharesUserRate ?? (zeofameSharesService?.ratePer1000 ? zeofameSharesService.ratePer1000 * 2.5 : 0.80);
-    const commentsRate = config.pricing?.commentsUserRate ?? 15.00;
+    const viewsRate = platform === "Instagram"
+      ? (config.instagramPricing?.viewsUserRate ?? (xmediaViewsService?.ratePer1000 ? xmediaViewsService.ratePer1000 * 1.5 : 3.50))
+      : (config.pricing?.viewsUserRate ?? (xmediaViewsService?.ratePer1000 ? xmediaViewsService.ratePer1000 * 1.5 : 4.50));
+
+    const likesRate = platform === "Instagram"
+      ? (config.instagramPricing?.likesUserRate ?? (zeofameLikesService?.ratePer1000 ? zeofameLikesService.ratePer1000 * 2.0 : 2.20))
+      : (config.pricing?.likesUserRate ?? (zeofameLikesService?.ratePer1000 ? zeofameLikesService.ratePer1000 * 2.0 : 2.00));
+
+    const savesRate = platform === "Instagram"
+      ? (config.instagramPricing?.savesUserRate ?? (zeofameSavesService?.ratePer1000 ? zeofameSavesService.ratePer1000 * 2.0 : 2.50))
+      : (config.pricing?.savesUserRate ?? (zeofameSavesService?.ratePer1000 ? zeofameSavesService.ratePer1000 * 2.5 : 0.80));
+
+    const sharesRate = platform === "Instagram"
+      ? (config.instagramPricing?.sharesUserRate ?? (zeofameSharesService?.ratePer1000 ? zeofameSharesService.ratePer1000 * 2.0 : 2.50))
+      : (config.pricing?.sharesUserRate ?? (zeofameSharesService?.ratePer1000 ? zeofameSharesService.ratePer1000 * 2.5 : 0.80));
+
+    const commentsRate = platform === "Instagram"
+      ? (config.instagramPricing?.commentsUserRate ?? 20.00)
+      : (config.pricing?.commentsUserRate ?? 15.00);
 
     // A–D. Build Runs — ALWAYS use deterministic plan batches when provided.
     // The legacy min/max/interval/runsCount fields in admin are no longer used for ordering.

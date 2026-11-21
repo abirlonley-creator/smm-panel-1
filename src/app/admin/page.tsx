@@ -33,6 +33,7 @@ import {
   Search,
   Zap,
   Sparkles,
+  MessageCircle,
   Eye,
   Heart,
   Bookmark,
@@ -106,8 +107,6 @@ export default function AdminPage() {
   const [passkeySearchQuery, setPasskeySearchQuery] = useState("");
   const [engagementProfiles, setEngagementProfiles] = useState<any[]>([]);
   const [engagementOrders, setEngagementOrders] = useState<any[]>([]);
-  const [editingMapping, setEditingMapping] = useState<{ profileId: string; type: string; providerId: string; providerServiceId: string; name: string; minQuantity: number; maxQuantity: number; ratePer1000: number } | null>(null);
-  const [savingMapping, setSavingMapping] = useState(false);
   const [loadingData, setLoadingData] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(false);
 
@@ -117,8 +116,6 @@ export default function AdminPage() {
   const [loadingAlerts, setLoadingAlerts] = useState(false);
   const [filterSeverity, setFilterSeverity] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
-  const [lookupLoading, setLookupLoading] = useState(false);
-  const [lookupStatus, setLookupStatus] = useState<{ exists: boolean; message: string; service?: any } | null>(null);
 
   // Action status states
   const [actionMsg, setActionMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
@@ -159,7 +156,8 @@ export default function AdminPage() {
   const [testingConnection, setTestingConnection] = useState(false);
   const [testResult, setTestResult] = useState<any>(null);
 
-  // TikTok Engagement Preset Config state
+  // TikTok & Instagram Engagement Preset Config state
+  const [adminPlatformTab, setAdminPlatformTab] = useState<"tiktok" | "instagram">("tiktok");
   const [tiktokConfig, setTiktokConfig] = useState<any>(null);
   const [tiktokTierPresets, setTiktokTierPresets] = useState<Record<string, any>>({});
   const [selectedAdminPresetKey, setSelectedAdminPresetKey] = useState<string>("tiktok_2k");
@@ -175,6 +173,19 @@ export default function AdminPage() {
     likes: 0.88,
     saves: 0.22,
     shares: 0.22,
+    comments: 5.00,
+  });
+  const [instagramOriginalRates, setInstagramOriginalRates] = useState<{
+    views: number;
+    likes: number;
+    saves: number;
+    shares: number;
+    comments: number;
+  }>({
+    views: 0.84,
+    likes: 1.10,
+    saves: 1.45,
+    shares: 1.50,
     comments: 5.00,
   });
 
@@ -329,44 +340,6 @@ export default function AdminPage() {
     }
   }
 
-  async function handleLookupService(providerId: string, serviceId: string) {
-    if (!providerId || !serviceId) return;
-    setLookupLoading(true);
-    setLookupStatus(null);
-    try {
-      const res = await fetch(`/api/admin/engagement-profiles/lookup?providerId=${encodeURIComponent(providerId)}&serviceId=${encodeURIComponent(serviceId)}`);
-      const data = await res.json();
-      if (data.success && data.exists && data.service) {
-        setLookupStatus({
-          exists: true,
-          message: `Found: ${data.service.name}`,
-          service: data.service,
-        });
-        if (editingMapping) {
-          setEditingMapping((prev) => prev ? {
-            ...prev,
-            name: data.service.name,
-            minQuantity: data.service.minQuantity,
-            maxQuantity: data.service.maxQuantity,
-            ratePer1000: data.service.ratePer1000,
-          } : null);
-        }
-      } else {
-        setLookupStatus({
-          exists: false,
-          message: data.message || `Service ID "${serviceId}" does not exist on this provider`,
-        });
-      }
-    } catch (err: any) {
-      setLookupStatus({
-        exists: false,
-        message: err.message || "Verification request failed",
-      });
-    } finally {
-      setLookupLoading(false);
-    }
-  }
-
   async function loadAllAdminData() {
     setLoadingData(true);
     try {
@@ -398,6 +371,7 @@ export default function AdminPage() {
         if (tiktokRes.config) setTiktokConfig(tiktokRes.config);
         if (tiktokRes.presets) setTiktokTierPresets(tiktokRes.presets);
         if (tiktokRes.originalRates) setOriginalRates(tiktokRes.originalRates);
+        if (tiktokRes.instagramOriginalRates) setInstagramOriginalRates(tiktokRes.instagramOriginalRates);
       }
       if (alertsRes.success) {
         setAlerts(alertsRes.alerts || []);
@@ -441,31 +415,6 @@ export default function AdminPage() {
       setActionMsg({ text: err.message || "Failed to save configuration", type: "error" });
     } finally {
       setSavingTiktokConfig(false);
-    }
-  }
-
-  async function handleSaveEngagementMapping(e: React.FormEvent) {
-    e.preventDefault();
-    if (!editingMapping) return;
-    setSavingMapping(true);
-    setActionMsg(null);
-    try {
-      const res = await fetch("/api/admin/engagement-profiles", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editingMapping),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || "Failed to update mapping");
-      }
-      setActionMsg({ text: data.message || "Mapping updated successfully", type: "success" });
-      setEditingMapping(null);
-      await loadAllAdminData();
-    } catch (err: any) {
-      setActionMsg({ text: err.message || "Failed to save mapping", type: "error" });
-    } finally {
-      setSavingMapping(false);
     }
   }
 
@@ -1432,9 +1381,40 @@ export default function AdminPage() {
                       </label>
                     </div>
                   </div>
+                </div>
 
-                  {/* Preset Selector Tabs */}
-                  <div className="space-y-2">
+                  {/* Platform Selector Tabs: TikTok vs Instagram */}
+                  <div className="flex items-center gap-2 p-1.5 bg-white border border-[#DEE0ED] rounded-2xl w-fit shadow-xs">
+                    <button
+                      type="button"
+                      onClick={() => setAdminPlatformTab("tiktok")}
+                      className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+                        adminPlatformTab === "tiktok"
+                          ? "bg-[#111413] text-[#D4F04F] shadow-xs"
+                          : "text-[#252943]/70 hover:text-[#252943]"
+                      }`}
+                    >
+                      <Zap className="w-4 h-4" />
+                      <span>TikTok Services & Margins</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAdminPlatformTab("instagram")}
+                      className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+                        adminPlatformTab === "instagram"
+                          ? "bg-[#111413] text-[#D4F04F] shadow-xs"
+                          : "text-[#252943]/70 hover:text-[#252943]"
+                      }`}
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      <span>Instagram Services & Margins</span>
+                    </button>
+                  </div>
+
+                  {adminPlatformTab === "tiktok" && (
+                    <>
+                      {/* Preset Selector Tabs */}
+                      <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Sparkles className="w-4 h-4 text-[#3A4EFB]" />
@@ -1497,7 +1477,6 @@ export default function AdminPage() {
                       })}
                     </div>
                   </div>
-                </div>
 
                 {/* Preset Editor Section */}
                 {(() => {
@@ -2573,6 +2552,525 @@ export default function AdminPage() {
                     </button>
                   </div>
                 </div>
+              </>
+            )}
+
+            {adminPlatformTab === "instagram" && (
+              <div className="space-y-6 animate-fadeIn">
+                {/* Section 1: Instagram Upstream Services Mapping & Configuration */}
+                <div className="p-6 rounded-3xl border border-[#DEE0ED] bg-[#F8F9FD]/60 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#DEE0ED]">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-600 flex items-center justify-center font-bold">
+                        <Sparkles className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="font-extrabold text-sm text-[#252943]">
+                          Instagram Upstream Provider Services
+                        </h3>
+                        <p className="text-[11px] text-[#252943]/60">
+                          Set the upstream provider service IDs dispatched for Instagram views, likes, saves, shares, and comments.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleSaveTiktokConfig()}
+                      disabled={savingTiktokConfig}
+                      className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition-all shadow-subtle flex items-center gap-1.5 self-start sm:self-center shrink-0 cursor-pointer disabled:opacity-50"
+                    >
+                      {savingTiktokConfig ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Save className="w-3.5 h-3.5" />
+                      )}
+                      <span>Save Instagram Services</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                    {/* 1. Instagram Views Service */}
+                    <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED] shadow-xs space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Eye className="w-4 h-4 text-purple-600" />
+                          <span className="font-bold text-xs text-[#252943]">Reel Views Service</span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                          Min: 100
+                        </span>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-[#252943]/70 mb-1">
+                          Provider Service ID
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="101"
+                          value={tiktokConfig.instagramViews?.serviceId ?? "101"}
+                          onChange={(e) =>
+                            setTiktokConfig({
+                              ...tiktokConfig,
+                              instagramViews: {
+                                ...(tiktokConfig.instagramViews || { enabled: true, minQuantity: 100, maxQuantity: 10000000 }),
+                                serviceId: e.target.value,
+                              },
+                            })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] focus:border-purple-500 font-mono text-xs font-bold text-[#252943] bg-white outline-none"
+                        />
+                      </div>
+                      <span className="text-[10px] text-[#252943]/50 block">High retention reel & video views</span>
+                    </div>
+
+                    {/* 2. Instagram Likes Service */}
+                    <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED] shadow-xs space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Heart className="w-4 h-4 text-rose-500" />
+                          <span className="font-bold text-xs text-[#252943]">Likes Service</span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                          Min: 10
+                        </span>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-[#252943]/70 mb-1">
+                          Provider Service ID
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="102"
+                          value={tiktokConfig.instagramLikes?.serviceId ?? "102"}
+                          onChange={(e) =>
+                            setTiktokConfig({
+                              ...tiktokConfig,
+                              instagramLikes: {
+                                ...(tiktokConfig.instagramLikes || { enabled: true, minQuantity: 10, maxQuantity: 500000 }),
+                                serviceId: e.target.value,
+                              },
+                            })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] focus:border-rose-500 font-mono text-xs font-bold text-[#252943] bg-white outline-none"
+                        />
+                      </div>
+                      <span className="text-[10px] text-[#252943]/50 block">Natural wave-paced post/reel likes</span>
+                    </div>
+
+                    {/* 3. Instagram Saves Service */}
+                    <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED] shadow-xs space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Bookmark className="w-4 h-4 text-amber-500" />
+                          <span className="font-bold text-xs text-[#252943]">Saves & Bookmarks Service</span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                          Min: 1
+                        </span>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-[#252943]/70 mb-1">
+                          Provider Service ID
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="103"
+                          value={tiktokConfig.instagramSaves?.serviceId ?? "103"}
+                          onChange={(e) =>
+                            setTiktokConfig({
+                              ...tiktokConfig,
+                              instagramSaves: {
+                                ...(tiktokConfig.instagramSaves || { enabled: true, minQuantity: 1, maxQuantity: 200000 }),
+                                serviceId: e.target.value,
+                              },
+                            })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] focus:border-amber-500 font-mono text-xs font-bold text-[#252943] bg-white outline-none"
+                        />
+                      </div>
+                      <span className="text-[10px] text-[#252943]/50 block">High algorithmic weight post saves</span>
+                    </div>
+
+                    {/* 4. Instagram Shares Service */}
+                    <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED] shadow-xs space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Share2 className="w-4 h-4 text-blue-500" />
+                          <span className="font-bold text-xs text-[#252943]">Shares Service</span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                          Min: 10
+                        </span>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-[#252943]/70 mb-1">
+                          Provider Service ID
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="104"
+                          value={tiktokConfig.instagramShares?.serviceId ?? "104"}
+                          onChange={(e) =>
+                            setTiktokConfig({
+                              ...tiktokConfig,
+                              instagramShares: {
+                                ...(tiktokConfig.instagramShares || { enabled: true, minQuantity: 10, maxQuantity: 100000 }),
+                                serviceId: e.target.value,
+                              },
+                            })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] focus:border-blue-500 font-mono text-xs font-bold text-[#252943] bg-white outline-none"
+                        />
+                      </div>
+                      <span className="text-[10px] text-[#252943]/50 block">Post & reel shares distribution</span>
+                    </div>
+
+                    {/* 5. Instagram Comments Service */}
+                    <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED] shadow-xs space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <MessageCircle className="w-4 h-4 text-emerald-600" />
+                          <span className="font-bold text-xs text-[#252943]">Custom Comments Service</span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          Min: 1
+                        </span>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-[#252943]/70 mb-1">
+                          Provider Service ID
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="950"
+                          value={tiktokConfig.instagramComments?.serviceId ?? "950"}
+                          onChange={(e) =>
+                            setTiktokConfig({
+                              ...tiktokConfig,
+                              instagramComments: {
+                                ...(tiktokConfig.instagramComments || { enabled: true, minQuantity: 1, maxQuantity: 10000 }),
+                                serviceId: e.target.value,
+                              },
+                            })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] focus:border-emerald-500 font-mono text-xs font-bold text-[#252943] bg-white outline-none"
+                        />
+                      </div>
+                      <span className="text-[10px] text-[#252943]/50 block">Verified English organic comments</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 2: Instagram Retail Pricing & Profit Margin Manager */}
+                <div className="p-6 rounded-3xl border-2 border-purple-300 bg-gradient-to-br from-purple-50/40 via-white to-purple-50/20 space-y-6 shadow-subtle">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-purple-200">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-purple-600 text-white flex items-center justify-center font-black shadow-subtle shrink-0">
+                        <Coins className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-base font-black text-[#252943]">
+                            Instagram Retail Pricing & Profit Margin Manager
+                          </h3>
+                          <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[10px] font-black uppercase tracking-wider border border-purple-300">
+                            Instagram Margins
+                          </span>
+                        </div>
+                        <p className="text-xs text-[#252943]/70">
+                          Set the exact retail rate charged to users per 1,000 for Instagram Views, Likes, Saves, Shares, and Comments. Control your profits.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleSaveTiktokConfig()}
+                      disabled={savingTiktokConfig}
+                      className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition-all shadow-subtle flex items-center gap-1.5 self-start sm:self-center shrink-0 cursor-pointer disabled:opacity-50"
+                    >
+                      {savingTiktokConfig ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Save className="w-3.5 h-3.5" />
+                      )}
+                      <span>Save Instagram Pricing</span>
+                    </button>
+                  </div>
+
+                  {/* 5-Metric Instagram Pricing Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {/* Views */}
+                    {(() => {
+                      const origCost = instagramOriginalRates?.views ?? 0.84;
+                      const userRate = Number(tiktokConfig.instagramPricing?.viewsUserRate ?? 3.50);
+                      const profit = Number((userRate - origCost).toFixed(2));
+                      const marginPct = origCost > 0 ? Math.round(((userRate - origCost) / origCost) * 100) : 0;
+                      return (
+                        <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED] shadow-subtle space-y-3">
+                          <div className="flex items-center justify-between pb-2 border-b border-[#DEE0ED]/60">
+                            <div className="flex items-center gap-2">
+                              <Eye className="w-4 h-4 text-purple-600" />
+                              <span className="font-bold text-xs text-[#252943]">Instagram Views</span>
+                            </div>
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-purple-50 text-purple-800 font-bold border border-purple-200">
+                              Wholesale: ₹{origCost.toFixed(2)}/1k
+                            </span>
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-[#252943]/80 mb-1">
+                              User Selling Rate (₹ / 1,000)
+                            </label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#252943]/50">₹</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0.1"
+                                value={userRate}
+                                onChange={(e) =>
+                                  setTiktokConfig({
+                                    ...tiktokConfig,
+                                    instagramPricing: {
+                                      ...(tiktokConfig.instagramPricing || {}),
+                                      viewsUserRate: Number(e.target.value),
+                                    },
+                                  })
+                                }
+                                className="w-full pl-7 pr-3 py-2 rounded-xl border-2 border-[#DEE0ED] focus:border-purple-500 bg-white text-xs font-black font-mono text-[#252943] outline-none"
+                                required
+                              />
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between text-[11px] pt-1">
+                            <span className="text-[#252943]/70">Profit / 1k: <strong className="text-emerald-700">₹{profit.toFixed(2)}</strong></span>
+                            <span className="font-bold text-purple-700">Margin: {marginPct}%</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Likes */}
+                    {(() => {
+                      const origCost = instagramOriginalRates?.likes ?? 1.10;
+                      const userRate = Number(tiktokConfig.instagramPricing?.likesUserRate ?? 2.20);
+                      const profit = Number((userRate - origCost).toFixed(2));
+                      const marginPct = origCost > 0 ? Math.round(((userRate - origCost) / origCost) * 100) : 0;
+                      return (
+                        <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED] shadow-subtle space-y-3">
+                          <div className="flex items-center justify-between pb-2 border-b border-[#DEE0ED]/60">
+                            <div className="flex items-center gap-2">
+                              <Heart className="w-4 h-4 text-rose-500" />
+                              <span className="font-bold text-xs text-[#252943]">Instagram Likes</span>
+                            </div>
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-rose-50 text-rose-800 font-bold border border-rose-200">
+                              Wholesale: ₹{origCost.toFixed(2)}/1k
+                            </span>
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-[#252943]/80 mb-1">
+                              User Selling Rate (₹ / 1,000)
+                            </label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#252943]/50">₹</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0.1"
+                                value={userRate}
+                                onChange={(e) =>
+                                  setTiktokConfig({
+                                    ...tiktokConfig,
+                                    instagramPricing: {
+                                      ...(tiktokConfig.instagramPricing || {}),
+                                      likesUserRate: Number(e.target.value),
+                                    },
+                                  })
+                                }
+                                className="w-full pl-7 pr-3 py-2 rounded-xl border-2 border-[#DEE0ED] focus:border-rose-500 bg-white text-xs font-black font-mono text-[#252943] outline-none"
+                                required
+                              />
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between text-[11px] pt-1">
+                            <span className="text-[#252943]/70">Profit / 1k: <strong className="text-emerald-700">₹{profit.toFixed(2)}</strong></span>
+                            <span className="font-bold text-purple-700">Margin: {marginPct}%</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Saves */}
+                    {(() => {
+                      const origCost = instagramOriginalRates?.saves ?? 1.45;
+                      const userRate = Number(tiktokConfig.instagramPricing?.savesUserRate ?? 2.50);
+                      const profit = Number((userRate - origCost).toFixed(2));
+                      const marginPct = origCost > 0 ? Math.round(((userRate - origCost) / origCost) * 100) : 0;
+                      return (
+                        <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED] shadow-subtle space-y-3">
+                          <div className="flex items-center justify-between pb-2 border-b border-[#DEE0ED]/60">
+                            <div className="flex items-center gap-2">
+                              <Bookmark className="w-4 h-4 text-amber-500" />
+                              <span className="font-bold text-xs text-[#252943]">Instagram Saves</span>
+                            </div>
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-50 text-amber-800 font-bold border border-amber-200">
+                              Wholesale: ₹{origCost.toFixed(2)}/1k
+                            </span>
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-[#252943]/80 mb-1">
+                              User Selling Rate (₹ / 1,000)
+                            </label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#252943]/50">₹</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0.1"
+                                value={userRate}
+                                onChange={(e) =>
+                                  setTiktokConfig({
+                                    ...tiktokConfig,
+                                    instagramPricing: {
+                                      ...(tiktokConfig.instagramPricing || {}),
+                                      savesUserRate: Number(e.target.value),
+                                    },
+                                  })
+                                }
+                                className="w-full pl-7 pr-3 py-2 rounded-xl border-2 border-[#DEE0ED] focus:border-amber-500 bg-white text-xs font-black font-mono text-[#252943] outline-none"
+                                required
+                              />
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between text-[11px] pt-1">
+                            <span className="text-[#252943]/70">Profit / 1k: <strong className="text-emerald-700">₹{profit.toFixed(2)}</strong></span>
+                            <span className="font-bold text-purple-700">Margin: {marginPct}%</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Shares */}
+                    {(() => {
+                      const origCost = instagramOriginalRates?.shares ?? 1.50;
+                      const userRate = Number(tiktokConfig.instagramPricing?.sharesUserRate ?? 2.50);
+                      const profit = Number((userRate - origCost).toFixed(2));
+                      const marginPct = origCost > 0 ? Math.round(((userRate - origCost) / origCost) * 100) : 0;
+                      return (
+                        <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED] shadow-subtle space-y-3">
+                          <div className="flex items-center justify-between pb-2 border-b border-[#DEE0ED]/60">
+                            <div className="flex items-center gap-2">
+                              <Share2 className="w-4 h-4 text-blue-500" />
+                              <span className="font-bold text-xs text-[#252943]">Instagram Shares</span>
+                            </div>
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-50 text-blue-800 font-bold border border-blue-200">
+                              Wholesale: ₹{origCost.toFixed(2)}/1k
+                            </span>
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-[#252943]/80 mb-1">
+                              User Selling Rate (₹ / 1,000)
+                            </label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#252943]/50">₹</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0.1"
+                                value={userRate}
+                                onChange={(e) =>
+                                  setTiktokConfig({
+                                    ...tiktokConfig,
+                                    instagramPricing: {
+                                      ...(tiktokConfig.instagramPricing || {}),
+                                      sharesUserRate: Number(e.target.value),
+                                    },
+                                  })
+                                }
+                                className="w-full pl-7 pr-3 py-2 rounded-xl border-2 border-[#DEE0ED] focus:border-blue-500 bg-white text-xs font-black font-mono text-[#252943] outline-none"
+                                required
+                              />
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between text-[11px] pt-1">
+                            <span className="text-[#252943]/70">Profit / 1k: <strong className="text-emerald-700">₹{profit.toFixed(2)}</strong></span>
+                            <span className="font-bold text-purple-700">Margin: {marginPct}%</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Comments */}
+                    {(() => {
+                      const origCost = instagramOriginalRates?.comments ?? 5.00;
+                      const userRate = Number(tiktokConfig.instagramPricing?.commentsUserRate ?? 20.00);
+                      const profit = Number((userRate - origCost).toFixed(2));
+                      const marginPct = origCost > 0 ? Math.round(((userRate - origCost) / origCost) * 100) : 0;
+                      return (
+                        <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED] shadow-subtle space-y-3">
+                          <div className="flex items-center justify-between pb-2 border-b border-[#DEE0ED]/60">
+                            <div className="flex items-center gap-2">
+                              <MessageCircle className="w-4 h-4 text-emerald-600" />
+                              <span className="font-bold text-xs text-[#252943]">Instagram Comments</span>
+                            </div>
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 font-bold border border-emerald-200">
+                              Wholesale: ₹{origCost.toFixed(2)}/1k
+                            </span>
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-[#252943]/80 mb-1">
+                              User Selling Rate (₹ / 1,000)
+                            </label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#252943]/50">₹</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0.1"
+                                value={userRate}
+                                onChange={(e) =>
+                                  setTiktokConfig({
+                                    ...tiktokConfig,
+                                    instagramPricing: {
+                                      ...(tiktokConfig.instagramPricing || {}),
+                                      commentsUserRate: Number(e.target.value),
+                                    },
+                                  })
+                                }
+                                className="w-full pl-7 pr-3 py-2 rounded-xl border-2 border-[#DEE0ED] focus:border-emerald-500 bg-white text-xs font-black font-mono text-[#252943] outline-none"
+                                required
+                              />
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between text-[11px] pt-1">
+                            <span className="text-[#252943]/70">Profit / 1k: <strong className="text-emerald-700">₹{profit.toFixed(2)}</strong></span>
+                            <span className="font-bold text-purple-700">Margin: {marginPct}%</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-purple-200">
+                    <span className="text-[11px] text-purple-950/70 font-medium">
+                      Instagram retail pricing and provider service IDs are persisted directly to the system config and charge users on every Instagram campaign order.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleSaveTiktokConfig()}
+                      disabled={savingTiktokConfig}
+                      className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition-all shadow-subtle flex items-center gap-2 self-start sm:self-center shrink-0 cursor-pointer disabled:opacity-50"
+                    >
+                      {savingTiktokConfig ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                      )}
+                      <span>Save Instagram Pricing & Services</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
                 {/* Section 4b: Universal Engagement Services & API Catalog Manager */}
                 <EngagementServicesManager />
@@ -2636,114 +3134,27 @@ export default function AdminPage() {
             )}
           </div>
 
+          {/* Active Campaigns Breakdown */}
           <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 sm:p-8 shadow-subtle space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#DEE0ED]">
               <div>
-                <h2 className="text-base font-bold text-[#252943]">Platform Profiles & Provider Service Mappings</h2>
+                <h2 className="text-base font-bold text-[#252943]">
+                  Active Natural-Looking Delivery Campaigns
+                </h2>
                 <p className="text-xs text-[#252943]/60">
-                  Config-driven pacing profiles. Each engagement type is mapped to a backend provider service with strictly enforced minimum batch sizes.
+                  Live client orders showing breakdown quantities and user customization (Suggested vs Custom).
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={loadAllAdminData}
-                disabled={loadingData}
-                className="px-3.5 py-2 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED] text-xs font-bold text-[#252943] hover:bg-[#DEE0ED]/50 flex items-center gap-1.5 self-start"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${loadingData ? "animate-spin text-[#3A4EFB]" : ""}`} />
-                <span>Reload Config</span>
-              </button>
-            </div>
-
-            <div className="space-y-6">
-              {engagementProfiles.map((prof: any) => (
-                <div key={prof.id} className="rounded-2xl border border-[#DEE0ED] p-5 space-y-4 bg-[#F8F9FD]/40">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#DEE0ED]/80">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold text-[#252943]">{prof.name}</span>
-                        <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold">
-                          {prof.badge}
-                        </span>
-                        <span className="text-[11px] font-mono text-[#252943]/50">ID: {prof.id}</span>
-                      </div>
-                      <p className="text-xs text-[#252943]/70 mt-0.5">{prof.description}</p>
-                    </div>
-
-                    <div className="flex items-center gap-3 text-xs text-[#252943]/70 font-medium">
-                      <span>k ∈ [{prof.viewsEnvelope.kRange.join(", ")}]</span>
-                      <span>•</span>
-                      <span>m ∈ [{prof.viewsEnvelope.mRange.join(", ")}]</span>
-                    </div>
-                  </div>
-
-                  {/* Service Mapping Table */}
-                  <div className="overflow-x-auto bg-white rounded-xl border border-[#DEE0ED]">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-[#F8F9FD] text-[#252943]/60 uppercase text-[10px] font-bold border-b border-[#DEE0ED]">
-                        <tr>
-                          <th className="px-3 py-2.5">Type</th>
-                          <th className="px-3 py-2.5">Mapped Service Name</th>
-                          <th className="px-3 py-2.5">Provider ID</th>
-                          <th className="px-3 py-2.5">External ID</th>
-                          <th className="px-3 py-2.5">Min / Max</th>
-                          <th className="px-3 py-2.5">Rate / 1k</th>
-                          <th className="px-3 py-2.5 text-right">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[#DEE0ED]/60 font-medium">
-                        {Object.entries(prof.serviceMappings || {}).map(([type, srv]: any) => (
-                          <tr key={type} className="hover:bg-[#F8F9FD]">
-                            <td className="px-3 py-2 font-bold capitalize text-[#252943]">{type}</td>
-                            <td className="px-3 py-2 max-w-xs truncate text-[#252943]/90">{srv.name}</td>
-                            <td className="px-3 py-2 font-mono text-[11px] text-[#252943]/60">{srv.providerId || "default"}</td>
-                            <td className="px-3 py-2 font-mono text-[11px] font-bold text-[#3A4EFB]">{srv.providerServiceId || srv.id || "—"}</td>
-                            <td className="px-3 py-2">
-                              <span className="px-1.5 py-0.5 rounded bg-slate-100 text-[10px] font-bold">
-                                {srv.minQuantity} - {srv.maxQuantity?.toLocaleString()}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2 font-bold text-[#252943]">₹{srv.ratePer1000}</td>
-                            <td className="px-3 py-2 text-right">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEditingMapping({
-                                    profileId: prof.id,
-                                    type,
-                                    providerId: srv.providerId || "prov-default",
-                                    providerServiceId: srv.providerServiceId || srv.id || "",
-                                    name: srv.name || "",
-                                    minQuantity: srv.minQuantity || 10,
-                                    maxQuantity: srv.maxQuantity || 100000,
-                                    ratePer1000: srv.ratePer1000 || 1.0,
-                                  });
-                                }}
-                                className="px-2.5 py-1 rounded-lg bg-[#F8F9FD] hover:bg-[#DEE0ED] text-[11px] font-bold text-[#3A4EFB] transition-colors"
-                              >
-                                Remap
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Recent Campaigns with Custom vs Suggested Breakdown */}
-            <div className="bg-white rounded-2xl border border-[#DEE0ED] p-6 shadow-subtle space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-base font-bold text-[#252943]">
-                    Active Natural-Looking Delivery Campaigns
-                  </h3>
-                  <p className="text-xs text-[#252943]/60">
-                    Live client orders showing breakdown quantities and user customization (Suggested vs Custom).
-                  </p>
-                </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={loadAllAdminData}
+                  disabled={loadingData}
+                  className="px-3.5 py-2 rounded-xl bg-[#F8F9FD] border border-[#DEE0ED] text-xs font-bold text-[#252943] hover:bg-[#DEE0ED]/50 flex items-center gap-1.5"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingData ? "animate-spin text-[#3A4EFB]" : ""}`} />
+                  <span>Refresh</span>
+                </button>
                 <a
                   href="/engagement/orders"
                   target="_blank"
@@ -2753,6 +3164,7 @@ export default function AdminPage() {
                   View All Orders
                 </a>
               </div>
+            </div>
 
               {engagementOrders.length === 0 ? (
                 <div className="p-8 text-center text-xs text-[#252943]/60">
@@ -2832,7 +3244,6 @@ export default function AdminPage() {
                 </div>
               )}
             </div>
-          </div>
         </div>
       ) : settingsSubTab === "provider" ? (
             <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 sm:p-8 shadow-subtle space-y-6 animate-fadeIn">
@@ -2909,170 +3320,6 @@ export default function AdminPage() {
           ) : (
             <SiteAnnouncementTab />
           )}
-        </div>
-      )}
-
-      {/* Remap Service Modal */}
-      {editingMapping && (
-        <div className="fixed inset-0 z-50 bg-[#252943]/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl border border-[#DEE0ED] max-w-md w-full p-6 shadow-2xl space-y-4 my-auto max-h-[calc(100vh-2rem)] overflow-y-auto animate-scaleUp">
-            <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
-              <div className="flex items-center gap-2">
-                <Sliders className="w-5 h-5 text-[#3A4EFB]" />
-                <h3 className="text-base font-bold text-[#252943]">
-                  Remap Service ({editingMapping.profileId} • {editingMapping.type})
-                </h3>
-              </div>
-              <button
-                onClick={() => {
-                  setEditingMapping(null);
-                  setLookupStatus(null);
-                }}
-                className="text-[#252943]/40 hover:text-[#252943] text-sm font-bold"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveEngagementMapping} className="space-y-3.5 text-xs">
-              <div>
-                <label className="block font-bold text-[#252943] mb-1">Service Display Name</label>
-                <input
-                  type="text"
-                  required
-                  value={editingMapping.name}
-                  onChange={(e) => setEditingMapping({ ...editingMapping, name: e.target.value })}
-                  className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3 py-2 font-semibold text-[#252943]"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-[#252943] mb-1">Provider (Connected)</label>
-                  <select
-                    value={editingMapping.providerId}
-                    onChange={(e) => {
-                      const newProvId = e.target.value;
-                      setEditingMapping({ ...editingMapping, providerId: newProvId });
-                      handleLookupService(newProvId, editingMapping.providerServiceId);
-                    }}
-                    className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3 py-2 font-bold text-[#252943] outline-none"
-                  >
-                    {alertsMetrics?.providersStatus?.length > 0 ? (
-                      alertsMetrics.providersStatus.map((p: any) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name} {p.active ? "• Active" : "• Paused"}
-                        </option>
-                      ))
-                    ) : (
-                      <option value="cmvm1iusy0000j5quq9ozboir">Primary Provider (Live)</option>
-                    )}
-                  </select>
-                </div>
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block font-bold text-[#252943]">Provider Service ID</label>
-                    <button
-                      type="button"
-                      onClick={() => handleLookupService(editingMapping.providerId, editingMapping.providerServiceId)}
-                      disabled={lookupLoading}
-                      className="text-[10px] text-[#3A4EFB] font-bold hover:underline flex items-center gap-1"
-                    >
-                      <RefreshCw className={`w-2.5 h-2.5 ${lookupLoading ? "animate-spin" : ""}`} />
-                      Re-sync
-                    </button>
-                  </div>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. 101"
-                    value={editingMapping.providerServiceId}
-                    onChange={(e) => {
-                      const newSrvId = e.target.value;
-                      setEditingMapping({ ...editingMapping, providerServiceId: newSrvId });
-                    }}
-                    onBlur={() => handleLookupService(editingMapping.providerId, editingMapping.providerServiceId)}
-                    className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3 py-2 font-mono font-bold text-[#252943]"
-                  />
-                </div>
-              </div>
-
-              {/* Service Verification Status Display */}
-              {lookupLoading && (
-                <div className="p-2 rounded-xl bg-blue-50 border border-blue-200 flex items-center gap-2 text-xs font-semibold text-blue-800">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-[#3A4EFB]" />
-                  <span>Verifying service ID on provider...</span>
-                </div>
-              )}
-              {!lookupLoading && lookupStatus && (
-                <div
-                  className={`p-2.5 rounded-xl border flex items-center gap-2 text-xs font-semibold ${lookupStatus.exists
-                    ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-                    : "bg-rose-50 border-rose-200 text-rose-800"
-                    }`}
-                >
-                  {lookupStatus.exists ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  ) : (
-                    <XCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                  )}
-                  <span>{lookupStatus.message}</span>
-                </div>
-              )}
-
-              {/* Read-only Min, Max and Rate per 1k */}
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <label className="block font-bold text-[#252943]/60 mb-1">Min Batch (Read-only)</label>
-                  <input
-                    type="number"
-                    readOnly
-                    value={editingMapping.minQuantity}
-                    className="w-full bg-gray-100/80 border border-[#DEE0ED] rounded-xl px-2.5 py-2 font-bold text-[#252943]/80 cursor-not-allowed"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-[#252943]/60 mb-1">Max Batch (Read-only)</label>
-                  <input
-                    type="number"
-                    readOnly
-                    value={editingMapping.maxQuantity}
-                    className="w-full bg-gray-100/80 border border-[#DEE0ED] rounded-xl px-2.5 py-2 font-bold text-[#252943]/80 cursor-not-allowed"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-[#252943]/60 mb-1">Rate / 1k ₹ (Read-only)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    readOnly
-                    value={editingMapping.ratePer1000}
-                    className="w-full bg-gray-100/80 border border-[#DEE0ED] rounded-xl px-2.5 py-2 font-bold text-[#252943]/80 cursor-not-allowed"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-2 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingMapping(null);
-                    setLookupStatus(null);
-                  }}
-                  className="px-4 py-2 rounded-xl border border-[#DEE0ED] text-xs font-semibold text-[#252943]/70 hover:bg-[#F8F9FD]"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={savingMapping || (lookupStatus !== null && !lookupStatus.exists)}
-                  className="px-5 py-2 rounded-xl bg-[#3A4EFB] text-white text-xs font-bold shadow-subtle hover:bg-[#2A3DE0] disabled:opacity-50"
-                >
-                  {savingMapping ? "Saving..." : "Save Mapping"}
-                </button>
-              </div>
-            </form>
-          </div>
         </div>
       )}
 
