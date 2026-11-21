@@ -50,6 +50,7 @@ export function LiveOrganicGrowthPreview({
   const [hoveredRowIndex, setHoveredRowIndex] = useState<number | null>(null);
   const [templateInput, setTemplateInput] = useState<string>("335");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [mobileGraphView, setMobileGraphView] = useState<"detailed" | "fit">("detailed");
   const svgRef = useRef<SVGSVGElement | null>(null);
 
   // SVG dimensions (Spec: 900 x 320)
@@ -382,7 +383,7 @@ export function LiveOrganicGrowthPreview({
   };
 
   return (
-    <div className="bg-white rounded-3xl border border-[#E4E0D3] p-5 sm:p-6 shadow-subtle space-y-4 font-sans select-none">
+    <div className="bg-white rounded-3xl border border-[#E4E0D3] p-3.5 sm:p-6 shadow-subtle space-y-4 font-sans select-none">
       {/* 1. TOP HEADER: Live Growth Preview */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#E4E0D3]">
         <div className="flex items-center gap-3">
@@ -551,19 +552,79 @@ export function LiveOrganicGrowthPreview({
       </div>
 
       {/* 4. THE GRAPH SVG (Section 4: Direct render of rows[], viewBox 0 0 900 320) */}
-      <div className="relative w-full overflow-hidden bg-gradient-to-b from-[#F3F1EA]/40 to-white rounded-2xl border border-[#E4E0D3] p-2 sm:p-3">
-        <svg
-          ref={svgRef}
-          viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
-          className="w-full h-64 sm:h-72 touch-none cursor-crosshair font-sans overflow-visible"
-          onPointerMove={handlePointerMove}
-          onPointerLeave={() => setHoveredRowIndex(null)}
-          onClick={() => {
-            if (hoveredRowIndex !== null) {
-              setSelectedRowIndex(hoveredRowIndex);
-            }
-          }}
+      <div className="relative w-full bg-gradient-to-b from-[#F3F1EA]/40 to-white rounded-2xl border border-[#E4E0D3] p-2.5 sm:p-3 space-y-2">
+        {/* Mobile View Switcher & Timeline Hint */}
+        <div className="sm:hidden flex items-center justify-between px-1 text-xs text-[#5B625F]">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[#111413]/70">Timeline:</span>
+            <div className="inline-flex rounded-lg bg-[#F3F1EA] p-0.5 border border-[#E4E0D3]">
+              <button
+                type="button"
+                onClick={() => setMobileGraphView("detailed")}
+                className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                  mobileGraphView === "detailed"
+                    ? "bg-[#111413] text-[#D4F04F] shadow-xs"
+                    : "text-[#5B625F] hover:text-[#111413]"
+                }`}
+              >
+                Detailed (Swipe ↔)
+              </button>
+              <button
+                type="button"
+                onClick={() => setMobileGraphView("fit")}
+                className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                  mobileGraphView === "fit"
+                    ? "bg-[#111413] text-[#D4F04F] shadow-xs"
+                    : "text-[#5B625F] hover:text-[#111413]"
+                }`}
+              >
+                Fit Screen
+              </button>
+            </div>
+          </div>
+          {mobileGraphView === "detailed" && (
+            <span className="text-[10px] text-[#5E8C1F] font-bold flex items-center gap-0.5 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/80">
+              <span>↔</span> Swipe timeline
+            </span>
+          )}
+        </div>
+
+        {/* Scrollable Container on Mobile for Detailed, or Responsive Fit */}
+        <div
+          className={`w-full ${
+            mobileGraphView === "detailed"
+              ? "overflow-x-auto overflow-y-hidden pb-1 -mx-0.5 px-0.5 scrollbar-thin"
+              : "overflow-hidden"
+          }`}
         >
+          <svg
+            ref={svgRef}
+            viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
+            className={`${
+              mobileGraphView === "detailed"
+                ? "min-w-[650px] sm:min-w-0 w-full h-[225px] sm:h-72 touch-pan-x"
+                : "w-full h-auto aspect-[900/320]"
+            } cursor-crosshair font-sans overflow-visible select-none`}
+            onPointerMove={handlePointerMove}
+            onPointerLeave={() => setHoveredRowIndex(null)}
+            onClick={(e) => {
+              if (!svgRef.current) return;
+              const rect = svgRef.current.getBoundingClientRect();
+              const svgX = ((e.clientX - rect.left) / rect.width) * SVG_WIDTH;
+              let nearestIdx = 0;
+              let minDiff = Infinity;
+              for (const r of plan.rows) {
+                const rx = getX(r.minuteOffset);
+                const diff = Math.abs(rx - svgX);
+                if (diff < minDiff) {
+                  minDiff = diff;
+                  nearestIdx = r.index;
+                }
+              }
+              setSelectedRowIndex(nearestIdx);
+              setHoveredRowIndex(nearestIdx);
+            }}
+          >
           <defs>
             <linearGradient id="viewsGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#2F6B3A" stopOpacity="0.14" />
@@ -973,6 +1034,7 @@ export function LiveOrganicGrowthPreview({
             </g>
           )}
         </svg>
+        </div>
       </div>
 
       {/* 5. VIEW SCHEDULE BUTTON & COLLAPSIBLE PANEL */}
