@@ -14,6 +14,8 @@ import {
   User,
   AlertTriangle,
   Send,
+  Sliders,
+  Sparkles,
 } from "lucide-react";
 import { formatProviderBalance } from "@/lib/currency";
 import { ProviderBalanceSwitcher } from "@/components/ProviderBalanceSwitcher";
@@ -177,6 +179,16 @@ export function AppHeader() {
             <span className="hidden sm:inline">API Key</span>
           </Link>
         )}
+
+        {/* Settings Action */}
+        <Link
+          href="/settings"
+          title="Account Settings & VIP Passkey"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-[#F3F1EA] border border-[#DEE0ED] text-[#252943] text-xs font-bold transition-all shadow-subtle"
+        >
+          <Sliders className="w-3.5 h-3.5 text-[#3A4EFB]" />
+          <span className="hidden sm:inline">Settings</span>
+        </Link>
 
         {/* Logout Action */}
         <button

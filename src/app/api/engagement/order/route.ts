@@ -310,27 +310,78 @@ export async function POST(request: Request) {
       });
     }
 
-    // 3. Build Batch Runs - Calculated with Admin Configured Selling Rates
+    // 2b. Check if User has Activated a VIP Passkey (Perk: 0% Admin Profit or VIP Rate)
+    const userVipPasskeys = await prisma.passkey.findMany({
+      where: {
+        userId: user.id,
+        status: "ACTIVE",
+        label: { not: "Account Password" },
+        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+      },
+    });
+    const isVip = userVipPasskeys.length > 0 || session.role === "ADMIN";
+
+    // 3. Build Batch Runs - Calculated with Admin Configured Selling Rates (Standard vs VIP)
     const now = Date.now();
-    const viewsRate = platform === "Instagram"
-      ? (config.instagramPricing?.viewsUserRate ?? (xmediaViewsService?.ratePer1000 ? xmediaViewsService.ratePer1000 * 1.5 : 3.50))
-      : (config.pricing?.viewsUserRate ?? (xmediaViewsService?.ratePer1000 ? xmediaViewsService.ratePer1000 * 1.5 : 4.50));
+    let viewsRate: number;
+    let likesRate: number;
+    let savesRate: number;
+    let sharesRate: number;
+    let commentsRate: number;
 
-    const likesRate = platform === "Instagram"
-      ? (config.instagramPricing?.likesUserRate ?? (zeofameLikesService?.ratePer1000 ? zeofameLikesService.ratePer1000 * 2.0 : 2.20))
-      : (config.pricing?.likesUserRate ?? (zeofameLikesService?.ratePer1000 ? zeofameLikesService.ratePer1000 * 2.0 : 2.00));
-
-    const savesRate = platform === "Instagram"
-      ? (config.instagramPricing?.savesUserRate ?? (zeofameSavesService?.ratePer1000 ? zeofameSavesService.ratePer1000 * 2.0 : 2.50))
-      : (config.pricing?.savesUserRate ?? (zeofameSavesService?.ratePer1000 ? zeofameSavesService.ratePer1000 * 2.5 : 0.80));
-
-    const sharesRate = platform === "Instagram"
-      ? (config.instagramPricing?.sharesUserRate ?? (zeofameSharesService?.ratePer1000 ? zeofameSharesService.ratePer1000 * 2.0 : 2.50))
-      : (config.pricing?.sharesUserRate ?? (zeofameSharesService?.ratePer1000 ? zeofameSharesService.ratePer1000 * 2.5 : 0.80));
-
-    const commentsRate = platform === "Instagram"
-      ? (config.instagramPricing?.commentsUserRate ?? 20.00)
-      : (config.pricing?.commentsUserRate ?? 15.00);
+    if (platform === "Instagram") {
+      if (isVip && (config.instagramZeroProfitVip || config.instagramVipPricing)) {
+        // Zero profit wholesale or custom VIP rate
+        viewsRate = config.instagramZeroProfitVip
+          ? (xmediaViewsService?.ratePer1000 ?? 0.84)
+          : (config.instagramVipPricing?.viewsUserRate ?? 0.84);
+        likesRate = config.instagramZeroProfitVip
+          ? (zeofameLikesService?.ratePer1000 ?? 1.10)
+          : (config.instagramVipPricing?.likesUserRate ?? 1.10);
+        savesRate = config.instagramZeroProfitVip
+          ? (zeofameSavesService?.ratePer1000 ?? 1.45)
+          : (config.instagramVipPricing?.savesUserRate ?? 1.45);
+        sharesRate = config.instagramZeroProfitVip
+          ? (zeofameSharesService?.ratePer1000 ?? 1.50)
+          : (config.instagramVipPricing?.sharesUserRate ?? 1.50);
+        commentsRate = config.instagramZeroProfitVip
+          ? (zeofameCommentsService?.ratePer1000 ?? 5.00)
+          : (config.instagramVipPricing?.commentsUserRate ?? 5.00);
+      } else {
+        // Standard user rates
+        viewsRate = config.instagramPricing?.viewsUserRate ?? (xmediaViewsService?.ratePer1000 ? xmediaViewsService.ratePer1000 * 1.5 : 3.50);
+        likesRate = config.instagramPricing?.likesUserRate ?? (zeofameLikesService?.ratePer1000 ? zeofameLikesService.ratePer1000 * 2.0 : 2.20);
+        savesRate = config.instagramPricing?.savesUserRate ?? (zeofameSavesService?.ratePer1000 ? zeofameSavesService.ratePer1000 * 2.0 : 2.50);
+        sharesRate = config.instagramPricing?.sharesUserRate ?? (zeofameSharesService?.ratePer1000 ? zeofameSharesService.ratePer1000 * 2.0 : 2.50);
+        commentsRate = config.instagramPricing?.commentsUserRate ?? 20.00;
+      }
+    } else {
+      if (isVip && (config.tiktokZeroProfitVip || config.tiktokVipPricing)) {
+        // Zero profit wholesale or custom VIP rate
+        viewsRate = config.tiktokZeroProfitVip
+          ? (xmediaViewsService?.ratePer1000 ?? 2.23)
+          : (config.tiktokVipPricing?.viewsUserRate ?? 2.23);
+        likesRate = config.tiktokZeroProfitVip
+          ? (zeofameLikesService?.ratePer1000 ?? 0.88)
+          : (config.tiktokVipPricing?.likesUserRate ?? 0.88);
+        savesRate = config.tiktokZeroProfitVip
+          ? (zeofameSavesService?.ratePer1000 ?? 0.22)
+          : (config.tiktokVipPricing?.savesUserRate ?? 0.22);
+        sharesRate = config.tiktokZeroProfitVip
+          ? (zeofameSharesService?.ratePer1000 ?? 0.22)
+          : (config.tiktokVipPricing?.sharesUserRate ?? 0.22);
+        commentsRate = config.tiktokZeroProfitVip
+          ? (zeofameCommentsService?.ratePer1000 ?? 5.00)
+          : (config.tiktokVipPricing?.commentsUserRate ?? 5.00);
+      } else {
+        // Standard user rates
+        viewsRate = config.pricing?.viewsUserRate ?? (xmediaViewsService?.ratePer1000 ? xmediaViewsService.ratePer1000 * 1.5 : 4.50);
+        likesRate = config.pricing?.likesUserRate ?? (zeofameLikesService?.ratePer1000 ? zeofameLikesService.ratePer1000 * 2.0 : 2.00);
+        savesRate = config.pricing?.savesUserRate ?? (zeofameSavesService?.ratePer1000 ? zeofameSavesService.ratePer1000 * 2.5 : 0.80);
+        sharesRate = config.pricing?.sharesUserRate ?? (zeofameSharesService?.ratePer1000 ? zeofameSharesService.ratePer1000 * 2.5 : 0.80);
+        commentsRate = config.pricing?.commentsUserRate ?? 15.00;
+      }
+    }
 
     // A–D. Build Runs — ALWAYS use deterministic plan batches when provided.
     // The legacy min/max/interval/runsCount fields in admin are no longer used for ordering.

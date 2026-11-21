@@ -640,6 +640,10 @@ export interface TikTokEngagementPresetConfig {
   instagramShares?: MetricConfigItem;
   instagramComments?: MetricConfigItem;
   instagramPricing?: EngagementPricingConfig;
+  tiktokVipPricing?: EngagementPricingConfig;
+  tiktokZeroProfitVip?: boolean;
+  instagramVipPricing?: EngagementPricingConfig;
+  instagramZeroProfitVip?: boolean;
 }
 
 export const DEFAULT_TIKTOK_ENGAGEMENT_CONFIG: TikTokEngagementPresetConfig = {
@@ -746,6 +750,22 @@ export const DEFAULT_TIKTOK_ENGAGEMENT_CONFIG: TikTokEngagementPresetConfig = {
     sharesUserRate: 2.50,
     commentsUserRate: 20.00,
   },
+  tiktokZeroProfitVip: true,
+  tiktokVipPricing: {
+    viewsUserRate: 2.23,
+    likesUserRate: 0.88,
+    savesUserRate: 0.22,
+    sharesUserRate: 0.22,
+    commentsUserRate: 5.00,
+  },
+  instagramZeroProfitVip: true,
+  instagramVipPricing: {
+    viewsUserRate: 0.84,
+    likesUserRate: 1.10,
+    savesUserRate: 1.45,
+    sharesUserRate: 1.50,
+    commentsUserRate: 5.00,
+  },
 };
 
 let cachedConfig: TikTokEngagementPresetConfig | null = null;
@@ -786,6 +806,10 @@ export async function getTikTokEngagementConfigAsync(force = false): Promise<Tik
         instagramShares: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramShares, ...(parsed.instagramShares || {}) },
         instagramComments: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramComments, ...(parsed.instagramComments || {}) },
         instagramPricing: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramPricing, ...(parsed.instagramPricing || {}) },
+        tiktokZeroProfitVip: parsed.tiktokZeroProfitVip !== undefined ? parsed.tiktokZeroProfitVip : DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.tiktokZeroProfitVip,
+        tiktokVipPricing: { ...(DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.tiktokVipPricing!), ...(parsed.tiktokVipPricing || {}) },
+        instagramZeroProfitVip: parsed.instagramZeroProfitVip !== undefined ? parsed.instagramZeroProfitVip : DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramZeroProfitVip,
+        instagramVipPricing: { ...(DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramVipPricing!), ...(parsed.instagramVipPricing || {}) },
       };
       cachedConfig = merged;
       lastConfigFetch = now;
@@ -821,6 +845,10 @@ export async function saveTikTokEngagementConfigAsync(
     instagramShares: { ...(DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramShares!), ...(current.instagramShares || {}), ...(newConfig.instagramShares || {}) } as MetricConfigItem,
     instagramComments: { ...(DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramComments!), ...(current.instagramComments || {}), ...(newConfig.instagramComments || {}) } as MetricConfigItem,
     instagramPricing: { ...(DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramPricing!), ...(current.instagramPricing || {}), ...(newConfig.instagramPricing || {}) } as EngagementPricingConfig,
+    tiktokZeroProfitVip: newConfig.tiktokZeroProfitVip !== undefined ? newConfig.tiktokZeroProfitVip : (current.tiktokZeroProfitVip ?? true),
+    tiktokVipPricing: { ...(DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.tiktokVipPricing!), ...(current.tiktokVipPricing || {}), ...(newConfig.tiktokVipPricing || {}) } as EngagementPricingConfig,
+    instagramZeroProfitVip: newConfig.instagramZeroProfitVip !== undefined ? newConfig.instagramZeroProfitVip : (current.instagramZeroProfitVip ?? true),
+    instagramVipPricing: { ...(DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramVipPricing!), ...(current.instagramVipPricing || {}), ...(newConfig.instagramVipPricing || {}) } as EngagementPricingConfig,
   };
 
   cachedConfig = merged;
@@ -877,6 +905,10 @@ export function getTikTokEngagementConfig(): TikTokEngagementPresetConfig {
         instagramShares: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramShares, ...(parsed.instagramShares || {}) },
         instagramComments: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramComments, ...(parsed.instagramComments || {}) },
         instagramPricing: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramPricing, ...(parsed.instagramPricing || {}) },
+        tiktokZeroProfitVip: parsed.tiktokZeroProfitVip !== undefined ? parsed.tiktokZeroProfitVip : DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.tiktokZeroProfitVip,
+        tiktokVipPricing: { ...(DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.tiktokVipPricing!), ...(parsed.tiktokVipPricing || {}) },
+        instagramZeroProfitVip: parsed.instagramZeroProfitVip !== undefined ? parsed.instagramZeroProfitVip : DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramZeroProfitVip,
+        instagramVipPricing: { ...(DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramVipPricing!), ...(parsed.instagramVipPricing || {}) },
       };
       return cachedConfig!;
     }

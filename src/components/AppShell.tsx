@@ -12,6 +12,8 @@ import { ShieldAlert, ArrowRight } from "lucide-react";
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isLoginPage = pathname === "/login";
+  const isSignupPage = pathname === "/signup";
+  const isLandingPage = pathname === "/";
   const isMaintenancePage = pathname === "/maintenance";
 
   const [underMaintenance, setUnderMaintenance] = useState(false);
@@ -50,7 +52,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  if (isLoginPage || isMaintenancePage) {
+  if (isLoginPage || isSignupPage || isLandingPage || isMaintenancePage) {
     return <>{children}</>;
   }
 

@@ -18,11 +18,15 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Allow public authentication endpoints and login page
+  // Allow public landing page, authentication endpoints, and login/signup
   if (
+    pathname === "/" ||
     pathname === "/login" ||
+    pathname === "/signup" ||
     pathname.startsWith("/api/auth/login") ||
-    pathname.startsWith("/api/auth/logout")
+    pathname.startsWith("/api/auth/register") ||
+    pathname.startsWith("/api/auth/logout") ||
+    pathname.startsWith("/api/auth/session")
   ) {
     return NextResponse.next();
   }

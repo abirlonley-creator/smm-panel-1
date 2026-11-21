@@ -1,16 +1,41 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { KeyRound, ArrowRight, Eye, EyeOff, AlertCircle, Send } from "lucide-react";
+import {
+  KeyRound,
+  ArrowRight,
+  Eye,
+  EyeOff,
+  AlertCircle,
+  CheckCircle2,
+  Lock,
+  Zap,
+  Users,
+  Loader2,
+  Sparkles,
+} from "lucide-react";
 import { MaintenanceScreen } from "@/components/MaintenanceScreen";
 
 export default function LoginPage() {
   const router = useRouter();
+
+  // Mode: Sign In vs Sign Up vs Direct Passkey
+  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
+  const [usePasskeyDirect, setUsePasskeyDirect] = useState(false);
+
+  // Input states
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [passkey, setPasskey] = useState("");
-  const [showKey, setShowKey] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  // Status states
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const [underMaintenance, setUnderMaintenance] = useState(false);
   const [maintInfo, setMaintInfo] = useState<{ title?: string; message?: string; supportTelegram?: string }>({});
@@ -46,25 +71,109 @@ export default function LoginPage() {
     );
   }
 
-  async function handleLogin(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!passkey.trim()) { setError("Please enter your passkey."); return; }
-    setLoading(true);
     setError(null);
+    setSuccessMsg(null);
+    setLoading(true);
+
     try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ passkey: passkey.trim() }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        setError(data.error || "Invalid or expired passkey.");
+      if (usePasskeyDirect) {
+        if (!passkey.trim()) {
+          setError("Please enter your passkey.");
+          setLoading(false);
+          return;
+        }
+
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ passkey: passkey.trim() }),
+        });
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+          setError(data.error || "Invalid or expired passkey.");
+          setLoading(false);
+          return;
+        }
+
+        window.dispatchEvent(new CustomEvent("auth-changed", { detail: data }));
+        router.push(data.role === "ADMIN" ? "/admin" : "/engagement");
+        router.refresh();
         return;
       }
-      window.dispatchEvent(new CustomEvent("auth-changed", { detail: data }));
-      router.push("/");
-      router.refresh();
+
+      if (authMode === "signup") {
+        if (!username.trim() || !password) {
+          setError("Please fill in all fields.");
+          setLoading(false);
+          return;
+        }
+        if (password.length < 6) {
+          setError("Password must be at least 6 characters.");
+          setLoading(false);
+          return;
+        }
+        if (password !== confirmPassword) {
+          setError("Passwords do not match.");
+          setLoading(false);
+          return;
+        }
+
+        const res = await fetch("/api/auth/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: username.trim(),
+            password,
+          }),
+        });
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+          setError(data.error || "Failed to create account.");
+          setLoading(false);
+          return;
+        }
+
+        setSuccessMsg("Account created! Redirecting to dashboard...");
+        window.dispatchEvent(new CustomEvent("auth-changed", { detail: data }));
+        setTimeout(() => {
+          router.push("/engagement");
+          router.refresh();
+        }, 700);
+      } else {
+        // Standard Sign In
+        if (!username.trim() || !password) {
+          setError("Please enter your username and password.");
+          setLoading(false);
+          return;
+        }
+
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: username.trim(),
+            password,
+          }),
+        });
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+          setError(data.error || "Invalid username or password.");
+          setLoading(false);
+          return;
+        }
+
+        setSuccessMsg("Signed in! Redirecting...");
+        window.dispatchEvent(new CustomEvent("auth-changed", { detail: data }));
+        setTimeout(() => {
+          router.push(data.role === "ADMIN" ? "/admin" : "/engagement");
+          router.refresh();
+        }, 500);
+      }
     } catch (err: any) {
       setError(err.message || "Network error. Please try again.");
     } finally {
@@ -73,146 +182,247 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#111413] flex items-center justify-center px-4 relative overflow-hidden">
-
-      {/* ── Background ── */}
-      {/* Top-centre lime subtle radial */}
+    <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center px-4 relative overflow-hidden text-[#252943]">
+      {/* Background subtle radial glow */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0"
+        className="pointer-events-none absolute inset-0 -z-10"
         style={{
           background:
-            "radial-gradient(ellipse 70% 50% at 50% -10%, rgba(212,240,79,0.06) 0%, transparent 70%)",
+            "radial-gradient(ellipse 70% 60% at 50% -10%, rgba(58, 78, 251, 0.08) 0%, rgba(212, 240, 79, 0.04) 50%, transparent 80%)",
         }}
       />
-      {/* Subtle dot grid */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-[0.03]"
+        className="pointer-events-none absolute inset-0 opacity-[0.025] -z-10"
         style={{
-          backgroundImage: "radial-gradient(circle, #ffffff 1px, transparent 1px)",
-          backgroundSize: "28px 28px",
+          backgroundImage: "radial-gradient(circle, #252943 1px, transparent 1px)",
+          backgroundSize: "32px 32px",
         }}
       />
 
-      {/* ── Card ── */}
-      <div className="relative z-10 w-full max-w-[400px] animate-loginIn">
-
-        {/* Logo + wordmark */}
-        <div className="flex flex-col items-center mb-8">
-          <img
-            src="/brand/logos/lockup-stacked-on-dark.svg"
-            alt="AuraSMM"
-            className="w-48 h-auto mx-auto"
-          />
+      {/* Main Card */}
+      <div className="relative z-10 w-full max-w-[420px] animate-loginIn space-y-6">
+        {/* Brand Header */}
+        <div className="flex flex-col items-center text-center">
+          <Link href="/" className="flex items-center gap-2.5 mb-2 group">
+            <div className="w-10 h-10 rounded-2xl bg-[#3A4EFB] text-white flex items-center justify-center font-black shadow-md group-hover:scale-105 transition-transform">
+              <Zap className="w-5 h-5 fill-white" />
+            </div>
+            <span className="text-xl font-black tracking-tight text-[#252943]">
+              Aura<span className="text-[#3A4EFB]">SMM</span>
+            </span>
+          </Link>
+          <p className="text-xs text-[#252943]/60">
+            Natural-Looking Algorithmic Social Media Pacing
+          </p>
         </div>
 
-        {/* Auth card */}
-        <div className="rounded-2xl border border-[#222826] bg-[#1B201E] shadow-2xl shadow-black/50 overflow-hidden">
-
-          {/* Card header strip */}
-          <div className="px-6 pt-6 pb-5 border-b border-[#222826]">
-            <p className="text-[13px] font-semibold text-[#F3F1EA]">Sign in with passkey</p>
-            <p className="text-[11px] text-[#9AA39F] mt-0.5">
-              Enter the access key shared with you to continue.
-            </p>
-          </div>
-
-          <form onSubmit={handleLogin} className="px-6 py-5 space-y-4">
-
-            {/* Input */}
-            <div className="space-y-1.5">
-              <label
-                htmlFor="passkey-input"
-                className="block text-[11px] font-semibold uppercase tracking-widest text-[#9AA39F]"
+        {/* Auth Form Card */}
+        <div className="rounded-3xl border border-[#DEE0ED] bg-white shadow-xl overflow-hidden p-6 sm:p-8 space-y-5">
+          {/* Header & Tab Switcher */}
+          {!usePasskeyDirect ? (
+            <div className="flex items-center p-1 bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode("signin");
+                  setError(null);
+                }}
+                className={`flex-1 py-2 rounded-lg transition-all cursor-pointer ${
+                  authMode === "signin"
+                    ? "bg-white text-[#3A4EFB] shadow-xs"
+                    : "text-[#252943]/60 hover:text-[#252943]"
+                }`}
               >
-                Passkey
-              </label>
-              <div className="relative group">
-                <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9AA39F] pointer-events-none transition-colors group-focus-within:text-[#D4F04F]" />
-                <input
-                  id="passkey-input"
-                  type={showKey ? "text" : "password"}
-                  value={passkey}
-                  onChange={(e) => { setPasskey(e.target.value); setError(null); }}
-                  placeholder="Enter your passkey"
-                  autoFocus
-                  autoComplete="current-password"
-                  disabled={loading}
-                  className="w-full bg-[#111413] text-white text-sm font-mono rounded-xl pl-10 pr-11 py-3 border border-[#222826] focus:border-[#D4F04F] focus:ring-1 focus:ring-[#D4F04F]/30 outline-none transition-all placeholder:text-[#5B625F] disabled:opacity-50"
-                />
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  onClick={() => setShowKey(!showKey)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-[#5B625F] hover:text-[#9AA39F] transition-colors"
-                  aria-label={showKey ? "Hide passkey" : "Show passkey"}
-                >
-                  {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
+                Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode("signup");
+                  setError(null);
+                }}
+                className={`flex-1 py-2 rounded-lg transition-all cursor-pointer ${
+                  authMode === "signup"
+                    ? "bg-white text-[#3A4EFB] shadow-xs"
+                    : "text-[#252943]/60 hover:text-[#252943]"
+                }`}
+              >
+                Create Account
+              </button>
             </div>
-
-            {/* Error */}
-            {error && (
-              <div className="flex items-start gap-2.5 rounded-xl bg-[#C4552D]/10 border border-[#C4552D]/30 px-3.5 py-3 animate-loginIn">
-                <AlertCircle className="w-3.5 h-3.5 text-[#C4552D] shrink-0 mt-0.5" />
-                <p className="text-[11px] text-[#C4552D] leading-relaxed">{error}</p>
+          ) : (
+            <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
+              <div className="flex items-center gap-2">
+                <KeyRound className="w-4 h-4 text-[#3A4EFB]" />
+                <span className="font-extrabold text-sm text-[#252943]">Sign in with Passkey</span>
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setUsePasskeyDirect(false);
+                  setError(null);
+                }}
+                className="text-[11px] font-bold text-[#3A4EFB] hover:underline cursor-pointer"
+              >
+                ← Back
+              </button>
+            </div>
+          )}
+
+          {/* Feedback Alerts */}
+          {error && (
+            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-medium flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+              <span>{error}</span>
+            </div>
+          )}
+          {successMsg && (
+            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+              <span>{successMsg}</span>
+            </div>
+          )}
+
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+            {usePasskeyDirect ? (
+              <div className="space-y-1.5">
+                <label className="block font-bold text-[#252943]">Passkey</label>
+                <div className="relative group">
+                  <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#252943]/40 group-focus-within:text-[#3A4EFB] transition-colors" />
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={passkey}
+                    onChange={(e) => {
+                      setPasskey(e.target.value);
+                      setError(null);
+                    }}
+                    placeholder="Enter passkey (e.g. abir90)"
+                    autoFocus
+                    disabled={loading}
+                    className="w-full bg-[#F8F9FD] text-[#252943] text-xs font-mono font-bold rounded-xl pl-10 pr-11 py-2.5 border border-[#DEE0ED] focus:border-[#3A4EFB] focus:bg-white outline-none transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#252943]/40 hover:text-[#252943]"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-1.5">
+                  <label className="block font-bold text-[#252943]">Username</label>
+                  <input
+                    type="text"
+                    required
+                    value={username}
+                    onChange={(e) => {
+                      setUsername(e.target.value);
+                      setError(null);
+                    }}
+                    placeholder="Enter username"
+                    disabled={loading}
+                    className="w-full bg-[#F8F9FD] text-[#252943] text-xs font-semibold rounded-xl px-3.5 py-2.5 border border-[#DEE0ED] focus:border-[#3A4EFB] focus:bg-white outline-none transition-all"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block font-bold text-[#252943]">Password</label>
+                  <div className="relative group">
+                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#252943]/40 group-focus-within:text-[#3A4EFB] transition-colors" />
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      required
+                      value={password}
+                      onChange={(e) => {
+                        setPassword(e.target.value);
+                        setError(null);
+                      }}
+                      placeholder="••••••••"
+                      disabled={loading}
+                      className="w-full bg-[#F8F9FD] text-[#252943] text-xs font-semibold rounded-xl pl-10 pr-11 py-2.5 border border-[#DEE0ED] focus:border-[#3A4EFB] focus:bg-white outline-none transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#252943]/40 hover:text-[#252943]"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {authMode === "signup" && (
+                  <div className="space-y-1.5">
+                    <label className="block font-bold text-[#252943]">Confirm Password</label>
+                    <div className="relative group">
+                      <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#252943]/40 group-focus-within:text-[#3A4EFB] transition-colors" />
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        required
+                        value={confirmPassword}
+                        onChange={(e) => {
+                          setConfirmPassword(e.target.value);
+                          setError(null);
+                        }}
+                        placeholder="••••••••"
+                        disabled={loading}
+                        className="w-full bg-[#F8F9FD] text-[#252943] text-xs font-semibold rounded-xl pl-10 pr-3.5 py-2.5 border border-[#DEE0ED] focus:border-[#3A4EFB] focus:bg-white outline-none transition-all"
+                      />
+                    </div>
+                  </div>
+                )}
+              </>
             )}
 
-            {/* Submit */}
+            {/* VIP Passkey Notice */}
+            <div className="p-3 rounded-xl bg-blue-50/70 border border-blue-200/60 text-[11px] text-blue-900 leading-relaxed">
+              <span className="font-bold">💡 VIP Perk:</span> Hold an admin-issued passkey? Sign in or sign up, then activate it in <span className="font-bold">Settings</span> to unlock 0% markup wholesale rates!
+            </div>
+
+            {/* Submit Button */}
             <button
               type="submit"
-              id="enter-panel-btn"
-              disabled={loading || !passkey.trim()}
-              className="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl bg-[#D4F04F] hover:bg-[#C5E23A] active:scale-[0.98] text-[#111413] text-[13px] font-bold transition-all shadow-md shadow-[#D4F04F]/20 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              disabled={loading}
+              className="w-full py-3 rounded-xl bg-[#3A4EFB] hover:bg-[#2A3DE0] active:scale-[0.97] text-white font-black text-xs transition-all shadow-subtle flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
             >
               {loading ? (
-                <>
-                  <img src="/brand/logos/mark-on-dark.svg" className="w-4 h-4 animate-pulse opacity-80" alt="" />
-                  <span>Verifying…</span>
-                </>
+                <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
-                <>
-                  <span>Enter Panel</span>
-                  <ArrowRight className="w-4 h-4 text-[#111413]" />
-                </>
+                <ArrowRight className="w-4 h-4" />
               )}
+              <span>
+                {usePasskeyDirect ? "Login with Passkey" : authMode === "signup" ? "Create Free Account" : "Sign In"}
+              </span>
             </button>
 
-          </form>
-
-          {/* Footer */}
-          <div className="px-6 pb-6 pt-1">
-            <div className="rounded-xl bg-[#111413] border border-[#222826] px-4 py-3 flex items-start gap-3">
-              <Send className="w-3.5 h-3.5 text-[#229ED9] shrink-0 mt-0.5" />
-              <p className="text-[11px] text-[#9AA39F] leading-relaxed">
-                Need a passkey?{" "}
-                <a
-                  href="https://t.me/Ghostfinds"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-[#229ED9] font-semibold hover:underline transition-colors"
-                >
-                  @Ghostfinds
-                </a>{" "}
-                on Telegram.
-              </p>
+            {/* Passkey Switcher */}
+            <div className="pt-2 text-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setUsePasskeyDirect(!usePasskeyDirect);
+                  setError(null);
+                }}
+                className="text-[11px] text-[#3A4EFB] font-bold hover:underline cursor-pointer"
+              >
+                {usePasskeyDirect ? "← Sign in with Username & Password" : "Sign in with Admin Passkey instead →"}
+              </button>
             </div>
-          </div>
+          </form>
         </div>
 
-        {/* Bottom trust row */}
-        <div className="flex items-center justify-center gap-4 mt-6">
-          {["Encrypted Keys", "Isolated APIs", "No Tracking"].map((t, i) => (
-            <React.Fragment key={t}>
-              <span className="text-[10px] text-[#5B625F] font-medium">{t}</span>
-              {i < 2 && <span className="w-1 h-1 rounded-full bg-[#222826]" />}
-            </React.Fragment>
-          ))}
+        {/* Back to Home Link */}
+        <div className="text-center">
+          <Link href="/" className="text-xs font-semibold text-[#252943]/60 hover:text-[#252943] transition-colors">
+            ← Return to AuraSMM Homepage
+          </Link>
         </div>
-
       </div>
     </div>
   );
