@@ -621,6 +621,8 @@ export interface EngagementPricingConfig {
 
 export interface TikTokEngagementPresetConfig {
   enabled: boolean;
+  tiktokEnabled?: boolean;
+  instagramEnabled?: boolean;
   presetName: string;
   views: MetricConfigItem;
   likes: MetricConfigItem;
@@ -636,6 +638,8 @@ export interface TikTokEngagementPresetConfig {
 
 export const DEFAULT_TIKTOK_ENGAGEMENT_CONFIG: TikTokEngagementPresetConfig = {
   enabled: true,
+  tiktokEnabled: true,
+  instagramEnabled: true,
   presetName: "TikTok 1st Working 2K",
   views: {
     enabled: true,
@@ -710,6 +714,8 @@ export async function getTikTokEngagementConfigAsync(force = false): Promise<Tik
       const merged: TikTokEngagementPresetConfig = {
         ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG,
         ...parsed,
+        tiktokEnabled: parsed.tiktokEnabled !== undefined ? parsed.tiktokEnabled : (parsed.enabled !== undefined ? parsed.enabled : true),
+        instagramEnabled: parsed.instagramEnabled !== undefined ? parsed.instagramEnabled : (parsed.enabled !== undefined ? parsed.enabled : true),
         views: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.views, ...(parsed.views || {}) },
         likes: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.likes, ...(parsed.likes || {}) },
         saves: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.saves, ...(parsed.saves || {}) },
@@ -787,6 +793,8 @@ export function getTikTokEngagementConfig(): TikTokEngagementPresetConfig {
       cachedConfig = {
         ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG,
         ...parsed,
+        tiktokEnabled: parsed.tiktokEnabled !== undefined ? parsed.tiktokEnabled : (parsed.enabled !== undefined ? parsed.enabled : true),
+        instagramEnabled: parsed.instagramEnabled !== undefined ? parsed.instagramEnabled : (parsed.enabled !== undefined ? parsed.enabled : true),
         views: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.views, ...(parsed.views || {}) },
         likes: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.likes, ...(parsed.likes || {}) },
         saves: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.saves, ...(parsed.saves || {}) },

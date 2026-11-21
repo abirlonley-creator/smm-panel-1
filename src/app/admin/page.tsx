@@ -1382,6 +1382,57 @@ export default function AdminPage() {
                     </div>
                   </div>
 
+                  {/* Dedicated Platform Ordering Access Switches (TikTok & Instagram) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* TikTok Switch */}
+                    <div className="flex items-center justify-between p-3.5 rounded-2xl bg-white border border-[#DEE0ED] shadow-xs">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-[#252943] text-xs">TikTok Engagement Orders</span>
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
+                            (tiktokConfig.tiktokEnabled ?? tiktokConfig.enabled) ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"
+                          }`}>
+                            {(tiktokConfig.tiktokEnabled ?? tiktokConfig.enabled) ? "Enabled" : "Paused"}
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-[#252943]/60 block">Allow users to order TikTok views, likes, saves & reposts</span>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={tiktokConfig.tiktokEnabled ?? tiktokConfig.enabled}
+                          onChange={(e) => setTiktokConfig({ ...tiktokConfig, tiktokEnabled: e.target.checked })}
+                          className="sr-only peer"
+                        />
+                        <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                      </label>
+                    </div>
+
+                    {/* Instagram Switch */}
+                    <div className="flex items-center justify-between p-3.5 rounded-2xl bg-white border border-[#DEE0ED] shadow-xs">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-[#252943] text-xs">Instagram Engagement Orders</span>
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
+                            (tiktokConfig.instagramEnabled ?? true) ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"
+                          }`}>
+                            {(tiktokConfig.instagramEnabled ?? true) ? "Enabled" : "Paused"}
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-[#252943]/60 block">Allow users to order Instagram reels & posts wave delivery</span>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={tiktokConfig.instagramEnabled ?? true}
+                          onChange={(e) => setTiktokConfig({ ...tiktokConfig, instagramEnabled: e.target.checked })}
+                          className="sr-only peer"
+                        />
+                        <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                      </label>
+                    </div>
+                  </div>
+
                   {/* Preset Selector Tabs */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">

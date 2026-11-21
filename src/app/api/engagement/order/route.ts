@@ -23,7 +23,7 @@ const createEngagementOrderSchema = z.object({
   targetUrl: z.string().url("Valid post or video URL required"),
   presetId: z.string().optional().default("tiktok_2k"),
   presetName: z.string().optional(),
-  platform: z.string().default("TikTok"),
+  platform: z.enum(["TikTok", "Instagram"]).default("TikTok"),
   followers: z.number().int().min(0).optional().default(500),
   seed: z.string().optional(),
   scheduledStartTime: z.string().optional(),
@@ -75,7 +75,7 @@ async function resolveService(userProviderId: string, targetExtId: string, adapt
             providerServiceId: targetExtId,
             name: match.name,
             type: match.type || "Default",
-            platform: "TikTok",
+            platform: defaults.platform || "TikTok",
             category: match.category || defaults.category,
             description: match.description || match.name || defaults.name,
             minQuantity: match.minQuantity || defaults.minQuantity,
@@ -96,7 +96,7 @@ async function resolveService(userProviderId: string, targetExtId: string, adapt
         providerServiceId: targetExtId,
         name: defaults.name,
         type: "Default",
-        platform: "TikTok",
+        platform: defaults.platform || "TikTok",
         category: defaults.category,
         description: defaults.name,
         minQuantity: defaults.minQuantity,
@@ -132,31 +132,56 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const parsed = createEngagementOrderSchema.parse(body);
+    const platform = parsed.platform === "Instagram" ? "Instagram" : "TikTok";
 
     let targetUrl = parsed.targetUrl.trim();
     const lowerUrl = targetUrl.toLowerCase();
-    if (!lowerUrl.includes("tiktok.com")) {
-      return NextResponse.json(
-        { success: false, error: "Please enter a valid TikTok video URL (e.g. https://www.tiktok.com/@username/video/...)" },
-        { status: 400 }
-      );
-    }
 
-    if (lowerUrl.includes("vt.tiktok.com") || lowerUrl.includes("vm.tiktok.com")) {
-      try {
-        const resolved = await resolveTargetUrl(targetUrl);
-        if (resolved?.normalizedUrl) {
-          targetUrl = resolved.normalizedUrl;
+    if (platform === "Instagram") {
+      if (!lowerUrl.includes("instagram.com")) {
+        return NextResponse.json(
+          { success: false, error: "Please enter a valid Instagram post or reel URL (e.g. https://www.instagram.com/p/... or /reel/...)" },
+          { status: 400 }
+        );
+      }
+    } else {
+      if (!lowerUrl.includes("tiktok.com")) {
+        return NextResponse.json(
+          { success: false, error: "Please enter a valid TikTok video URL (e.g. https://www.tiktok.com/@username/video/...)" },
+          { status: 400 }
+        );
+      }
+
+      if (lowerUrl.includes("vt.tiktok.com") || lowerUrl.includes("vm.tiktok.com")) {
+        try {
+          const resolved = await resolveTargetUrl(targetUrl);
+          if (resolved?.normalizedUrl) {
+            targetUrl = resolved.normalizedUrl;
+          }
+        } catch (err: any) {
+          console.warn("[ENGAGEMENT] URL resolution warning:", err?.message);
         }
-      } catch (err: any) {
-        console.warn("[ENGAGEMENT] URL resolution warning:", err?.message);
       }
     }
 
     const config = await getTikTokEngagementConfigAsync();
     if (!config.enabled) {
       return NextResponse.json(
+        { success: false, error: "Engagement system is currently disabled by administrator." },
+        { status: 503 }
+      );
+    }
+
+    if (platform === "TikTok" && config.tiktokEnabled === false) {
+      return NextResponse.json(
         { success: false, error: "TikTok Engagement system is currently disabled by administrator." },
+        { status: 503 }
+      );
+    }
+
+    if (platform === "Instagram" && config.instagramEnabled === false) {
+      return NextResponse.json(
+        { success: false, error: "Instagram Engagement system is currently disabled by administrator." },
         { status: 503 }
       );
     }
@@ -210,28 +235,31 @@ export async function POST(request: Request) {
     const sharesServiceId = config.shares?.serviceId || preset.shares?.serviceId || "718";
 
     const xmediaViewsService = await resolveService(xmediaConn.id, viewsServiceId, xmediaAdapter, {
-      name: "TikTok Video Views [Medium Fast]",
-      category: "TikTok Views",
-      ratePer1000: 2.23,
+      name: platform === "Instagram" ? "Instagram Reel Views [High Retention]" : "TikTok Video Views [Medium Fast]",
+      category: platform === "Instagram" ? "Instagram Views" : "TikTok Views",
+      platform,
+      ratePer1000: platform === "Instagram" ? 0.84 : 2.23,
       minQuantity: 100,
       maxQuantity: 100000000,
     });
 
     const zeofameLikesService = await resolveService(zeofameConn.id, likesServiceId, zeofameAdapter, {
-      name: "TikTok Likes [Fast]",
-      category: "TikTok Likes",
-      ratePer1000: 0.88,
+      name: platform === "Instagram" ? "Instagram Likes [Organic Paced]" : "TikTok Likes [Fast]",
+      category: platform === "Instagram" ? "Instagram Likes" : "TikTok Likes",
+      platform,
+      ratePer1000: platform === "Instagram" ? 1.10 : 0.88,
       minQuantity: 10,
       maxQuantity: 500000,
     });
 
     let zeofameSavesService: any = null;
-    if (preset.saves?.enabled) {
+    if (preset.saves?.enabled || (parsed.batches && parsed.batches.some((b) => b.service === "saves"))) {
       zeofameSavesService = await resolveService(zeofameConn.id, savesServiceId, zeofameAdapter, {
-        name: "TikTok Video Save",
-        category: "TikTok Saves",
-        ratePer1000: 0.22,
-        minQuantity: 10,
+        name: platform === "Instagram" ? "Instagram Saves & Bookmarks" : "TikTok Video Save",
+        category: platform === "Instagram" ? "Instagram Saves" : "TikTok Saves",
+        platform,
+        ratePer1000: platform === "Instagram" ? 1.45 : 0.22,
+        minQuantity: platform === "Instagram" ? 1 : 10,
         maxQuantity: 500000,
       });
     }
@@ -242,9 +270,10 @@ export async function POST(request: Request) {
       (parsed.batches && parsed.batches.some((b) => b.service === "shares" || b.service === "reposts"))
     ) {
       zeofameSharesService = await resolveService(zeofameConn.id, sharesServiceId, zeofameAdapter, {
-        name: "TikTok Shares / Reposts",
-        category: "TikTok Shares",
-        ratePer1000: 0.22,
+        name: platform === "Instagram" ? "Instagram Shares" : "TikTok Shares / Reposts",
+        category: platform === "Instagram" ? "Instagram Shares" : "TikTok Shares",
+        platform,
+        ratePer1000: platform === "Instagram" ? 1.50 : 0.22,
         minQuantity: 10,
         maxQuantity: 500000,
       });
@@ -259,8 +288,9 @@ export async function POST(request: Request) {
 
     if (hasComments) {
       zeofameCommentsService = await resolveService(zeofameConn.id, commentsServiceId, zeofameAdapter, {
-        name: "TikTok Comments",
-        category: "TikTok Comments",
+        name: platform === "Instagram" ? "Instagram Comments" : "TikTok Comments",
+        category: platform === "Instagram" ? "Instagram Comments" : "TikTok Comments",
+        platform,
         ratePer1000: 15.00,
         minQuantity: 1,
         maxQuantity: 10000,
@@ -560,7 +590,7 @@ export async function POST(request: Request) {
         providerName: adminOutOfBalanceProvider,
         providerId: xmediaConn.id,
         userId: user.id,
-        platform: "TikTok",
+        platform,
         reason: `Admin provider "${adminOutOfBalanceProvider}" has run out of balance. User @${session.user.username} tried to place order (${preset.name}) with sufficient user wallet balance (₹${currentBalance}), but the admin upstream provider balance is depleted.`,
       }).catch((err) => console.warn("Could not log admin alert:", err));
 
@@ -602,7 +632,7 @@ export async function POST(request: Request) {
           amount: -totalCost,
           balanceAfter: newBalance,
           referenceId: orderRef,
-          description: `TikTok Engagement (${preset.name}): ${descriptionParts.join(", ")}`,
+          description: `${platform} Engagement (${preset.name}): ${descriptionParts.join(", ")}`,
         },
       });
 
@@ -619,7 +649,7 @@ export async function POST(request: Request) {
           orderRef,
           userId: user.id,
           targetUrl,
-          platform: "TikTok",
+          platform,
           profileId: preset.id,
           presetKey: preset.name,
           baseViews: totalPlannedViews,
@@ -791,9 +821,10 @@ export async function POST(request: Request) {
           unitCost: viewsRate,
           totalCost,
           status: "PROCESSING",
-          scheduleMode: "TIKTOK_ENGAGEMENT",
+          scheduleMode: platform === "Instagram" ? "INSTAGRAM_ENGAGEMENT" : "TIKTOK_ENGAGEMENT",
           notes: JSON.stringify({
             isEngagement: true,
+            platform,
             presetId: preset.id,
             presetName: preset.name,
             totalPlannedViews,

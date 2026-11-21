@@ -44,8 +44,29 @@ import {
   PackageConfig,
   DeterministicPlan,
   DEFAULT_PROVIDER_MINIMUMS,
+  DEFAULT_INSTAGRAM_PROVIDER_MINIMUMS,
+  DEFAULT_TIKTOK_CONFIG,
+  DEFAULT_INSTAGRAM_CONFIG,
   formatDurationDaysHours,
 } from "@/lib/engagement/deterministic-pattern-engine";
+
+function TikTokIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.89 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.32 0 .62.06.9.16V9.45a6.37 6.37 0 0 0-.9-.06A6.34 6.34 0 0 0 3 15.73 6.34 6.34 0 0 0 9.34 22a6.34 6.34 0 0 0 6.34-6.27V9.17a8.16 8.16 0 0 0 4.91 1.63v-3.47c-.34 0-.68-.05-1-.14z" />
+    </svg>
+  );
+}
+
+function InstagramIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
+      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+      <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
+    </svg>
+  );
+}
 
 interface ApiStatusItem {
   connected: boolean;
@@ -190,7 +211,8 @@ export default function EngagementPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [statusData, setStatusData] = useState<EngagementStatusResponse | null>(null);
 
-  // Selected package
+  // Selected platform & package
+  const [platform, setPlatform] = useState<"TikTok" | "Instagram">("TikTok");
   const [selectedPackageId, setSelectedPackageId] = useState<string>("tiktok_2k");
 
   // Step 1: Add-ons state
@@ -305,6 +327,19 @@ export default function EngagementPage() {
     };
   }, [currentPackage, addOnLikes, addOnSaves, addOnShares, addOnComments, commentsCount]);
 
+  // Platform status & config selection
+  const isTikTokEnabled = statusData?.config?.tiktokEnabled !== false && statusData?.config?.enabled !== false;
+  const isInstagramEnabled = statusData?.config?.instagramEnabled !== false && statusData?.config?.enabled !== false;
+  const isCurrentPlatformEnabled = platform === "TikTok" ? isTikTokEnabled : isInstagramEnabled;
+
+  const currentPlatformConfig = useMemo(() => {
+    return platform === "Instagram" ? DEFAULT_INSTAGRAM_CONFIG : DEFAULT_TIKTOK_CONFIG;
+  }, [platform]);
+
+  const currentProviderMinimums = useMemo(() => {
+    return platform === "Instagram" ? DEFAULT_INSTAGRAM_PROVIDER_MINIMUMS : DEFAULT_PROVIDER_MINIMUMS;
+  }, [platform]);
+
   // Generate deterministic schedule plan
   const plan: DeterministicPlan = useMemo(() => {
     return generatePattern(
@@ -312,11 +347,12 @@ export default function EngagementPage() {
       followers,
       patternSeed,
       {
-        providerMinimums: DEFAULT_PROVIDER_MINIMUMS,
+        platformConfig: currentPlatformConfig,
+        providerMinimums: currentProviderMinimums,
         startDate: computedStartTime,
       }
     );
-  }, [effectivePackage, followers, patternSeed, computedStartTime]);
+  }, [effectivePackage, followers, patternSeed, currentPlatformConfig, currentProviderMinimums, computedStartTime]);
 
   // Price calculation: package price + add-ons = total price
   const basePriceInr = currentPackage.price_inr ?? 0;
@@ -414,14 +450,24 @@ export default function EngagementPage() {
     e.preventDefault();
     setErrorMsg(null);
 
-    const url = targetUrl.trim();
-    if (!url) {
-      setErrorMsg("Please enter your TikTok video link.");
+    if (!isCurrentPlatformEnabled) {
+      setErrorMsg(`${platform} engagement ordering is currently paused by administrator.`);
       return;
     }
 
-    if (!url.toLowerCase().includes("tiktok.com")) {
+    const url = targetUrl.trim();
+    if (!url) {
+      setErrorMsg(`Please enter your ${platform} video or post link.`);
+      return;
+    }
+
+    if (platform === "TikTok" && !url.toLowerCase().includes("tiktok.com")) {
       setErrorMsg("Please enter a valid TikTok video URL (e.g. https://www.tiktok.com/@username/video/...)");
+      return;
+    }
+
+    if (platform === "Instagram" && !url.toLowerCase().includes("instagram.com")) {
+      setErrorMsg("Please enter a valid Instagram post or reel link (e.g. https://www.instagram.com/p/... or /reel/...)");
       return;
     }
 
@@ -452,7 +498,7 @@ export default function EngagementPage() {
           targetUrl: url,
           presetId: currentPackage.id,
           presetName: currentPackage.name,
-          platform: "TikTok",
+          platform: platform,
           followers: followers,
           seed: plan.seed,
           scheduledStartTime: computedStartTime.toISOString(),
@@ -590,7 +636,7 @@ export default function EngagementPage() {
       {adminOutOfBalance?.isOutOfBalance && (
         <AdminOutOfBalanceBanner
           providerName={adminOutOfBalance.providerName}
-          orderType="TikTok Engagement Campaign"
+          orderType={`${platform} Engagement Campaign`}
           serviceName={currentPackage.name}
           onDismiss={() => setAdminOutOfBalance(null)}
         />
@@ -606,6 +652,137 @@ export default function EngagementPage() {
 
       {/* 4-STEP STREAMLINED FLOW */}
       <form onSubmit={handleCreateOrder} className="space-y-6 font-sans">
+        {/* PLATFORM SELECTOR (TikTok vs Instagram) */}
+        <div className="bg-white rounded-3xl border border-[#E4E0D3] p-4 sm:p-5 shadow-subtle space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-[#5E8C1F]" />
+              <span className="font-extrabold text-sm text-[#111413] font-sans">
+                Select Platform
+              </span>
+            </div>
+            <span className="text-[11px] font-semibold text-[#5B625F] font-sans">
+              Algorithmic organic pacing tailored per platform
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* TikTok Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setPlatform("TikTok");
+                if (targetUrl.includes("instagram.com")) setTargetUrl("");
+              }}
+              className={`p-3.5 rounded-2xl border text-left transition-all duration-200 cursor-pointer flex items-center justify-between press-scale font-sans ${
+                platform === "TikTok"
+                  ? "bg-[#111413] border-[#111413] text-white shadow-md ring-2 ring-[#D4F04F]/40"
+                  : "bg-[#F8F9FD] border-[#DEE0ED] hover:border-[#111413]/30 text-[#111413]"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                    platform === "TikTok"
+                      ? "bg-[#D4F04F] text-[#111413]"
+                      : "bg-white text-[#111413] border border-[#DEE0ED]"
+                  }`}
+                >
+                  <TikTokIcon className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-extrabold text-sm">TikTok Organic</span>
+                    {!isTikTokEnabled && (
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-rose-100 text-rose-800 border border-rose-200">
+                        Paused
+                      </span>
+                    )}
+                  </div>
+                  <span
+                    className={`text-xs block ${
+                      platform === "TikTok" ? "text-gray-300" : "text-[#5B625F]"
+                    }`}
+                  >
+                    FYP Velocity & View-Paced Engagement
+                  </span>
+                </div>
+              </div>
+              <div
+                className={`w-5 h-5 rounded-full flex items-center justify-center border ${
+                  platform === "TikTok"
+                    ? "bg-[#D4F04F] border-[#D4F04F] text-[#111413]"
+                    : "border-gray-300 bg-white"
+                }`}
+              >
+                {platform === "TikTok" && <Check className="w-3 h-3 stroke-[3]" />}
+              </div>
+            </button>
+
+            {/* Instagram Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setPlatform("Instagram");
+                if (targetUrl.includes("tiktok.com")) setTargetUrl("");
+              }}
+              className={`p-3.5 rounded-2xl border text-left transition-all duration-200 cursor-pointer flex items-center justify-between press-scale font-sans ${
+                platform === "Instagram"
+                  ? "bg-[#111413] border-[#111413] text-white shadow-md ring-2 ring-[#D4F04F]/40"
+                  : "bg-[#F8F9FD] border-[#DEE0ED] hover:border-[#111413]/30 text-[#111413]"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                    platform === "Instagram"
+                      ? "bg-[#D4F04F] text-[#111413]"
+                      : "bg-white text-[#111413] border border-[#DEE0ED]"
+                  }`}
+                >
+                  <InstagramIcon className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-extrabold text-sm">Instagram Organic</span>
+                    {!isInstagramEnabled && (
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-rose-100 text-rose-800 border border-rose-200">
+                        Paused
+                      </span>
+                    )}
+                  </div>
+                  <span
+                    className={`text-xs block ${
+                      platform === "Instagram" ? "text-gray-300" : "text-[#5B625F]"
+                    }`}
+                  >
+                    Reels & Posts Configured Waves Delivery
+                  </span>
+                </div>
+              </div>
+              <div
+                className={`w-5 h-5 rounded-full flex items-center justify-center border ${
+                  platform === "Instagram"
+                    ? "bg-[#D4F04F] border-[#D4F04F] text-[#111413]"
+                    : "border-gray-300 bg-white"
+                }`}
+              >
+                {platform === "Instagram" && <Check className="w-3 h-3 stroke-[3]" />}
+              </div>
+            </button>
+          </div>
+
+          {/* Platform Paused Warning if current platform disabled */}
+          {!isCurrentPlatformEnabled && (
+            <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 flex items-center gap-2.5 text-xs font-semibold animate-fadeIn font-sans">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>
+                {platform} engagement orders are temporarily paused by administrator. You can preview delivery plans, but order placement is disabled.
+              </span>
+            </div>
+          )}
+        </div>
+
         {/* STEP 1: CHOOSE GROWTH PACKAGE */}
         <div className="bg-white rounded-3xl border border-[#E4E0D3] p-5 sm:p-6 shadow-subtle space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-[#E4E0D3]">
@@ -865,22 +1042,25 @@ export default function EngagementPage() {
               </span>
               <div>
                 <h2 className="text-sm font-bold text-[#111413] font-sans">
-                  TikTok Post URL & Target Profile
+                  {platform === "Instagram" ? "Instagram Post/Reel URL & Target Profile" : "TikTok Post URL & Target Profile"}
                 </h2>
                 <p className="text-[11px] text-[#5B625F] font-sans">
-                  Paste your public TikTok video link and account details
+                  {platform === "Instagram"
+                    ? "Paste your public Instagram post or reel link and account details"
+                    : "Paste your public TikTok video link and account details"}
                 </p>
               </div>
             </div>
 
-            {targetUrl.toLowerCase().includes("tiktok.com") ? (
+            {((platform === "Instagram" && targetUrl.toLowerCase().includes("instagram.com")) ||
+              (platform === "TikTok" && targetUrl.toLowerCase().includes("tiktok.com"))) ? (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-[#5E8C1F] border border-emerald-200 font-sans">
                 <Check className="w-3 h-3 stroke-[3]" />
                 <span>Link Ready</span>
               </span>
             ) : (
               <span className="text-[11px] text-[#5B625F] font-medium hidden sm:inline font-sans">
-                Supports video, carousel & short links
+                {platform === "Instagram" ? "Supports reels, photo posts & carousels" : "Supports video, carousel & short links"}
               </span>
             )}
           </div>
@@ -889,7 +1069,11 @@ export default function EngagementPage() {
             <input
               type="url"
               required
-              placeholder="https://www.tiktok.com/@username/video/1234567890..."
+              placeholder={
+                platform === "Instagram"
+                  ? "https://www.instagram.com/reel/C3x9... or https://www.instagram.com/p/..."
+                  : "https://www.tiktok.com/@username/video/1234567890..."
+              }
               value={targetUrl}
               onChange={(e) => setTargetUrl(e.target.value)}
               className="w-full pl-11 pr-10 py-3.5 rounded-2xl bg-white border border-[#E4E0D3] text-xs sm:text-sm font-semibold text-[#111413] placeholder-[#5B625F]/50 focus:outline-none focus:border-[#111413] focus:bg-white focus:ring-2 focus:ring-[#111413]/10 transition-all shadow-inner font-sans"
@@ -1148,9 +1332,9 @@ export default function EngagementPage() {
           {hasSufficientFunds ? (
             <button
               type="submit"
-              disabled={submitting || !agreedToTerms}
+              disabled={submitting || !agreedToTerms || !isCurrentPlatformEnabled}
               className={`w-full py-4 rounded-xl text-sm font-black tracking-wide transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer press-scale font-sans ${
-                submitting || !agreedToTerms
+                submitting || !agreedToTerms || !isCurrentPlatformEnabled
                   ? "bg-[#E4E0D3] text-[#5B625F] cursor-not-allowed opacity-60"
                   : "bg-[#D4F04F] hover:bg-[#C5E23A] text-[#111413] shadow-[#D4F04F]/25 active:scale-[0.98]"
               }`}
@@ -1158,12 +1342,14 @@ export default function EngagementPage() {
               {submitting ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin text-[#111413]" />
-                  <span>Launching Campaign...</span>
+                  <span>Launching {platform} Campaign...</span>
                 </>
+              ) : !isCurrentPlatformEnabled ? (
+                <span>{platform} Ordering Paused by Admin</span>
               ) : (
                 <>
                   <Play className="w-4 h-4 fill-[#111413] text-[#111413]" />
-                  <span>Launch Campaign • ₹{totalCampaignPriceInr.toFixed(2)}</span>
+                  <span>Launch {platform} Campaign • ₹{totalCampaignPriceInr.toFixed(2)}</span>
                 </>
               )}
             </button>
