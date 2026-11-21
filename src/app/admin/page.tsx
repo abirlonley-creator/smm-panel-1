@@ -2898,13 +2898,13 @@ export default function AdminPage() {
                           </label>
                           <input
                             type="text"
-                            placeholder="950"
-                            value={tiktokConfig.instagramComments?.serviceId ?? "950"}
+                            placeholder="693"
+                            value={tiktokConfig.instagramComments?.serviceId ?? "693"}
                             onChange={(e) =>
                               setTiktokConfig({
                                 ...tiktokConfig,
                                 instagramComments: {
-                                  ...(tiktokConfig.instagramComments || { enabled: true, minQuantity: 1, maxQuantity: 10000 }),
+                                  ...(tiktokConfig.instagramComments || { enabled: true, minQuantity: 1, maxQuantity: 1000 }),
                                   serviceId: e.target.value,
                                 },
                               })

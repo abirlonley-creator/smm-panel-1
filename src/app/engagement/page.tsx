@@ -223,6 +223,7 @@ export default function EngagementPage() {
   const [addOnReposts, setAddOnReposts] = useState<boolean>(true);
   const [addOnComments, setAddOnComments] = useState<boolean>(false);
   const [commentsCount, setCommentsCount] = useState<number>(10);
+  const [customCommentsText, setCustomCommentsText] = useState<string>("");
 
   // Step 2: URL & Post preview
   const [targetUrl, setTargetUrl] = useState("");
@@ -343,6 +344,35 @@ export default function EngagementPage() {
     return platform === "Instagram" ? DEFAULT_INSTAGRAM_PROVIDER_MINIMUMS : DEFAULT_PROVIDER_MINIMUMS;
   }, [platform]);
 
+  const customCommentsLines = useMemo(() => {
+    return customCommentsText
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+  }, [customCommentsText]);
+
+  const targetCommentsCount = effectivePackage.comments ?? 0;
+
+  const handleCommentsChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    const lines = val.split("\n");
+    // If entered lines exceed target comments, restrict to target count
+    if (targetCommentsCount > 0 && lines.length > targetCommentsCount) {
+      setCustomCommentsText(lines.slice(0, targetCommentsCount).join("\n"));
+      return;
+    }
+    setCustomCommentsText(val);
+  };
+
+  const handleCommentsKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter") {
+      const currentLines = customCommentsText.split("\n");
+      if (targetCommentsCount > 0 && currentLines.length >= targetCommentsCount) {
+        e.preventDefault();
+      }
+    }
+  };
+
   // Generate deterministic schedule plan
   const plan: DeterministicPlan = useMemo(() => {
     return generatePattern(
@@ -353,9 +383,11 @@ export default function EngagementPage() {
         platformConfig: currentPlatformConfig,
         providerMinimums: currentProviderMinimums,
         startDate: computedStartTime,
+        userCommentLines: customCommentsLines,
+        commentsMode: "USER_ONLY",
       }
     );
-  }, [effectivePackage, followers, patternSeed, currentPlatformConfig, currentProviderMinimums, computedStartTime]);
+  }, [effectivePackage, followers, patternSeed, currentPlatformConfig, currentProviderMinimums, computedStartTime, customCommentsLines]);
 
   // Price calculation: package price + add-ons = total price
   const basePriceInr = currentPackage.price_inr ?? 0;
@@ -475,6 +507,11 @@ export default function EngagementPage() {
       return;
     }
 
+    if (targetCommentsCount > 0 && customCommentsLines.length < targetCommentsCount) {
+      setErrorMsg(`Please enter all ${targetCommentsCount} custom comments (${customCommentsLines.length}/${targetCommentsCount} entered).`);
+      return;
+    }
+
     if (!agreedToTerms) {
       setErrorMsg("Please confirm that you agree to gradual, view-paced delivery.");
       return;
@@ -508,6 +545,7 @@ export default function EngagementPage() {
           scheduledStartTime: computedStartTime.toISOString(),
           packagePriceInr: basePriceInr,
           totalCostInr: totalCampaignPriceInr,
+          customComments: customCommentsLines,
           batches: plan.batches,
           rows: plan.rows,
         }),
@@ -1035,29 +1073,50 @@ export default function EngagementPage() {
               </label>
 
               {/* Comments Toggle (Optional Add-on) */}
-              <label
-                className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
+              <div
+                className={`p-2.5 rounded-xl border transition-all ${
                   addOnComments
                     ? "bg-sky-50/60 border-sky-200 text-sky-950"
                     : "bg-white border-[#E4E0D3] text-[#5B625F]"
                 }`}
               >
-                <div className="flex items-center gap-2">
-                  <MessageCircle className={`w-3.5 h-3.5 ${addOnComments ? "text-sky-600" : "text-gray-400"}`} />
-                  <div>
-                    <span className="font-bold block text-xs">Comments</span>
-                    <span className="text-[10px] text-[#5B625F]">
-                      {addOnComments ? `+${commentsCount} (+₹${commentsAddOnCost})` : "Optional (+₹25)"}
-                    </span>
+                <label className="flex items-center justify-between cursor-pointer">
+                  <div className="flex items-center gap-2">
+                    <MessageCircle className={`w-3.5 h-3.5 ${addOnComments ? "text-sky-600" : "text-gray-400"}`} />
+                    <div>
+                      <span className="font-bold block text-xs">Custom Comments</span>
+                      <span className="text-[10px] text-[#5B625F]">
+                        {addOnComments ? `+${commentsCount} comments (+₹${commentsAddOnCost})` : "Optional (+₹25)"}
+                      </span>
+                    </div>
                   </div>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={addOnComments}
-                  onChange={(e) => setAddOnComments(e.target.checked)}
-                  className="rounded text-[#111413] focus:ring-0 cursor-pointer"
-                />
-              </label>
+                  <input
+                    type="checkbox"
+                    checked={addOnComments}
+                    onChange={(e) => setAddOnComments(e.target.checked)}
+                    className="rounded text-[#111413] focus:ring-0 cursor-pointer"
+                  />
+                </label>
+                {addOnComments && (
+                  <div className="flex items-center gap-1.5 pt-2 border-t border-sky-200/60 mt-2">
+                    <span className="text-[10px] font-bold text-sky-900">Qty:</span>
+                    {[1, 5, 10, 20, 50].map((num) => (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => setCommentsCount(num)}
+                        className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer ${
+                          commentsCount === num
+                            ? "bg-sky-600 text-white border-sky-600 shadow-2xs"
+                            : "bg-white text-sky-900 border-sky-200 hover:bg-sky-100"
+                        }`}
+                      >
+                        {num}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -1245,6 +1304,64 @@ export default function EngagementPage() {
               )}
             </div>
           </div>
+
+          {/* Custom Comments (1 per line) Section */}
+          {targetCommentsCount > 0 && (
+            <div className="pt-4 border-t border-[#E4E0D3] space-y-2.5 font-sans">
+              <div className="flex items-center justify-between">
+                <label className="text-xs sm:text-sm font-bold text-[#111413] flex items-center gap-2">
+                  <MessageCircle className="w-4 h-4 text-sky-600" />
+                  <span>Comments (1 per line)</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold border transition-colors ${
+                      customCommentsLines.length === targetCommentsCount
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                        : customCommentsLines.length > targetCommentsCount
+                        ? "bg-rose-50 text-rose-700 border-rose-200"
+                        : "bg-sky-50 text-sky-800 border-sky-200"
+                    }`}
+                  >
+                    {customCommentsLines.length} / {targetCommentsCount} comments
+                  </span>
+                </div>
+              </div>
+
+              {/* Dark rounded textarea matching design specification */}
+              <div className="relative rounded-2xl bg-[#0E1217] border border-[#232936] p-3 shadow-inner">
+                <textarea
+                  rows={Math.max(4, Math.min(8, targetCommentsCount))}
+                  value={customCommentsText}
+                  onChange={handleCommentsChange}
+                  onKeyDown={handleCommentsKeyDown}
+                  placeholder={`Add your custom comments here (1 per line)...\ne.g.\nLove this reel! 🔥\nGreat content 👏\nAmazing post!`}
+                  className="w-full bg-transparent text-xs sm:text-sm text-gray-100 placeholder-gray-500 font-mono outline-none resize-y"
+                />
+              </div>
+
+              <div className="flex items-center justify-between text-[11px] text-[#5B625F]">
+                <span>
+                  {customCommentsLines.length === targetCommentsCount ? (
+                    <span className="text-emerald-600 font-bold flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5 stroke-[3]" /> All {targetCommentsCount} comments entered
+                    </span>
+                  ) : customCommentsLines.length > targetCommentsCount ? (
+                    <span className="text-rose-600 font-bold">
+                      Maximum {targetCommentsCount} comments allowed. Extra lines will not be sent.
+                    </span>
+                  ) : (
+                    <span>
+                      Please enter {targetCommentsCount - customCommentsLines.length} more comment{targetCommentsCount - customCommentsLines.length === 1 ? "" : "s"} (1 per line)
+                    </span>
+                  )}
+                </span>
+                <span className="text-[10px] text-gray-400 font-mono">
+                  Provider: Zefame
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* STEP 3: LIVE ORGANIC GROWTH PREVIEW */}
@@ -1361,9 +1478,9 @@ export default function EngagementPage() {
           {hasSufficientFunds ? (
             <button
               type="submit"
-              disabled={submitting || !agreedToTerms || !isCurrentPlatformEnabled}
+              disabled={submitting || !agreedToTerms || !isCurrentPlatformEnabled || (targetCommentsCount > 0 && customCommentsLines.length < targetCommentsCount)}
               className={`w-full py-4 rounded-xl text-sm font-black tracking-wide transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer press-scale font-sans ${
-                submitting || !agreedToTerms || !isCurrentPlatformEnabled
+                submitting || !agreedToTerms || !isCurrentPlatformEnabled || (targetCommentsCount > 0 && customCommentsLines.length < targetCommentsCount)
                   ? "bg-[#E4E0D3] text-[#5B625F] cursor-not-allowed opacity-60"
                   : "bg-[#D4F04F] hover:bg-[#C5E23A] text-[#111413] shadow-[#D4F04F]/25 active:scale-[0.98]"
               }`}
@@ -1375,6 +1492,8 @@ export default function EngagementPage() {
                 </>
               ) : !isCurrentPlatformEnabled ? (
                 <span>{platform} Ordering Paused by Admin</span>
+              ) : targetCommentsCount > 0 && customCommentsLines.length < targetCommentsCount ? (
+                <span>Add All {targetCommentsCount} Custom Comments ({customCommentsLines.length}/{targetCommentsCount})</span>
               ) : (
                 <>
                   <Play className="w-4 h-4 fill-[#111413] text-[#111413]" />

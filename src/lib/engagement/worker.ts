@@ -693,11 +693,39 @@ async function executeEngagementTick(): Promise<EngagementTickResult> {
         continue;
       }
 
+      let runCommentsText: string | undefined = undefined;
+      if (run.engagementType === "comments") {
+        if (run.rawResponse) {
+          try {
+            const parsedMeta = JSON.parse(run.rawResponse);
+            if (parsedMeta.customComments) {
+              runCommentsText = Array.isArray(parsedMeta.customComments)
+                ? parsedMeta.customComments.join("\n")
+                : String(parsedMeta.customComments);
+            }
+          } catch {}
+        }
+        if (!runCommentsText && order.planParams) {
+          try {
+            const parsedPlan = JSON.parse(order.planParams);
+            if (Array.isArray(parsedPlan.customComments) && parsedPlan.customComments.length > 0) {
+              runCommentsText = parsedPlan.customComments.join("\n");
+            } else if (Array.isArray(parsedPlan.rows)) {
+              const matchedRow = parsedPlan.rows.find((r: any) => r.runNumber === run.runNumber || (r.comments > 0 && r.assignedComments?.length));
+              if (matchedRow?.assignedComments?.length) {
+                runCommentsText = matchedRow.assignedComments.join("\n");
+              }
+            }
+          } catch {}
+        }
+      }
+
       const callStart = Date.now();
       const providerRes = await activeAdapter.createOrder({
         serviceExternalId: targetServiceExtId,
         targetUrl: finalTargetUrl,
         quantity: run.quantity,
+        comments: runCommentsText,
       });
       const durationMs = Date.now() - callStart;
 

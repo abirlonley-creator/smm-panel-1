@@ -749,10 +749,10 @@ export const DEFAULT_TIKTOK_ENGAGEMENT_CONFIG: TikTokEngagementPresetConfig = {
   },
   instagramComments: {
     enabled: true,
-    providerName: "Engagement Engine",
-    serviceId: "950",
+    providerName: "Zefame (Engagement Network)",
+    serviceId: "693",
     minQuantity: 1,
-    maxQuantity: 10000,
+    maxQuantity: 1000,
     runsCount: 2,
     intervalMinutes: 180,
   },

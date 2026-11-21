@@ -486,6 +486,10 @@ export class StandardSMMv2Provider implements SMMProviderAdapter {
       extra.interval = params.interval;
     }
 
+    if (params.comments) {
+      extra.comments = params.comments;
+    }
+
     try {
       const res = await this.postRequest("add", extra);
       const data = res.data as Record<string, unknown>;

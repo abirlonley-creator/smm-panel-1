@@ -76,6 +76,7 @@ export interface CreateOrderParams {
   quantity: number;
   runs?: number;
   interval?: number; // minutes
+  comments?: string; // SMM standard newline-separated custom comments
 }
 
 export interface CreateOrderResult {

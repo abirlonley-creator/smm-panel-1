@@ -29,6 +29,7 @@ const createEngagementOrderSchema = z.object({
   scheduledStartTime: z.string().optional(),
   packagePriceInr: z.number().optional(),
   totalCostInr: z.number().optional(),
+  customComments: z.union([z.string(), z.array(z.string())]).optional(),
   batches: z.array(
     z.object({
       id: z.string().optional(),
@@ -627,9 +628,26 @@ export async function POST(request: Request) {
     }
 
     // E. Comments Runs (if any)
-    const commentsRuns: Array<{ runNumber: number; scheduledAt: Date; quantity: number; cost: number }> = [];
+    const commentsRuns: Array<{ runNumber: number; scheduledAt: Date; quantity: number; cost: number; commentsText?: string }> = [];
     let totalPlannedComments = 0;
     let totalCommentsCost = 0;
+
+    // Parse custom comments lines if provided
+    let customCommentsLines: string[] = [];
+    if (parsed.customComments) {
+      if (Array.isArray(parsed.customComments)) {
+        customCommentsLines = parsed.customComments.map((c) => String(c).trim()).filter(Boolean);
+      } else if (typeof parsed.customComments === "string") {
+        customCommentsLines = parsed.customComments.split("\n").map((c) => c.trim()).filter(Boolean);
+      }
+    }
+    if (customCommentsLines.length === 0 && Array.isArray(parsed.rows)) {
+      for (const r of parsed.rows) {
+        if (Array.isArray(r.assignedComments)) {
+          customCommentsLines.push(...r.assignedComments.map((c: any) => String(c).trim()).filter(Boolean));
+        }
+      }
+    }
 
     // Check if deterministic batches are supplied from the pattern engine
     const baseStartTime = parsed.scheduledStartTime ? new Date(parsed.scheduledStartTime) : new Date(now);
@@ -693,6 +711,18 @@ export async function POST(request: Request) {
           commentsRuns.push({ runNumber: cIdx++, scheduledAt: batchScheduledAt, quantity: b.quantity, cost: runCost });
           totalPlannedComments += b.quantity;
           totalCommentsCost += runCost;
+        }
+      }
+    }
+
+    // Distribute custom comments lines across scheduled comments runs
+    if (customCommentsLines.length > 0 && commentsRuns.length > 0) {
+      let cCursor = 0;
+      for (const cr of commentsRuns) {
+        const assigned = customCommentsLines.slice(cCursor, cCursor + cr.quantity);
+        cCursor += cr.quantity;
+        if (assigned.length > 0) {
+          cr.commentsText = assigned.join("\n");
         }
       }
     }
@@ -867,6 +897,7 @@ export async function POST(request: Request) {
           plannedSaves: totalPlannedSaves,
           plannedShares: totalPlannedShares,
           plannedComments: totalPlannedComments,
+          commentsSource: customCommentsLines.length > 0 ? "custom" : "suggested",
           enabledTypes: JSON.stringify(enabledTypes),
           planParams: JSON.stringify({
             version: "aurasmm_deterministic_v1",
@@ -885,6 +916,7 @@ export async function POST(request: Request) {
             sharesRuns: sharesRuns.length,
             repostsRuns: repostsRuns.length,
             commentsRuns: commentsRuns.length,
+            customComments: customCommentsLines,
             rows: parsed.rows || null,
           }),
         },
@@ -1028,13 +1060,14 @@ export async function POST(request: Request) {
             engagementType: "comments",
             serviceId: zeofameCommentsService?.id ?? null,
             providerId: commentsProviderId,
-            providerServiceId: String(zeofameCommentsService?.providerServiceId || zeofameCommentsService?.externalId || "950"),
+            providerServiceId: String(zeofameCommentsService?.providerServiceId || zeofameCommentsService?.externalId || (platform === "Instagram" ? "693" : "950")),
             runNumber: cr.runNumber,
             scheduledAt: cr.scheduledAt,
             quantity: cr.quantity,
             plannedCumulative: 0,
             status: "scheduled",
             cost: cr.cost,
+            rawResponse: cr.commentsText ? JSON.stringify({ customComments: cr.commentsText }) : null,
           },
         });
       }
