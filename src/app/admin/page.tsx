@@ -38,6 +38,7 @@ import {
   Heart,
   Bookmark,
   Share2,
+  Repeat,
   CreditCard,
   Percent,
   Coins,
@@ -183,12 +184,14 @@ export default function AdminPage() {
     saves: number;
     shares: number;
     comments: number;
+    reposts?: number;
   }>({
     views: 0.84,
     likes: 1.10,
     saves: 1.45,
     shares: 1.50,
     comments: 5.00,
+    reposts: 0.22,
   });
 
   // SMM Providers Available for Dropdown Assignment
@@ -212,9 +215,9 @@ export default function AdminPage() {
   const [maintTitleInput, setMaintTitleInput] = useState("");
   const [maintMessageInput, setMaintMessageInput] = useState("");
 
-  function getEffectiveRate(metric: "views" | "likes" | "saves" | "shares" | "comments", platform: "tiktok" | "instagram", isVip: boolean) {
+  function getEffectiveRate(metric: "views" | "likes" | "saves" | "shares" | "comments" | "reposts", platform: "tiktok" | "instagram", isVip: boolean) {
     if (platform === "tiktok") {
-      const orig = originalRates[metric] ?? 0;
+      const orig = originalRates[metric as "views" | "likes" | "saves" | "shares" | "comments"] ?? 0;
       if (isVip) {
         if (tiktokConfig?.tiktokZeroProfitVip ?? true) return { rate: orig, profit: 0, margin: 0, isZero: true };
         const rate = Number(tiktokConfig?.tiktokVipPricing?.[`${metric}UserRate`] ?? orig);
@@ -235,7 +238,7 @@ export default function AdminPage() {
         const margin = orig > 0 ? Math.round(((rate - orig) / orig) * 100) : 0;
         return { rate, profit, margin, isZero: false };
       }
-      const rate = Number(tiktokConfig?.instagramPricing?.[`${metric}UserRate`] ?? (metric === "views" ? 3.5 : metric === "likes" ? 2.2 : metric === "saves" ? 2.5 : metric === "shares" ? 2.5 : 20.0));
+      const rate = Number(tiktokConfig?.instagramPricing?.[`${metric}UserRate`] ?? (metric === "views" ? 3.5 : metric === "likes" ? 2.2 : metric === "saves" ? 2.5 : metric === "shares" ? 2.5 : metric === "reposts" ? 2.5 : 20.0));
       const profit = Number((rate - orig).toFixed(2));
       const margin = orig > 0 ? Math.round(((rate - orig) / orig) * 100) : 0;
       return { rate, profit, margin, isZero: false };
@@ -2793,6 +2796,70 @@ export default function AdminPage() {
                       </div>
                       <span className="text-[10px] text-[#252943]/50 block">Verified English organic comments</span>
                     </div>
+
+                    {/* 6. Instagram Reposts Service */}
+                    <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED] shadow-xs space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Repeat className="w-4 h-4 text-indigo-600" />
+                          <span className="font-bold text-xs text-[#252943]">Reposts Service</span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                          Min: 10
+                        </span>
+                      </div>
+                      <div className="space-y-2">
+                        <div>
+                          <label className="block text-[11px] font-bold text-[#252943]/70 mb-1">
+                            SMM Provider
+                          </label>
+                          <select
+                            value={tiktokConfig.instagramReposts?.providerId || ""}
+                            onChange={(e) => {
+                              const pId = e.target.value;
+                              const matched = availableProviders.find((p) => p.id === pId);
+                              setTiktokConfig({
+                                ...tiktokConfig,
+                                instagramReposts: {
+                                  ...(tiktokConfig.instagramReposts || { enabled: true, minQuantity: 10, maxQuantity: 50000 }),
+                                  providerId: pId,
+                                  providerName: matched?.name || "Reposts Provider",
+                                },
+                              });
+                            }}
+                            className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] focus:border-indigo-500 text-xs font-semibold text-[#252943] bg-white outline-none cursor-pointer"
+                          >
+                            <option value="">Default Reposts Provider ({tiktokConfig.instagramReposts?.providerName || "Auto"})</option>
+                            {availableProviders.map((prov) => (
+                              <option key={prov.id} value={prov.id}>
+                                {prov.name} ({prov.currency || "INR"} {typeof prov.balance === "number" ? prov.balance.toFixed(2) : "0.00"})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-[#252943]/70 mb-1">
+                            Provider Service ID
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="105"
+                            value={tiktokConfig.instagramReposts?.serviceId ?? "105"}
+                            onChange={(e) =>
+                              setTiktokConfig({
+                                ...tiktokConfig,
+                                instagramReposts: {
+                                  ...(tiktokConfig.instagramReposts || { enabled: true, minQuantity: 10, maxQuantity: 50000 }),
+                                  serviceId: e.target.value,
+                                },
+                              })
+                            }
+                            className="w-full px-3 py-2 rounded-xl border border-[#DEE0ED] focus:border-indigo-500 font-mono text-xs font-bold text-[#252943] bg-white outline-none"
+                          />
+                        </div>
+                      </div>
+                      <span className="text-[10px] text-[#252943]/50 block">Post & reel reposts distribution (min 10)</span>
+                    </div>
                   </div>
                 </div>
 
@@ -2880,7 +2947,7 @@ export default function AdminPage() {
                     )}
                   </div>
 
-                  {/* 5-Metric Instagram Pricing Cards */}
+                  {/* 6-Metric Instagram Pricing Cards */}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {(
                       [
@@ -2888,6 +2955,7 @@ export default function AdminPage() {
                         { key: "likes", label: "Instagram Likes", icon: Heart, color: "text-rose-500", bg: "bg-rose-50 text-rose-800 border-rose-200", orig: instagramOriginalRates?.likes ?? 1.10, multipliers: [25, 50, 100, 150, 200] },
                         { key: "saves", label: "Instagram Saves", icon: Bookmark, color: "text-amber-500", bg: "bg-amber-50 text-amber-800 border-amber-200", orig: instagramOriginalRates?.saves ?? 1.45, multipliers: [25, 50, 100, 150, 200] },
                         { key: "shares", label: "Instagram Shares", icon: Share2, color: "text-blue-500", bg: "bg-blue-50 text-blue-800 border-blue-200", orig: instagramOriginalRates?.shares ?? 1.50, multipliers: [25, 50, 100, 150, 200] },
+                        { key: "reposts", label: "Instagram Reposts", icon: Repeat, color: "text-indigo-600", bg: "bg-indigo-50 text-indigo-800 border-indigo-200", orig: instagramOriginalRates?.reposts ?? 0.22, multipliers: [25, 50, 100, 150, 200] },
                         { key: "comments", label: "Instagram Comments", icon: MessageCircle, color: "text-emerald-600", bg: "bg-emerald-50 text-emerald-800 border-emerald-200", orig: instagramOriginalRates?.comments ?? 5.00, multipliers: [50, 100, 150, 200, 300] },
                       ] as const
                     ).map((m) => {

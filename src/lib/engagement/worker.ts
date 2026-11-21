@@ -563,7 +563,7 @@ async function executeEngagementTick(): Promise<EngagementTickResult> {
           ? order.plannedLikes || 42
           : run.engagementType === "saves"
             ? order.plannedSaves || 10
-            : run.engagementType === "shares"
+            : (run.engagementType === "shares" || run.engagementType === "reposts")
               ? order.plannedShares || 5
               : order.plannedComments || 2;
 
@@ -574,7 +574,7 @@ async function executeEngagementTick(): Promise<EngagementTickResult> {
           ? order.deliveredLikes || 0
           : run.engagementType === "saves"
             ? order.deliveredSaves || 0
-            : run.engagementType === "shares"
+            : (run.engagementType === "shares" || run.engagementType === "reposts")
               ? order.deliveredShares || 0
               : order.deliveredComments || 0;
 
@@ -734,7 +734,7 @@ async function executeEngagementTick(): Promise<EngagementTickResult> {
             ? "deliveredViews"
             : run.engagementType === "likes"
               ? "deliveredLikes"
-              : run.engagementType === "shares"
+              : (run.engagementType === "shares" || run.engagementType === "reposts")
                 ? "deliveredShares"
                 : run.engagementType === "saves"
                   ? "deliveredSaves"

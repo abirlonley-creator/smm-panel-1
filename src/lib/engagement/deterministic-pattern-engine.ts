@@ -36,6 +36,7 @@ export interface PackageConfig {
   likes?: number;
   saves?: number;
   shares?: number;
+  reposts?: number;
   comments?: number;
 }
 
@@ -1908,6 +1909,9 @@ export function generatePlan(
     for (const s of ["likes", "saves", "reposts", "comments", "shares"] as ServiceType[]) {
       if (s === "views") continue;
       let tot = Math.round(viewsTotal * rates[s]);
+      if (typeof (pkg as any)[s] === "number") {
+        tot = (pkg as any)[s]!;
+      }
       if (s === "comments") {
         if (commentsMode === "DISABLED") {
           tot = 0;

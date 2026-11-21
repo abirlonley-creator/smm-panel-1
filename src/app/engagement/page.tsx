@@ -20,6 +20,7 @@ import {
   Heart,
   Bookmark,
   Share2,
+  Repeat,
   MessageSquare,
   MessageCircle,
   ChevronDown,
@@ -219,6 +220,7 @@ export default function EngagementPage() {
   const [addOnLikes, setAddOnLikes] = useState<boolean>(true);
   const [addOnSaves, setAddOnSaves] = useState<boolean>(true);
   const [addOnShares, setAddOnShares] = useState<boolean>(true);
+  const [addOnReposts, setAddOnReposts] = useState<boolean>(true);
   const [addOnComments, setAddOnComments] = useState<boolean>(false);
   const [commentsCount, setCommentsCount] = useState<number>(10);
 
@@ -323,9 +325,10 @@ export default function EngagementPage() {
       likes: addOnLikes ? currentPackage.likes : 0,
       saves: addOnSaves ? ((currentPackage.saves ?? 0) > 0 ? (currentPackage.saves ?? 0) : 20) : 0,
       shares: addOnShares ? ((currentPackage.shares ?? 0) > 0 ? (currentPackage.shares ?? 0) : 10) : 0,
+      reposts: addOnReposts ? ((currentPackage.reposts ?? 0) > 0 ? (currentPackage.reposts ?? 0) : 10) : 0,
       comments: addOnComments ? commentsCount : 0,
     };
-  }, [currentPackage, addOnLikes, addOnSaves, addOnShares, addOnComments, commentsCount]);
+  }, [currentPackage, addOnLikes, addOnSaves, addOnShares, addOnReposts, addOnComments, commentsCount]);
 
   // Platform status & config selection
   const isTikTokEnabled = statusData?.config?.tiktokEnabled !== false && statusData?.config?.enabled !== false;
@@ -360,7 +363,8 @@ export default function EngagementPage() {
   // If 2K package (which has 0 saves/shares included), adding saves or shares has small add-on fee
   const savesAddOnCost = currentPackage.saves === 0 && addOnSaves ? 15 : 0;
   const sharesAddOnCost = currentPackage.shares === 0 && addOnShares ? 15 : 0;
-  const addOnsTotalInr = commentsAddOnCost + savesAddOnCost + sharesAddOnCost;
+  const repostsAddOnCost = currentPackage.reposts === 0 && addOnReposts ? 15 : 0;
+  const addOnsTotalInr = commentsAddOnCost + savesAddOnCost + sharesAddOnCost + repostsAddOnCost;
   const totalCampaignPriceInr = basePriceInr + addOnsTotalInr;
 
   const walletBalance = statusData?.walletBalance ?? 0;
@@ -931,7 +935,7 @@ export default function EngagementPage() {
               Customize Engagement Add-ons (Included & Optional)
             </span>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-sans">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 text-xs font-sans">
               {/* Likes Toggle */}
               <label
                 className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
@@ -1001,6 +1005,31 @@ export default function EngagementPage() {
                   type="checkbox"
                   checked={addOnShares}
                   onChange={(e) => setAddOnShares(e.target.checked)}
+                  className="rounded text-[#111413] focus:ring-0 cursor-pointer"
+                />
+              </label>
+
+              {/* Reposts Toggle */}
+              <label
+                className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
+                  addOnReposts
+                    ? "bg-indigo-50/60 border-indigo-200 text-indigo-950"
+                    : "bg-white border-[#E4E0D3] text-[#5B625F] opacity-70"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Repeat className={`w-3.5 h-3.5 ${addOnReposts ? "text-indigo-600" : "text-gray-400"}`} />
+                  <div>
+                    <span className="font-bold block text-xs">Reposts</span>
+                    <span className="text-[10px] text-[#5B625F]">
+                      {(currentPackage.reposts ?? 0) > 0 ? `+${currentPackage.reposts} (Included)` : "+10 (Min: 10)"}
+                    </span>
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={addOnReposts}
+                  onChange={(e) => setAddOnReposts(e.target.checked)}
                   className="rounded text-[#111413] focus:ring-0 cursor-pointer"
                 />
               </label>

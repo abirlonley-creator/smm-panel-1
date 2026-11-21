@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   Sparkles,
@@ -34,6 +35,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { LiveOrganicGrowthPreview } from "@/components/engagement/LiveOrganicGrowthPreview";
+import { AuraPrimaryButton } from "@/components/ui/AuraPrimaryButton";
 import {
   generatePattern,
   DEFAULT_PACKAGES,
@@ -223,75 +225,62 @@ export default function LandingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-[#252943] relative selection:bg-[#3A4EFB]/20">
-      {/* ── Background Subtle Glow & Radial Gradients ── */}
+    <div className="landing min-h-screen bg-[#F3F1EA] text-[#111413] relative selection:bg-[#D4F04F]/30">
+      {/* Aura brand atmosphere */}
       <div
         aria-hidden
-        className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-[1200px] h-[750px] -z-10"
+        className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-[1200px] h-[760px] -z-10"
         style={{
           background:
-            "radial-gradient(ellipse 65% 55% at 50% 0%, rgba(58, 78, 251, 0.08) 0%, rgba(212, 240, 79, 0.04) 50%, transparent 80%)",
-        }}
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-[0.025] -z-10"
-        style={{
-          backgroundImage: "radial-gradient(circle, #252943 1px, transparent 1px)",
-          backgroundSize: "32px 32px",
+            "radial-gradient(ellipse 64% 56% at 55% 0%, rgba(212, 240, 79, 0.12) 0%, rgba(228, 224, 211, 0.18) 48%, transparent 82%)",
         }}
       />
 
       {/* ── Floating Pill Top Navigation ── */}
-      <header className="sticky top-5 z-40 max-w-5xl mx-auto px-4">
-        <nav className="bg-white/90 backdrop-blur-md border border-[#DEE0ED] rounded-full px-5 py-2.5 shadow-sm flex items-center justify-between transition-all">
+      <header className="landing-nav-wrap">
+        <nav className="landing-nav">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="w-8 h-8 rounded-full bg-[#3A4EFB] text-white flex items-center justify-center font-black shadow-xs group-hover:scale-105 transition-transform">
-              <Zap className="w-4 h-4 fill-white" />
-            </div>
-            <div className="flex flex-col">
-              <span className="font-extrabold text-sm tracking-tight text-[#252943]">
-                Aura<span className="text-[#3A4EFB]">SMM</span>
-              </span>
-              <span className="text-[9px] font-mono text-[#252943]/50 leading-none">v2.0</span>
-            </div>
+          <Link href="/" className="landing-brand" aria-label="AuraSMM home">
+            <Image
+              src="/brand/lockup-horizontal-on-light.svg"
+              alt="AuraSMM"
+              width={180}
+              height={42}
+              priority
+            />
           </Link>
 
           {/* Nav Links */}
-          <div className="hidden md:flex items-center gap-1 bg-[#F8F9FD] border border-[#DEE0ED]/60 rounded-full px-3 py-1 text-xs font-semibold text-[#252943]/70">
+          <div className="landing-nav-links">
             <Link
               href="/"
-              className="px-3 py-1 rounded-full text-[#3A4EFB] font-bold bg-white shadow-xs"
+              className="text-current"
             >
               Home
             </Link>
             <Link
               href="/pricing"
-              className="px-3 py-1 rounded-full hover:text-[#252943] transition-colors"
             >
-              Service List
+              Services
             </Link>
             <Link
               href="/api-docs"
-              className="px-3 py-1 rounded-full hover:text-[#252943] transition-colors"
             >
-              Docs
+              API
             </Link>
             <Link
-              href="/engagement"
-              className="px-3 py-1 rounded-full hover:text-[#252943] transition-colors"
+              href="#how-it-works"
             >
-              Engagement Engine
+              How it works
             </Link>
           </div>
 
           {/* Right Action Buttons */}
-          <div className="flex items-center gap-2">
+          <div className="landing-nav-actions">
             {session?.authenticated ? (
               <Link
                 href="/engagement"
-                className="px-4 py-2 rounded-full bg-[#3A4EFB] hover:bg-[#2A3DE0] text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 active:scale-[0.97]"
+                className="landing-button landing-button-dark"
               >
                 <span>Dashboard</span>
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -301,14 +290,14 @@ export default function LandingPage() {
                 <button
                   type="button"
                   onClick={() => openAuth("signin")}
-                  className="px-3.5 py-1.5 text-xs font-bold text-[#252943]/80 hover:text-[#252943] transition-colors cursor-pointer"
+                  className="landing-signin"
                 >
                   Sign In
                 </button>
                 <button
                   type="button"
                   onClick={() => openAuth("signup")}
-                  className="px-4 py-2 rounded-full bg-[#3A4EFB] hover:bg-[#2A3DE0] text-white text-xs font-black transition-all shadow-sm active:scale-[0.97] cursor-pointer"
+                  className="landing-button landing-button-lime"
                 >
                   Sign Up
                 </button>
@@ -318,266 +307,67 @@ export default function LandingPage() {
         </nav>
       </header>
 
-      {/* ── Main Hero Section (Faithful to Reference Layout) ── */}
-      <main className="max-w-7xl mx-auto px-4 pt-8 sm:pt-14 pb-16 relative">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-center">
-          {/* ── Left Flank: Floating Follower & Growth Cards ── */}
-          <div className="lg:col-span-3 space-y-5 order-2 lg:order-1 flex flex-col items-center lg:items-start">
-            {/* Toast Notification */}
-            <div className="p-3 bg-white/95 backdrop-blur-sm rounded-2xl border border-[#DEE0ED] shadow-sm flex items-center gap-3 w-fit transition-transform hover:-translate-y-0.5 animate-fadeIn">
-              <img
-                className="w-8 h-8 rounded-full object-cover shrink-0"
-                src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=80&q=80"
-                alt="Notification avatar"
-              />
-              <div className="text-xs">
-                <span className="font-bold text-[#252943]">You got New followers! 🎉</span>
-                <span className="text-[10px] text-[#252943]/50 block">Just now via Natural FYP wave</span>
-              </div>
-            </div>
-
-            {/* Net Follower Gain Card */}
-            <div className="p-5 sm:p-6 rounded-3xl bg-white border border-[#DEE0ED] shadow-sm space-y-4 w-full max-w-sm transition-transform hover:-translate-y-0.5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-[11px] font-bold text-[#252943]/60 uppercase tracking-wider block">
-                    Net Follower Gain
-                  </span>
-                  <span className="text-2xl font-black text-[#252943]">₹550,000+</span>
-                </div>
-                <div className="text-right">
-                  <span className="px-2.5 py-1 rounded-full bg-blue-50 text-[#3A4EFB] text-[10px] font-bold inline-flex items-center gap-1 border border-blue-200">
-                    <span>Boost Activated</span>
-                    <Sparkles className="w-3 h-3 text-[#3A4EFB]" />
-                  </span>
-                  <span className="text-[10px] text-[#252943]/50 block mt-1 font-semibold">250,000 Total Views</span>
-                </div>
-              </div>
-
-              {/* Realistic SVG Curved Momentum Graph */}
-              <div className="h-28 w-full relative pt-2">
-                <svg className="w-full h-full overflow-visible" viewBox="0 0 300 100">
-                  <defs>
-                    <linearGradient id="gradientCurve" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#3A4EFB" stopOpacity="0.22" />
-                      <stop offset="100%" stopColor="#3A4EFB" stopOpacity="0.0" />
-                    </linearGradient>
-                  </defs>
-                  <path
-                    d="M 0,85 Q 50,72 100,62 T 200,38 T 300,12 L 300,100 L 0,100 Z"
-                    fill="url(#gradientCurve)"
-                  />
-                  <path
-                    d="M 0,85 Q 50,72 100,62 T 200,38 T 300,12"
-                    fill="none"
-                    stroke="#3A4EFB"
-                    strokeWidth="3.5"
-                    strokeLinecap="round"
-                  />
-                  <circle cx="200" cy="38" r="4.5" fill="#3A4EFB" />
-                  <circle cx="300" cy="12" r="5" fill="#10B981" />
-                </svg>
-                {/* Month Indicators */}
-                <div className="flex justify-between text-[10px] font-semibold text-[#252943]/40 pt-1">
-                  <span>April</span>
-                  <span>May</span>
-                  <span>June</span>
-                  <span>July</span>
-                  <span>August</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* ── Center Column: Hero Announcement, Title, Subtitle, CTA & Badges ── */}
-          <div className="lg:col-span-6 text-center space-y-4 order-1 lg:order-2">
-            {/* Top Major Update Pill */}
-            <div className="flex justify-center mb-3 animate-fadeIn">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-50 border border-blue-200 shadow-xs text-xs">
-                <span className="px-2 py-0.5 rounded-full bg-[#3A4EFB] text-white text-[10px] font-black uppercase tracking-wider">
-                  Major Update!
-                </span>
-                <span className="font-semibold text-[#252943]">
-                  AuraSMM v2.0 is now online with Natural Algorithmic Pacing!
-                </span>
-              </div>
-            </div>
-
-            {/* Central Headline */}
-            <h1 className="text-3xl sm:text-5xl md:text-5xl lg:text-[3.25rem] font-black text-[#252943] tracking-tight leading-[1.14]">
-              Best SMM Tool{" "}
-              <span className="inline-block text-[#3A4EFB]">
-                ✨
-              </span>{" "}
-              for Genuine Social Media Engagement
-            </h1>
-
-            <p className="text-sm sm:text-base text-[#252943]/70 font-medium max-w-lg mx-auto leading-relaxed">
-              A perfect fit for TikTok Creators, Instagram Influencers, Businesses, Artists & Brands seeking mathematically verified, ban-proof organic momentum.
+            {/* AuraSMM landing hero */}
+      <main className="landing-main">
+        <section className="landing-hero landing-hero-background">
+          <div className="hero-wave-shape" aria-hidden="true" />
+          <div className="landing-hero-copy hero-text-content">
+            <p className="landing-eyebrow">
+              <span className="landing-live-dot" aria-hidden="true" />
+              A steadier way to grow
             </p>
-
-            {/* Hero CTA Button */}
-            <div className="pt-3 flex flex-col items-center gap-3">
-              <button
-                type="button"
+            <h1>
+              Social growth,
+              <br />
+              <span>with a plan.</span>
+            </h1>
+            <p className="landing-lede">
+              Thoughtful delivery for the people building something online. Set up social media orders, shape their pace, and keep everything in view.
+            </p>
+            <div className="landing-hero-actions">
+              <AuraPrimaryButton
+                label="Create your account"
+                size="large"
                 onClick={() => openAuth("signup")}
-                className="px-8 py-3.5 rounded-full bg-[#3A4EFB] hover:bg-[#2A3DE0] active:scale-[0.97] text-white text-sm font-black transition-all shadow-md shadow-blue-500/20 flex items-center gap-2 cursor-pointer"
-              >
-                <span>Signup for free today!</span>
-                <Users className="w-4 h-4" />
-              </button>
-
-              {/* Social Proof Star Rating & Avatar Stack */}
-              <div className="flex items-center gap-2.5 text-xs text-[#252943]/70 font-semibold pt-1">
-                <div className="flex -space-x-2 overflow-hidden">
-                  <img
-                    className="inline-block h-6 w-6 rounded-full ring-2 ring-white object-cover"
-                    src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=80&q=80"
-                    alt="Reviewer"
-                  />
-                  <img
-                    className="inline-block h-6 w-6 rounded-full ring-2 ring-white object-cover"
-                    src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=80&q=80"
-                    alt="Reviewer"
-                  />
-                  <img
-                    className="inline-block h-6 w-6 rounded-full ring-2 ring-white object-cover"
-                    src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=80&q=80"
-                    alt="Reviewer"
-                  />
-                  <img
-                    className="inline-block h-6 w-6 rounded-full ring-2 ring-white object-cover"
-                    src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=80&q=80"
-                    alt="Reviewer"
-                  />
-                </div>
-                <div className="flex items-center gap-1">
-                  <div className="flex text-amber-400">
-                    <Star className="w-3.5 h-3.5 fill-current" />
-                    <Star className="w-3.5 h-3.5 fill-current" />
-                    <Star className="w-3.5 h-3.5 fill-current" />
-                    <Star className="w-3.5 h-3.5 fill-current" />
-                    <Star className="w-3.5 h-3.5 fill-current" />
-                  </div>
-                  <span className="font-bold text-[#252943]">4.8 / 5</span>
-                  <span className="text-[#252943]/50">Rating over 500 Reviews</span>
-                </div>
-              </div>
+              />
+              <Link href="/pricing" className="landing-text-link">
+                Explore services
+                <ArrowRight size={16} aria-hidden="true" />
+              </Link>
             </div>
-
-            {/* Feature Badges Row */}
-            <div className="pt-4 flex flex-wrap items-center justify-center gap-2 text-[11px] font-bold text-[#252943]">
-              <span className="px-3 py-1.5 rounded-full bg-white border border-[#DEE0ED] shadow-xs flex items-center gap-1.5">
-                <Percent className="w-3.5 h-3.5 text-[#3A4EFB]" />
-                <span>Starting at Just ₹0.84 / 1K</span>
-              </span>
-              <span className="px-3 py-1.5 rounded-full bg-white border border-[#DEE0ED] shadow-xs flex items-center gap-1.5">
-                <Zap className="w-3.5 h-3.5 text-amber-500" />
-                <span>Natural Algorithmic Pacing</span>
-              </span>
-              <span className="px-3 py-1.5 rounded-full bg-white border border-[#DEE0ED] shadow-xs flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-                <span>Non-drop services</span>
-              </span>
-              <span className="px-3 py-1.5 rounded-full bg-white border border-[#DEE0ED] shadow-xs flex items-center gap-1.5">
-                <RefreshCw className="w-3.5 h-3.5 text-blue-500" />
-                <span>Lifetime Refills</span>
-              </span>
-              <span className="px-3 py-1.5 rounded-full bg-white border border-[#DEE0ED] shadow-xs flex items-center gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-teal-500" />
-                <span>24/7 Support</span>
-              </span>
+            <div className="landing-proof-row">
+              <span><Activity size={15} aria-hidden="true" /> Curve-aware delivery</span>
+              <span><Heart size={15} aria-hidden="true" /> Built for TikTok & Instagram</span>
+              <span><ShieldCheck size={15} aria-hidden="true" /> Clear order tracking</span>
             </div>
           </div>
-
-          {/* ── Right Flank: Live Order & Sales Performance Cards ── */}
-          <div className="lg:col-span-3 space-y-5 order-3 flex flex-col items-center lg:items-end">
-            {/* Live Order Card */}
-            <div className="p-5 rounded-3xl bg-white border border-[#DEE0ED] shadow-sm space-y-3 w-full max-w-sm transition-transform hover:-translate-y-0.5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-[#252943]">Order #1345</span>
-                <span className="px-2 py-0.5 rounded-full bg-blue-50 text-[#3A4EFB] text-[10px] font-bold border border-blue-200">
-                  In Progress
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2">
-                  <img
-                    className="w-7 h-7 rounded-full object-cover shrink-0"
-                    src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=80&q=80"
-                    alt="Target profile"
-                  />
-                  <div>
-                    <span className="font-bold text-[#252943] block">@elenaturkals</span>
-                    <span className="text-[10px] text-emerald-600 font-semibold">Boost Active 🚀</span>
-                  </div>
-                </div>
-                <span className="font-mono text-xs font-bold text-[#252943]/70">
-                  1,000 / 10,000,000
-                </span>
-              </div>
-
-              {/* Progress Bar */}
-              <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                <div
-                  className="bg-[#3A4EFB] h-full rounded-full transition-all duration-1000"
-                  style={{ width: "68%" }}
+          <div className="landing-stage">
+            <div className="stage-glow" aria-hidden="true" />
+            <figure className="landing-dashboard-figure">
+              <div className="landing-image-frame">
+                <Image
+                  className="landing-dashboard-shot"
+                  src="/brand/aurasmm-growth-preview.png"
+                  alt="AuraSMM live growth preview showing view and engagement delivery over time"
+                  width={1280}
+                  height={759}
+                  priority
                 />
               </div>
-            </div>
-
-            {/* Sales Performance Card */}
-            <div className="p-5 rounded-3xl bg-white border border-[#DEE0ED] shadow-sm flex items-center justify-between w-full max-w-sm transition-transform hover:-translate-y-0.5">
-              <div>
-                <div className="flex items-center gap-1.5 text-xs text-[#252943]/60 font-semibold">
-                  <span>My Clothing Brand</span>
-                  <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
-                </div>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="text-xl font-black text-[#252943]">₹500,000</span>
-                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                    +110%
-                  </span>
-                </div>
-              </div>
-              <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-bold">
-                <TrendingUp className="w-5 h-5" />
-              </div>
-            </div>
+            </figure>
           </div>
-        </div>
+          <p className="landing-scroll-note"><span aria-hidden="true" /> Made for the day-to-day of growing online</p>
+        </section>
 
-        {/* ── Platform Logos Cloud ── */}
-        <div className="mt-20 pt-8 border-t border-[#DEE0ED] text-center space-y-4">
-          <p className="text-xs font-bold uppercase tracking-widest text-[#252943]/50">
-            Providing solutions for best platforms
-          </p>
-          <div className="flex flex-wrap items-center justify-center gap-8 sm:gap-14 text-sm font-bold text-[#252943]/60 grayscale hover:grayscale-0 transition-all">
-            <span className="flex items-center gap-2 hover:text-red-600 transition-colors">
-              <Play className="w-4 h-4 fill-current text-red-600" />
-              <span>YouTube</span>
-            </span>
-            <span className="flex items-center gap-2 hover:text-black transition-colors">
-              <span className="font-black text-base">𝕏</span>
-              <span>Twitter</span>
-            </span>
-            <span className="flex items-center gap-2 hover:text-pink-600 transition-colors">
-              <Heart className="w-4 h-4 fill-current text-pink-600" />
-              <span>Instagram</span>
-            </span>
-            <span className="flex items-center gap-2 hover:text-[#000000] transition-colors">
-              <Zap className="w-4 h-4 fill-current text-black" />
-              <span>TikTok</span>
-            </span>
-            <span className="flex items-center gap-2 hover:text-blue-600 transition-colors">
-              <Share2 className="w-4 h-4 text-blue-600" />
-              <span>Facebook</span>
-            </span>
-          </div>
+        <div className="landing-platforms" aria-label="Supported social platforms">
+          <span>GROW ACROSS</span>
+          <b>TikTok</b><i aria-hidden="true" />
+          <b>Instagram</b><i aria-hidden="true" />
+          <b>YouTube</b><i aria-hidden="true" />
+          <b>Facebook</b><i aria-hidden="true" />
+          <b>X</b>
         </div>
-
-        {/* ── All Delivery Graphs & Algorithmic Visualizers Showcase ── */}
+{/* ── All Delivery Graphs & Algorithmic Visualizers Showcase ── */}
         <section className="mt-24 pt-10 border-t border-[#DEE0ED] space-y-10">
           <div className="text-center space-y-3 max-w-3xl mx-auto">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-700">
@@ -1202,7 +992,7 @@ export default function LandingPage() {
         </section>
 
         {/* ── How to Grow in 3 Steps Section (from reference) ── */}
-        <section className="mt-24 pt-10 border-t border-[#DEE0ED] text-center space-y-10">
+        <section id="how-it-works" className="mt-24 pt-10 border-t border-[#DEE0ED] text-center space-y-10">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-xs font-bold text-[#3A4EFB]">
               <Percent className="w-3 h-3" />

@@ -619,6 +619,7 @@ export interface EngagementPricingConfig {
   savesUserRate: number;     // Rate charged to users per 1k saves (INR ₹)
   sharesUserRate: number;    // Rate charged to users per 1k shares/reposts (INR ₹)
   commentsUserRate: number;  // Rate charged to users per 1k comments (INR ₹)
+  repostsUserRate?: number;  // Rate charged to users per 1k reposts (INR ₹)
 }
 
 export interface TikTokEngagementPresetConfig {
@@ -640,6 +641,7 @@ export interface TikTokEngagementPresetConfig {
   instagramLikes?: MetricConfigItem;
   instagramSaves?: MetricConfigItem;
   instagramShares?: MetricConfigItem;
+  instagramReposts?: MetricConfigItem;
   instagramComments?: MetricConfigItem;
   instagramPricing?: EngagementPricingConfig;
   tiktokVipPricing?: EngagementPricingConfig;
@@ -736,6 +738,15 @@ export const DEFAULT_TIKTOK_ENGAGEMENT_CONFIG: TikTokEngagementPresetConfig = {
     runsCount: 3,
     intervalMinutes: 120,
   },
+  instagramReposts: {
+    enabled: true,
+    providerName: "Engagement Engine",
+    serviceId: "105",
+    minQuantity: 10,
+    maxQuantity: 50000,
+    runsCount: 3,
+    intervalMinutes: 120,
+  },
   instagramComments: {
     enabled: true,
     providerName: "Engagement Engine",
@@ -750,6 +761,7 @@ export const DEFAULT_TIKTOK_ENGAGEMENT_CONFIG: TikTokEngagementPresetConfig = {
     likesUserRate: 2.20,
     savesUserRate: 2.50,
     sharesUserRate: 2.50,
+    repostsUserRate: 2.50,
     commentsUserRate: 20.00,
   },
   tiktokZeroProfitVip: true,
@@ -758,6 +770,7 @@ export const DEFAULT_TIKTOK_ENGAGEMENT_CONFIG: TikTokEngagementPresetConfig = {
     likesUserRate: 0.88,
     savesUserRate: 0.22,
     sharesUserRate: 0.22,
+    repostsUserRate: 0.22,
     commentsUserRate: 5.00,
   },
   instagramZeroProfitVip: true,
@@ -766,6 +779,7 @@ export const DEFAULT_TIKTOK_ENGAGEMENT_CONFIG: TikTokEngagementPresetConfig = {
     likesUserRate: 1.10,
     savesUserRate: 1.45,
     sharesUserRate: 1.50,
+    repostsUserRate: 0.22,
     commentsUserRate: 5.00,
   },
 };
@@ -806,6 +820,7 @@ export async function getTikTokEngagementConfigAsync(force = false): Promise<Tik
         instagramLikes: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramLikes, ...(parsed.instagramLikes || {}) },
         instagramSaves: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramSaves, ...(parsed.instagramSaves || {}) },
         instagramShares: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramShares, ...(parsed.instagramShares || {}) },
+        instagramReposts: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramReposts, ...(parsed.instagramReposts || {}) },
         instagramComments: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramComments, ...(parsed.instagramComments || {}) },
         instagramPricing: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramPricing, ...(parsed.instagramPricing || {}) },
         tiktokZeroProfitVip: parsed.tiktokZeroProfitVip !== undefined ? parsed.tiktokZeroProfitVip : DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.tiktokZeroProfitVip,
@@ -845,6 +860,7 @@ export async function saveTikTokEngagementConfigAsync(
     instagramLikes: { ...(DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramLikes!), ...(current.instagramLikes || {}), ...(newConfig.instagramLikes || {}) } as MetricConfigItem,
     instagramSaves: { ...(DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramSaves!), ...(current.instagramSaves || {}), ...(newConfig.instagramSaves || {}) } as MetricConfigItem,
     instagramShares: { ...(DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramShares!), ...(current.instagramShares || {}), ...(newConfig.instagramShares || {}) } as MetricConfigItem,
+    instagramReposts: { ...(DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramReposts!), ...(current.instagramReposts || {}), ...(newConfig.instagramReposts || {}) } as MetricConfigItem,
     instagramComments: { ...(DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramComments!), ...(current.instagramComments || {}), ...(newConfig.instagramComments || {}) } as MetricConfigItem,
     instagramPricing: { ...(DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramPricing!), ...(current.instagramPricing || {}), ...(newConfig.instagramPricing || {}) } as EngagementPricingConfig,
     tiktokZeroProfitVip: newConfig.tiktokZeroProfitVip !== undefined ? newConfig.tiktokZeroProfitVip : (current.tiktokZeroProfitVip ?? true),
@@ -905,6 +921,7 @@ export function getTikTokEngagementConfig(): TikTokEngagementPresetConfig {
         instagramLikes: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramLikes, ...(parsed.instagramLikes || {}) },
         instagramSaves: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramSaves, ...(parsed.instagramSaves || {}) },
         instagramShares: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramShares, ...(parsed.instagramShares || {}) },
+        instagramReposts: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramReposts, ...(parsed.instagramReposts || {}) },
         instagramComments: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramComments, ...(parsed.instagramComments || {}) },
         instagramPricing: { ...DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramPricing, ...(parsed.instagramPricing || {}) },
         tiktokZeroProfitVip: parsed.tiktokZeroProfitVip !== undefined ? parsed.tiktokZeroProfitVip : DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.tiktokZeroProfitVip,
@@ -933,6 +950,13 @@ export function saveTikTokEngagementConfig(newConfig: Partial<TikTokEngagementPr
     shares: { ...current.shares, ...(newConfig.shares || {}) },
     pricing: { ...current.pricing, ...(newConfig.pricing || {}) },
     syncThreshold: { ...current.syncThreshold, ...(newConfig.syncThreshold || {}) },
+    instagramViews: { ...(DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramViews!), ...(current.instagramViews || {}), ...(newConfig.instagramViews || {}) } as MetricConfigItem,
+    instagramLikes: { ...(DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramLikes!), ...(current.instagramLikes || {}), ...(newConfig.instagramLikes || {}) } as MetricConfigItem,
+    instagramSaves: { ...(DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramSaves!), ...(current.instagramSaves || {}), ...(newConfig.instagramSaves || {}) } as MetricConfigItem,
+    instagramShares: { ...(DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramShares!), ...(current.instagramShares || {}), ...(newConfig.instagramShares || {}) } as MetricConfigItem,
+    instagramReposts: { ...(DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramReposts!), ...(current.instagramReposts || {}), ...(newConfig.instagramReposts || {}) } as MetricConfigItem,
+    instagramComments: { ...(DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramComments!), ...(current.instagramComments || {}), ...(newConfig.instagramComments || {}) } as MetricConfigItem,
+    instagramPricing: { ...(DEFAULT_TIKTOK_ENGAGEMENT_CONFIG.instagramPricing!), ...(current.instagramPricing || {}), ...(newConfig.instagramPricing || {}) } as EngagementPricingConfig,
   };
 
   cachedConfig = merged;

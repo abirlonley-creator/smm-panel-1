@@ -100,7 +100,7 @@ export async function GET(
     const viewsRuns = order.runs.filter((r) => r.engagementType === "views");
     const likesRuns = order.runs.filter((r) => r.engagementType === "likes");
     const savesRuns = order.runs.filter((r) => r.engagementType === "saves");
-    const sharesRuns = order.runs.filter((r) => r.engagementType === "shares");
+    const sharesRuns = order.runs.filter((r) => r.engagementType === "shares" || r.engagementType === "reposts");
 
     const viewsDelivered = viewsRuns.reduce(
       (sum, r) => sum + (r.deliveredQuantity ?? (r.status === "completed" || r.status === "confirmed" ? r.quantity : 0)),

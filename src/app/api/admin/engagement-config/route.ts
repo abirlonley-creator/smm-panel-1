@@ -37,6 +37,7 @@ export async function GET(request: Request) {
   let igSavesOriginalRate = 1.45;
   let igSharesOriginalRate = 1.50;
   let igCommentsOriginalRate = 5.00;
+  let igRepostsOriginalRate = 0.22;
 
   try {
     const [adminViews, adminEng] = await Promise.all([
@@ -94,8 +95,9 @@ export async function GET(request: Request) {
       const igLServiceId = config.instagramLikes?.serviceId || "102";
       const igSServiceId = config.instagramSaves?.serviceId || "103";
       const igRServiceId = config.instagramShares?.serviceId || "104";
+      const igRepServiceId = config.instagramReposts?.serviceId || "105";
 
-      const [likesSrv, savesSrv, sharesSrv, igLikesSrv, igSavesSrv, igSharesSrv] = await Promise.all([
+      const [likesSrv, savesSrv, sharesSrv, igLikesSrv, igSavesSrv, igSharesSrv, igRepostsSrv] = await Promise.all([
         prisma.service.findFirst({
           where: {
             userProviderId: engConnId,
@@ -132,6 +134,12 @@ export async function GET(request: Request) {
             OR: [{ providerServiceId: igRServiceId }, { externalId: igRServiceId }],
           },
         }),
+        prisma.service.findFirst({
+          where: {
+            userProviderId: engConnId,
+            OR: [{ providerServiceId: igRepServiceId }, { externalId: igRepServiceId }],
+          },
+        }),
       ]);
 
       if (likesSrv && typeof likesSrv.ratePer1000 === "number") likesOriginalRate = likesSrv.ratePer1000;
@@ -141,6 +149,7 @@ export async function GET(request: Request) {
       if (igLikesSrv && typeof igLikesSrv.ratePer1000 === "number") igLikesOriginalRate = igLikesSrv.ratePer1000;
       if (igSavesSrv && typeof igSavesSrv.ratePer1000 === "number") igSavesOriginalRate = igSavesSrv.ratePer1000;
       if (igSharesSrv && typeof igSharesSrv.ratePer1000 === "number") igSharesOriginalRate = igSharesSrv.ratePer1000;
+      if (igRepostsSrv && typeof igRepostsSrv.ratePer1000 === "number") igRepostsOriginalRate = igRepostsSrv.ratePer1000;
     }
   } catch (err) {
     console.warn("[ADMIN_CONFIG] Could not resolve provider wholesale rates:", err);
@@ -210,6 +219,7 @@ export async function GET(request: Request) {
       saves: igSavesOriginalRate,
       shares: igSharesOriginalRate,
       comments: igCommentsOriginalRate,
+      reposts: igRepostsOriginalRate,
     },
   });
 }
@@ -248,6 +258,7 @@ export async function PUT(request: Request) {
       body.instagramLikes ||
       body.instagramSaves ||
       body.instagramShares ||
+      body.instagramReposts ||
       body.instagramComments ||
       body.instagramPricing
     ) {

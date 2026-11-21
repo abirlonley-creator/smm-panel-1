@@ -261,6 +261,13 @@ export async function POST(request: Request) {
     const sharesConn = sharesProv.connectionRecord;
     const sharesAdapter = sharesProv.adapter;
 
+    const repostsProvId = platform === "Instagram"
+      ? config.instagramReposts?.providerId
+      : (config.shares?.providerId || preset.shares?.providerId);
+    const repostsProv = resolveProviderForMetric(repostsProvId, adminEng);
+    const repostsConn = repostsProv.connectionRecord;
+    const repostsAdapter = repostsProv.adapter;
+
     const commentsProvId = platform === "Instagram"
       ? config.instagramComments?.providerId
       : (config.comments?.providerId);
@@ -283,6 +290,10 @@ export async function POST(request: Request) {
 
     const sharesServiceId = platform === "Instagram"
       ? (config.instagramShares?.serviceId || "104")
+      : (config.shares?.serviceId || preset.shares?.serviceId || "718");
+
+    const repostsServiceId = platform === "Instagram"
+      ? (config.instagramReposts?.serviceId || "105")
       : (config.shares?.serviceId || preset.shares?.serviceId || "718");
 
     const xmediaViewsService = await resolveService(xmediaConn.id, viewsServiceId, xmediaAdapter, {
@@ -318,11 +329,25 @@ export async function POST(request: Request) {
     let zeofameSharesService: any = null;
     if (
       preset.shares?.enabled ||
-      (parsed.batches && parsed.batches.some((b) => b.service === "shares" || b.service === "reposts"))
+      (parsed.batches && parsed.batches.some((b) => b.service === "shares"))
     ) {
       zeofameSharesService = await resolveService(sharesConn.id, sharesServiceId, sharesAdapter, {
-        name: platform === "Instagram" ? "Instagram Shares" : "TikTok Shares / Reposts",
+        name: platform === "Instagram" ? "Instagram Shares" : "TikTok Shares",
         category: platform === "Instagram" ? "Instagram Shares" : "TikTok Shares",
+        platform,
+        ratePer1000: platform === "Instagram" ? 1.50 : 0.22,
+        minQuantity: 10,
+        maxQuantity: 500000,
+      });
+    }
+
+    let zeofameRepostsService: any = null;
+    if (
+      (parsed.batches && parsed.batches.some((b) => b.service === "reposts"))
+    ) {
+      zeofameRepostsService = await resolveService(repostsConn.id, repostsServiceId, repostsAdapter, {
+        name: platform === "Instagram" ? "Instagram Reposts [Paced]" : "TikTok Reposts",
+        category: platform === "Instagram" ? "Instagram Reposts" : "TikTok Reposts",
         platform,
         ratePer1000: platform === "Instagram" ? 1.50 : 0.22,
         minQuantity: 10,
@@ -367,6 +392,7 @@ export async function POST(request: Request) {
     let likesRate: number;
     let savesRate: number;
     let sharesRate: number;
+    let repostsRate: number;
     let commentsRate: number;
 
     if (platform === "Instagram") {
@@ -384,6 +410,9 @@ export async function POST(request: Request) {
         sharesRate = config.instagramZeroProfitVip
           ? (zeofameSharesService?.ratePer1000 ?? 1.50)
           : (config.instagramVipPricing?.sharesUserRate ?? 1.50);
+        repostsRate = config.instagramZeroProfitVip
+          ? (zeofameRepostsService?.ratePer1000 ?? 0.22)
+          : (config.instagramVipPricing?.repostsUserRate ?? 0.22);
         commentsRate = config.instagramZeroProfitVip
           ? (zeofameCommentsService?.ratePer1000 ?? 5.00)
           : (config.instagramVipPricing?.commentsUserRate ?? 5.00);
@@ -393,6 +422,7 @@ export async function POST(request: Request) {
         likesRate = config.instagramPricing?.likesUserRate ?? (zeofameLikesService?.ratePer1000 ? zeofameLikesService.ratePer1000 * 2.0 : 2.20);
         savesRate = config.instagramPricing?.savesUserRate ?? (zeofameSavesService?.ratePer1000 ? zeofameSavesService.ratePer1000 * 2.0 : 2.50);
         sharesRate = config.instagramPricing?.sharesUserRate ?? (zeofameSharesService?.ratePer1000 ? zeofameSharesService.ratePer1000 * 2.0 : 2.50);
+        repostsRate = config.instagramPricing?.repostsUserRate ?? (zeofameRepostsService?.ratePer1000 ? zeofameRepostsService.ratePer1000 * 2.0 : 2.50);
         commentsRate = config.instagramPricing?.commentsUserRate ?? 20.00;
       }
     } else {
@@ -410,6 +440,7 @@ export async function POST(request: Request) {
         sharesRate = config.tiktokZeroProfitVip
           ? (zeofameSharesService?.ratePer1000 ?? 0.22)
           : (config.tiktokVipPricing?.sharesUserRate ?? 0.22);
+        repostsRate = sharesRate;
         commentsRate = config.tiktokZeroProfitVip
           ? (zeofameCommentsService?.ratePer1000 ?? 5.00)
           : (config.tiktokVipPricing?.commentsUserRate ?? 5.00);
@@ -419,6 +450,7 @@ export async function POST(request: Request) {
         likesRate = config.pricing?.likesUserRate ?? (zeofameLikesService?.ratePer1000 ? zeofameLikesService.ratePer1000 * 2.0 : 2.00);
         savesRate = config.pricing?.savesUserRate ?? (zeofameSavesService?.ratePer1000 ? zeofameSavesService.ratePer1000 * 2.5 : 0.80);
         sharesRate = config.pricing?.sharesUserRate ?? (zeofameSharesService?.ratePer1000 ? zeofameSharesService.ratePer1000 * 2.5 : 0.80);
+        repostsRate = sharesRate;
         commentsRate = config.pricing?.commentsUserRate ?? 15.00;
       }
     }
@@ -559,6 +591,9 @@ export async function POST(request: Request) {
     const sharesRuns: Array<{ runNumber: number; scheduledAt: Date; quantity: number; cost: number }> = [];
     let totalPlannedShares = 0;
     let totalSharesCost = 0;
+    const repostsRuns: Array<{ runNumber: number; scheduledAt: Date; quantity: number; cost: number }> = [];
+    let totalPlannedReposts = 0;
+    let totalRepostsCost = 0;
     if (!hasDeterministicBatches && preset.shares?.enabled) {
       const minR = Math.min(preset.shares.minQuantity, preset.shares.maxQuantity);
       const maxR = Math.max(preset.shares.minQuantity, preset.shares.maxQuantity);
@@ -604,6 +639,7 @@ export async function POST(request: Request) {
       likesRuns.length = 0;
       savesRuns.length = 0;
       sharesRuns.length = 0;
+      repostsRuns.length = 0;
       commentsRuns.length = 0;
       totalPlannedViews = 0;
       totalViewsCost = 0;
@@ -613,6 +649,8 @@ export async function POST(request: Request) {
       totalSavesCost = 0;
       totalPlannedShares = 0;
       totalSharesCost = 0;
+      totalPlannedReposts = 0;
+      totalRepostsCost = 0;
       totalPlannedComments = 0;
       totalCommentsCost = 0;
 
@@ -620,6 +658,7 @@ export async function POST(request: Request) {
       let lIdx = 1;
       let sIdx = 1;
       let shIdx = 1;
+      let repIdx = 1;
       let cIdx = 1;
 
       for (const b of parsed.batches) {
@@ -639,11 +678,16 @@ export async function POST(request: Request) {
           savesRuns.push({ runNumber: sIdx++, scheduledAt: batchScheduledAt, quantity: b.quantity, cost: runCost });
           totalPlannedSaves += b.quantity;
           totalSavesCost += runCost;
-        } else if (b.service === "shares" || b.service === "reposts") {
+        } else if (b.service === "shares") {
           const runCost = Number(((b.quantity / 1000) * sharesRate).toFixed(4));
           sharesRuns.push({ runNumber: shIdx++, scheduledAt: batchScheduledAt, quantity: b.quantity, cost: runCost });
           totalPlannedShares += b.quantity;
           totalSharesCost += runCost;
+        } else if (b.service === "reposts") {
+          const runCost = Number(((b.quantity / 1000) * repostsRate).toFixed(4));
+          repostsRuns.push({ runNumber: repIdx++, scheduledAt: batchScheduledAt, quantity: b.quantity, cost: runCost });
+          totalPlannedReposts += b.quantity;
+          totalRepostsCost += runCost;
         } else if (b.service === "comments") {
           const runCost = Number(((b.quantity / 1000) * commentsRate).toFixed(4));
           commentsRuns.push({ runNumber: cIdx++, scheduledAt: batchScheduledAt, quantity: b.quantity, cost: runCost });
@@ -657,7 +701,7 @@ export async function POST(request: Request) {
     if (typeof parsed.totalCostInr === "number" && parsed.totalCostInr > 0) {
       totalCost = Number(parsed.totalCostInr.toFixed(2));
     } else {
-      totalCost = Number((totalViewsCost + totalLikesCost + totalSavesCost + totalSharesCost + totalCommentsCost).toFixed(2));
+      totalCost = Number((totalViewsCost + totalLikesCost + totalSavesCost + totalSharesCost + totalRepostsCost + totalCommentsCost).toFixed(2));
     }
     const currentBalance = user.walletBalance ?? 0;
 
@@ -683,6 +727,7 @@ export async function POST(request: Request) {
     const likesWholesaleCost = Number(((totalPlannedLikes / 1000) * (zeofameLikesService.ratePer1000 || 0.88)).toFixed(4));
     const savesWholesaleCost = Number(((totalPlannedSaves / 1000) * (zeofameSavesService?.ratePer1000 || 0.22)).toFixed(4));
     const sharesWholesaleCost = Number(((totalPlannedShares / 1000) * (zeofameSharesService?.ratePer1000 || 0.22)).toFixed(4));
+    const repostsWholesaleCost = Number(((totalPlannedReposts / 1000) * (zeofameRepostsService?.ratePer1000 || 0.22)).toFixed(4));
     const commentsWholesaleCost = Number(((totalPlannedComments / 1000) * (zeofameCommentsService?.ratePer1000 || 15.00)).toFixed(4));
 
     const checkProviderBalance = (conn: any, neededCost: number) => {
@@ -723,6 +768,13 @@ export async function POST(request: Request) {
       if (failed) {
         adminOutOfBalanceProvider = failed;
         outOfBalanceConnId = sharesConn.id;
+      }
+    }
+    if (!adminOutOfBalanceProvider && totalPlannedReposts > 0) {
+      const failed = checkProviderBalance(repostsConn, repostsWholesaleCost);
+      if (failed) {
+        adminOutOfBalanceProvider = failed;
+        outOfBalanceConnId = repostsConn.id;
       }
     }
     if (!adminOutOfBalanceProvider && totalPlannedComments > 0) {
@@ -792,6 +844,7 @@ export async function POST(request: Request) {
       if (totalPlannedLikes > 0) enabledTypes.push("likes");
       if (totalPlannedSaves > 0) enabledTypes.push("saves");
       if (totalPlannedShares > 0) enabledTypes.push("shares");
+      if (totalPlannedReposts > 0) enabledTypes.push("reposts");
       if (totalPlannedComments > 0) enabledTypes.push("comments");
 
       // C. Create EngagementOrder
@@ -830,6 +883,7 @@ export async function POST(request: Request) {
             likesRuns: likesRuns.length,
             savesRuns: savesRuns.length,
             sharesRuns: sharesRuns.length,
+            repostsRuns: repostsRuns.length,
             commentsRuns: commentsRuns.length,
             rows: parsed.rows || null,
           }),
@@ -859,6 +913,11 @@ export async function POST(request: Request) {
       const sharesProviderId =
         zeofameSharesService?.providerId && validProviders.has(zeofameSharesService.providerId)
           ? zeofameSharesService.providerId
+          : null;
+
+      const repostsProviderId =
+        zeofameRepostsService?.providerId && validProviders.has(zeofameRepostsService.providerId)
+          ? zeofameRepostsService.providerId
           : null;
 
       const commentsProviderId =
@@ -942,6 +1001,25 @@ export async function POST(request: Request) {
         });
       }
 
+      // G2. Create Reposts Runs (if any)
+      for (const repr of repostsRuns) {
+        await tx.engagementRun.create({
+          data: {
+            engagementOrderId: engagementOrder.id,
+            engagementType: "reposts",
+            serviceId: zeofameRepostsService?.id ?? null,
+            providerId: repostsProviderId,
+            providerServiceId: String(zeofameRepostsService?.providerServiceId || zeofameRepostsService?.externalId || "105"),
+            runNumber: repr.runNumber,
+            scheduledAt: repr.scheduledAt,
+            quantity: repr.quantity,
+            plannedCumulative: 0,
+            status: "scheduled",
+            cost: repr.cost,
+          },
+        });
+      }
+
       // H. Create Comments Runs (if any)
       for (const cr of commentsRuns) {
         await tx.engagementRun.create({
@@ -982,6 +1060,7 @@ export async function POST(request: Request) {
             totalPlannedLikes,
             totalPlannedSaves,
             totalPlannedShares,
+            totalPlannedReposts,
             totalPlannedComments,
             durationHours: preset.durationHours,
           }),
@@ -994,7 +1073,7 @@ export async function POST(request: Request) {
       };
     });
 
-    const totalRunsCount = viewsRuns.length + likesRuns.length + savesRuns.length + sharesRuns.length + commentsRuns.length;
+    const totalRunsCount = viewsRuns.length + likesRuns.length + savesRuns.length + sharesRuns.length + repostsRuns.length + commentsRuns.length;
 
     // Log Creation Event
     await logOrderEvent({
