@@ -5,7 +5,7 @@ import {
   getTikTokPresetByIdAsync,
   TikTokTierPreset,
 } from "./tiktok-preset-config";
-import { getAdminViewsProvider, getAdminEngagementProvider } from "@/lib/provider/admin-provider";
+import { getAdminViewsProvider, getAdminEngagementProvider, getAdminProviderConnections } from "@/lib/provider/admin-provider";
 import { logOrderEvent } from "./event-logger";
 import { recordAdminAlert } from "./alert-service";
 import { runEngagementTick } from "./worker";
@@ -47,6 +47,7 @@ export interface EngagementOrderResult {
   targetLikes?: number;
   targetSaves?: number;
   targetShares?: number;
+  targetReposts?: number;
   batchesCount?: number;
   durationHours?: number;
   remainingBalance?: number;
@@ -245,6 +246,7 @@ export const ENGAGEMENT_TIER_SERVICES = [
     presetId: "tiktok_2k",
     name: "2k",
     displayName: "TikTok Engagement 2K",
+    platform: "TikTok" as const,
     duration: "5 Hours",
     min: 2000,
     max: 2000,
@@ -252,6 +254,7 @@ export const ENGAGEMENT_TIER_SERVICES = [
     targetLikes: 42,
     targetSaves: 0,
     targetShares: 0,
+    targetReposts: 0,
     description: "Organic 5-hour pacing with 16 randomized view batches and 3 synchronized like waves. Dynamic organic shuffle supported.",
   },
   {
@@ -260,6 +263,7 @@ export const ENGAGEMENT_TIER_SERVICES = [
     presetId: "tiktok_5k",
     name: "5k",
     displayName: "TikTok Engagement 5K",
+    platform: "TikTok" as const,
     duration: "16 Hours",
     min: 5000,
     max: 5000,
@@ -267,6 +271,7 @@ export const ENGAGEMENT_TIER_SERVICES = [
     targetLikes: 170,
     targetSaves: 44,
     targetShares: 22,
+    targetReposts: 0,
     description: "16-hour FYP velocity push with 20 randomized view batches, 14 like waves, 4 save waves, and 2 repost waves.",
   },
   {
@@ -275,6 +280,7 @@ export const ENGAGEMENT_TIER_SERVICES = [
     presetId: "tiktok_10k",
     name: "10k",
     displayName: "TikTok Engagement 10K",
+    platform: "TikTok" as const,
     duration: "22 Hours",
     min: 10000,
     max: 10000,
@@ -282,6 +288,7 @@ export const ENGAGEMENT_TIER_SERVICES = [
     targetLikes: 384,
     targetSaves: 90,
     targetShares: 44,
+    targetReposts: 0,
     description: "22-hour algorithm breakout with 26 view batches, 24 like waves, 8 save waves, and 4 repost waves.",
   },
   {
@@ -290,6 +297,7 @@ export const ENGAGEMENT_TIER_SERVICES = [
     presetId: "tiktok_15k",
     name: "15k",
     displayName: "TikTok Engagement 15K",
+    platform: "TikTok" as const,
     duration: "24 Hours",
     min: 15000,
     max: 15000,
@@ -297,8 +305,85 @@ export const ENGAGEMENT_TIER_SERVICES = [
     targetLikes: 550,
     targetSaves: 120,
     targetShares: 60,
+    targetReposts: 0,
     description: "24-hour full FYP acceleration surge with 30 view batches, 26 like waves, 10 save waves, and 6 repost waves.",
   },
+];
+
+export const INSTAGRAM_ENGAGEMENT_TIER_SERVICES = [
+  {
+    service: 201,
+    alias: "ig_2k",
+    presetId: "tiktok_2k",
+    name: "ig_2k",
+    displayName: "Instagram Engagement 2K",
+    platform: "Instagram" as const,
+    duration: "6 Hours",
+    min: 2000,
+    max: 2000,
+    targetViews: 2000,
+    targetLikes: 42,
+    targetSaves: 10,
+    targetShares: 10,
+    targetReposts: 10,
+    description: "Natural 6-hour Instagram growth with gradual view pacing, likes, saves, shares and organic reposts.",
+  },
+  {
+    service: 202,
+    alias: "ig_5k",
+    presetId: "tiktok_5k",
+    name: "ig_5k",
+    displayName: "Instagram Engagement 5K",
+    platform: "Instagram" as const,
+    duration: "24 Hours",
+    min: 5000,
+    max: 5000,
+    targetViews: 5000,
+    targetLikes: 170,
+    targetSaves: 44,
+    targetShares: 22,
+    targetReposts: 22,
+    description: "24-hour Instagram Explore & Reel breakout velocity with coordinated like waves, saves, and reposts.",
+  },
+  {
+    service: 203,
+    alias: "ig_10k",
+    presetId: "tiktok_10k",
+    name: "ig_10k",
+    displayName: "Instagram Engagement 10K",
+    platform: "Instagram" as const,
+    duration: "48 Hours",
+    min: 10000,
+    max: 10000,
+    targetViews: 10000,
+    targetLikes: 384,
+    targetSaves: 90,
+    targetShares: 44,
+    targetReposts: 44,
+    description: "48-hour algorithmic momentum surge with high-weight bookmarks, shares, and organic reposts.",
+  },
+  {
+    service: 204,
+    alias: "ig_15k",
+    presetId: "tiktok_15k",
+    name: "ig_15k",
+    displayName: "Instagram Engagement 15K",
+    platform: "Instagram" as const,
+    duration: "72 Hours",
+    min: 15000,
+    max: 15000,
+    targetViews: 15000,
+    targetLikes: 550,
+    targetSaves: 120,
+    targetShares: 60,
+    targetReposts: 60,
+    description: "72-hour full viral acceleration push with multi-phase stepped expansion across all engagement metrics.",
+  },
+];
+
+export const ALL_ENGAGEMENT_TIER_SERVICES = [
+  ...ENGAGEMENT_TIER_SERVICES,
+  ...INSTAGRAM_ENGAGEMENT_TIER_SERVICES,
 ];
 
 /**
@@ -311,7 +396,13 @@ export async function getEngagementServicesCatalog() {
   const sRate = config.pricing?.savesUserRate ?? 0.22;
   const shRate = config.pricing?.sharesUserRate ?? 0.22;
 
-  return ENGAGEMENT_TIER_SERVICES.map((tier) => {
+  const igVRate = config.instagramPricing?.viewsUserRate ?? 3.5;
+  const igLRate = config.instagramPricing?.likesUserRate ?? 2.2;
+  const igSRate = config.instagramPricing?.savesUserRate ?? 2.5;
+  const igShRate = config.instagramPricing?.sharesUserRate ?? 2.5;
+  const igRepRate = config.instagramPricing?.repostsUserRate ?? 2.5;
+
+  const tiktokServices = ENGAGEMENT_TIER_SERVICES.map((tier) => {
     const viewsCost = (tier.targetViews / 1000) * vRate;
     const likesCost = (tier.targetLikes / 1000) * lRate;
     const savesCost = (tier.targetSaves / 1000) * sRate;
@@ -336,9 +427,42 @@ export async function getEngagementServicesCatalog() {
       target_shares: tier.targetShares,
       shuffle_supported: true,
       description: tier.description,
-      status: "active",
+      status: config.tiktokEnabled === false || !config.enabled ? "paused" : "active",
     };
   });
+
+  const instagramServices = INSTAGRAM_ENGAGEMENT_TIER_SERVICES.map((tier) => {
+    const viewsCost = (tier.targetViews / 1000) * igVRate;
+    const likesCost = (tier.targetLikes / 1000) * igLRate;
+    const savesCost = (tier.targetSaves / 1000) * igSRate;
+    const sharesCost = (tier.targetShares / 1000) * igShRate;
+    const repostsCost = ((tier.targetReposts || 0) / 1000) * igRepRate;
+    const totalCost = Number((viewsCost + likesCost + savesCost + sharesCost + repostsCost).toFixed(2));
+
+    return {
+      service: tier.service,
+      alias: tier.alias,
+      category: "Instagram Engagement",
+      name: tier.name,
+      display_name: tier.displayName,
+      platform: "instagram",
+      type: "engagement_campaign",
+      rate: totalCost.toFixed(2),
+      min: tier.min,
+      max: tier.max,
+      duration: tier.duration,
+      target_views: tier.targetViews,
+      target_likes: tier.targetLikes,
+      target_saves: tier.targetSaves,
+      target_shares: tier.targetShares,
+      target_reposts: tier.targetReposts,
+      shuffle_supported: true,
+      description: tier.description,
+      status: config.instagramEnabled === false || !config.enabled ? "paused" : "active",
+    };
+  });
+
+  return [...tiktokServices, ...instagramServices];
 }
 
 /**
@@ -349,41 +473,80 @@ export async function createEngagementOrderInternal(
 ): Promise<EngagementOrderResult> {
   let targetUrl = params.targetUrl.trim();
   const lowerUrl = targetUrl.toLowerCase();
+  const isInstagramUrl = lowerUrl.includes("instagram.com") || lowerUrl.includes("instagr.am");
+  const isTikTokUrl = lowerUrl.includes("tiktok.com");
 
-  if (!lowerUrl.includes("tiktok.com")) {
-    return {
-      success: false,
-      error: "Please enter a valid TikTok video URL (e.g. https://www.tiktok.com/@username/video/...)",
-      statusCode: 400,
-    };
+  // Determine matched tier definition from service or preset
+  const paramStr = String(params.serviceOrPreset).toLowerCase().trim();
+  const paramNum = parseInt(paramStr, 10);
+  const matchedTier =
+    ALL_ENGAGEMENT_TIER_SERVICES.find(
+      (t) =>
+        t.service === paramNum ||
+        t.alias.toLowerCase() === paramStr ||
+        t.name.toLowerCase() === paramStr ||
+        t.presetId.toLowerCase() === paramStr
+    ) ||
+    (isInstagramUrl ? INSTAGRAM_ENGAGEMENT_TIER_SERVICES[0] : ENGAGEMENT_TIER_SERVICES[0]);
+
+  const platform: "TikTok" | "Instagram" =
+    matchedTier.platform === "Instagram" || isInstagramUrl ? "Instagram" : "TikTok";
+
+  // URL validation based on platform
+  if (platform === "Instagram") {
+    if (!isInstagramUrl) {
+      return {
+        success: false,
+        error: "Please enter a valid Instagram reel or post URL (e.g. https://www.instagram.com/p/... or /reel/...)",
+        statusCode: 400,
+      };
+    }
+  } else {
+    if (!isTikTokUrl) {
+      return {
+        success: false,
+        error: "Please enter a valid TikTok video URL (e.g. https://www.tiktok.com/@username/video/...)",
+        statusCode: 400,
+      };
+    }
+    if (lowerUrl.includes("vt.tiktok.com") || lowerUrl.includes("vm.tiktok.com")) {
+      try {
+        const resolved = await resolveTargetUrl(targetUrl);
+        if (resolved?.normalizedUrl) {
+          targetUrl = resolved.normalizedUrl;
+        }
+      } catch {}
+    }
   }
 
-  if (lowerUrl.includes("vt.tiktok.com") || lowerUrl.includes("vm.tiktok.com")) {
-    try {
-      const resolved = await resolveTargetUrl(targetUrl);
-      if (resolved?.normalizedUrl) {
-        targetUrl = resolved.normalizedUrl;
-      }
-    } catch {}
-  }
-
+  // Master and Platform Pause Checks
   const config = await getTikTokEngagementConfigAsync();
   if (!config.enabled) {
     return {
       success: false,
-      error: "TikTok Engagement system is currently disabled by administrator.",
+      error: "Admins Have Paused Engagement System",
       statusCode: 503,
     };
   }
 
-  // Resolve preset from shorthand ("2k", "5k", "10k", "15k"), numeric ID (101-104), or preset key
-  const preset = await getTikTokPresetByIdAsync(String(params.serviceOrPreset));
+  if (platform === "TikTok" && config.tiktokEnabled === false) {
+    return {
+      success: false,
+      error: "Admins Have Paused TikTok Engagement Orders",
+      statusCode: 503,
+    };
+  }
 
-  // Determine matched tier definition
-  const matchedTier =
-    ENGAGEMENT_TIER_SERVICES.find((t) => t.presetId === preset.id) ||
-    ENGAGEMENT_TIER_SERVICES.find((t) => t.alias === String(params.serviceOrPreset).toLowerCase()) ||
-    ENGAGEMENT_TIER_SERVICES[0];
+  if (platform === "Instagram" && config.instagramEnabled === false) {
+    return {
+      success: false,
+      error: "Admins Have Paused Instagram Engagement Orders",
+      statusCode: 503,
+    };
+  }
+
+  // Resolve preset from shorthand ("2k", "5k", "10k", "15k"), numeric ID (101-104 or 201-204), or preset key
+  const preset = await getTikTokPresetByIdAsync(matchedTier.presetId);
 
   const user = await prisma.user.findUnique({
     where: { id: params.userId },
@@ -395,9 +558,10 @@ export async function createEngagementOrderInternal(
   }
 
   // 1. Resolve Admin Upstream Providers
-  const [adminViews, adminEng] = await Promise.all([
+  const [adminViews, adminEng, allAdminConns] = await Promise.all([
     getAdminViewsProvider(),
     getAdminEngagementProvider(),
+    getAdminProviderConnections(),
   ]);
 
   if (!adminViews || !adminEng) {
@@ -408,48 +572,112 @@ export async function createEngagementOrderInternal(
     };
   }
 
-  const xmediaConn = adminViews.connectionRecord;
-  const zeofameConn = adminEng.connectionRecord;
-  const xmediaAdapter = adminViews.adapter;
-  const zeofameAdapter = adminEng.adapter;
+  const resolveProviderForMetric = (preferredId?: string | null, fallback?: any) => {
+    if (preferredId) {
+      const found = allAdminConns.find((p) => p.id === preferredId);
+      if (found) return found;
+    }
+    return fallback;
+  };
 
-  const viewsServiceId = config.views?.serviceId || preset.views.serviceId || "897";
-  const likesServiceId = config.likes?.serviceId || preset.likes.serviceId || "1123";
-  const savesServiceId = config.saves?.serviceId || preset.saves?.serviceId || "807";
-  const sharesServiceId = config.shares?.serviceId || preset.shares?.serviceId || "718";
+  const viewsProvId = platform === "Instagram"
+    ? config.instagramViews?.providerId
+    : (config.views?.providerId || preset.views?.providerId);
+  const viewsProv = resolveProviderForMetric(viewsProvId, adminViews);
+  const xmediaConn = viewsProv.connectionRecord;
+  const xmediaAdapter = viewsProv.adapter;
+
+  const likesProvId = platform === "Instagram"
+    ? config.instagramLikes?.providerId
+    : (config.likes?.providerId || preset.likes?.providerId);
+  const likesProv = resolveProviderForMetric(likesProvId, adminEng);
+  const likesConn = likesProv.connectionRecord;
+  const likesAdapter = likesProv.adapter;
+
+  const savesProvId = platform === "Instagram"
+    ? config.instagramSaves?.providerId
+    : (config.saves?.providerId || preset.saves?.providerId);
+  const savesProv = resolveProviderForMetric(savesProvId, adminEng);
+  const savesConn = savesProv.connectionRecord;
+  const savesAdapter = savesProv.adapter;
+
+  const sharesProvId = platform === "Instagram"
+    ? config.instagramShares?.providerId
+    : (config.shares?.providerId || preset.shares?.providerId);
+  const sharesProv = resolveProviderForMetric(sharesProvId, adminEng);
+  const sharesConn = sharesProv.connectionRecord;
+  const sharesAdapter = sharesProv.adapter;
+
+  const repostsProvId = platform === "Instagram"
+    ? config.instagramReposts?.providerId
+    : (config.shares?.providerId || preset.shares?.providerId);
+  const repostsProv = resolveProviderForMetric(repostsProvId, adminEng);
+  const repostsConn = repostsProv.connectionRecord;
+  const repostsAdapter = repostsProv.adapter;
+
+  const viewsServiceId = platform === "Instagram"
+    ? (config.instagramViews?.serviceId || "101")
+    : (config.views?.serviceId || preset.views.serviceId || "897");
+
+  const likesServiceId = platform === "Instagram"
+    ? (config.instagramLikes?.serviceId || "102")
+    : (config.likes?.serviceId || preset.likes.serviceId || "1123");
+
+  const savesServiceId = platform === "Instagram"
+    ? (config.instagramSaves?.serviceId || "103")
+    : (config.saves?.serviceId || preset.saves?.serviceId || "807");
+
+  const sharesServiceId = platform === "Instagram"
+    ? (config.instagramShares?.serviceId || "104")
+    : (config.shares?.serviceId || preset.shares?.serviceId || "718");
+
+  const repostsServiceId = platform === "Instagram"
+    ? (config.instagramReposts?.serviceId || "105")
+    : (config.shares?.serviceId || preset.shares?.serviceId || "718");
 
   const xmediaViewsService = await resolveService(xmediaConn.id, viewsServiceId, xmediaAdapter, {
-    name: "TikTok Video Views [Medium Fast]",
-    category: "TikTok Views",
-    ratePer1000: 2.23,
+    name: platform === "Instagram" ? "Instagram Reel Views" : "TikTok Video Views [Medium Fast]",
+    category: platform === "Instagram" ? "Instagram Views" : "TikTok Views",
+    ratePer1000: platform === "Instagram" ? 0.84 : 2.23,
     minQuantity: 100,
     maxQuantity: 100000000,
   });
 
-  const zeofameLikesService = await resolveService(zeofameConn.id, likesServiceId, zeofameAdapter, {
-    name: "TikTok Likes [Fast]",
-    category: "TikTok Likes",
-    ratePer1000: 0.88,
+  const zeofameLikesService = await resolveService(likesConn.id, likesServiceId, likesAdapter, {
+    name: platform === "Instagram" ? "Instagram Likes" : "TikTok Likes [Fast]",
+    category: platform === "Instagram" ? "Instagram Likes" : "TikTok Likes",
+    ratePer1000: platform === "Instagram" ? 1.10 : 0.88,
     minQuantity: 10,
     maxQuantity: 500000,
   });
 
   let zeofameSavesService: any = null;
-  if (preset.saves?.enabled) {
-    zeofameSavesService = await resolveService(zeofameConn.id, savesServiceId, zeofameAdapter, {
-      name: "TikTok Video Save",
-      category: "TikTok Saves",
-      ratePer1000: 0.22,
-      minQuantity: 10,
+  if (platform === "Instagram" || preset.saves?.enabled) {
+    zeofameSavesService = await resolveService(savesConn.id, savesServiceId, savesAdapter, {
+      name: platform === "Instagram" ? "Instagram Saves" : "TikTok Video Save",
+      category: platform === "Instagram" ? "Instagram Saves" : "TikTok Saves",
+      ratePer1000: platform === "Instagram" ? 1.45 : 0.22,
+      minQuantity: 1,
       maxQuantity: 500000,
     });
   }
 
   let zeofameSharesService: any = null;
-  if (preset.shares?.enabled) {
-    zeofameSharesService = await resolveService(zeofameConn.id, sharesServiceId, zeofameAdapter, {
-      name: "TikTok Shares / Reposts",
-      category: "TikTok Shares",
+  if (platform === "Instagram" || preset.shares?.enabled) {
+    zeofameSharesService = await resolveService(sharesConn.id, sharesServiceId, sharesAdapter, {
+      name: platform === "Instagram" ? "Instagram Shares" : "TikTok Shares / Reposts",
+      category: platform === "Instagram" ? "Instagram Shares" : "TikTok Shares",
+      ratePer1000: platform === "Instagram" ? 1.50 : 0.22,
+      minQuantity: 10,
+      maxQuantity: 500000,
+    });
+  }
+
+  let zeofameRepostsService: any = null;
+  if (platform === "Instagram") {
+    zeofameRepostsService = await resolveService(repostsConn.id, repostsServiceId, repostsAdapter, {
+      name: "Instagram Reposts",
+      category: "Instagram Reposts",
       ratePer1000: 0.22,
       minQuantity: 10,
       maxQuantity: 500000,
@@ -458,10 +686,19 @@ export async function createEngagementOrderInternal(
 
   // 2. Build Batch Schedules (with dynamic organic shuffle support)
   const now = Date.now();
-  const viewsRate = config.pricing?.viewsUserRate ?? (xmediaViewsService?.ratePer1000 ? xmediaViewsService.ratePer1000 * 1.5 : 4.5);
-  const likesRate = config.pricing?.likesUserRate ?? (zeofameLikesService?.ratePer1000 ? zeofameLikesService.ratePer1000 * 2.0 : 2.0);
-  const savesRate = config.pricing?.savesUserRate ?? (zeofameSavesService?.ratePer1000 ? zeofameSavesService.ratePer1000 * 2.5 : 0.8);
-  const sharesRate = config.pricing?.sharesUserRate ?? (zeofameSharesService?.ratePer1000 ? zeofameSharesService.ratePer1000 * 2.5 : 0.8);
+  const viewsRate = platform === "Instagram"
+    ? (config.instagramPricing?.viewsUserRate ?? 3.5)
+    : (config.pricing?.viewsUserRate ?? (xmediaViewsService?.ratePer1000 ? xmediaViewsService.ratePer1000 * 1.5 : 4.5));
+  const likesRate = platform === "Instagram"
+    ? (config.instagramPricing?.likesUserRate ?? 2.2)
+    : (config.pricing?.likesUserRate ?? (zeofameLikesService?.ratePer1000 ? zeofameLikesService.ratePer1000 * 2.0 : 2.0));
+  const savesRate = platform === "Instagram"
+    ? (config.instagramPricing?.savesUserRate ?? 2.5)
+    : (config.pricing?.savesUserRate ?? (zeofameSavesService?.ratePer1000 ? zeofameSavesService.ratePer1000 * 2.5 : 0.8));
+  const sharesRate = platform === "Instagram"
+    ? (config.instagramPricing?.sharesUserRate ?? 2.5)
+    : (config.pricing?.sharesUserRate ?? (zeofameSharesService?.ratePer1000 ? zeofameSharesService.ratePer1000 * 2.5 : 0.8));
+  const repostsRate = config.instagramPricing?.repostsUserRate ?? 2.5;
 
   const shouldShuffle = params.shuffle !== false;
 
@@ -549,19 +786,20 @@ export async function createEngagementOrderInternal(
   let totalPlannedSaves = 0;
   let totalSavesCost = 0;
 
-  if (preset.saves?.enabled) {
-    const minS = Math.min(preset.saves.minQuantity, preset.saves.maxQuantity);
-    const maxS = Math.max(preset.saves.minQuantity, preset.saves.maxQuantity);
+  if (platform === "Instagram" || preset.saves?.enabled) {
+    const minS = Math.min(preset.saves?.minQuantity || 1, preset.saves?.maxQuantity || 500);
+    const maxS = Math.max(preset.saves?.minQuantity || 1, preset.saves?.maxQuantity || 500);
     const targetS = preset.targetSaves || matchedTier.targetSaves;
-    const savesOffsets = preset.saves.waveOffsets || [180, 360, 600];
+    const savesOffsets = preset.saves?.waveOffsets || [180, 360, 600];
+    const savesRunsCount = preset.saves?.runsCount || 2;
 
     const randomizedSaves = shouldShuffle
-      ? generateOrganicRandomDistribution(targetS, preset.saves.runsCount, minS, maxS, true)
+      ? generateOrganicRandomDistribution(targetS, savesRunsCount, minS, maxS, true)
       : [];
 
-    for (let i = 0; i < preset.saves.runsCount; i++) {
+    for (let i = 0; i < savesRunsCount; i++) {
       let qty: number;
-      if (params.plannedSaves && typeof params.plannedSaves[i] === "number" && params.plannedSaves[i] >= Math.min(minS, 10)) {
+      if (params.plannedSaves && typeof params.plannedSaves[i] === "number" && params.plannedSaves[i] >= Math.min(minS, 1)) {
         qty = params.plannedSaves[i];
       } else if (randomizedSaves[i]) {
         qty = randomizedSaves[i];
@@ -584,17 +822,18 @@ export async function createEngagementOrderInternal(
   let totalPlannedShares = 0;
   let totalSharesCost = 0;
 
-  if (preset.shares?.enabled) {
-    const minR = Math.min(preset.shares.minQuantity, preset.shares.maxQuantity);
-    const maxR = Math.max(preset.shares.minQuantity, preset.shares.maxQuantity);
+  if (platform === "Instagram" || preset.shares?.enabled) {
+    const minR = Math.min(preset.shares?.minQuantity || 10, preset.shares?.maxQuantity || 500);
+    const maxR = Math.max(preset.shares?.minQuantity || 10, preset.shares?.maxQuantity || 500);
     const targetR = preset.targetShares || matchedTier.targetShares;
-    const sharesOffsets = preset.shares.waveOffsets || [300, 540];
+    const sharesOffsets = preset.shares?.waveOffsets || [300, 540];
+    const sharesRunsCount = preset.shares?.runsCount || 2;
 
     const randomizedShares = shouldShuffle
-      ? generateOrganicRandomDistribution(targetR, preset.shares.runsCount, minR, maxR, true)
+      ? generateOrganicRandomDistribution(targetR, sharesRunsCount, minR, maxR, true)
       : [];
 
-    for (let i = 0; i < preset.shares.runsCount; i++) {
+    for (let i = 0; i < sharesRunsCount; i++) {
       let qty: number;
       if (params.plannedShares && typeof params.plannedShares[i] === "number" && params.plannedShares[i] >= Math.min(minR, 5)) {
         qty = params.plannedShares[i];
@@ -614,7 +853,34 @@ export async function createEngagementOrderInternal(
     }
   }
 
-  const totalCost = Number((totalViewsCost + totalLikesCost + totalSavesCost + totalSharesCost).toFixed(2));
+  // E. Reposts Runs (for Instagram)
+  const repostsRuns: Array<{ runNumber: number; scheduledAt: Date; quantity: number; cost: number }> = [];
+  let totalPlannedReposts = 0;
+  let totalRepostsCost = 0;
+
+  if (platform === "Instagram" && (matchedTier.targetReposts || 0) > 0) {
+    const targetRep = matchedTier.targetReposts || 10;
+    const repRunsCount = targetRep <= 15 ? 1 : 2;
+    const repOffsets = [360, 720];
+    const randomizedReposts = shouldShuffle
+      ? generateOrganicRandomDistribution(targetRep, repRunsCount, 5, targetRep, true)
+      : [targetRep];
+
+    for (let i = 0; i < repRunsCount; i++) {
+      const qty = randomizedReposts[i] || Math.ceil(targetRep / repRunsCount);
+      const offsetMinutes = repOffsets[i] ?? (360 + i * 360);
+      const scheduledAt = new Date(now + offsetMinutes * 60 * 1000);
+      const runCost = Number(((qty / 1000) * repostsRate).toFixed(4));
+
+      totalPlannedReposts += qty;
+      totalRepostsCost += runCost;
+      repostsRuns.push({ runNumber: i + 1, scheduledAt, quantity: qty, cost: runCost });
+    }
+  }
+
+  const totalCost = Number(
+    (totalViewsCost + totalLikesCost + totalSavesCost + totalSharesCost + totalRepostsCost).toFixed(2)
+  );
   const currentBalance = user.walletBalance ?? 0;
 
   if (currentBalance < totalCost) {
@@ -631,21 +897,22 @@ export async function createEngagementOrderInternal(
   const engWholesaleCost = Number((
     (totalPlannedLikes / 1000) * (zeofameLikesService.ratePer1000 || 0.88) +
     (totalPlannedSaves / 1000) * (zeofameSavesService?.ratePer1000 || 0.22) +
-    (totalPlannedShares / 1000) * (zeofameSharesService?.ratePer1000 || 0.22)
+    (totalPlannedShares / 1000) * (zeofameSharesService?.ratePer1000 || 0.22) +
+    (totalPlannedReposts / 1000) * (zeofameRepostsService?.ratePer1000 || 0.22)
   ).toFixed(4));
 
   const viewsProviderBalance = typeof xmediaConn.balance === "number" ? xmediaConn.balance : null;
-  const engProviderBalance = typeof zeofameConn.balance === "number" ? zeofameConn.balance : null;
+  const engProviderBalance = typeof likesConn.balance === "number" ? likesConn.balance : null;
 
   let adminOutOfBalanceProvider: string | null = null;
   if (totalPlannedViews > 0 && viewsProviderBalance !== null && viewsProviderBalance <= 0) {
     adminOutOfBalanceProvider = xmediaConn.name || "Views Network";
-  } else if ((totalPlannedLikes > 0 || totalPlannedSaves > 0 || totalPlannedShares > 0) && engProviderBalance !== null && engProviderBalance <= 0) {
-    adminOutOfBalanceProvider = zeofameConn.name || "Engagement Network";
+  } else if ((totalPlannedLikes > 0 || totalPlannedSaves > 0 || totalPlannedShares > 0 || totalPlannedReposts > 0) && engProviderBalance !== null && engProviderBalance <= 0) {
+    adminOutOfBalanceProvider = likesConn.name || "Engagement Network";
   } else if (totalPlannedViews > 0 && viewsProviderBalance !== null && viewsProviderBalance < viewsWholesaleCost && !xmediaConn.isMock) {
     adminOutOfBalanceProvider = xmediaConn.name || "Views Network";
-  } else if ((totalPlannedLikes > 0 || totalPlannedSaves > 0 || totalPlannedShares > 0) && engProviderBalance !== null && engProviderBalance < engWholesaleCost && !zeofameConn.isMock) {
-    adminOutOfBalanceProvider = zeofameConn.name || "Engagement Network";
+  } else if ((totalPlannedLikes > 0 || totalPlannedSaves > 0 || totalPlannedShares > 0 || totalPlannedReposts > 0) && engProviderBalance !== null && engProviderBalance < engWholesaleCost && !likesConn.isMock) {
+    adminOutOfBalanceProvider = likesConn.name || "Engagement Network";
   }
 
   if (adminOutOfBalanceProvider) {
@@ -655,7 +922,7 @@ export async function createEngagementOrderInternal(
       providerName: adminOutOfBalanceProvider,
       providerId: xmediaConn.id,
       userId: user.id,
-      platform: "TikTok",
+      platform,
       reason: `Admin provider "${adminOutOfBalanceProvider}" has run out of balance. User @${user.username} tried to place order (${matchedTier.name}) with sufficient balance, but upstream provider is depleted.`,
     }).catch(() => {});
 
@@ -697,7 +964,7 @@ export async function createEngagementOrderInternal(
         amount: -totalCost,
         balanceAfter: newBalance,
         referenceId: orderRef,
-        description: `TikTok Engagement (${matchedTier.name}): ${totalPlannedViews} Views, ${totalPlannedLikes} Likes${totalPlannedSaves ? `, ${totalPlannedSaves} Saves` : ""}${totalPlannedShares ? `, ${totalPlannedShares} Reposts` : ""}`,
+        description: `${platform} Engagement (${matchedTier.name}): ${totalPlannedViews} Views, ${totalPlannedLikes} Likes${totalPlannedSaves ? `, ${totalPlannedSaves} Saves` : ""}${totalPlannedShares ? `, ${totalPlannedShares} Shares` : ""}${totalPlannedReposts ? `, ${totalPlannedReposts} Reposts` : ""}`,
       },
     });
 
@@ -706,6 +973,7 @@ export async function createEngagementOrderInternal(
     if (totalPlannedLikes > 0) enabledTypes.push("likes");
     if (totalPlannedSaves > 0) enabledTypes.push("saves");
     if (totalPlannedShares > 0) enabledTypes.push("shares");
+    if (totalPlannedReposts > 0) enabledTypes.push("reposts");
 
     // C. Create EngagementOrder
     const engagementOrder = await tx.engagementOrder.create({
@@ -713,7 +981,7 @@ export async function createEngagementOrderInternal(
         orderRef,
         userId: user.id,
         targetUrl,
-        platform: "TikTok",
+        platform,
         profileId: preset.id,
         presetKey: matchedTier.name,
         baseViews: totalPlannedViews,
@@ -744,6 +1012,7 @@ export async function createEngagementOrderInternal(
           likesRuns: likesRuns.length,
           savesRuns: savesRuns.length,
           sharesRuns: sharesRuns.length,
+          repostsRuns: repostsRuns.length,
         }),
       },
     });
@@ -754,6 +1023,7 @@ export async function createEngagementOrderInternal(
     const likesProviderId = zeofameLikesService.providerId && validProviders.has(zeofameLikesService.providerId) ? zeofameLikesService.providerId : null;
     const savesProviderId = zeofameSavesService?.providerId && validProviders.has(zeofameSavesService.providerId) ? zeofameSavesService.providerId : null;
     const sharesProviderId = zeofameSharesService?.providerId && validProviders.has(zeofameSharesService.providerId) ? zeofameSharesService.providerId : null;
+    const repostsProviderId = zeofameRepostsService?.providerId && validProviders.has(zeofameRepostsService.providerId) ? zeofameRepostsService.providerId : null;
 
     // D. Create Runs
     for (const vr of viewsRuns) {
@@ -828,6 +1098,26 @@ export async function createEngagementOrderInternal(
       });
     }
 
+    for (const repr of repostsRuns) {
+      if (zeofameRepostsService) {
+        await tx.engagementRun.create({
+          data: {
+            engagementOrderId: engagementOrder.id,
+            engagementType: "reposts",
+            serviceId: zeofameRepostsService.id,
+            providerId: repostsProviderId,
+            providerServiceId: String(zeofameRepostsService.providerServiceId || zeofameRepostsService.externalId),
+            runNumber: repr.runNumber,
+            scheduledAt: repr.scheduledAt,
+            quantity: repr.quantity,
+            plannedCumulative: 0,
+            status: "scheduled",
+            cost: repr.cost,
+          },
+        });
+      }
+    }
+
     // E. Create parent Order entry for global tracking
     const mainOrder = await tx.order.create({
       data: {
@@ -843,15 +1133,17 @@ export async function createEngagementOrderInternal(
         unitCost: viewsRate,
         totalCost,
         status: "PROCESSING",
-        scheduleMode: "TIKTOK_ENGAGEMENT",
+        scheduleMode: platform === "Instagram" ? "INSTAGRAM_ENGAGEMENT" : "TIKTOK_ENGAGEMENT",
         notes: JSON.stringify({
           isEngagement: true,
+          platform,
           presetId: preset.id,
           tierName: matchedTier.name,
           totalPlannedViews,
           totalPlannedLikes,
           totalPlannedSaves,
           totalPlannedShares,
+          totalPlannedReposts,
           durationHours: preset.durationHours,
         }),
       },
@@ -868,12 +1160,12 @@ export async function createEngagementOrderInternal(
     return { engagementOrder, mainOrder };
   });
 
-  const totalRunsCount = viewsRuns.length + likesRuns.length + savesRuns.length + sharesRuns.length;
+  const totalRunsCount = viewsRuns.length + likesRuns.length + savesRuns.length + sharesRuns.length + repostsRuns.length;
 
   await logOrderEvent({
     orderId: result.engagementOrder.id,
     eventType: "STATE_CHANGE",
-    message: `Engagement campaign created with preset "${matchedTier.name}". Scheduled ${totalRunsCount} batches over ${preset.durationHours} hours.`,
+    message: `${platform} engagement campaign created with preset "${matchedTier.name}". Scheduled ${totalRunsCount} batches over ${preset.durationHours} hours.`,
   });
 
   // Trigger background execution
@@ -894,6 +1186,7 @@ export async function createEngagementOrderInternal(
     targetLikes: totalPlannedLikes,
     targetSaves: totalPlannedSaves,
     targetShares: totalPlannedShares,
+    targetReposts: totalPlannedReposts,
     batchesCount: totalRunsCount,
     durationHours: Math.ceil(preset.durationHours),
     remainingBalance: newBalance,
@@ -961,9 +1254,13 @@ export async function getEngagementOrderDetails(
   ).length;
 
   const matchedTier =
-    ENGAGEMENT_TIER_SERVICES.find((t) => t.presetId === engOrder!.profileId) ||
-    ENGAGEMENT_TIER_SERVICES.find((t) => t.name.toLowerCase() === (engOrder!.presetKey || "").toLowerCase()) ||
-    ENGAGEMENT_TIER_SERVICES[0];
+    ALL_ENGAGEMENT_TIER_SERVICES.find(
+      (t) =>
+        t.presetId === engOrder!.profileId &&
+        (engOrder?.platform ? t.platform.toLowerCase() === engOrder.platform.toLowerCase() : true)
+    ) ||
+    ALL_ENGAGEMENT_TIER_SERVICES.find((t) => t.name.toLowerCase() === (engOrder!.presetKey || "").toLowerCase()) ||
+    ALL_ENGAGEMENT_TIER_SERVICES[0];
 
   const numericOrder = parseInt(engOrder.orderRef.replace(/\D/g, ""), 10) || 0;
 

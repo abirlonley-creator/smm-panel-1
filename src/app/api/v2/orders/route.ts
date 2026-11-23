@@ -79,7 +79,7 @@ export async function POST(request: Request) {
     // 1. Validate service parameter
     if (service === undefined || service === null || service === "") {
       return NextResponse.json(
-        { error: "Missing required field: service. Valid values: '2k', '5k', '10k', '15k' (or numeric IDs 101, 102, 103, 104)." },
+        { error: "Missing required field: service. Valid values: TikTok ('2k', '5k', '10k', '15k' / 101-104) or Instagram ('ig_2k', 'ig_5k', 'ig_10k', 'ig_15k' / 201-204)." },
         { status: 400 }
       );
     }
@@ -87,7 +87,7 @@ export async function POST(request: Request) {
     // 2. Validate link
     if (!link || typeof link !== "string" || !isValidUrl(link.trim())) {
       return NextResponse.json(
-        { error: "Invalid link URL. Must be a valid public TikTok video URL." },
+        { error: "Invalid link URL. Must be a valid public TikTok video or Instagram reel/post URL." },
         { status: 400 }
       );
     }

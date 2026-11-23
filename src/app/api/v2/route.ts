@@ -155,10 +155,10 @@ export async function POST(request: Request) {
     const shuffle = payload.shuffle !== false;
 
     if (!service) {
-      return NextResponse.json({ error: "Missing required parameter: service (e.g. '2k', '5k', '10k', '15k')" }, { status: 400 });
+      return NextResponse.json({ error: "Missing required parameter: service (e.g. TikTok '2k'-'15k' / 101-104, or Instagram 'ig_2k'-'ig_15k' / 201-204)" }, { status: 400 });
     }
     if (!link || typeof link !== "string" || !isValidUrl(link.trim())) {
-      return NextResponse.json({ error: "Invalid link URL. Must be a valid TikTok video URL." }, { status: 400 });
+      return NextResponse.json({ error: "Invalid link URL. Must be a valid public TikTok video or Instagram reel/post URL." }, { status: 400 });
     }
     const cleanLink = link.trim();
 

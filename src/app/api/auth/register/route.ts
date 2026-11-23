@@ -28,31 +28,46 @@ export async function POST(request: Request) {
     const cleanUsername = parsed.data.username.toLowerCase().trim();
     const { password } = parsed.data;
 
-    // Check if username is already taken
-    const existing = await prisma.user.findUnique({
-      where: { username: cleanUsername },
+    // Check if username is already taken (case-insensitive)
+    const existing = await prisma.user.findFirst({
+      where: {
+        username: { equals: cleanUsername, mode: "insensitive" },
+      },
       include: { passkeys: true },
     });
 
     if (existing) {
-      if (existing.passkeys.length === 0) {
-        // Clean up orphaned user record from prior aborted attempt
-        await prisma.user.delete({ where: { id: existing.id } }).catch(() => {});
-      } else {
+      if (existing.passkeys && existing.passkeys.length > 0) {
         return NextResponse.json(
-          { success: false, error: "This username is already taken. Please choose another." },
+          { success: false, error: "This username is already taken. Please choose another or sign in." },
           { status: 409 }
         );
       }
+      // Clean up orphaned user record and its relations from prior aborted attempt
+      await prisma.session.deleteMany({ where: { userId: existing.id } }).catch(() => {});
+      await prisma.userProviderConnection.deleteMany({ where: { userId: existing.id } }).catch(() => {});
+      await prisma.user.delete({ where: { id: existing.id } }).catch(() => {});
     }
 
     // Hash user password with username salt to ensure global uniqueness on Passkey.keyHash
     const keyHash = hashUserPassword(cleanUsername, password);
 
-    // Clean up any stale orphaned passkey record with this keyHash
-    const stalePasskey = await prisma.passkey.findUnique({ where: { keyHash } });
-    if (stalePasskey) {
-      await prisma.passkey.delete({ where: { id: stalePasskey.id } }).catch(() => {});
+    // Check if credentials already exist
+    const existingPasskey = await prisma.passkey.findUnique({
+      where: { keyHash },
+      include: { user: true },
+    });
+
+    if (existingPasskey) {
+      if (existingPasskey.user) {
+        return NextResponse.json(
+          { success: false, error: "An account with these credentials already exists. Please sign in." },
+          { status: 409 }
+        );
+      }
+      // Clean up orphaned passkey record
+      await prisma.session.deleteMany({ where: { passkeyId: existingPasskey.id } }).catch(() => {});
+      await prisma.passkey.delete({ where: { id: existingPasskey.id } }).catch(() => {});
     }
 
     // Atomically create User, Provider Connection, and Passkey
@@ -116,14 +131,19 @@ export async function POST(request: Request) {
     });
   } catch (error: any) {
     console.error("[REGISTER_ERROR]", error);
-    if (error.code === "P2002") {
+    const isUniqueCollision =
+      error?.code === "P2002" ||
+      String(error?.message || "").includes("Unique constraint failed") ||
+      String(error?.message || "").includes("keyHash");
+
+    if (isUniqueCollision) {
       return NextResponse.json(
         { success: false, error: "Username or credentials already exist. Please try signing in or use another username." },
         { status: 409 }
       );
     }
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to create account" },
+      { success: false, error: "Failed to create account. Please try again or use another username." },
       { status: 500 }
     );
   }
