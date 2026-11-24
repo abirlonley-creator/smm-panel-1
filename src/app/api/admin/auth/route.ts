@@ -8,6 +8,8 @@ import { sendTelegramSecurityAlert } from "@/lib/security/telegram";
 import { cookies } from "next/headers";
 import { z } from "zod";
 
+export const dynamic = "force-dynamic";
+
 const loginSchema = z.object({
   key: z.string().min(1, "Access key is required"),
 });

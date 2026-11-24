@@ -1,5 +1,4 @@
 import crypto from "crypto";
-import argon2 from "argon2";
 import { prisma } from "../prisma";
 
 export interface CreatePasskeyParams {
@@ -55,20 +54,33 @@ export function hashUserPassword(username: string, password: string): string {
 }
 
 /**
- * Modern memory-hard Argon2id password hash (RFC 9106 compliant).
+ * Modern memory-hard Argon2id password hash (RFC 9106 compliant) with Scrypt resilience.
  * Configured with 64MB memory cost, 3 iterations, and 4 lanes.
  */
 export async function hashPasswordArgon2(password: string): Promise<string> {
-  return argon2.hash(password.trim(), {
-    type: argon2.argon2id,
-    memoryCost: 65536, // 64 MB
-    timeCost: 3,
-    parallelism: 4,
-  });
+  try {
+    const argon2Module = await import("argon2");
+    return await argon2Module.hash(password.trim(), {
+      type: argon2Module.argon2id,
+      memoryCost: 65536,
+      timeCost: 3,
+      parallelism: 4,
+    });
+  } catch {
+    // High-memory scrypt fallback if native argon2 binary is unavailable in serverless container
+    const salt = crypto.randomBytes(16).toString("hex");
+    const derived = await new Promise<string>((resolve, reject) => {
+      crypto.scrypt(password.trim(), salt, 32, { N: 16384, r: 8, p: 1 }, (err, derivedKey) => {
+        if (err) reject(err);
+        else resolve(derivedKey.toString("hex"));
+      });
+    });
+    return `$scrypt$N=16384,r=8,p=1$${salt}$${derived}`;
+  }
 }
 
 /**
- * Universal password hash verifier with auto-detection of Argon2id vs legacy SHA-256.
+ * Universal password hash verifier with auto-detection of Argon2id, Scrypt, and legacy SHA-256.
  */
 export async function verifyPasswordHash(
   storedHash: string,
@@ -80,20 +92,39 @@ export async function verifyPasswordHash(
   // 1. Argon2id check
   if (storedHash.startsWith("$argon2id$") || storedHash.startsWith("$argon2i$")) {
     try {
-      return await argon2.verify(storedHash, plainText.trim());
+      const argon2Module = await import("argon2");
+      return await argon2Module.verify(storedHash, plainText.trim());
     } catch {
       return false;
     }
   }
 
-  // 2. Legacy username-salted SHA-256 check
+  // 2. Scrypt check
+  if (storedHash.startsWith("$scrypt$")) {
+    try {
+      const parts = storedHash.split("$");
+      const salt = parts[3];
+      const originalHex = parts[4];
+      const derived = await new Promise<string>((resolve, reject) => {
+        crypto.scrypt(plainText.trim(), salt, 32, { N: 16384, r: 8, p: 1 }, (err, derivedKey) => {
+          if (err) reject(err);
+          else resolve(derivedKey.toString("hex"));
+        });
+      });
+      return crypto.timingSafeEqual(Buffer.from(originalHex, "hex"), Buffer.from(derived, "hex"));
+    } catch {
+      return false;
+    }
+  }
+
+  // 3. Legacy username-salted SHA-256 check
   if (username) {
     const cleanUser = username.toLowerCase().trim();
     const saltedHash = crypto.createHash("sha256").update(`aurasmm_pwd:${cleanUser}:${plainText.trim()}`).digest("hex");
     if (storedHash === saltedHash) return true;
   }
 
-  // 3. Raw SHA-256 check
+  // 4. Raw SHA-256 check
   const rawHash = crypto.createHash("sha256").update(plainText.trim()).digest("hex");
   return storedHash === rawHash;
 }
