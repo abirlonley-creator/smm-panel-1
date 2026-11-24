@@ -92,10 +92,30 @@ interface EngagementStatusResponse {
   success: boolean;
   enabled: boolean;
   isAdmin?: boolean;
+  isVip?: boolean;
+  accountType?: string;
   walletBalance: number;
   readyToOrder: boolean;
   zeofame: ApiStatusItem;
   xmedia: ApiStatusItem;
+  pricingRates?: {
+    tiktok: {
+      views: number;
+      likes: number;
+      saves: number;
+      shares: number;
+      reposts: number;
+      comments: number;
+    };
+    instagram: {
+      views: number;
+      likes: number;
+      saves: number;
+      shares: number;
+      reposts: number;
+      comments: number;
+    };
+  };
   rates?: {
     viewsRate: number;
     likesRate: number;
@@ -254,23 +274,58 @@ export default function EngagementPage() {
   const [successReceipt, setSuccessReceipt] = useState<any | null>(null);
   const [showAddFundsModal, setShowAddFundsModal] = useState(false);
 
+  // Active platform rates from status API
+  const currentRates = useMemo(() => {
+    const ratesObj = platform === "Instagram" ? statusData?.pricingRates?.instagram : statusData?.pricingRates?.tiktok;
+    if (ratesObj) return ratesObj;
+    if (platform === "Instagram") {
+      return { views: 3.5, likes: 2.2, saves: 2.5, shares: 2.5, reposts: 2.5, comments: 20.0 };
+    }
+    return { views: 4.5, likes: 2.0, saves: 0.8, shares: 0.8, reposts: 0.8, comments: 15.0 };
+  }, [platform, statusData?.pricingRates]);
+
+  // Exact dynamic price calculation for any package: (qty/1000) * rate
+  const getPackagePrice = useCallback((pkg: PackageConfig, rates: { views: number; likes: number; saves: number; shares: number; reposts: number; comments: number }) => {
+    const v = ((pkg.views_total || pkg.base_views || 2000) / 1000) * rates.views;
+    const l = ((pkg.likes || 0) / 1000) * rates.likes;
+    const s = ((pkg.saves || 0) / 1000) * rates.saves;
+    const sh = ((pkg.shares || 0) / 1000) * rates.shares;
+    const rep = ((pkg.reposts || 0) / 1000) * rates.reposts;
+    const c = ((pkg.comments || 0) / 1000) * rates.comments;
+    return Number((v + l + s + sh + rep + c).toFixed(2));
+  }, []);
+
   // Memoized packages list combining defaults with live database preset prices & metrics
   const packagesList: PackageConfig[] = useMemo(() => {
-    const list = Object.values(DEFAULT_PACKAGES).map((defaultPkg) => {
+    const rawList: (PackageConfig | null)[] = Object.values(DEFAULT_PACKAGES).map((defaultPkg) => {
       if (Array.isArray(statusData?.presets)) {
         const match = statusData.presets.find((p: any) => p.id === defaultPkg.id);
         if (match) {
           const isEnabled = match.disabled !== true && match.enabled !== false;
+          const targetViews = match.views_total || match.targetViews || defaultPkg.views_total;
+          const targetLikes = match.targetLikes ?? defaultPkg.likes;
+          const targetSaves = match.targetSaves ?? defaultPkg.saves;
+          const targetShares = match.targetShares ?? defaultPkg.shares;
+          const dynamicPrice = getPackagePrice(
+            {
+              ...defaultPkg,
+              views_total: targetViews,
+              likes: targetLikes,
+              saves: targetSaves,
+              shares: targetShares,
+            },
+            currentRates
+          );
           return {
             ...defaultPkg,
             enabled: isEnabled,
             disabled: !isEnabled,
-            price_inr: typeof match.price_inr === "number" ? match.price_inr : defaultPkg.price_inr,
-            views_total: match.views_total || match.targetViews || defaultPkg.views_total,
+            price_inr: dynamicPrice,
+            views_total: targetViews,
             base_duration_hours: match.base_duration_hours || match.durationHours || defaultPkg.base_duration_hours,
-            likes: match.targetLikes ?? defaultPkg.likes,
-            saves: match.targetSaves ?? defaultPkg.saves,
-            shares: match.targetShares ?? defaultPkg.shares,
+            likes: targetLikes,
+            saves: targetSaves,
+            shares: targetShares,
             min_followers_note: match.min_followers_note || defaultPkg.min_followers_note,
           };
         }
@@ -279,15 +334,20 @@ export default function EngagementPage() {
           return null;
         }
       }
-      return defaultPkg;
-    }).filter((p): p is PackageConfig => p !== null);
+      return {
+        ...defaultPkg,
+        price_inr: getPackagePrice(defaultPkg, currentRates),
+      };
+    });
+
+    const list: PackageConfig[] = rawList.filter((p): p is PackageConfig => p !== null);
 
     // If regular user (non-admin), completely filter out disabled packages so users cannot view or see them
     if (!statusData?.isAdmin) {
       return list.filter((p) => p.disabled !== true && p.enabled !== false);
     }
     return list;
-  }, [statusData?.presets, statusData?.isAdmin]);
+  }, [statusData?.presets, statusData?.isAdmin, currentRates, getPackagePrice]);
 
   // Active package definition - auto-falls back to first enabled package if selected is disabled
   const currentPackage: PackageConfig = useMemo(() => {
@@ -389,15 +449,25 @@ export default function EngagementPage() {
     );
   }, [effectivePackage, followers, patternSeed, currentPlatformConfig, currentProviderMinimums, computedStartTime, customCommentsLines]);
 
-  // Price calculation: package price + add-ons = total price
-  const basePriceInr = currentPackage.price_inr ?? 0;
-  const commentsAddOnCost = addOnComments ? Math.round(commentsCount * 2.5) : 0;
-  // If 2K package (which has 0 saves/shares included), adding saves or shares has small add-on fee
-  const savesAddOnCost = currentPackage.saves === 0 && addOnSaves ? 15 : 0;
-  const sharesAddOnCost = currentPackage.shares === 0 && addOnShares ? 15 : 0;
-  const repostsAddOnCost = currentPackage.reposts === 0 && addOnReposts ? 15 : 0;
-  const addOnsTotalInr = commentsAddOnCost + savesAddOnCost + sharesAddOnCost + repostsAddOnCost;
-  const totalCampaignPriceInr = basePriceInr + addOnsTotalInr;
+  // Pure rate-based campaign price calculation strictly according to admin configured rates:
+  // (views/1000)*viewsRate + (likes/1000)*likesRate + (saves/1000)*savesRate + (shares/1000)*sharesRate + (reposts/1000)*repostsRate + (comments/1000)*commentsRate
+  const targetViews = effectivePackage.views_total || effectivePackage.base_views || 2000;
+  const targetLikes = effectivePackage.likes ?? 0;
+  const targetSaves = effectivePackage.saves ?? 0;
+  const targetShares = effectivePackage.shares ?? 0;
+  const targetReposts = effectivePackage.reposts ?? 0;
+  const targetComments = effectivePackage.comments ?? 0;
+
+  const viewsCost = (targetViews / 1000) * currentRates.views;
+  const likesCost = (targetLikes / 1000) * currentRates.likes;
+  const savesCost = (targetSaves / 1000) * currentRates.saves;
+  const sharesCost = (targetShares / 1000) * currentRates.shares;
+  const repostsCost = (targetReposts / 1000) * currentRates.reposts;
+  const commentsCost = (targetComments / 1000) * currentRates.comments;
+
+  const totalCampaignPriceInr = Number(
+    (viewsCost + likesCost + savesCost + sharesCost + repostsCost + commentsCost).toFixed(2)
+  );
 
   const walletBalance = statusData?.walletBalance ?? 0;
   const hasSufficientFunds = walletBalance >= totalCampaignPriceInr;
@@ -543,7 +613,7 @@ export default function EngagementPage() {
           followers: followers,
           seed: plan.seed,
           scheduledStartTime: computedStartTime.toISOString(),
-          packagePriceInr: basePriceInr,
+          packagePriceInr: getPackagePrice(currentPackage, currentRates),
           totalCostInr: totalCampaignPriceInr,
           customComments: customCommentsLines,
           batches: plan.batches,
@@ -1010,7 +1080,9 @@ export default function EngagementPage() {
                   <div>
                     <span className="font-bold block text-xs">Saves</span>
                     <span className="text-[10px] text-[#5B625F]">
-                      {(currentPackage.saves ?? 0) > 0 ? `+${currentPackage.saves} (Included)` : "+20 (+₹15)"}
+                      {(currentPackage.saves ?? 0) > 0
+                        ? `+${currentPackage.saves} (Included)`
+                        : `+20 (+₹${((20 / 1000) * currentRates.saves).toFixed(2)})`}
                     </span>
                   </div>
                 </div>
@@ -1035,7 +1107,9 @@ export default function EngagementPage() {
                   <div>
                     <span className="font-bold block text-xs">Shares</span>
                     <span className="text-[10px] text-[#5B625F]">
-                      {(currentPackage.shares ?? 0) > 0 ? `+${currentPackage.shares} (Included)` : "+10 (+₹15)"}
+                      {(currentPackage.shares ?? 0) > 0
+                        ? `+${currentPackage.shares} (Included)`
+                        : `+10 (+₹${((10 / 1000) * currentRates.shares).toFixed(2)})`}
                     </span>
                   </div>
                 </div>
@@ -1060,7 +1134,9 @@ export default function EngagementPage() {
                   <div>
                     <span className="font-bold block text-xs">Reposts</span>
                     <span className="text-[10px] text-[#5B625F]">
-                      {(currentPackage.reposts ?? 0) > 0 ? `+${currentPackage.reposts} (Included)` : "+10 (Min: 10)"}
+                      {(currentPackage.reposts ?? 0) > 0
+                        ? `+${currentPackage.reposts} (Included)`
+                        : `+10 (+₹${((10 / 1000) * currentRates.reposts).toFixed(2)})`}
                     </span>
                   </div>
                 </div>
@@ -1086,7 +1162,9 @@ export default function EngagementPage() {
                     <div>
                       <span className="font-bold block text-xs">Custom Comments</span>
                       <span className="text-[10px] text-[#5B625F]">
-                        {addOnComments ? `+${commentsCount} comments (+₹${commentsAddOnCost})` : "Optional (+₹25)"}
+                        {addOnComments
+                          ? `+${commentsCount} comments (+₹${((commentsCount / 1000) * currentRates.comments).toFixed(2)})`
+                          : `Optional (+₹${((10 / 1000) * currentRates.comments).toFixed(2)}/10)`}
                       </span>
                     </div>
                   </div>
@@ -1443,11 +1521,11 @@ export default function EngagementPage() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-sans text-[#5B625F]">
               <div>
                 <span className="block text-[10px] font-bold uppercase text-[#5B625F]/80">Base Package</span>
-                <span className="font-extrabold text-[#111413]">₹{basePriceInr.toFixed(2)}</span>
+                <span className="font-extrabold text-[#111413]">₹{getPackagePrice(currentPackage, currentRates).toFixed(2)}</span>
               </div>
               <div>
                 <span className="block text-[10px] font-bold uppercase text-[#5B625F]/80">Add-ons Total</span>
-                <span className="font-extrabold text-[#111413]">₹{addOnsTotalInr.toFixed(2)}</span>
+                <span className="font-extrabold text-[#111413]">₹{Math.max(0, Number((totalCampaignPriceInr - getPackagePrice(currentPackage, currentRates)).toFixed(2))).toFixed(2)}</span>
               </div>
               <div>
                 <span className="block text-[10px] font-bold uppercase text-[#5B625F]/80">Starts</span>

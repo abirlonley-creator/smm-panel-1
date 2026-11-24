@@ -859,11 +859,11 @@ export async function createEngagementOrderInternal(
   let totalRepostsCost = 0;
 
   if (platform === "Instagram" && (matchedTier.targetReposts || 0) > 0) {
-    const targetRep = matchedTier.targetReposts || 10;
-    const repRunsCount = targetRep <= 15 ? 1 : 2;
+    const targetRep = Math.max(10, matchedTier.targetReposts || 10);
+    const repRunsCount = targetRep < 20 ? 1 : Math.min(2, Math.floor(targetRep / 10));
     const repOffsets = [360, 720];
-    const randomizedReposts = shouldShuffle
-      ? generateOrganicRandomDistribution(targetRep, repRunsCount, 5, targetRep, true)
+    const randomizedReposts = shouldShuffle && repRunsCount > 1
+      ? generateOrganicRandomDistribution(targetRep, repRunsCount, 10, targetRep, true)
       : [targetRep];
 
     for (let i = 0; i < repRunsCount; i++) {

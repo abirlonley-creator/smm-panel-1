@@ -727,12 +727,11 @@ export async function POST(request: Request) {
       }
     }
 
-    let totalCost: number;
-    if (typeof parsed.totalCostInr === "number" && parsed.totalCostInr > 0) {
-      totalCost = Number(parsed.totalCostInr.toFixed(2));
-    } else {
-      totalCost = Number((totalViewsCost + totalLikesCost + totalSavesCost + totalSharesCost + totalRepostsCost + totalCommentsCost).toFixed(2));
-    }
+    // Exact dynamic price calculation according to admin configured rates (no hardcoded overrides)
+    const calculatedCost = Number(
+      (totalViewsCost + totalLikesCost + totalSavesCost + totalSharesCost + totalRepostsCost + totalCommentsCost).toFixed(2)
+    );
+    const totalCost = calculatedCost;
     const currentBalance = user.walletBalance ?? 0;
 
     // 4. Wallet Balance Check (User balance check only)

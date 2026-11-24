@@ -778,7 +778,10 @@ export default function AdminPage() {
     return null;
   }
 
-  const filteredPasskeys = passkeys.filter((pk) => {
+  // Filter out internal password credentials so only actual admin-created VIP Passkeys appear in the passkey tab
+  const vipPasskeys = passkeys.filter((pk) => pk.label !== "Account Password");
+
+  const filteredPasskeys = vipPasskeys.filter((pk) => {
     if (!passkeySearchQuery.trim()) return true;
     const q = passkeySearchQuery.toLowerCase();
     return (
@@ -988,7 +991,7 @@ export default function AdminPage() {
                     : "text-[#252943]/70 hover:bg-gray-100"
                 }`}
               >
-                Directory
+                Created Accounts
               </button>
               <button
                 type="button"
@@ -999,7 +1002,7 @@ export default function AdminPage() {
                     : "text-[#252943]/70 hover:bg-gray-100"
                 }`}
               >
-                Passkeys ({passkeys.length})
+                VIP Passkeys ({vipPasskeys.length})
               </button>
             </>
           )}
@@ -1122,25 +1125,25 @@ export default function AdminPage() {
           {/* Summary Metric Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED] shadow-subtle">
-              <span className="text-[10px] uppercase font-bold text-[#252943]/60 block mb-1">Total Passkeys</span>
-              <span className="text-2xl font-black text-[#252943]">{passkeys.length}</span>
+              <span className="text-[10px] uppercase font-bold text-[#252943]/60 block mb-1">Total VIP Passkeys</span>
+              <span className="text-2xl font-black text-[#252943]">{vipPasskeys.length}</span>
             </div>
             <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED] shadow-subtle">
-              <span className="text-[10px] uppercase font-bold text-[#252943]/60 block mb-1">Active Accounts</span>
+              <span className="text-[10px] uppercase font-bold text-[#252943]/60 block mb-1">Active VIP Passkeys</span>
               <span className="text-2xl font-black text-emerald-600">
-                {passkeys.filter((p) => p.status === "ACTIVE").length}
+                {vipPasskeys.filter((p) => p.status === "ACTIVE").length}
               </span>
             </div>
             <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED] shadow-subtle">
-              <span className="text-[10px] uppercase font-bold text-[#252943]/60 block mb-1">Expired Passkeys</span>
+              <span className="text-[10px] uppercase font-bold text-[#252943]/60 block mb-1">Expired VIP Passkeys</span>
               <span className="text-2xl font-black text-amber-600">
-                {passkeys.filter((p) => p.status === "EXPIRED" || p.isExpired).length}
+                {vipPasskeys.filter((p) => p.status === "EXPIRED" || p.isExpired).length}
               </span>
             </div>
             <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED] shadow-subtle">
               <span className="text-[10px] uppercase font-bold text-[#252943]/60 block mb-1">Admin Passkeys</span>
               <span className="text-2xl font-black text-[#3A4EFB]">
-                {passkeys.filter((p) => p.role === "ADMIN").length}
+                {vipPasskeys.filter((p) => p.role === "ADMIN").length}
               </span>
             </div>
           </div>
@@ -1148,9 +1151,9 @@ export default function AdminPage() {
           {/* Action Bar */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
             <div>
-              <h2 className="text-base font-bold text-[#252943]">Configured Passkeys</h2>
+              <h2 className="text-base font-bold text-[#252943]">Configured VIP Passkeys</h2>
               <p className="text-xs text-[#252943]/60">
-                Manage access duration, assign roles, edit details, revoke or renew access for botters and admins.
+                Manage access duration, assign roles, edit details, revoke or renew access for VIP clients and admins. Regular registered accounts are managed in Created Accounts.
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -1325,9 +1328,9 @@ export default function AdminPage() {
                   {filteredPasskeys.length === 0 && (
                     <tr>
                       <td colSpan={8} className="text-center py-8 text-[#252943]/50">
-                        {passkeys.length === 0
-                          ? 'No passkeys found. Click "Create New Passkey" above.'
-                          : `No passkeys match "${passkeySearchQuery}".`}
+                        {vipPasskeys.length === 0
+                          ? 'No VIP passkeys configured. Click "Create New Passkey" above to issue one.'
+                          : `No VIP passkeys match "${passkeySearchQuery}".`}
                       </td>
                     </tr>
                   )}

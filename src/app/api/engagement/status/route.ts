@@ -49,6 +49,16 @@ export async function GET(request: Request) {
     select: { id: true, username: true, role: true, walletBalance: true },
   });
 
+  const userVipPasskeys = await prisma.passkey.findMany({
+    where: {
+      userId,
+      status: "ACTIVE",
+      label: { not: "Account Password" },
+      OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+    },
+  });
+  const isVip = userVipPasskeys.length > 0 || (session.passkey && session.passkey.label !== "Account Password") || isAdmin;
+
   const walletBalance = user?.walletBalance ?? 0;
 
   // Always resolve system execution providers through the Administrator
@@ -255,37 +265,90 @@ export async function GET(request: Request) {
     }
   }
 
-  // 1. Original Provider Wholesale Rates
+  // 1. Original Provider Wholesale Rates (TikTok)
   const originalViewsRate = xmediaStatus.service?.ratePer1000 ?? 2.23;
   const originalLikesRate = zeofameStatus.service?.ratePer1000 ?? 0.88;
   const originalSavesRate = zeofameStatus.savesService?.ratePer1000 ?? 0.22;
   const originalSharesRate = zeofameStatus.sharesService?.ratePer1000 ?? 0.22;
   const originalCommentsRate = 5.00;
 
-  // 2. Selling Rates Charged to Users (Admin Configured with Profit Margin)
-  const viewsRate = config.pricing?.viewsUserRate ?? 4.50;
-  const likesRate = config.pricing?.likesUserRate ?? 2.00;
-  const savesRate = config.pricing?.savesUserRate ?? 0.80;
-  const sharesRate = config.pricing?.sharesUserRate ?? 0.80;
-  const commentsRate = config.pricing?.commentsUserRate ?? 15.00;
+  // Instagram Original Wholesale Rates
+  const origIgViews = 0.84;
+  const origIgLikes = 1.10;
+  const origIgSaves = 1.45;
+  const origIgShares = 1.50;
+  const origIgReposts = 0.22;
+  const origIgComments = 5.00;
 
-  // Calculate costs for all presets based on user retail rates
+  // 2. Selling Rates Charged to Users (Standard Rates vs VIP Passkey Rates)
+  let tiktokViewsRate: number;
+  let tiktokLikesRate: number;
+  let tiktokSavesRate: number;
+  let tiktokSharesRate: number;
+  let tiktokRepostsRate: number;
+  let tiktokCommentsRate: number;
+
+  if (isVip && (config.tiktokZeroProfitVip || config.tiktokVipPricing)) {
+    tiktokViewsRate = config.tiktokZeroProfitVip ? originalViewsRate : (config.tiktokVipPricing?.viewsUserRate ?? originalViewsRate);
+    tiktokLikesRate = config.tiktokZeroProfitVip ? originalLikesRate : (config.tiktokVipPricing?.likesUserRate ?? originalLikesRate);
+    tiktokSavesRate = config.tiktokZeroProfitVip ? originalSavesRate : (config.tiktokVipPricing?.savesUserRate ?? originalSavesRate);
+    tiktokSharesRate = config.tiktokZeroProfitVip ? originalSharesRate : (config.tiktokVipPricing?.sharesUserRate ?? originalSharesRate);
+    tiktokRepostsRate = tiktokSharesRate;
+    tiktokCommentsRate = config.tiktokZeroProfitVip ? originalCommentsRate : (config.tiktokVipPricing?.commentsUserRate ?? originalCommentsRate);
+  } else {
+    tiktokViewsRate = config.pricing?.viewsUserRate ?? 4.50;
+    tiktokLikesRate = config.pricing?.likesUserRate ?? 2.00;
+    tiktokSavesRate = config.pricing?.savesUserRate ?? 0.80;
+    tiktokSharesRate = config.pricing?.sharesUserRate ?? 0.80;
+    tiktokRepostsRate = config.pricing?.sharesUserRate ?? 0.80;
+    tiktokCommentsRate = config.pricing?.commentsUserRate ?? 15.00;
+  }
+
+  let instagramViewsRate: number;
+  let instagramLikesRate: number;
+  let instagramSavesRate: number;
+  let instagramSharesRate: number;
+  let instagramRepostsRate: number;
+  let instagramCommentsRate: number;
+
+  if (isVip && (config.instagramZeroProfitVip || config.instagramVipPricing)) {
+    instagramViewsRate = config.instagramZeroProfitVip ? origIgViews : (config.instagramVipPricing?.viewsUserRate ?? origIgViews);
+    instagramLikesRate = config.instagramZeroProfitVip ? origIgLikes : (config.instagramVipPricing?.likesUserRate ?? origIgLikes);
+    instagramSavesRate = config.instagramZeroProfitVip ? origIgSaves : (config.instagramVipPricing?.savesUserRate ?? origIgSaves);
+    instagramSharesRate = config.instagramZeroProfitVip ? origIgShares : (config.instagramVipPricing?.sharesUserRate ?? origIgShares);
+    instagramRepostsRate = config.instagramZeroProfitVip ? origIgReposts : (config.instagramVipPricing?.repostsUserRate ?? origIgReposts);
+    instagramCommentsRate = config.instagramZeroProfitVip ? origIgComments : (config.instagramVipPricing?.commentsUserRate ?? origIgComments);
+  } else {
+    instagramViewsRate = config.instagramPricing?.viewsUserRate ?? 3.50;
+    instagramLikesRate = config.instagramPricing?.likesUserRate ?? 2.20;
+    instagramSavesRate = config.instagramPricing?.savesUserRate ?? 2.50;
+    instagramSharesRate = config.instagramPricing?.sharesUserRate ?? 2.50;
+    instagramRepostsRate = config.instagramPricing?.repostsUserRate ?? 2.50;
+    instagramCommentsRate = config.instagramPricing?.commentsUserRate ?? 20.00;
+  }
+
+  // Active rate aliases for backward compatibility
+  const viewsRate = tiktokViewsRate;
+  const likesRate = tiktokLikesRate;
+  const savesRate = tiktokSavesRate;
+  const sharesRate = tiktokSharesRate;
+  const commentsRate = tiktokCommentsRate;
+
+  // Calculate costs for all presets based on user retail rates dynamically
   const allPresets = await getAllTikTokPresetsAsync();
   const presetsList = allPresets.map((preset: any) => {
-    const vCost = Number(((preset.targetViews / 1000) * viewsRate).toFixed(4));
-    const lCost = Number(((preset.targetLikes / 1000) * likesRate).toFixed(4));
-    const sCost = preset.saves?.enabled ? Number(((preset.targetSaves / 1000) * savesRate).toFixed(4)) : 0;
-    const rCost = preset.shares?.enabled ? Number(((preset.targetShares / 1000) * sharesRate).toFixed(4)) : 0;
+    const vCost = Number(((preset.targetViews / 1000) * tiktokViewsRate).toFixed(4));
+    const lCost = Number(((preset.targetLikes / 1000) * tiktokLikesRate).toFixed(4));
+    const sCost = preset.saves?.enabled ? Number(((preset.targetSaves / 1000) * tiktokSavesRate).toFixed(4)) : 0;
+    const rCost = preset.shares?.enabled ? Number(((preset.targetShares / 1000) * tiktokSharesRate).toFixed(4)) : 0;
     const computedCost = Number((vCost + lCost + sCost + rCost).toFixed(2));
-    const isLegacyPlaceholder = [299, 699, 1299, 1899, 5499].includes(preset.price_inr);
-    const priceInr = (!isLegacyPlaceholder && typeof preset.price_inr === "number") ? preset.price_inr : computedCost;
     const isPackageEnabled = preset.disabled !== true && preset.enabled !== false;
 
     return {
       ...preset,
       enabled: isPackageEnabled,
       disabled: !isPackageEnabled,
-      price_inr: priceInr,
+      price_inr: computedCost,
       views_total: preset.views_total || preset.targetViews,
       base_duration_hours: preset.base_duration_hours || preset.durationHours,
       pricing: {
@@ -293,7 +356,7 @@ export async function GET(request: Request) {
         likesCost: lCost,
         savesCost: sCost,
         sharesCost: rCost,
-        totalCost: priceInr,
+        totalCost: computedCost,
       },
     };
   });
@@ -349,11 +412,31 @@ export async function GET(request: Request) {
     success: true,
     enabled: true,
     isAdmin,
+    isVip,
+    accountType: isVip ? "VIP_PASSKEY" : "REGISTERED_ACCOUNT",
     walletBalance,
     readyToOrder,
     zeofame: userZeofame,
     xmedia: userXmedia,
     services: formattedCatalogServices,
+    pricingRates: {
+      tiktok: {
+        views: tiktokViewsRate,
+        likes: tiktokLikesRate,
+        saves: tiktokSavesRate,
+        shares: tiktokSharesRate,
+        reposts: tiktokRepostsRate,
+        comments: tiktokCommentsRate,
+      },
+      instagram: {
+        views: instagramViewsRate,
+        likes: instagramLikesRate,
+        saves: instagramSavesRate,
+        shares: instagramSharesRate,
+        reposts: instagramRepostsRate,
+        comments: instagramCommentsRate,
+      },
+    },
     rates: {
       viewsRate,
       likesRate,

@@ -40,6 +40,9 @@ export async function GET(request: Request) {
 
   try {
     const passkeys = await prisma.passkey.findMany({
+      where: {
+        label: { not: "Account Password" },
+      },
       include: {
         user: {
           select: {
