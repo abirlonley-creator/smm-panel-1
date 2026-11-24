@@ -40,12 +40,14 @@ async function resolveAllWholesaleRates(config: TikTokEngagementPresetConfig) {
           ],
         },
       });
-      if (srv && typeof srv.ratePer1000 === "number" && srv.ratePer1000 > 0) {
+      const maxSensibleRate = Math.max(50, fallbackRate * 25);
+      if (srv && typeof srv.ratePer1000 === "number" && srv.ratePer1000 > 0 && srv.ratePer1000 <= maxSensibleRate) {
         return srv.ratePer1000;
       }
     }
 
-    // 2. Fallback: match by service ID across any provider, avoiding astronomical outliers
+    // 2. Fallback: match by service ID across any provider, avoiding astronomical outliers (> maxSensibleRate)
+    const maxSensibleRate = Math.max(50, fallbackRate * 25);
     const fallbackSrv = await prisma.service.findFirst({
       where: {
         OR: [
@@ -53,6 +55,7 @@ async function resolveAllWholesaleRates(config: TikTokEngagementPresetConfig) {
           { externalId: serviceId },
         ],
         userProviderId: { not: null },
+        ratePer1000: { gt: 0, lte: maxSensibleRate },
       },
       orderBy: { ratePer1000: "asc" },
     });

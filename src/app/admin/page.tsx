@@ -40,6 +40,7 @@ import {
   Share2,
   Repeat,
   CreditCard,
+  Wallet,
   Percent,
   Coins,
   MessageSquare,
@@ -78,11 +79,12 @@ interface PasskeyData {
   };
 }
 
-export type AdminCategory = "customers" | "financials" | "operations" | "settings";
+export type AdminCategory = "customers" | "services" | "operations" | "financials" | "settings";
 export type CustomersSubTab = "directory" | "passkeys";
+export type ServicesSubTab = "tiktok" | "instagram" | "catalog";
 export type FinancialsSubTab = "revenue" | "deposits";
 export type OperationsSubTab = "orders" | "alerts";
-export type SettingsSubTab = "engagement" | "provider" | "announcement";
+export type SettingsSubTab = "provider" | "announcement";
 
 export default function AdminPage() {
   const router = useRouter();
@@ -97,12 +99,13 @@ export default function AdminPage() {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loggingIn, setLoggingIn] = useState(false);
 
-  // 4 Unified Admin Categories & Sub-tabs state
+  // 5 Unified Admin Categories & Sub-tabs state
   const [category, setCategory] = useState<AdminCategory>("customers");
   const [customersSubTab, setCustomersSubTab] = useState<CustomersSubTab>("directory");
+  const [servicesSubTab, setServicesSubTab] = useState<ServicesSubTab>("tiktok");
   const [financialsSubTab, setFinancialsSubTab] = useState<FinancialsSubTab>("revenue");
   const [operationsSubTab, setOperationsSubTab] = useState<OperationsSubTab>("orders");
-  const [settingsSubTab, setSettingsSubTab] = useState<SettingsSubTab>("engagement");
+  const [settingsSubTab, setSettingsSubTab] = useState<SettingsSubTab>("provider");
 
   const [passkeys, setPasskeys] = useState<PasskeyData[]>([]);
   const [passkeySearchQuery, setPasskeySearchQuery] = useState("");
@@ -225,8 +228,12 @@ export default function AdminPage() {
       const pId = (tiktokConfig as any)?.[tKey]?.providerId;
       const sId = (tiktokConfig as any)?.[tKey]?.serviceId;
       if (pId && sId && providerServicesMap[`${pId}:${sId}`]) {
-        orig = providerServicesMap[`${pId}:${sId}`];
+        const mapped = providerServicesMap[`${pId}:${sId}`];
+        if (mapped > 0 && mapped <= 50) orig = mapped;
       }
+      const defaultOrig = metric === "views" ? 2.23 : metric === "likes" ? 0.88 : metric === "saves" ? 0.22 : metric === "shares" ? 0.22 : 5.00;
+      if (orig > 50 || orig <= 0) orig = defaultOrig;
+
       if (isVip) {
         if (tiktokConfig?.tiktokZeroProfitVip ?? true) return { rate: orig, profit: 0, margin: 0, isZero: true, orig };
         const rate = Number(tiktokConfig?.tiktokVipPricing?.[`${metric}UserRate`] ?? orig);
@@ -244,8 +251,12 @@ export default function AdminPage() {
       const pId = (tiktokConfig as any)?.[igKey]?.providerId;
       const sId = (tiktokConfig as any)?.[igKey]?.serviceId;
       if (pId && sId && providerServicesMap[`${pId}:${sId}`]) {
-        orig = providerServicesMap[`${pId}:${sId}`];
+        const mapped = providerServicesMap[`${pId}:${sId}`];
+        if (mapped > 0 && mapped <= 50) orig = mapped;
       }
+      const defaultOrig = metric === "views" ? 0.84 : metric === "likes" ? 1.10 : metric === "saves" ? 1.45 : metric === "shares" ? 1.50 : metric === "reposts" ? 0.22 : 5.00;
+      if (orig > 50 || orig <= 0) orig = defaultOrig;
+
       if (isVip) {
         if (tiktokConfig?.instagramZeroProfitVip ?? true) return { rate: orig, profit: 0, margin: 0, isZero: true, orig };
         const rate = Number(tiktokConfig?.instagramVipPricing?.[`${metric}UserRate`] ?? orig);
@@ -354,10 +365,17 @@ export default function AdminPage() {
   }, []);
 
   // Direct Category & Sub-tab Navigator
-  const navigateTo = (target: "directory" | "passkeys" | "revenue" | "deposits" | "orders" | "alerts" | "engagement" | "provider" | "announcement") => {
+  const navigateTo = (target: "directory" | "passkeys" | "tiktok" | "instagram" | "catalog" | "revenue" | "deposits" | "orders" | "alerts" | "engagement" | "provider" | "announcement") => {
     if (target === "directory" || target === "passkeys") {
       setCategory("customers");
       setCustomersSubTab(target);
+    } else if (target === "tiktok" || target === "instagram" || target === "catalog" || target === "engagement") {
+      setCategory("services");
+      const sub = target === "engagement" ? "tiktok" : target;
+      setServicesSubTab(sub as ServicesSubTab);
+      if (sub === "tiktok" || sub === "instagram") {
+        setAdminPlatformTab(sub);
+      }
     } else if (target === "revenue" || target === "deposits") {
       setCategory("financials");
       setFinancialsSubTab(target);
@@ -365,10 +383,38 @@ export default function AdminPage() {
       setCategory("operations");
       setOperationsSubTab(target);
       if (target === "alerts") loadAlerts();
-    } else if (target === "engagement" || target === "provider" || target === "announcement") {
+    } else if (target === "provider" || target === "announcement") {
       setCategory("settings");
       setSettingsSubTab(target);
     }
+  };
+
+  const currentJumpValue = `${category}:${
+    category === "customers"
+      ? customersSubTab
+      : category === "services"
+      ? servicesSubTab
+      : category === "operations"
+      ? operationsSubTab
+      : category === "financials"
+      ? financialsSubTab
+      : settingsSubTab
+  }`;
+
+  const handleQuickJump = (value: string) => {
+    const [targetCat, targetSub] = value.split(":");
+    setCategory(targetCat as AdminCategory);
+    if (targetCat === "customers") setCustomersSubTab(targetSub as CustomersSubTab);
+    else if (targetCat === "services") {
+      setServicesSubTab(targetSub as ServicesSubTab);
+      if (targetSub === "tiktok" || targetSub === "instagram") {
+        setAdminPlatformTab(targetSub);
+      }
+    } else if (targetCat === "operations") {
+      setOperationsSubTab(targetSub as OperationsSubTab);
+      if (targetSub === "alerts") loadAlerts();
+    } else if (targetCat === "financials") setFinancialsSubTab(targetSub as FinancialsSubTab);
+    else if (targetCat === "settings") setSettingsSubTab(targetSub as SettingsSubTab);
   };
 
   useEffect(() => {
@@ -795,12 +841,44 @@ export default function AdminPage() {
 
   return (
     <div className="space-y-6 animate-fadeIn max-w-6xl mx-auto pb-16">
-      {/* ── Minimalist Admin Header ── */}
+      {/* ── Minimalist Admin Header with Quick Jump Dropdown ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#DEE0ED]">
-        <div>
-          <h1 className="text-xl font-bold text-[#252943] tracking-tight">
+        <div className="flex items-center gap-3 flex-wrap">
+          <h1 className="text-xl font-black text-[#252943] tracking-tight">
             Admin Console
           </h1>
+
+          {/* Quick Jump Navigator Dropdown */}
+          <div className="relative">
+            <select
+              value={currentJumpValue}
+              onChange={(e) => handleQuickJump(e.target.value)}
+              className="px-3 py-1.5 rounded-xl border border-[#DEE0ED] bg-[#F8F9FD] hover:bg-white text-xs font-bold text-[#252943] shadow-xs outline-none focus:border-[#3A4EFB] cursor-pointer"
+              title="Jump directly to any admin tool or screen"
+            >
+              <optgroup label="👥 Customers & Accounts">
+                <option value="customers:directory">Created Accounts (User Directory)</option>
+                <option value="customers:passkeys">VIP Passkeys ({vipPasskeys.length})</option>
+              </optgroup>
+              <optgroup label="⚡ Services & Margins">
+                <option value="services:tiktok">TikTok Services & Margins</option>
+                <option value="services:instagram">Instagram Services & Margins</option>
+                <option value="services:catalog">Catalog Services (API v2)</option>
+              </optgroup>
+              <optgroup label="📦 Orders & Delivery System">
+                <option value="operations:orders">Live Order Monitor</option>
+                <option value="operations:alerts">Delivery Health & Alerts</option>
+              </optgroup>
+              <optgroup label="💰 Finances & Revenue">
+                <option value="financials:revenue">Revenue & Profit Margins</option>
+                <option value="financials:deposits">Binance Crypto Deposits</option>
+              </optgroup>
+              <optgroup label="⚙️ System & Providers">
+                <option value="settings:provider">SMM Provider API Connections</option>
+                <option value="settings:announcement">Site Announcement & Banner</option>
+              </optgroup>
+            </select>
+          </div>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
@@ -925,9 +1003,9 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* ── Minimalist Segmented Navigation ── */}
+      {/* ── Segmented Navigation (5 Clear Categories) ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#DEE0ED] pb-3">
-        {/* 4 Primary Categories */}
+        {/* 5 Primary Categories */}
         <div className="flex items-center gap-1 p-1 rounded-2xl bg-[#F4F5F9] border border-[#DEE0ED] w-fit overflow-x-auto">
           <button
             type="button"
@@ -938,19 +1016,19 @@ export default function AdminPage() {
                 : "text-[#252943]/60 hover:text-[#252943]"
             }`}
           >
-            Customers
+            👥 Customers
           </button>
 
           <button
             type="button"
-            onClick={() => setCategory("financials")}
+            onClick={() => setCategory("services")}
             className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
-              category === "financials"
+              category === "services"
                 ? "bg-white text-[#252943] shadow-xs"
                 : "text-[#252943]/60 hover:text-[#252943]"
             }`}
           >
-            Finances
+            ⚡ Services & Margins
           </button>
 
           <button
@@ -962,7 +1040,19 @@ export default function AdminPage() {
                 : "text-[#252943]/60 hover:text-[#252943]"
             }`}
           >
-            Orders
+            📦 Orders
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setCategory("financials")}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              category === "financials"
+                ? "bg-white text-[#252943] shadow-xs"
+                : "text-[#252943]/60 hover:text-[#252943]"
+            }`}
+          >
+            💰 Finances
           </button>
 
           <button
@@ -974,12 +1064,12 @@ export default function AdminPage() {
                 : "text-[#252943]/60 hover:text-[#252943]"
             }`}
           >
-            Settings
+            ⚙️ Settings
           </button>
         </div>
 
         {/* Sub-tabs for Current Category */}
-        <div className="flex items-center gap-1 text-xs">
+        <div className="flex items-center gap-1 text-xs flex-wrap">
           {category === "customers" && (
             <>
               <button
@@ -1007,29 +1097,49 @@ export default function AdminPage() {
             </>
           )}
 
-          {category === "financials" && (
+          {category === "services" && (
             <>
               <button
                 type="button"
-                onClick={() => setFinancialsSubTab("revenue")}
-                className={`px-3 py-1.5 rounded-xl font-semibold transition-all ${
-                  financialsSubTab === "revenue"
-                    ? "bg-[#252943] text-white"
+                onClick={() => {
+                  setServicesSubTab("tiktok");
+                  setAdminPlatformTab("tiktok");
+                }}
+                className={`px-3 py-1.5 rounded-xl font-semibold transition-all flex items-center gap-1.5 ${
+                  servicesSubTab === "tiktok"
+                    ? "bg-[#111413] text-[#D4F04F]"
                     : "text-[#252943]/70 hover:bg-gray-100"
                 }`}
               >
-                Revenue & Profit
+                <Zap className="w-3.5 h-3.5" />
+                <span>TikTok Services & Margins</span>
               </button>
               <button
                 type="button"
-                onClick={() => setFinancialsSubTab("deposits")}
-                className={`px-3 py-1.5 rounded-xl font-semibold transition-all ${
-                  financialsSubTab === "deposits"
+                onClick={() => {
+                  setServicesSubTab("instagram");
+                  setAdminPlatformTab("instagram");
+                }}
+                className={`px-3 py-1.5 rounded-xl font-semibold transition-all flex items-center gap-1.5 ${
+                  servicesSubTab === "instagram"
+                    ? "bg-purple-600 text-white"
+                    : "text-[#252943]/70 hover:bg-gray-100"
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Instagram Services & Margins</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setServicesSubTab("catalog")}
+                className={`px-3 py-1.5 rounded-xl font-semibold transition-all flex items-center gap-1.5 ${
+                  servicesSubTab === "catalog"
                     ? "bg-[#252943] text-white"
                     : "text-[#252943]/70 hover:bg-gray-100"
                 }`}
               >
-                Binance Deposits
+                <Layers className="w-3.5 h-3.5" />
+                <span>Catalog Services (API v2)</span>
               </button>
             </>
           )}
@@ -1069,19 +1179,35 @@ export default function AdminPage() {
             </>
           )}
 
-          {category === "settings" && (
+          {category === "financials" && (
             <>
               <button
                 type="button"
-                onClick={() => setSettingsSubTab("engagement")}
+                onClick={() => setFinancialsSubTab("revenue")}
                 className={`px-3 py-1.5 rounded-xl font-semibold transition-all ${
-                  settingsSubTab === "engagement"
+                  financialsSubTab === "revenue"
                     ? "bg-[#252943] text-white"
                     : "text-[#252943]/70 hover:bg-gray-100"
                 }`}
               >
-                TikTok Presets
+                Revenue & Profit
               </button>
+              <button
+                type="button"
+                onClick={() => setFinancialsSubTab("deposits")}
+                className={`px-3 py-1.5 rounded-xl font-semibold transition-all ${
+                  financialsSubTab === "deposits"
+                    ? "bg-[#252943] text-white"
+                    : "text-[#252943]/70 hover:bg-gray-100"
+                }`}
+              >
+                Binance Deposits
+              </button>
+            </>
+          )}
+
+          {category === "settings" && (
+            <>
               <button
                 type="button"
                 onClick={() => setSettingsSubTab("provider")}
@@ -1119,9 +1245,37 @@ export default function AdminPage() {
       {category === "customers" && (
         <div className="space-y-6 animate-fadeIn">
           {customersSubTab === "directory" ? (
-            <UsersLiveActivityTab />
+            <div className="space-y-6 animate-fadeIn">
+              <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-200 flex items-start gap-3">
+                <div className="w-8 h-8 rounded-xl bg-[#3A4EFB] text-white flex items-center justify-center shrink-0">
+                  <Users className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold text-blue-950 flex items-center gap-1.5">
+                    <span>🎯 Main Goal: Registered Customer Accounts & Live Activity</span>
+                  </h3>
+                  <p className="text-[11px] text-blue-900/80 mt-0.5 leading-relaxed">
+                    View and manage all real users who created an account with username and password. Inspect active sessions, adjust INR wallet balances, and track user order volume.
+                  </p>
+                </div>
+              </div>
+              <UsersLiveActivityTab />
+            </div>
           ) : (
         <div className="space-y-6 animate-fadeIn">
+          <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 flex items-start gap-3">
+            <div className="w-8 h-8 rounded-xl bg-amber-600 text-white flex items-center justify-center shrink-0">
+              <Key className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                <span>🎯 Main Goal: VIP Client Access Passkeys (0% Markup / Wholesale)</span>
+              </h3>
+              <p className="text-[11px] text-amber-900/80 mt-0.5 leading-relaxed">
+                Generate and manage VIP access passkeys for wholesale clients. VIP passkey holders automatically get wholesale rates with 0% markup or dedicated VIP rates.
+              </p>
+            </div>
+          </div>
           {/* Summary Metric Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="p-4 rounded-2xl bg-white border border-[#DEE0ED] shadow-subtle">
@@ -1344,14 +1498,44 @@ export default function AdminPage() {
       )}
 
       {/* =====================================================================
-          CATEGORY 2: FINANCES & CAPITAL
+          CATEGORY 4: FINANCES & CAPITAL
       ====================================================================== */}
       {category === "financials" && (
         <div className="space-y-6 animate-fadeIn">
           {financialsSubTab === "revenue" ? (
-            <RevenueProfitTab />
+            <div className="space-y-4 animate-fadeIn">
+              <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200 flex items-start gap-3">
+                <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                  <TrendingUp className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                    <span>🎯 Main Goal: Net Revenue, Wholesale Costs & Real-Time Profit Margins</span>
+                  </h3>
+                  <p className="text-[11px] text-emerald-900/80 mt-0.5 leading-relaxed">
+                    Review incoming client payments, wholesale provider costs deducted, net gross profit, and live profit margins across completed orders.
+                  </p>
+                </div>
+              </div>
+              <RevenueProfitTab />
+            </div>
           ) : (
-            <BinanceDepositsTab />
+            <div className="space-y-4 animate-fadeIn">
+              <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 flex items-start gap-3">
+                <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0">
+                  <Wallet className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                    <span>🎯 Main Goal: Binance Pay & Cryptocurrency Deposits Verification</span>
+                  </h3>
+                  <p className="text-[11px] text-amber-900/80 mt-0.5 leading-relaxed">
+                    Inspect crypto transactions submitted by users, verify Binance Pay transaction hashes, and approve INR wallet credits.
+                  </p>
+                </div>
+              </div>
+              <BinanceDepositsTab />
+            </div>
           )}
         </div>
       )}
@@ -1362,19 +1546,66 @@ export default function AdminPage() {
       {category === "operations" && (
         <div className="space-y-6 animate-fadeIn">
           {operationsSubTab === "orders" ? (
-            <OrderMonitorTab />
+            <div className="space-y-4 animate-fadeIn">
+              <div className="p-4 rounded-2xl bg-cyan-50/70 border border-cyan-200 flex items-start gap-3">
+                <div className="w-8 h-8 rounded-xl bg-cyan-600 text-white flex items-center justify-center shrink-0">
+                  <Activity className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold text-cyan-950 flex items-center gap-1.5">
+                    <span>🎯 Main Goal: Live Order Execution & Delivery Waves Monitor</span>
+                  </h3>
+                  <p className="text-[11px] text-cyan-900/80 mt-0.5 leading-relaxed">
+                    Monitor active gradual delivery batches across 15-minute intervals, track real-time provider order IDs, and inspect completion status.
+                  </p>
+                </div>
+              </div>
+              <OrderMonitorTab />
+            </div>
           ) : (
-            <AlertsHealthTab />
+            <div className="space-y-4 animate-fadeIn">
+              <div className="p-4 rounded-2xl bg-rose-50/70 border border-rose-200 flex items-start gap-3">
+                <div className="w-8 h-8 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold text-rose-950 flex items-center gap-1.5">
+                    <span>🎯 Main Goal: System Health, Upstream Failures & Balance Alerts</span>
+                  </h3>
+                  <p className="text-[11px] text-rose-900/80 mt-0.5 leading-relaxed">
+                    Inspect failed upstream dispatches, insufficient provider balances, or API timeouts requiring admin attention.
+                  </p>
+                </div>
+              </div>
+              <AlertsHealthTab />
+            </div>
           )}
         </div>
       )}
 
       {/* =====================================================================
-          CATEGORY 4: SERVICES & ENGINE
+          CATEGORY 2: SERVICES & MARGINS (TIKTOK, INSTAGRAM, CATALOG API v2)
       ====================================================================== */}
-      {category === "settings" && (
+      {category === "services" && (
         <div className="space-y-6 animate-fadeIn">
-          {settingsSubTab === "engagement" ? (
+          {servicesSubTab === "catalog" ? (
+            <div className="space-y-4 animate-fadeIn">
+              <div className="p-4 rounded-2xl bg-indigo-50 border border-indigo-200 flex items-start gap-3">
+                <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0">
+                  <Layers className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
+                    <span>🎯 Main Goal: Universal Catalog & Reseller API Services (v2)</span>
+                  </h3>
+                  <p className="text-[11px] text-indigo-900/80 mt-0.5 leading-relaxed">
+                    Manage services exposed via the public reseller API (<code className="font-mono text-indigo-700 bg-white/70 px-1 py-0.5 rounded">GET /api/v2/services</code>) and standard SMM orders.
+                  </p>
+                </div>
+              </div>
+              <EngagementServicesManager />
+            </div>
+          ) : (
             <div className="space-y-6 animate-fadeIn">
               {/* TikTok Organic Engagement System Admin Configuration (Section 8) */}
               <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 sm:p-8 shadow-subtle space-y-6">
@@ -1496,45 +1727,97 @@ export default function AdminPage() {
                   </div>
                 </div>
 
-                  {/* Platform Selector Tabs: TikTok vs Instagram */}
-                  <div className="flex items-center gap-2 p-1.5 bg-white border border-[#DEE0ED] rounded-2xl w-fit shadow-xs">
-                    <button
-                      type="button"
-                      onClick={() => setAdminPlatformTab("tiktok")}
-                      className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
-                        adminPlatformTab === "tiktok"
-                          ? "bg-[#111413] text-[#D4F04F] shadow-xs"
-                          : "text-[#252943]/70 hover:text-[#252943]"
-                      }`}
-                    >
-                      <Zap className="w-4 h-4" />
-                      <span>TikTok Services & Margins</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAdminPlatformTab("instagram")}
-                      className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
-                        adminPlatformTab === "instagram"
-                          ? "bg-[#111413] text-[#D4F04F] shadow-xs"
-                          : "text-[#252943]/70 hover:text-[#252943]"
-                      }`}
-                    >
-                      <Sparkles className="w-4 h-4" />
-                      <span>Instagram Services & Margins</span>
-                    </button>
+                  {/* Platform Selector Tabs: TikTok vs Instagram with Dropdown */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 p-1.5 bg-white border border-[#DEE0ED] rounded-2xl w-fit shadow-xs">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAdminPlatformTab("tiktok");
+                          setServicesSubTab("tiktok");
+                        }}
+                        className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+                          adminPlatformTab === "tiktok"
+                            ? "bg-[#111413] text-[#D4F04F] shadow-xs"
+                            : "text-[#252943]/70 hover:text-[#252943]"
+                        }`}
+                      >
+                        <Zap className="w-4 h-4" />
+                        <span>TikTok Services & Margins</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAdminPlatformTab("instagram");
+                          setServicesSubTab("instagram");
+                        }}
+                        className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+                          adminPlatformTab === "instagram"
+                            ? "bg-[#111413] text-[#D4F04F] shadow-xs"
+                            : "text-[#252943]/70 hover:text-[#252943]"
+                        }`}
+                      >
+                        <Sparkles className="w-4 h-4" />
+                        <span>Instagram Services & Margins</span>
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs font-bold text-[#252943]">Platform Selector:</label>
+                      <select
+                        value={adminPlatformTab}
+                        onChange={(e) => {
+                          const val = e.target.value as "tiktok" | "instagram";
+                          setAdminPlatformTab(val);
+                          setServicesSubTab(val);
+                        }}
+                        className="bg-white border border-[#DEE0ED] rounded-xl px-3 py-2 text-xs font-bold text-[#252943] shadow-xs outline-none cursor-pointer focus:border-[#3A4EFB]"
+                      >
+                        <option value="tiktok">⚡ TikTok Organic Engagement</option>
+                        <option value="instagram">📸 Instagram Engagement (Reels & Posts)</option>
+                      </select>
+                    </div>
                   </div>
 
                   {adminPlatformTab === "tiktok" && (
                     <>
-                      {/* Preset Selector Tabs */}
-                      <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Sparkles className="w-4 h-4 text-[#3A4EFB]" />
-                        <span className="font-bold text-xs text-[#252943]">Choose Preset to Configure</span>
+                      {/* TikTok Goal Clarification Banner */}
+                      <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-start gap-3">
+                        <div className="w-8 h-8 rounded-xl bg-[#111413] text-[#D4F04F] flex items-center justify-center shrink-0">
+                          <Zap className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h3 className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                            <span>🎯 Main Goal: TikTok Organic Delivery Presets & Dynamic Margins</span>
+                          </h3>
+                          <p className="text-[11px] text-emerald-900/80 mt-0.5 leading-relaxed">
+                            Configure automated gradual delivery waves, upstream provider service mappings, and retail selling rates. Customer charges are calculated dynamically based on these exact rates with zero hardcoded prices.
+                          </p>
+                        </div>
                       </div>
-                      <span className="text-[11px] text-[#252943]/50">Edit any preset's services, turn services On/Off, or adjust quantities</span>
-                    </div>
+
+                      {/* Preset Selector Tabs & Dropdown */}
+                      <div className="space-y-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-[#F8F9FD] border border-[#DEE0ED] rounded-2xl">
+                          <div className="flex items-center gap-2">
+                            <Sparkles className="w-4 h-4 text-[#3A4EFB]" />
+                            <span className="font-bold text-xs text-[#252943]">Choose Preset to Configure:</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <label className="text-[11px] font-bold text-[#252943]/70">Preset Dropdown:</label>
+                            <select
+                              value={selectedAdminPresetKey}
+                              onChange={(e) => setSelectedAdminPresetKey(e.target.value)}
+                              className="bg-white border border-[#DEE0ED] rounded-xl px-3 py-1.5 text-xs font-bold text-[#252943] shadow-xs outline-none focus:border-[#3A4EFB] cursor-pointer"
+                            >
+                              <option value="tiktok_2k">🎯 2K Starter (6h) — 2,000 views, 42 likes</option>
+                              <option value="tiktok_5k">⚡ 5K Velocity (24h) — 5,000 views, 180 likes</option>
+                              <option value="tiktok_10k">🚀 10K Breakthrough (48h) — 10,000 views, 450 likes</option>
+                              <option value="tiktok_15k">🔥 15K Acceleration (72h) — 15,000 views, 750 likes</option>
+                              <option value="tiktok_50k">👑 50K Mega Viral (120h) — 50,000 views, 3,200 likes</option>
+                            </select>
+                          </div>
+                        </div>
 
                     <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
                       {[
@@ -2247,28 +2530,36 @@ export default function AdminPage() {
                   {/* Tier Selector & VIP Controls */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-white/80 rounded-2xl border border-emerald-200">
                     <div className="flex items-center gap-2">
+                      <select
+                        value={tiktokPricingTab}
+                        onChange={(e) => setTiktokPricingTab(e.target.value as "standard" | "vip")}
+                        className="bg-white border border-emerald-300 rounded-xl px-3 py-1.5 text-xs font-bold text-[#252943] shadow-xs outline-none cursor-pointer focus:border-emerald-500"
+                      >
+                        <option value="standard">🏷️ Standard Rates (Regular Signups)</option>
+                        <option value="vip">✨ VIP Passkey Rates (VIP Clients)</option>
+                      </select>
                       <button
                         type="button"
                         onClick={() => setTiktokPricingTab("standard")}
-                        className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                           tiktokPricingTab === "standard"
                             ? "bg-emerald-600 text-white shadow-sm"
                             : "bg-[#F8F9FD] text-[#252943]/70 hover:bg-slate-200"
                         }`}
                       >
-                        Standard Rates (Regular Signups)
+                        Standard Rates
                       </button>
                       <button
                         type="button"
                         onClick={() => setTiktokPricingTab("vip")}
-                        className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                           tiktokPricingTab === "vip"
                             ? "bg-amber-500 text-white shadow-sm"
                             : "bg-[#F8F9FD] text-[#252943]/70 hover:bg-slate-200"
                         }`}
                       >
                         <Sparkles className="w-3.5 h-3.5" />
-                        <span>VIP Passkey Rates</span>
+                        <span>VIP Passkey</span>
                       </button>
                     </div>
 
@@ -2353,10 +2644,34 @@ export default function AdminPage() {
                             </div>
                           </div>
 
-                          {/* Quick Margin Multipliers */}
+                          {/* Quick Margin Multipliers with Dropdown */}
                           {!isZeroVip ? (
-                            <div className="space-y-1">
-                              <span className="text-[10px] text-[#252943]/60 font-semibold block">Quick Profit Range:</span>
+                            <div className="space-y-1.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] text-[#252943]/60 font-semibold block">Quick Profit Margin:</span>
+                                <select
+                                  onChange={(e) => {
+                                    const pct = Number(e.target.value);
+                                    if (pct > 0) {
+                                      updateEffectiveRate(
+                                        m.key,
+                                        "tiktok",
+                                        isVip,
+                                        Number((origCost * (1 + pct / 100)).toFixed(2))
+                                      );
+                                    }
+                                  }}
+                                  defaultValue=""
+                                  className="bg-[#F8F9FD] border border-[#DEE0ED] rounded-lg px-2 py-0.5 text-[10px] font-bold text-[#252943] outline-none cursor-pointer hover:border-emerald-500"
+                                >
+                                  <option value="" disabled>Choose Margin ▾</option>
+                                  {m.multipliers.map((pct) => (
+                                    <option key={pct} value={pct}>
+                                      +{pct}% Margin (₹{(origCost * (1 + pct / 100)).toFixed(2)})
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
                               <div className="flex items-center flex-wrap gap-1">
                                 {m.multipliers.map((pct) => (
                                   <button
@@ -2471,6 +2786,21 @@ export default function AdminPage() {
 
             {adminPlatformTab === "instagram" && (
               <div className="space-y-6 animate-fadeIn">
+                {/* Instagram Goal Clarification Banner */}
+                <div className="p-4 rounded-2xl bg-purple-50 border border-purple-200 flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-purple-950 flex items-center gap-1.5">
+                      <span>🎯 Main Goal: Instagram Reels Services, Upstream Providers & Retail Margins</span>
+                    </h3>
+                    <p className="text-[11px] text-purple-900/80 mt-0.5 leading-relaxed">
+                      Map upstream provider service IDs and configure retail rates for Instagram Reel Views, Likes, Saves, Shares, Reposts (min: 10), and Custom Comments (Zefame).
+                    </p>
+                  </div>
+                </div>
+
                 {/* Section 1: Instagram Upstream Services Mapping & Configuration */}
                 <div className="p-6 rounded-3xl border border-[#DEE0ED] bg-[#F8F9FD]/60 space-y-4">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#DEE0ED]">
@@ -3072,6 +3402,14 @@ export default function AdminPage() {
                   {/* Tier Selector & VIP Controls */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-white/80 rounded-2xl border border-purple-200">
                     <div className="flex items-center gap-2">
+                      <select
+                        value={instagramPricingTab}
+                        onChange={(e) => setInstagramPricingTab(e.target.value as "standard" | "vip")}
+                        className="bg-white border border-purple-300 rounded-xl px-3 py-1.5 text-xs font-bold text-[#252943] shadow-xs outline-none cursor-pointer focus:border-purple-500"
+                      >
+                        <option value="standard">🏷️ Standard Rates (Regular Signups)</option>
+                        <option value="vip">✨ VIP Passkey Rates (VIP Clients)</option>
+                      </select>
                       <button
                         type="button"
                         onClick={() => setInstagramPricingTab("standard")}
@@ -3081,7 +3419,7 @@ export default function AdminPage() {
                             : "bg-[#F8F9FD] text-[#252943]/70 hover:bg-slate-200"
                         }`}
                       >
-                        Standard Rates (Regular Signups)
+                        Standard Rates
                       </button>
                       <button
                         type="button"
@@ -3093,7 +3431,7 @@ export default function AdminPage() {
                         }`}
                       >
                         <Sparkles className="w-3.5 h-3.5" />
-                        <span>VIP Passkey Rates</span>
+                        <span>VIP Passkey</span>
                       </button>
                     </div>
 
@@ -3179,10 +3517,34 @@ export default function AdminPage() {
                             </div>
                           </div>
 
-                          {/* Quick Margin Multipliers */}
+                          {/* Quick Margin Multipliers with Dropdown */}
                           {!isZeroVip ? (
-                            <div className="space-y-1">
-                              <span className="text-[10px] text-[#252943]/60 font-semibold block">Quick Profit Range:</span>
+                            <div className="space-y-1.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] text-[#252943]/60 font-semibold block">Quick Profit Margin:</span>
+                                <select
+                                  onChange={(e) => {
+                                    const pct = Number(e.target.value);
+                                    if (pct > 0) {
+                                      updateEffectiveRate(
+                                        m.key,
+                                        "instagram",
+                                        isVip,
+                                        Number((origCost * (1 + pct / 100)).toFixed(2))
+                                      );
+                                    }
+                                  }}
+                                  defaultValue=""
+                                  className="bg-[#F8F9FD] border border-[#DEE0ED] rounded-lg px-2 py-0.5 text-[10px] font-bold text-[#252943] outline-none cursor-pointer hover:border-purple-500"
+                                >
+                                  <option value="" disabled>Choose Margin ▾</option>
+                                  {m.multipliers.map((pct) => (
+                                    <option key={pct} value={pct}>
+                                      +{pct}% Margin (₹{(origCost * (1 + pct / 100)).toFixed(2)})
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
                               <div className="flex items-center flex-wrap gap-1">
                                 {m.multipliers.map((pct) => (
                                   <button
@@ -3250,9 +3612,6 @@ export default function AdminPage() {
                 </div>
               </div>
             )}
-
-                {/* Section 4b: Universal Engagement Services & API Catalog Manager */}
-                <EngagementServicesManager />
 
                 {/* Section 5: Delayed Likes Protection Synchronization Threshold */}
                 <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-300 space-y-3">
@@ -3423,81 +3782,121 @@ export default function AdminPage() {
                 </div>
               )}
             </div>
-        </div>
-      ) : settingsSubTab === "provider" ? (
-            <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 sm:p-8 shadow-subtle space-y-6 animate-fadeIn">
-              <div className="pb-4 border-b border-[#DEE0ED]">
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="w-8 h-8 rounded-xl bg-[#252943] text-white flex items-center justify-center font-bold">
-                    <Server className="w-4 h-4" />
-                  </div>
-                  <h2 className="text-base font-black text-[#252943]">
-                    Fallback System Provider Configuration
-                  </h2>
+          </div>
+        )}
+      </div>
+    )}
+
+      {/* =====================================================================
+          CATEGORY 5: SYSTEM SETTINGS (PROVIDER & ANNOUNCEMENT)
+      ====================================================================== */}
+      {category === "settings" && (
+        <div className="space-y-6 animate-fadeIn">
+          {settingsSubTab === "provider" ? (
+            <div className="space-y-4 animate-fadeIn">
+              <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-200 flex items-start gap-3">
+                <div className="w-8 h-8 rounded-xl bg-[#252943] text-white flex items-center justify-center shrink-0">
+                  <Server className="w-4 h-4" />
                 </div>
-                <p className="text-xs text-[#252943]/60 max-w-2xl">
-                  Used as the primary upstream connection for background tasks and automated orders.
-                </p>
+                <div>
+                  <h3 className="text-xs font-bold text-[#252943] flex items-center gap-1.5">
+                    <span>🎯 Main Goal: Fallback SMM Provider API Configuration</span>
+                  </h3>
+                  <p className="text-[11px] text-[#252943]/80 mt-0.5 leading-relaxed">
+                    Configure the fallback upstream SMM provider connection used for background automation and order routing.
+                  </p>
+                </div>
               </div>
 
-              <form onSubmit={handleSaveSystemProvider} className="space-y-4 max-w-xl">
-                <div>
-                  <label className="block text-xs font-bold text-[#252943] mb-1">Provider Label</label>
-                  <input
-                    type="text"
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3.5 py-2.5 text-xs font-semibold text-[#252943] outline-none focus:border-[#3A4EFB]"
-                    placeholder="e.g. Standard SMM Provider"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-[#252943] mb-1">API Endpoint URL</label>
-                  <input
-                    type="url"
-                    value={editApiUrl}
-                    onChange={(e) => setEditApiUrl(e.target.value)}
-                    className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3.5 py-2.5 text-xs font-mono font-semibold text-[#252943] outline-none focus:border-[#3A4EFB]"
-                    placeholder="https://provider-api.com/api/v2"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-[#252943] mb-1">API Key</label>
-                  <input
-                    type="password"
-                    value={editApiKey}
-                    onChange={(e) => setEditApiKey(e.target.value)}
-                    placeholder="Enter new key to replace existing secret"
-                    className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3.5 py-2.5 text-xs font-mono text-[#252943] outline-none focus:border-[#3A4EFB]"
-                  />
-                </div>
-
-                <div className="p-3.5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] flex items-center justify-between">
-                  <div>
-                    <span className="text-xs font-bold text-[#252943] block">System Mock Mode</span>
-                    <span className="text-[11px] text-[#252943]/60">Deliver simulated orders in staging/development</span>
+              <div className="bg-white rounded-3xl border border-[#DEE0ED] p-6 sm:p-8 shadow-subtle space-y-6 animate-fadeIn">
+                <div className="pb-4 border-b border-[#DEE0ED]">
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="w-8 h-8 rounded-xl bg-[#252943] text-white flex items-center justify-center font-bold">
+                      <Server className="w-4 h-4" />
+                    </div>
+                    <h2 className="text-base font-black text-[#252943]">
+                      Fallback System Provider Configuration
+                    </h2>
                   </div>
-                  <input
-                    type="checkbox"
-                    checked={editIsMock}
-                    onChange={(e) => setEditIsMock(e.target.checked)}
-                    className="rounded text-[#3A4EFB] w-4 h-4 cursor-pointer"
-                  />
+                  <p className="text-xs text-[#252943]/60 max-w-2xl">
+                    Used as the primary upstream connection for background tasks and automated orders.
+                  </p>
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={savingProvider}
-                  className="px-6 py-2.5 rounded-xl bg-[#252943] text-white text-xs font-bold shadow-subtle hover:bg-[#1A1D31] transition-all press-scale disabled:opacity-50"
-                >
-                  {savingProvider ? "Saving..." : "Save System Config"}
-                </button>
-              </form>
+                <form onSubmit={handleSaveSystemProvider} className="space-y-4 max-w-xl">
+                  <div>
+                    <label className="block text-xs font-bold text-[#252943] mb-1">Provider Label</label>
+                    <input
+                      type="text"
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3.5 py-2.5 text-xs font-semibold text-[#252943] outline-none focus:border-[#3A4EFB]"
+                      placeholder="e.g. Standard SMM Provider"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#252943] mb-1">API Endpoint URL</label>
+                    <input
+                      type="url"
+                      value={editApiUrl}
+                      onChange={(e) => setEditApiUrl(e.target.value)}
+                      className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3.5 py-2.5 text-xs font-mono font-semibold text-[#252943] outline-none focus:border-[#3A4EFB]"
+                      placeholder="https://provider-api.com/api/v2"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#252943] mb-1">API Key</label>
+                    <input
+                      type="password"
+                      value={editApiKey}
+                      onChange={(e) => setEditApiKey(e.target.value)}
+                      placeholder="Enter new key to replace existing secret"
+                      className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3.5 py-2.5 text-xs font-mono text-[#252943] outline-none focus:border-[#3A4EFB]"
+                    />
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-[#F8F9FD] border border-[#DEE0ED] flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-bold text-[#252943] block">System Mock Mode</span>
+                      <span className="text-[11px] text-[#252943]/60">Deliver simulated orders in staging/development</span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={editIsMock}
+                      onChange={(e) => setEditIsMock(e.target.checked)}
+                      className="rounded text-[#3A4EFB] w-4 h-4 cursor-pointer"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={savingProvider}
+                    className="px-6 py-2.5 rounded-xl bg-[#252943] text-white text-xs font-bold shadow-subtle hover:bg-[#1A1D31] transition-all press-scale disabled:opacity-50"
+                  >
+                    {savingProvider ? "Saving..." : "Save System Config"}
+                  </button>
+                </form>
+              </div>
             </div>
           ) : (
-            <SiteAnnouncementTab />
+            <div className="space-y-4 animate-fadeIn">
+              <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200 flex items-start gap-3">
+                <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                  <Megaphone className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                    <span>🎯 Main Goal: Site-Wide User Announcement & Maintenance Banner</span>
+                  </h3>
+                  <p className="text-[11px] text-emerald-900/80 mt-0.5 leading-relaxed">
+                    Broadcast critical updates, maintenance notices, or special offers displayed prominently at the top of client dashboards.
+                  </p>
+                </div>
+              </div>
+              <SiteAnnouncementTab />
+            </div>
           )}
         </div>
       )}
