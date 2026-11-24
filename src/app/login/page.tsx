@@ -42,8 +42,9 @@ export default function LoginPage() {
 
   useEffect(() => {
     fetch("/api/system/maintenance", { cache: "no-store" })
-      .then((res) => res.json())
+      .then((res) => (res.ok ? res.json().catch(() => null) : null))
       .then((data) => {
+        if (!data) return;
         if (data.isAdmin) {
           router.push("/engagement");
           return;
@@ -90,10 +91,10 @@ export default function LoginPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ passkey: passkey.trim() }),
         });
-        const data = await res.json();
+        const data = await res.json().catch(() => null);
 
-        if (!res.ok || !data.success) {
-          setError(data.error || "Invalid or expired passkey.");
+        if (!res.ok || !data?.success) {
+          setError(data?.error || "Invalid or expired passkey.");
           setLoading(false);
           return;
         }
@@ -129,10 +130,10 @@ export default function LoginPage() {
             password,
           }),
         });
-        const data = await res.json();
+        const data = await res.json().catch(() => null);
 
-        if (!res.ok || !data.success) {
-          setError(data.error || "Failed to create account.");
+        if (!res.ok || !data?.success) {
+          setError(data?.error || "Failed to create account.");
           setLoading(false);
           return;
         }
@@ -159,10 +160,10 @@ export default function LoginPage() {
             password,
           }),
         });
-        const data = await res.json();
+        const data = await res.json().catch(() => null);
 
-        if (!res.ok || !data.success) {
-          setError(data.error || "Invalid username or password.");
+        if (!res.ok || !data?.success) {
+          setError(data?.error || "Invalid username or password.");
           setLoading(false);
           return;
         }

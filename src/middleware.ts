@@ -64,11 +64,13 @@ export function middleware(request: NextRequest) {
     pathname === "/" ||
     pathname === "/login" ||
     pathname === "/signup" ||
+    pathname === "/admin" ||
     pathname.startsWith("/api/auth/login") ||
     pathname.startsWith("/api/auth/register") ||
     pathname.startsWith("/api/auth/logout") ||
     pathname.startsWith("/api/auth/session") ||
-    pathname.startsWith("/api/auth/google")
+    pathname.startsWith("/api/auth/google") ||
+    pathname.startsWith("/api/admin/auth")
   ) {
     return applySecurityHeaders(NextResponse.next());
   }
@@ -132,8 +134,8 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  // Strict protection for /api/admin/ endpoints
-  if (pathname.startsWith("/api/admin/")) {
+  // Strict protection for /api/admin/ endpoints (excluding the auth route)
+  if (pathname.startsWith("/api/admin/") && !pathname.startsWith("/api/admin/auth")) {
     const hasAdminToken = Boolean(
       (adminCookie && adminCookie.trim().length >= 6) ||
       (adminHeader && adminHeader.trim().length >= 6)

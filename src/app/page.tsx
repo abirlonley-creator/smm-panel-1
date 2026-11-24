@@ -70,9 +70,9 @@ export default function LandingPage() {
 
   useEffect(() => {
     fetch("/api/auth/session")
-      .then((res) => res.json())
+      .then((res) => (res.ok ? res.json().catch(() => null) : null))
       .then((data) => {
-        if (data.authenticated) {
+        if (data && data.authenticated) {
           setSession(data);
         }
       })

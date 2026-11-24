@@ -76,10 +76,10 @@ export default function SignupPage() {
         }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
 
-      if (!res.ok || !data.success) {
-        setError(data.error || "Failed to create account. Please try again.");
+      if (!res.ok || !data?.success) {
+        setError(data?.error || "Failed to create account. Please try again.");
         setLoading(false);
         return;
       }
