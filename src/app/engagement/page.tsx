@@ -279,7 +279,7 @@ export default function EngagementPage() {
     const ratesObj = platform === "Instagram" ? statusData?.pricingRates?.instagram : statusData?.pricingRates?.tiktok;
     if (ratesObj) return ratesObj;
     if (platform === "Instagram") {
-      return { views: 3.5, likes: 2.2, saves: 2.5, shares: 2.5, reposts: 2.5, comments: 20.0 };
+      return { views: 1.0, likes: 35.57, saves: 6.7, shares: 2.0, reposts: 152.45, comments: 2113.92 };
     }
     return { views: 4.5, likes: 2.0, saves: 0.8, shares: 0.8, reposts: 0.8, comments: 15.0 };
   }, [platform, statusData?.pricingRates]);
@@ -451,7 +451,7 @@ export default function EngagementPage() {
 
   // Pure rate-based campaign price calculation strictly according to admin configured rates:
   // (views/1000)*viewsRate + (likes/1000)*likesRate + (saves/1000)*savesRate + (shares/1000)*sharesRate + (reposts/1000)*repostsRate + (comments/1000)*commentsRate
-  const targetViews = effectivePackage.views_total || effectivePackage.base_views || 2000;
+  const targetViews = (plan && plan.viewsTotal > 0) ? plan.viewsTotal : (effectivePackage.views_total || effectivePackage.base_views || 2000);
   const targetLikes = effectivePackage.likes ?? 0;
   const targetSaves = effectivePackage.saves ?? 0;
   const targetShares = effectivePackage.shares ?? 0;
@@ -468,6 +468,19 @@ export default function EngagementPage() {
   const totalCampaignPriceInr = Number(
     (viewsCost + likesCost + savesCost + sharesCost + repostsCost + commentsCost).toFixed(2)
   );
+
+  // Compute Base Package price based on included package metrics and actual plan views total
+  const basePackageViewsQty = (plan && plan.viewsTotal > 0) ? plan.viewsTotal : (currentPackage.views_total || currentPackage.base_views || 2000);
+  const basePackageViewsCost = (basePackageViewsQty / 1000) * currentRates.views;
+  const basePackageLikesCost = ((currentPackage.likes ?? 0) / 1000) * currentRates.likes;
+  const basePackageSavesCost = ((currentPackage.saves ?? 0) / 1000) * currentRates.saves;
+  const basePackageSharesCost = ((currentPackage.shares ?? 0) / 1000) * currentRates.shares;
+  const basePackageRepostsCost = ((currentPackage.reposts ?? 0) / 1000) * currentRates.reposts;
+  const basePackageCommentsCost = ((currentPackage.comments ?? 0) / 1000) * currentRates.comments;
+  const basePackagePrice = Number(
+    (basePackageViewsCost + basePackageLikesCost + basePackageSavesCost + basePackageSharesCost + basePackageRepostsCost + basePackageCommentsCost).toFixed(2)
+  );
+  const addOnsTotalPrice = Math.max(0, Number((totalCampaignPriceInr - basePackagePrice).toFixed(2)));
 
   const walletBalance = statusData?.walletBalance ?? 0;
   const hasSufficientFunds = walletBalance >= totalCampaignPriceInr;
@@ -786,19 +799,17 @@ export default function EngagementPage() {
                 setPlatform("TikTok");
                 if (targetUrl.includes("instagram.com")) setTargetUrl("");
               }}
-              className={`p-3.5 rounded-2xl border text-left transition-all duration-200 cursor-pointer flex items-center justify-between press-scale font-sans ${
-                platform === "TikTok"
-                  ? "bg-[#111413] border-[#111413] text-white shadow-md ring-2 ring-[#D4F04F]/40"
-                  : "bg-[#F8F9FD] border-[#DEE0ED] hover:border-[#111413]/30 text-[#111413]"
-              }`}
+              className={`p-3.5 rounded-2xl border text-left transition-all duration-200 cursor-pointer flex items-center justify-between press-scale font-sans ${platform === "TikTok"
+                ? "bg-[#111413] border-[#111413] text-white shadow-md ring-2 ring-[#D4F04F]/40"
+                : "bg-[#F8F9FD] border-[#DEE0ED] hover:border-[#111413]/30 text-[#111413]"
+                }`}
             >
               <div className="flex items-center gap-3">
                 <div
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                    platform === "TikTok"
-                      ? "bg-[#D4F04F] text-[#111413]"
-                      : "bg-white text-[#111413] border border-[#DEE0ED]"
-                  }`}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${platform === "TikTok"
+                    ? "bg-[#D4F04F] text-[#111413]"
+                    : "bg-white text-[#111413] border border-[#DEE0ED]"
+                    }`}
                 >
                   <TikTokIcon className="w-5 h-5" />
                 </div>
@@ -812,20 +823,18 @@ export default function EngagementPage() {
                     )}
                   </div>
                   <span
-                    className={`text-xs block ${
-                      platform === "TikTok" ? "text-gray-300" : "text-[#5B625F]"
-                    }`}
+                    className={`text-xs block ${platform === "TikTok" ? "text-gray-300" : "text-[#5B625F]"
+                      }`}
                   >
                     FYP Velocity & View-Paced Engagement
                   </span>
                 </div>
               </div>
               <div
-                className={`w-5 h-5 rounded-full flex items-center justify-center border ${
-                  platform === "TikTok"
-                    ? "bg-[#D4F04F] border-[#D4F04F] text-[#111413]"
-                    : "border-gray-300 bg-white"
-                }`}
+                className={`w-5 h-5 rounded-full flex items-center justify-center border ${platform === "TikTok"
+                  ? "bg-[#D4F04F] border-[#D4F04F] text-[#111413]"
+                  : "border-gray-300 bg-white"
+                  }`}
               >
                 {platform === "TikTok" && <Check className="w-3 h-3 stroke-[3]" />}
               </div>
@@ -838,19 +847,17 @@ export default function EngagementPage() {
                 setPlatform("Instagram");
                 if (targetUrl.includes("tiktok.com")) setTargetUrl("");
               }}
-              className={`p-3.5 rounded-2xl border text-left transition-all duration-200 cursor-pointer flex items-center justify-between press-scale font-sans ${
-                platform === "Instagram"
-                  ? "bg-[#111413] border-[#111413] text-white shadow-md ring-2 ring-[#D4F04F]/40"
-                  : "bg-[#F8F9FD] border-[#DEE0ED] hover:border-[#111413]/30 text-[#111413]"
-              }`}
+              className={`p-3.5 rounded-2xl border text-left transition-all duration-200 cursor-pointer flex items-center justify-between press-scale font-sans ${platform === "Instagram"
+                ? "bg-[#111413] border-[#111413] text-white shadow-md ring-2 ring-[#D4F04F]/40"
+                : "bg-[#F8F9FD] border-[#DEE0ED] hover:border-[#111413]/30 text-[#111413]"
+                }`}
             >
               <div className="flex items-center gap-3">
                 <div
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                    platform === "Instagram"
-                      ? "bg-[#D4F04F] text-[#111413]"
-                      : "bg-white text-[#111413] border border-[#DEE0ED]"
-                  }`}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${platform === "Instagram"
+                    ? "bg-[#D4F04F] text-[#111413]"
+                    : "bg-white text-[#111413] border border-[#DEE0ED]"
+                    }`}
                 >
                   <InstagramIcon className="w-5 h-5" />
                 </div>
@@ -864,20 +871,18 @@ export default function EngagementPage() {
                     )}
                   </div>
                   <span
-                    className={`text-xs block ${
-                      platform === "Instagram" ? "text-gray-300" : "text-[#5B625F]"
-                    }`}
+                    className={`text-xs block ${platform === "Instagram" ? "text-gray-300" : "text-[#5B625F]"
+                      }`}
                   >
                     Reels & Posts Configured Waves Delivery
                   </span>
                 </div>
               </div>
               <div
-                className={`w-5 h-5 rounded-full flex items-center justify-center border ${
-                  platform === "Instagram"
-                    ? "bg-[#D4F04F] border-[#D4F04F] text-[#111413]"
-                    : "border-gray-300 bg-white"
-                }`}
+                className={`w-5 h-5 rounded-full flex items-center justify-center border ${platform === "Instagram"
+                  ? "bg-[#D4F04F] border-[#D4F04F] text-[#111413]"
+                  : "border-gray-300 bg-white"
+                  }`}
               >
                 {platform === "Instagram" && <Check className="w-3 h-3 stroke-[3]" />}
               </div>
@@ -929,13 +934,11 @@ export default function EngagementPage() {
                   key={pkg.id}
                   type="button"
                   onClick={() => handleSelectPackage(pkg.id)}
-                  className={`group relative p-3 rounded-2xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between press-scale font-sans ${
-                    idx === 4 ? "col-span-2 sm:col-span-1 lg:col-span-1" : "col-span-1"
-                  } ${
-                    isSelected
+                  className={`group relative p-3 rounded-2xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between press-scale font-sans ${idx === 4 ? "col-span-2 sm:col-span-1 lg:col-span-1" : "col-span-1"
+                    } ${isSelected
                       ? "bg-[#D4F04F]/[0.08] border-2 border-[#D4F04F] shadow-sm ring-2 ring-[#D4F04F]/20 -translate-y-0.5"
                       : "bg-white border-[#E4E0D3] hover:border-[#111413]/30 hover:shadow-xs"
-                  }`}
+                    }`}
                 >
                   {/* Top: Icon + Duration */}
                   <div className="w-full flex items-center justify-between gap-1 mb-2">
@@ -957,11 +960,10 @@ export default function EngagementPage() {
                         </span>
                       )}
                       <span
-                        className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider font-sans ${
-                          isSelected
-                            ? "bg-[#111413] text-[#D4F04F] shadow-2xs"
-                            : "bg-[#F3F1EA] text-[#5B625F]"
-                        }`}
+                        className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider font-sans ${isSelected
+                          ? "bg-[#111413] text-[#D4F04F] shadow-2xs"
+                          : "bg-[#F3F1EA] text-[#5B625F]"
+                          }`}
                       >
                         About {pkg.base_duration_hours}h
                       </span>
@@ -1023,11 +1025,10 @@ export default function EngagementPage() {
                     </div>
 
                     <div
-                      className={`w-4 h-4 rounded-full flex items-center justify-center border transition-all ${
-                        isSelected
-                          ? "bg-[#111413] border-[#111413] text-[#D4F04F] shadow-2xs"
-                          : "border-[#E4E0D3] bg-white group-hover:border-[#111413]/50"
-                      }`}
+                      className={`w-4 h-4 rounded-full flex items-center justify-center border transition-all ${isSelected
+                        ? "bg-[#111413] border-[#111413] text-[#D4F04F] shadow-2xs"
+                        : "border-[#E4E0D3] bg-white group-hover:border-[#111413]/50"
+                        }`}
                     >
                       {isSelected && <Check className="w-2.5 h-2.5 stroke-[3] text-[#D4F04F]" />}
                     </div>
@@ -1046,11 +1047,10 @@ export default function EngagementPage() {
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 text-xs font-sans">
               {/* Likes Toggle */}
               <label
-                className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
-                  addOnLikes
-                    ? "bg-rose-50/60 border-rose-200 text-rose-950"
-                    : "bg-white border-[#E4E0D3] text-[#5B625F] opacity-70"
-                }`}
+                className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${addOnLikes
+                  ? "bg-rose-50/60 border-rose-200 text-rose-950"
+                  : "bg-white border-[#E4E0D3] text-[#5B625F] opacity-70"
+                  }`}
               >
                 <div className="flex items-center gap-2">
                   <Heart className={`w-3.5 h-3.5 ${addOnLikes ? "fill-rose-500 text-rose-500" : "text-gray-400"}`} />
@@ -1069,11 +1069,10 @@ export default function EngagementPage() {
 
               {/* Saves Toggle */}
               <label
-                className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
-                  addOnSaves
-                    ? "bg-amber-50/60 border-amber-200 text-amber-950"
-                    : "bg-white border-[#E4E0D3] text-[#5B625F] opacity-70"
-                }`}
+                className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${addOnSaves
+                  ? "bg-amber-50/60 border-amber-200 text-amber-950"
+                  : "bg-white border-[#E4E0D3] text-[#5B625F] opacity-70"
+                  }`}
               >
                 <div className="flex items-center gap-2">
                   <Bookmark className={`w-3.5 h-3.5 ${addOnSaves ? "fill-amber-500 text-amber-500" : "text-gray-400"}`} />
@@ -1096,11 +1095,10 @@ export default function EngagementPage() {
 
               {/* Shares Toggle */}
               <label
-                className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
-                  addOnShares
-                    ? "bg-purple-50/60 border-purple-200 text-purple-950"
-                    : "bg-white border-[#E4E0D3] text-[#5B625F] opacity-70"
-                }`}
+                className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${addOnShares
+                  ? "bg-purple-50/60 border-purple-200 text-purple-950"
+                  : "bg-white border-[#E4E0D3] text-[#5B625F] opacity-70"
+                  }`}
               >
                 <div className="flex items-center gap-2">
                   <Share2 className={`w-3.5 h-3.5 ${addOnShares ? "text-purple-600" : "text-gray-400"}`} />
@@ -1123,11 +1121,10 @@ export default function EngagementPage() {
 
               {/* Reposts Toggle */}
               <label
-                className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
-                  addOnReposts
-                    ? "bg-indigo-50/60 border-indigo-200 text-indigo-950"
-                    : "bg-white border-[#E4E0D3] text-[#5B625F] opacity-70"
-                }`}
+                className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${addOnReposts
+                  ? "bg-indigo-50/60 border-indigo-200 text-indigo-950"
+                  : "bg-white border-[#E4E0D3] text-[#5B625F] opacity-70"
+                  }`}
               >
                 <div className="flex items-center gap-2">
                   <Repeat className={`w-3.5 h-3.5 ${addOnReposts ? "text-indigo-600" : "text-gray-400"}`} />
@@ -1150,11 +1147,10 @@ export default function EngagementPage() {
 
               {/* Comments Toggle (Optional Add-on) */}
               <div
-                className={`p-2.5 rounded-xl border transition-all ${
-                  addOnComments
-                    ? "bg-sky-50/60 border-sky-200 text-sky-950"
-                    : "bg-white border-[#E4E0D3] text-[#5B625F]"
-                }`}
+                className={`p-2.5 rounded-xl border transition-all ${addOnComments
+                  ? "bg-sky-50/60 border-sky-200 text-sky-950"
+                  : "bg-white border-[#E4E0D3] text-[#5B625F]"
+                  }`}
               >
                 <label className="flex items-center justify-between cursor-pointer">
                   <div className="flex items-center gap-2">
@@ -1183,11 +1179,10 @@ export default function EngagementPage() {
                         key={num}
                         type="button"
                         onClick={() => setCommentsCount(num)}
-                        className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer ${
-                          commentsCount === num
-                            ? "bg-sky-600 text-white border-sky-600 shadow-2xs"
-                            : "bg-white text-sky-900 border-sky-200 hover:bg-sky-100"
-                        }`}
+                        className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer ${commentsCount === num
+                          ? "bg-sky-600 text-white border-sky-600 shadow-2xs"
+                          : "bg-white text-sky-900 border-sky-200 hover:bg-sky-100"
+                          }`}
                       >
                         {num}
                       </button>
@@ -1305,27 +1300,24 @@ export default function EngagementPage() {
                   <button
                     type="button"
                     onClick={() => setFollowers(500)}
-                    className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition-colors ${
-                      followers < 1000 ? "bg-[#111413] text-[#D4F04F] border-[#111413]" : "bg-white text-[#5B625F] border-[#E4E0D3] hover:bg-[#F3F1EA]"
-                    }`}
+                    className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition-colors ${followers < 1000 ? "bg-[#111413] text-[#D4F04F] border-[#111413]" : "bg-white text-[#5B625F] border-[#E4E0D3] hover:bg-[#F3F1EA]"
+                      }`}
                   >
                     &lt;1k
                   </button>
                   <button
                     type="button"
                     onClick={() => setFollowers(3500)}
-                    className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition-colors ${
-                      followers >= 1000 && followers <= 10000 ? "bg-[#111413] text-[#D4F04F] border-[#111413]" : "bg-white text-[#5B625F] border-[#E4E0D3] hover:bg-[#F3F1EA]"
-                    }`}
+                    className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition-colors ${followers >= 1000 && followers <= 10000 ? "bg-[#111413] text-[#D4F04F] border-[#111413]" : "bg-white text-[#5B625F] border-[#E4E0D3] hover:bg-[#F3F1EA]"
+                      }`}
                   >
                     1k–10k
                   </button>
                   <button
                     type="button"
                     onClick={() => setFollowers(15000)}
-                    className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition-colors ${
-                      followers > 10000 ? "bg-[#111413] text-[#D4F04F] border-[#111413]" : "bg-white text-[#5B625F] border-[#E4E0D3] hover:bg-[#F3F1EA]"
-                    }`}
+                    className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition-colors ${followers > 10000 ? "bg-[#111413] text-[#D4F04F] border-[#111413]" : "bg-white text-[#5B625F] border-[#E4E0D3] hover:bg-[#F3F1EA]"
+                      }`}
                   >
                     &gt;10k
                   </button>
@@ -1342,22 +1334,20 @@ export default function EngagementPage() {
                 <button
                   type="button"
                   onClick={() => setStartMode("now")}
-                  className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer font-sans ${
-                    startMode === "now"
-                      ? "bg-[#111413] text-[#D4F04F] border-[#111413] shadow-xs"
-                      : "bg-white text-[#5B625F] border-[#E4E0D3] hover:bg-[#F3F1EA]"
-                  }`}
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer font-sans ${startMode === "now"
+                    ? "bg-[#111413] text-[#D4F04F] border-[#111413] shadow-xs"
+                    : "bg-white text-[#5B625F] border-[#E4E0D3] hover:bg-[#F3F1EA]"
+                    }`}
                 >
                   Start Now
                 </button>
                 <button
                   type="button"
                   onClick={() => setStartMode("schedule")}
-                  className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer font-sans ${
-                    startMode === "schedule"
-                      ? "bg-[#111413] text-[#D4F04F] border-[#111413] shadow-xs"
-                      : "bg-white text-[#5B625F] border-[#E4E0D3] hover:bg-[#F3F1EA]"
-                  }`}
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer font-sans ${startMode === "schedule"
+                    ? "bg-[#111413] text-[#D4F04F] border-[#111413] shadow-xs"
+                    : "bg-white text-[#5B625F] border-[#E4E0D3] hover:bg-[#F3F1EA]"
+                    }`}
                 >
                   Schedule Start
                 </button>
@@ -1393,13 +1383,12 @@ export default function EngagementPage() {
                 </label>
                 <div className="flex items-center gap-2">
                   <span
-                    className={`px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold border transition-colors ${
-                      customCommentsLines.length === targetCommentsCount
-                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                        : customCommentsLines.length > targetCommentsCount
+                    className={`px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold border transition-colors ${customCommentsLines.length === targetCommentsCount
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                      : customCommentsLines.length > targetCommentsCount
                         ? "bg-rose-50 text-rose-700 border-rose-200"
                         : "bg-sky-50 text-sky-800 border-sky-200"
-                    }`}
+                      }`}
                   >
                     {customCommentsLines.length} / {targetCommentsCount} comments
                   </span>
@@ -1521,11 +1510,11 @@ export default function EngagementPage() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-sans text-[#5B625F]">
               <div>
                 <span className="block text-[10px] font-bold uppercase text-[#5B625F]/80">Base Package</span>
-                <span className="font-extrabold text-[#111413]">₹{getPackagePrice(currentPackage, currentRates).toFixed(2)}</span>
+                <span className="font-extrabold text-[#111413]">₹{basePackagePrice.toFixed(2)}</span>
               </div>
               <div>
                 <span className="block text-[10px] font-bold uppercase text-[#5B625F]/80">Add-ons Total</span>
-                <span className="font-extrabold text-[#111413]">₹{Math.max(0, Number((totalCampaignPriceInr - getPackagePrice(currentPackage, currentRates)).toFixed(2))).toFixed(2)}</span>
+                <span className="font-extrabold text-[#111413]">₹{addOnsTotalPrice.toFixed(2)}</span>
               </div>
               <div>
                 <span className="block text-[10px] font-bold uppercase text-[#5B625F]/80">Starts</span>
@@ -1557,11 +1546,10 @@ export default function EngagementPage() {
             <button
               type="submit"
               disabled={submitting || !agreedToTerms || !isCurrentPlatformEnabled || (targetCommentsCount > 0 && customCommentsLines.length < targetCommentsCount)}
-              className={`w-full py-4 rounded-xl text-sm font-black tracking-wide transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer press-scale font-sans ${
-                submitting || !agreedToTerms || !isCurrentPlatformEnabled || (targetCommentsCount > 0 && customCommentsLines.length < targetCommentsCount)
-                  ? "bg-[#E4E0D3] text-[#5B625F] cursor-not-allowed opacity-60"
-                  : "bg-[#D4F04F] hover:bg-[#C5E23A] text-[#111413] shadow-[#D4F04F]/25 active:scale-[0.98]"
-              }`}
+              className={`w-full py-4 rounded-xl text-sm font-black tracking-wide transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer press-scale font-sans ${submitting || !agreedToTerms || !isCurrentPlatformEnabled || (targetCommentsCount > 0 && customCommentsLines.length < targetCommentsCount)
+                ? "bg-[#E4E0D3] text-[#5B625F] cursor-not-allowed opacity-60"
+                : "bg-[#D4F04F] hover:bg-[#C5E23A] text-[#111413] shadow-[#D4F04F]/25 active:scale-[0.98]"
+                }`}
             >
               {submitting ? (
                 <>

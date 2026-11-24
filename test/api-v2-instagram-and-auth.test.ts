@@ -47,6 +47,21 @@ test("Exact dynamic formula: 2,000 views @ 0.97/1k + 42 likes @ 35/1k equals 3.4
   assert.strictEqual(total, 3.41, "Total charge must be exactly 3.41 rupees, neither high nor low");
 });
 
+test("Exact dynamic formula: 2,079 views @ 1.00/1k + 42 likes @ 35.57/1k equals 3.57 rupees", () => {
+  const viewsRate = 1.00;
+  const likesRate = 35.57;
+  const targetViews = 2079;
+  const targetLikes = 42;
+
+  const viewsCost = (targetViews / 1000) * viewsRate; // 2.079
+  const likesCost = (targetLikes / 1000) * likesRate; // 1.49394
+  const total = Number((viewsCost + likesCost).toFixed(2));
+
+  assert.strictEqual(Number(viewsCost.toFixed(3)), 2.079);
+  assert.strictEqual(Number(likesCost.toFixed(3)), 1.494);
+  assert.strictEqual(total, 3.57, "Total charge must be exactly 3.57 INR, matching admin configuration");
+});
+
 test("Passkey separation filters out regular registered account passwords", () => {
   const samplePasskeys = [
     { id: "pk-1", label: "VIP Client Alpha", status: "ACTIVE" },

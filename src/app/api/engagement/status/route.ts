@@ -57,7 +57,7 @@ export async function GET(request: Request) {
       OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
     },
   });
-  const isVip = userVipPasskeys.length > 0 || (session.passkey && session.passkey.label !== "Account Password") || isAdmin;
+  const isVip = userVipPasskeys.length > 0 || Boolean(session.passkey && session.passkey.label !== "Account Password");
 
   const walletBalance = user?.walletBalance ?? 0;
 
@@ -319,12 +319,12 @@ export async function GET(request: Request) {
     instagramRepostsRate = config.instagramZeroProfitVip ? origIgReposts : (config.instagramVipPricing?.repostsUserRate ?? origIgReposts);
     instagramCommentsRate = config.instagramZeroProfitVip ? origIgComments : (config.instagramVipPricing?.commentsUserRate ?? origIgComments);
   } else {
-    instagramViewsRate = config.instagramPricing?.viewsUserRate ?? 3.50;
-    instagramLikesRate = config.instagramPricing?.likesUserRate ?? 2.20;
-    instagramSavesRate = config.instagramPricing?.savesUserRate ?? 2.50;
-    instagramSharesRate = config.instagramPricing?.sharesUserRate ?? 2.50;
-    instagramRepostsRate = config.instagramPricing?.repostsUserRate ?? 2.50;
-    instagramCommentsRate = config.instagramPricing?.commentsUserRate ?? 20.00;
+    instagramViewsRate = config.instagramPricing?.viewsUserRate ?? 1.00;
+    instagramLikesRate = config.instagramPricing?.likesUserRate ?? 35.57;
+    instagramSavesRate = config.instagramPricing?.savesUserRate ?? 6.70;
+    instagramSharesRate = config.instagramPricing?.sharesUserRate ?? 2.00;
+    instagramRepostsRate = config.instagramPricing?.repostsUserRate ?? 152.45;
+    instagramCommentsRate = config.instagramPricing?.commentsUserRate ?? 2113.92;
   }
 
   // Active rate aliases for backward compatibility

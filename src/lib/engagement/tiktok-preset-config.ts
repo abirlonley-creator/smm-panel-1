@@ -757,12 +757,12 @@ export const DEFAULT_TIKTOK_ENGAGEMENT_CONFIG: TikTokEngagementPresetConfig = {
     intervalMinutes: 180,
   },
   instagramPricing: {
-    viewsUserRate: 3.50,
-    likesUserRate: 2.20,
-    savesUserRate: 2.50,
-    sharesUserRate: 2.50,
-    repostsUserRate: 2.50,
-    commentsUserRate: 20.00,
+    viewsUserRate: 1.00,
+    likesUserRate: 35.57,
+    savesUserRate: 6.70,
+    sharesUserRate: 2.00,
+    repostsUserRate: 152.45,
+    commentsUserRate: 2113.92,
   },
   tiktokZeroProfitVip: true,
   tiktokVipPricing: {

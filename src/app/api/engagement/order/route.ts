@@ -87,7 +87,7 @@ async function resolveService(userProviderId: string, targetExtId: string, adapt
           },
         });
       }
-    } catch {}
+    } catch { }
   }
 
   if (!srv) {
@@ -385,7 +385,7 @@ export async function POST(request: Request) {
         OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
       },
     });
-    const isVip = userVipPasskeys.length > 0 || session.role === "ADMIN";
+    const isVip = userVipPasskeys.length > 0;
 
     // 3. Build Batch Runs - Calculated with Admin Configured Selling Rates (Standard vs VIP)
     const now = Date.now();
@@ -419,12 +419,12 @@ export async function POST(request: Request) {
           : (config.instagramVipPricing?.commentsUserRate ?? 5.00);
       } else {
         // Standard user rates
-        viewsRate = config.instagramPricing?.viewsUserRate ?? (xmediaViewsService?.ratePer1000 ? xmediaViewsService.ratePer1000 * 1.5 : 3.50);
-        likesRate = config.instagramPricing?.likesUserRate ?? (zeofameLikesService?.ratePer1000 ? zeofameLikesService.ratePer1000 * 2.0 : 2.20);
-        savesRate = config.instagramPricing?.savesUserRate ?? (zeofameSavesService?.ratePer1000 ? zeofameSavesService.ratePer1000 * 2.0 : 2.50);
-        sharesRate = config.instagramPricing?.sharesUserRate ?? (zeofameSharesService?.ratePer1000 ? zeofameSharesService.ratePer1000 * 2.0 : 2.50);
-        repostsRate = config.instagramPricing?.repostsUserRate ?? (zeofameRepostsService?.ratePer1000 ? zeofameRepostsService.ratePer1000 * 2.0 : 2.50);
-        commentsRate = config.instagramPricing?.commentsUserRate ?? 20.00;
+        viewsRate = config.instagramPricing?.viewsUserRate ?? (xmediaViewsService?.ratePer1000 ? xmediaViewsService.ratePer1000 * 1.5 : 1.00);
+        likesRate = config.instagramPricing?.likesUserRate ?? (zeofameLikesService?.ratePer1000 ? zeofameLikesService.ratePer1000 * 2.0 : 35.57);
+        savesRate = config.instagramPricing?.savesUserRate ?? (zeofameSavesService?.ratePer1000 ? zeofameSavesService.ratePer1000 * 2.0 : 6.70);
+        sharesRate = config.instagramPricing?.sharesUserRate ?? (zeofameSharesService?.ratePer1000 ? zeofameSharesService.ratePer1000 * 2.0 : 2.00);
+        repostsRate = config.instagramPricing?.repostsUserRate ?? (zeofameRepostsService?.ratePer1000 ? zeofameRepostsService.ratePer1000 * 2.0 : 152.45);
+        commentsRate = config.instagramPricing?.commentsUserRate ?? 2113.92;
       }
     } else {
       if (isVip && (config.tiktokZeroProfitVip || config.tiktokVipPricing)) {
