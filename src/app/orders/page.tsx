@@ -286,14 +286,14 @@ export default function OrdersPage() {
               <tbody className="divide-y divide-[#DEE0ED]/60">
                 {[1, 2, 3, 4, 5, 6].map((i) => (
                   <tr key={i} className="hover:bg-[#F8F9FD]/60">
-                    <td className="py-3.5 px-4"><div className="h-4 w-24 bg-[#EBEFFA] rounded" /></td>
-                    <td className="py-3.5 px-4"><div className="h-4 w-44 bg-[#EBEFFA] rounded" /></td>
-                    <td className="py-3.5 px-4"><div className="h-4 w-32 bg-[#EBEFFA] rounded" /></td>
-                    <td className="py-3.5 px-4 text-right"><div className="h-4 w-16 bg-[#EBEFFA] rounded ml-auto" /></td>
-                    <td className="py-3.5 px-4 text-right"><div className="h-4 w-12 bg-[#EBEFFA] rounded ml-auto" /></td>
-                    <td className="py-3.5 px-4"><div className="h-4 w-16 bg-[#EBEFFA] rounded" /></td>
-                    <td className="py-3.5 px-4"><div className="h-5 w-20 bg-[#EBEFFA] rounded-full" /></td>
-                    <td className="py-3.5 px-4 text-right"><div className="h-4 w-14 bg-[#EBEFFA] rounded ml-auto" /></td>
+                    <td className="py-3.5 px-4"><div className="h-4 w-24 bg-[#E4E0D3]/60 rounded animate-shimmer" /></td>
+                    <td className="py-3.5 px-4"><div className="h-4 w-44 bg-[#E4E0D3]/60 rounded animate-shimmer" /></td>
+                    <td className="py-3.5 px-4"><div className="h-4 w-32 bg-[#E4E0D3]/60 rounded animate-shimmer" /></td>
+                    <td className="py-3.5 px-4 text-right"><div className="h-4 w-16 bg-[#E4E0D3]/60 rounded ml-auto animate-shimmer" /></td>
+                    <td className="py-3.5 px-4 text-right"><div className="h-4 w-12 bg-[#E4E0D3]/60 rounded ml-auto animate-shimmer" /></td>
+                    <td className="py-3.5 px-4"><div className="h-4 w-16 bg-[#E4E0D3]/60 rounded animate-shimmer" /></td>
+                    <td className="py-3.5 px-4"><div className="h-5 w-20 bg-[#E4E0D3]/60 rounded-full animate-shimmer" /></td>
+                    <td className="py-3.5 px-4 text-right"><div className="h-4 w-14 bg-[#E4E0D3]/60 rounded ml-auto animate-shimmer" /></td>
                   </tr>
                 ))}
               </tbody>

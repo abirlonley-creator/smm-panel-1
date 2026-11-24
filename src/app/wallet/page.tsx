@@ -26,6 +26,7 @@ import Link from "next/link";
 import { formatProviderBalance } from "@/lib/currency";
 import { BRAND } from "@/lib/brand";
 import { BinanceAddFundsModal } from "@/components/BinanceAddFundsModal";
+import { WalletPageSkeleton } from "@/components/ui/PageLoadingSkeletons";
 
 function sanitizeProviderName(name: string): string {
   if (!name) return "Provider Account";
@@ -293,14 +294,7 @@ export default function WalletPage() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="flex items-center gap-2 text-sm text-[#252943]/60">
-          <Loader2 className="w-5 h-5 animate-spin text-[#3A4EFB]" />
-          <span>Loading Add Funds & Deposit Engine...</span>
-        </div>
-      </div>
-    );
+    return <WalletPageSkeleton />;
   }
 
   const inrVal = parseFloat(inrAmountStr) || 0;

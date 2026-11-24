@@ -184,9 +184,9 @@ export function AppHeader() {
         <Link
           href="/settings"
           title="Account Settings & VIP Passkey"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-[#F3F1EA] border border-[#DEE0ED] text-[#252943] text-xs font-bold transition-all shadow-subtle"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-[#F3F1EA] border border-[#E4E0D3] text-[#111413] text-xs font-bold transition-all shadow-subtle press-scale"
         >
-          <Sliders className="w-3.5 h-3.5 text-[#3A4EFB]" />
+          <Sliders className="w-3.5 h-3.5 text-[#5E8C1F]" />
           <span className="hidden sm:inline">Settings</span>
         </Link>
 

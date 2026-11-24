@@ -50,6 +50,7 @@ import {
   DEFAULT_INSTAGRAM_CONFIG,
   formatDurationDaysHours,
 } from "@/lib/engagement/deterministic-pattern-engine";
+import { EngagementPageSkeleton } from "@/components/ui/PageLoadingSkeletons";
 
 function TikTokIcon({ className = "w-4 h-4" }: { className?: string }) {
   return (
@@ -674,15 +675,7 @@ export default function EngagementPage() {
   }, [computedStartTime, plan.totalDurationMinutes]);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <img
-          src="/brand/logos/mark-on-light.svg"
-          alt="Loading..."
-          className="w-10 h-10 animate-pulse"
-        />
-      </div>
-    );
+    return <EngagementPageSkeleton />;
   }
 
   return (

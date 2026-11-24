@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { CatalogPageSkeleton } from "@/components/ui/PageLoadingSkeletons";
 
 interface ServiceItem {
   id: string;
@@ -360,12 +361,7 @@ export default function ComboOrdersPage() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[50vh] text-xs text-[#252943]/60 gap-2">
-        <Loader2 className="w-5 h-5 animate-spin text-[#3A4EFB]" />
-        <span>Loading Combo Orders system...</span>
-      </div>
-    );
+    return <CatalogPageSkeleton />;
   }
 
   return (

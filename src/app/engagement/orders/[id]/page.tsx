@@ -27,6 +27,7 @@ import {
   Send,
 } from "lucide-react";
 import { formatBdTime, formatBdDateTime } from "@/lib/date-bd";
+import { OrderDetailSkeleton } from "@/components/ui/PageLoadingSkeletons";
 
 interface EngagementRunItem {
   id: string;
@@ -253,12 +254,7 @@ export default function EngagementOrderDetailPage() {
   }
 
   if (loading && !order) {
-    return (
-      <div className="max-w-6xl mx-auto py-20 text-center space-y-3">
-        <img src="/brand/logos/mark-on-light.svg" className="w-8 h-8 animate-pulse mx-auto" alt="" />
-        <p className="text-xs font-bold text-[#111413]/60">Loading campaign details...</p>
-      </div>
-    );
+    return <OrderDetailSkeleton />;
   }
 
   if (!order) {

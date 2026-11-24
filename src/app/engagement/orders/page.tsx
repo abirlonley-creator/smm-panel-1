@@ -25,6 +25,7 @@ import {
   Send,
 } from "lucide-react";
 import Link from "next/link";
+import { OrdersPageSkeleton } from "@/components/ui/PageLoadingSkeletons";
 
 interface OrderBreakdownItem {
   planned: number;
@@ -174,14 +175,7 @@ export default function EngagementOrdersPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="flex items-center gap-3 text-sm text-[#5B625F]">
-          <img src="/brand/logos/mark-on-light.svg" className="w-6 h-6 animate-pulse" alt="" />
-          <span>Loading campaigns...</span>
-        </div>
-      </div>
-    );
+    return <OrdersPageSkeleton />;
   }
 
   return (

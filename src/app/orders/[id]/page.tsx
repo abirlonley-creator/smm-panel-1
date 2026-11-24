@@ -24,6 +24,7 @@ import {
 import { redistributeRemaining } from "@/lib/scheduler/calculator";
 import { normalizeOrderDetail, type OrderDetailStep } from "@/lib/orders/order-detail";
 import { formatBdTime, formatBdDateTime } from "@/lib/date-bd";
+import { OrderDetailSkeleton } from "@/components/ui/PageLoadingSkeletons";
 
 type StepRecord = OrderDetailStep;
 
@@ -338,12 +339,7 @@ export default function OrderDetailPage() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[50vh] text-xs text-[#252943]/60 gap-2">
-        <Loader2 className="w-5 h-5 animate-spin text-[#3A4EFB]" />
-        <span>Loading order details...</span>
-      </div>
-    );
+    return <OrderDetailSkeleton />;
   }
 
   if (!order) {

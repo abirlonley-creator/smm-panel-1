@@ -398,7 +398,28 @@ export default function ApiKeysPage() {
           </div>
         )}
 
-        {keys.length === 0 && !loading ? (
+        {loading && keys.length === 0 ? (
+          <div className="grid grid-cols-1 gap-3.5 font-sans">
+            {[1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="p-5 rounded-2xl bg-white border border-[#E4E0D3] shadow-subtle flex flex-col md:flex-row md:items-center justify-between gap-4 animate-fadeIn"
+              >
+                <div className="space-y-2 flex-1">
+                  <div className="flex items-center gap-2">
+                    <div className="h-4 w-36 bg-[#E4E0D3]/60 rounded animate-shimmer" />
+                    <div className="h-4 w-16 bg-[#E4E0D3]/40 rounded-full animate-shimmer" />
+                  </div>
+                  <div className="h-3 w-64 bg-[#E4E0D3]/40 rounded animate-shimmer" />
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="h-8 w-20 bg-[#E4E0D3]/40 rounded-xl animate-shimmer" />
+                  <div className="h-8 w-20 bg-[#E4E0D3]/40 rounded-xl animate-shimmer" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : keys.length === 0 ? (
           <div className="p-10 rounded-3xl bg-white border border-[#DEE0ED] text-center space-y-3 shadow-subtle">
             <div className="w-12 h-12 rounded-2xl bg-[#3A4EFB]/10 text-[#3A4EFB] mx-auto flex items-center justify-center">
               <KeyRound className="w-6 h-6" />

@@ -1120,9 +1120,25 @@ function NewOrderForm() {
 
       {/* 5. Initial Loading Skeleton */}
       {loadingServices && allServices.length === 0 && (
-        <div className="rounded-2xl bg-white border border-[#DEE0ED] p-12 text-center text-xs text-[#252943]/60 flex items-center justify-center gap-2 shadow-sm">
-          <Loader2 className="w-4 h-4 animate-spin text-[#3A4EFB]" />
-          <span>Loading services catalog...</span>
+        <div className="rounded-3xl bg-white border border-[#E4E0D3] p-6 shadow-subtle space-y-4 animate-fadeIn font-sans">
+          <div className="flex items-center justify-between pb-3 border-b border-[#E4E0D3]">
+            <div className="space-y-1">
+              <div className="h-4 w-40 bg-[#E4E0D3]/60 rounded-lg animate-shimmer" />
+              <div className="h-3 w-64 bg-[#E4E0D3]/40 rounded-lg animate-shimmer" />
+            </div>
+            <div className="h-8 w-28 bg-[#D4F04F]/40 rounded-xl animate-pulse" />
+          </div>
+          <div className="space-y-3">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="p-4 rounded-2xl border border-[#E4E0D3]/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-2 flex-1">
+                  <div className="h-4 w-48 bg-[#E4E0D3]/60 rounded animate-shimmer" />
+                  <div className="h-3 w-80 bg-[#E4E0D3]/40 rounded animate-shimmer" />
+                </div>
+                <div className="h-8 w-24 bg-[#E4E0D3]/50 rounded-xl animate-shimmer shrink-0" />
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
