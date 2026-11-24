@@ -131,9 +131,22 @@ export async function getAuthSession(request?: Request): Promise<AuthSessionResu
       }
     }
 
-    // Check legacy admin cookie (holds raw key or bootstrap)
+    // Check admin cookie (validates session token first, fallback to passkey)
     const adminToken = cookieStore.get(ADMIN_COOKIE_NAME)?.value;
     if (adminToken) {
+      const sessionRes = await validateSession(adminToken.trim());
+      if (sessionRes.valid && sessionRes.user) {
+        return {
+          authenticated: true,
+          user: sessionRes.user,
+          passkey: sessionRes.passkey,
+          role: sessionRes.role,
+          label: sessionRes.passkey?.label || sessionRes.user.username,
+          remainingDays: sessionRes.remainingDays,
+          remainingHours: sessionRes.remainingHours,
+        };
+      }
+
       const keyRes = await verifyPasskey(adminToken.trim());
       if (keyRes.valid && keyRes.user) {
         return {

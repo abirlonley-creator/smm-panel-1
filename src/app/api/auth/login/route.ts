@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
-import { verifyPasskey, createSession, hashKey, hashUserPassword } from "@/lib/auth/passkey-service";
+import { verifyPasskey, createSession, hashPasswordArgon2, verifyPasswordHash } from "@/lib/auth/passkey-service";
 import { SESSION_COOKIE_NAME, ADMIN_COOKIE_NAME } from "@/lib/auth/session";
 import { getMaintenanceState } from "@/lib/maintenance/maintenance-service";
 import { prisma } from "@/lib/prisma";
+import { authRateLimiter, getClientIp } from "@/lib/security/redis";
+import { verifyTurnstileToken } from "@/lib/security/turnstile";
+import { sendTelegramSecurityAlert } from "@/lib/security/telegram";
 import { cookies } from "next/headers";
 import { z } from "zod";
 
@@ -10,9 +13,35 @@ const loginSchema = z.object({
   username: z.string().optional(),
   password: z.string().optional(),
   passkey: z.string().optional(),
+  turnstileToken: z.string().optional(),
 });
 
 export async function POST(request: Request) {
+  const clientIp = getClientIp(request);
+
+  // 1. Distributed Rate Limiting via Upstash Redis (5 attempts per 60 seconds per IP)
+  try {
+    const rateLimit = await authRateLimiter.limit(`login:${clientIp}`);
+    if (!rateLimit.success) {
+      const retryAfterSeconds = Math.max(1, Math.ceil((rateLimit.reset - Date.now()) / 1000));
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Too many login attempts. Please wait before attempting to sign in again.",
+          retryAfter: retryAfterSeconds,
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(retryAfterSeconds),
+          },
+        }
+      );
+    }
+  } catch (err) {
+    console.error("[RateLimiter Login Error]:", err);
+  }
+
   try {
     const body = await request.json();
     const parsed = loginSchema.safeParse(body);
@@ -24,12 +53,23 @@ export async function POST(request: Request) {
       );
     }
 
-    const { username, password, passkey } = parsed.data;
+    const { username, password, passkey, turnstileToken } = parsed.data;
+
+    // Turnstile bot challenge validation
+    if (turnstileToken) {
+      const turnstile = await verifyTurnstileToken(turnstileToken, clientIp);
+      if (!turnstile.success) {
+        return NextResponse.json(
+          { success: false, error: "Bot verification challenge failed. Please refresh and try again." },
+          { status: 400 }
+        );
+      }
+    }
 
     // Check if Under Update / Maintenance mode is active
     const maintenance = await getMaintenanceState();
 
-    // 1. Direct Passkey Login (Access passkey or raw passkey)
+    // 1. Direct Passkey Login
     if (passkey && passkey.trim()) {
       const cleanKey = passkey.trim();
       const verification = await verifyPasskey(cleanKey);
@@ -38,7 +78,7 @@ export async function POST(request: Request) {
         return NextResponse.json(
           {
             success: false,
-            error: verification.error || "Invalid, expired, or revoked passkey.",
+            error: "Invalid, expired, or revoked passkey.",
             isExpired: verification.isExpired || false,
           },
           { status: 401 }
@@ -71,13 +111,21 @@ export async function POST(request: Request) {
       });
 
       if (verification.role === "ADMIN") {
-        cookieStore.set(ADMIN_COOKIE_NAME, cleanKey, {
+        cookieStore.set(ADMIN_COOKIE_NAME, session.token, {
           httpOnly: true,
           secure: process.env.NODE_ENV === "production",
           sameSite: "lax",
-          maxAge: Math.floor((session.expiresAt.getTime() - Date.now()) / 1000),
+          maxAge: 60 * 60 * 2, // 2-hour admin session limit
           path: "/",
         });
+
+        sendTelegramSecurityAlert({
+          title: "Admin Passkey Session Initiated",
+          details: `Admin authenticated via passkey (${verification.passkey?.label || "VIP"}).`,
+          severity: "WARNING",
+          ip: clientIp,
+          userAgent: request.headers.get("user-agent") || undefined,
+        }).catch(() => {});
       }
 
       return NextResponse.json({
@@ -110,19 +158,22 @@ export async function POST(request: Request) {
     });
 
     if (!user) {
+      // Constant-time generic error prevents username enumeration
       return NextResponse.json(
         { success: false, error: "Invalid username or password." },
         { status: 401 }
       );
     }
 
-    // Match password hash against user's stored account credentials or passkeys
-    // Supports both globally unique salted password hash and legacy hash
-    const userPwdHash = hashUserPassword(cleanUsername, password);
-    const legacyHash = hashKey(password);
-    const matchingKey = user.passkeys.find(
-      (pk) => pk.keyHash === userPwdHash || pk.keyHash === legacyHash
-    );
+    // Find matching passkey credential using Argon2id / SHA-256 verifier
+    let matchingKey = null;
+    for (const pk of user.passkeys) {
+      const isValid = await verifyPasswordHash(pk.keyHash, password, cleanUsername);
+      if (isValid) {
+        matchingKey = pk;
+        break;
+      }
+    }
 
     if (!matchingKey) {
       return NextResponse.json(
@@ -131,11 +182,13 @@ export async function POST(request: Request) {
       );
     }
 
-    // Auto-migrate legacy hash to username-salted hash for future uniqueness safety
-    if (matchingKey.keyHash === legacyHash && matchingKey.label === "Account Password") {
-      prisma.passkey.update({
-        where: { id: matchingKey.id },
-        data: { keyHash: userPwdHash },
+    // Automatic migration to Argon2id if record was using legacy SHA-256
+    if (!matchingKey.keyHash.startsWith("$argon2id$") && matchingKey.label === "Account Password") {
+      hashPasswordArgon2(password).then((upgradedHash) => {
+        prisma.passkey.update({
+          where: { id: matchingKey!.id },
+          data: { keyHash: upgradedHash },
+        }).catch(() => {});
       }).catch(() => {});
     }
 
@@ -162,16 +215,23 @@ export async function POST(request: Request) {
     });
 
     if (user.role === "ADMIN") {
-      cookieStore.set(ADMIN_COOKIE_NAME, password, {
+      cookieStore.set(ADMIN_COOKIE_NAME, session.token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
-        maxAge: Math.floor((session.expiresAt.getTime() - Date.now()) / 1000),
+        maxAge: 60 * 60 * 2, // 2 hour max session for admin
         path: "/",
       });
+
+      sendTelegramSecurityAlert({
+        title: "Admin Signed In",
+        details: `Administrator account "${user.username}" authenticated.`,
+        severity: "WARNING",
+        ip: clientIp,
+        userAgent: request.headers.get("user-agent") || undefined,
+      }).catch(() => {});
     }
 
-    // Check if user has VIP status from an admin passkey
     const hasVipPasskey = user.passkeys.some(
       (pk) =>
         pk.label !== "Account Password" &&
@@ -192,7 +252,7 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error("[LOGIN_ERROR]", error);
     return NextResponse.json(
-      { success: false, error: error.message || "Authentication error occurred" },
+      { success: false, error: "Authentication failed. Please try again." },
       { status: 500 }
     );
   }

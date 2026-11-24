@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { hashUserPassword, createSession } from "@/lib/auth/passkey-service";
+import { hashPasswordArgon2, createSession } from "@/lib/auth/passkey-service";
 import { SESSION_COOKIE_NAME } from "@/lib/auth/session";
+import { authRateLimiter, getClientIp } from "@/lib/security/redis";
+import { verifyTurnstileToken } from "@/lib/security/turnstile";
+import { isDisposableEmail, isValidEmailFormat } from "@/lib/security/disposable-email";
+import { sendTelegramSecurityAlert } from "@/lib/security/telegram";
 import { cookies } from "next/headers";
 import { z } from "zod";
 
@@ -11,11 +15,38 @@ const registerSchema = z.object({
     .min(3, "Username must be at least 3 characters")
     .max(30, "Username must be under 30 characters")
     .regex(/^[a-zA-Z0-9_]+$/, "Username can only contain letters, numbers, and underscores"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
-  email: z.string().email("Invalid email format").optional().or(z.literal("")),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  email: z.string().optional().or(z.literal("")),
+  turnstileToken: z.string().optional(),
 });
 
 export async function POST(request: Request) {
+  const clientIp = getClientIp(request);
+
+  // 1. Distributed Rate Limiting via Upstash Redis (5 requests per 60 seconds per IP)
+  try {
+    const rateLimit = await authRateLimiter.limit(`register:${clientIp}`);
+    if (!rateLimit.success) {
+      const retryAfterSeconds = Math.max(1, Math.ceil((rateLimit.reset - Date.now()) / 1000));
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Too many registration attempts. Please wait a moment before trying again.",
+          retryAfter: retryAfterSeconds,
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(retryAfterSeconds),
+          },
+        }
+      );
+    }
+  } catch (err) {
+    console.error("[RateLimiter Error]:", err);
+    // Graceful fallback: continue if Redis is temporarily unreachable
+  }
+
   try {
     const body = await request.json();
     const parsed = registerSchema.safeParse(body);
@@ -26,7 +57,35 @@ export async function POST(request: Request) {
     }
 
     const cleanUsername = parsed.data.username.toLowerCase().trim();
-    const { password } = parsed.data;
+    const { password, email, turnstileToken } = parsed.data;
+
+    // 2. Cloudflare Turnstile Human Verification
+    if (turnstileToken) {
+      const turnstile = await verifyTurnstileToken(turnstileToken, clientIp);
+      if (!turnstile.success) {
+        return NextResponse.json(
+          { success: false, error: "Bot verification challenge failed. Please refresh and try again." },
+          { status: 400 }
+        );
+      }
+    }
+
+    // 3. Disposable and Temporary Email Domain Blocker
+    if (email && email.trim().length > 0) {
+      const cleanEmail = email.trim().toLowerCase();
+      if (!isValidEmailFormat(cleanEmail)) {
+        return NextResponse.json(
+          { success: false, error: "Please provide a valid email address." },
+          { status: 400 }
+        );
+      }
+      if (isDisposableEmail(cleanEmail)) {
+        return NextResponse.json(
+          { success: false, error: "Temporary and disposable email providers are prohibited. Please use a permanent email." },
+          { status: 400 }
+        );
+      }
+    }
 
     // Check if username is already taken (case-insensitive)
     const existing = await prisma.user.findFirst({
@@ -49,26 +108,8 @@ export async function POST(request: Request) {
       await prisma.user.delete({ where: { id: existing.id } }).catch(() => {});
     }
 
-    // Hash user password with username salt to ensure global uniqueness on Passkey.keyHash
-    const keyHash = hashUserPassword(cleanUsername, password);
-
-    // Check if credentials already exist
-    const existingPasskey = await prisma.passkey.findUnique({
-      where: { keyHash },
-      include: { user: true },
-    });
-
-    if (existingPasskey) {
-      if (existingPasskey.user) {
-        return NextResponse.json(
-          { success: false, error: "An account with these credentials already exists. Please sign in." },
-          { status: 409 }
-        );
-      }
-      // Clean up orphaned passkey record
-      await prisma.session.deleteMany({ where: { passkeyId: existingPasskey.id } }).catch(() => {});
-      await prisma.passkey.delete({ where: { id: existingPasskey.id } }).catch(() => {});
-    }
+    // 4. Memory-hard Argon2id password hash (RFC 9106)
+    const keyHash = await hashPasswordArgon2(password);
 
     // Atomically create User, Provider Connection, and Passkey
     const { user, passkeyRecord } = await prisma.$transaction(async (tx) => {
@@ -119,6 +160,15 @@ export async function POST(request: Request) {
       path: "/",
     });
 
+    // 5. Out-of-band Security Alert
+    sendTelegramSecurityAlert({
+      title: "New Account Registered",
+      details: `User: ${cleanUsername} registered successfully with Argon2id protection.`,
+      severity: "INFO",
+      ip: clientIp,
+      userAgent: request.headers.get("user-agent") || undefined,
+    }).catch(() => {});
+
     return NextResponse.json({
       success: true,
       user: {
@@ -138,12 +188,13 @@ export async function POST(request: Request) {
 
     if (isUniqueCollision) {
       return NextResponse.json(
-        { success: false, error: "Username or credentials already exist. Please try signing in or use another username." },
+        { success: false, error: "An account with these credentials already exists. Please choose a different username or sign in." },
         { status: 409 }
       );
     }
+
     return NextResponse.json(
-      { success: false, error: "Failed to create account. Please try again or use another username." },
+      { success: false, error: error.message || "Failed to create account" },
       { status: 500 }
     );
   }

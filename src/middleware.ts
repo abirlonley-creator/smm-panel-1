@@ -1,6 +1,47 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
+function applySecurityHeaders(response: NextResponse): NextResponse {
+  // RFC 6797 HTTP Strict Transport Security
+  response.headers.set(
+    "Strict-Transport-Security",
+    "max-age=63072000; includeSubDomains; preload"
+  );
+
+  // Clickjacking Mitigation
+  response.headers.set("X-Frame-Options", "DENY");
+
+  // MIME-Sniffing Prevention
+  response.headers.set("X-Content-Type-Options", "nosniff");
+
+  // Referrer Privacy Protection
+  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+
+  // Browser Feature Restrictions
+  response.headers.set(
+    "Permissions-Policy",
+    "camera=(), microphone=(), geolocation=(), payment=(), browsing-topics=()"
+  );
+
+  // Cross-Site Scripting (XSS) & Content Security Policy
+  const cspDirectives = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com https://accounts.google.com https://apis.google.com",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com data:",
+    "img-src 'self' data: blob: https: https://lh3.googleusercontent.com",
+    "connect-src 'self' https://challenges.cloudflare.com https://accounts.google.com https://oauth2.googleapis.com https://*.supabase.co https://*.upstash.io",
+    "frame-src 'self' https://challenges.cloudflare.com https://accounts.google.com",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self' https://accounts.google.com",
+  ].join("; ");
+
+  response.headers.set("Content-Security-Policy", cspDirectives);
+
+  return response;
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -26,9 +67,10 @@ export function middleware(request: NextRequest) {
     pathname.startsWith("/api/auth/login") ||
     pathname.startsWith("/api/auth/register") ||
     pathname.startsWith("/api/auth/logout") ||
-    pathname.startsWith("/api/auth/session")
+    pathname.startsWith("/api/auth/session") ||
+    pathname.startsWith("/api/auth/google")
   ) {
-    return NextResponse.next();
+    return applySecurityHeaders(NextResponse.next());
   }
 
   // Allow health check, maintenance status, scheduler tick, and Universal API v2 / public docs
@@ -42,7 +84,7 @@ export function middleware(request: NextRequest) {
     pathname === "/api/v2" ||
     pathname.startsWith("/api/v2/")
   ) {
-    return NextResponse.next();
+    return applySecurityHeaders(NextResponse.next());
   }
 
   // Check for authentication cookies or authorization header
@@ -55,53 +97,59 @@ export function middleware(request: NextRequest) {
     request.headers.get("x-session-token") ||
     request.headers.get("x-api-key");
 
-  const hasCredential = Boolean(sessionToken || adminCookie || authHeader || adminHeader);
+  const hasCredential = Boolean(
+    (sessionToken && sessionToken.trim().length >= 10) ||
+    (adminCookie && adminCookie.trim().length >= 6) ||
+    authHeader ||
+    adminHeader
+  );
 
   // If unauthenticated:
   if (!hasCredential) {
     if (pathname.startsWith("/api/")) {
-      return NextResponse.json(
-        { success: false, error: "Authentication required. Please provide a valid passkey." },
-        { status: 401 }
+      return applySecurityHeaders(
+        NextResponse.json(
+          { success: false, error: "Authentication required. Please sign in." },
+          { status: 401 }
+        )
       );
     }
 
     // Redirect to login page for browser navigation
     const loginUrl = new URL("/login", request.url);
-    return NextResponse.redirect(loginUrl);
+    return applySecurityHeaders(NextResponse.redirect(loginUrl));
   }
 
   // Strict protection for /admin routes:
-  // If a user navigates to /admin, verify admin authentication exists.
-  // Normal users who only hold a standard USER session will be redirected to /engagement
-  // so they can never view, inspect, or interact with the admin panel.
   if (pathname === "/admin" || pathname.startsWith("/admin/")) {
-    const isAdmin = Boolean(adminCookie || adminHeader);
-    if (!isAdmin) {
+    const hasAdminToken = Boolean(
+      (adminCookie && adminCookie.trim().length >= 6) ||
+      (adminHeader && adminHeader.trim().length >= 6)
+    );
+    if (!hasAdminToken) {
       const fallbackUrl = new URL("/engagement", request.url);
-      return NextResponse.redirect(fallbackUrl);
+      return applySecurityHeaders(NextResponse.redirect(fallbackUrl));
     }
   }
 
   // Strict protection for /api/admin/ endpoints
   if (pathname.startsWith("/api/admin/")) {
-    const isAdmin = Boolean(adminCookie || adminHeader);
-    if (!isAdmin) {
-      return NextResponse.json({ success: false, error: "Not found" }, { status: 404 });
+    const hasAdminToken = Boolean(
+      (adminCookie && adminCookie.trim().length >= 6) ||
+      (adminHeader && adminHeader.trim().length >= 6)
+    );
+    if (!hasAdminToken) {
+      return applySecurityHeaders(
+        NextResponse.json({ success: false, error: "Not found" }, { status: 404 })
+      );
     }
   }
 
-  return NextResponse.next();
+  return applySecurityHeaders(NextResponse.next());
 }
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
     "/((?!_next/static|_next/image|favicon.ico).*)",
   ],
 };
