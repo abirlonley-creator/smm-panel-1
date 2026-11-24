@@ -41,12 +41,6 @@ export interface AuthSessionResult {
  * Resolves authenticated user session from headers or HTTP-only cookies.
  */
 export async function getAuthSession(request?: Request): Promise<AuthSessionResult> {
-  try {
-    await initDefaultAdminPasskey();
-  } catch {
-    // Non-fatal if already initialized or concurrent
-  }
-
   // 1. Check custom headers
   if (request) {
     const sessionHeader = request.headers.get("x-session-token");
@@ -114,58 +108,79 @@ export async function getAuthSession(request?: Request): Promise<AuthSessionResu
     }
   }
 
-  // 2. Check HTTP-only cookies
-  try {
-    const cookieStore = cookies();
+  // 2. Check cookies (direct header parse first for speed and edge safety, fallback to cookieStore)
+  let sessionToken: string | undefined = undefined;
+  let adminToken: string | undefined = undefined;
 
-    // Check modern session token cookie
-    const sessionToken = cookieStore.get(SESSION_COOKIE_NAME)?.value;
-    if (sessionToken) {
-      const sessionRes = await validateSession(sessionToken.trim());
-      if (sessionRes.valid && sessionRes.user) {
-        return {
-          authenticated: true,
-          user: sessionRes.user,
-          passkey: sessionRes.passkey,
-          role: sessionRes.role,
-          label: sessionRes.passkey?.label || sessionRes.user.username,
-          remainingDays: sessionRes.remainingDays,
-          remainingHours: sessionRes.remainingHours,
-        };
-      }
+  if (request) {
+    const rawCookies = request.headers.get("cookie");
+    if (rawCookies) {
+      const parsed = Object.fromEntries(
+        rawCookies
+          .split(";")
+          .map((c) => {
+            const idx = c.indexOf("=");
+            if (idx === -1) return [];
+            return [c.slice(0, idx).trim(), decodeURIComponent(c.slice(idx + 1).trim())];
+          })
+          .filter((pair) => pair.length === 2)
+      );
+      sessionToken = parsed[SESSION_COOKIE_NAME];
+      adminToken = parsed[ADMIN_COOKIE_NAME];
+    }
+  }
+
+  if (!sessionToken && !adminToken) {
+    try {
+      const cookieStore = cookies();
+      sessionToken = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+      adminToken = cookieStore.get(ADMIN_COOKIE_NAME)?.value;
+    } catch {
+      // Non-request context
+    }
+  }
+
+  if (sessionToken) {
+    const sessionRes = await validateSession(sessionToken.trim());
+    if (sessionRes.valid && sessionRes.user) {
+      return {
+        authenticated: true,
+        user: sessionRes.user,
+        passkey: sessionRes.passkey,
+        role: sessionRes.role,
+        label: sessionRes.passkey?.label || sessionRes.user.username,
+        remainingDays: sessionRes.remainingDays,
+        remainingHours: sessionRes.remainingHours,
+      };
+    }
+  }
+
+  if (adminToken) {
+    const sessionRes = await validateSession(adminToken.trim());
+    if (sessionRes.valid && sessionRes.user) {
+      return {
+        authenticated: true,
+        user: sessionRes.user,
+        passkey: sessionRes.passkey,
+        role: sessionRes.role,
+        label: sessionRes.passkey?.label || sessionRes.user.username,
+        remainingDays: sessionRes.remainingDays,
+        remainingHours: sessionRes.remainingHours,
+      };
     }
 
-    // Check admin cookie (validates session token first, fallback to passkey)
-    const adminToken = cookieStore.get(ADMIN_COOKIE_NAME)?.value;
-    if (adminToken) {
-      const sessionRes = await validateSession(adminToken.trim());
-      if (sessionRes.valid && sessionRes.user) {
-        return {
-          authenticated: true,
-          user: sessionRes.user,
-          passkey: sessionRes.passkey,
-          role: sessionRes.role,
-          label: sessionRes.passkey?.label || sessionRes.user.username,
-          remainingDays: sessionRes.remainingDays,
-          remainingHours: sessionRes.remainingHours,
-        };
-      }
-
-      const keyRes = await verifyPasskey(adminToken.trim());
-      if (keyRes.valid && keyRes.user) {
-        return {
-          authenticated: true,
-          user: keyRes.user,
-          passkey: keyRes.passkey,
-          role: keyRes.role,
-          label: keyRes.passkey?.label || keyRes.user.username,
-          remainingDays: keyRes.remainingDays,
-          remainingHours: keyRes.remainingHours,
-        };
-      }
+    const keyRes = await verifyPasskey(adminToken.trim());
+    if (keyRes.valid && keyRes.user) {
+      return {
+        authenticated: true,
+        user: keyRes.user,
+        passkey: keyRes.passkey,
+        role: keyRes.role,
+        label: keyRes.passkey?.label || keyRes.user.username,
+        remainingDays: keyRes.remainingDays,
+        remainingHours: keyRes.remainingHours,
+      };
     }
-  } catch {
-    // cookies() might not be available in non-request contexts
   }
 
   return { authenticated: false };
