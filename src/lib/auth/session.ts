@@ -41,7 +41,11 @@ export interface AuthSessionResult {
  * Resolves authenticated user session from headers or HTTP-only cookies.
  */
 export async function getAuthSession(request?: Request): Promise<AuthSessionResult> {
-  await initDefaultAdminPasskey();
+  try {
+    await initDefaultAdminPasskey();
+  } catch {
+    // Non-fatal if already initialized or concurrent
+  }
 
   // 1. Check custom headers
   if (request) {

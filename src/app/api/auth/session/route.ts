@@ -37,9 +37,8 @@ export async function GET(request: Request) {
       expiresAt: activePasskey?.expiresAt,
     });
   } catch (error: any) {
-    return NextResponse.json(
-      { authenticated: false, error: error.message },
-      { status: 500 }
-    );
+    return NextResponse.json({
+      authenticated: false,
+    });
   }
 }
