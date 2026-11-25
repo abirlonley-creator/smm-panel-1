@@ -50,21 +50,6 @@ import {
 export default function LandingPage() {
   const router = useRouter();
 
-  // Auth modal states
-  const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [authMode, setAuthMode] = useState<"signin" | "signup">("signup");
-  const [usePasskeyDirect, setUsePasskeyDirect] = useState(false);
-
-  // Form states
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [passkey, setPasskey] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
-
   // User session state (check if already logged in)
   const [session, setSession] = useState<any>(null);
 
@@ -107,122 +92,6 @@ export default function LandingPage() {
       }
     );
   }, [demoPackage, demoSeed, demoPlatform, demoStartTime]);
-
-  async function handleAuthSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setSuccessMsg(null);
-    setLoading(true);
-
-    try {
-      if (usePasskeyDirect) {
-        // Direct Passkey login (e.g. for Admin or VIP keyholders)
-        if (!passkey.trim()) {
-          setError("Please enter your passkey.");
-          setLoading(false);
-          return;
-        }
-        const res = await fetch("/api/auth/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ passkey: passkey.trim() }),
-        });
-        const data = await res.json();
-        if (!res.ok || !data.success) {
-          setError(data.error || "Invalid passkey.");
-          setLoading(false);
-          return;
-        }
-        window.dispatchEvent(new CustomEvent("auth-changed", { detail: data }));
-        router.push(data.role === "ADMIN" ? "/admin" : "/engagement");
-        router.refresh();
-        return;
-      }
-
-      if (authMode === "signup") {
-        if (!username.trim() || !password) {
-          setError("Please fill in all required fields.");
-          setLoading(false);
-          return;
-        }
-        if (password.length < 6) {
-          setError("Password must be at least 6 characters.");
-          setLoading(false);
-          return;
-        }
-        if (password !== confirmPassword) {
-          setError("Passwords do not match.");
-          setLoading(false);
-          return;
-        }
-
-        const res = await fetch("/api/auth/register", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            username: username.trim(),
-            password,
-          }),
-        });
-        const data = await res.json();
-
-        if (!res.ok || !data.success) {
-          setError(data.error || "Failed to create account.");
-          setLoading(false);
-          return;
-        }
-
-        setSuccessMsg("Account created! Redirecting to dashboard...");
-        window.dispatchEvent(new CustomEvent("auth-changed", { detail: data }));
-        setTimeout(() => {
-          router.push("/engagement");
-          router.refresh();
-        }, 800);
-      } else {
-        // Sign In
-        if (!username.trim() || !password) {
-          setError("Please enter your username and password.");
-          setLoading(false);
-          return;
-        }
-
-        const res = await fetch("/api/auth/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            username: username.trim(),
-            password,
-          }),
-        });
-        const data = await res.json();
-
-        if (!res.ok || !data.success) {
-          setError(data.error || "Invalid credentials.");
-          setLoading(false);
-          return;
-        }
-
-        setSuccessMsg("Signed in successfully! Redirecting...");
-        window.dispatchEvent(new CustomEvent("auth-changed", { detail: data }));
-        setTimeout(() => {
-          router.push(data.role === "ADMIN" ? "/admin" : "/engagement");
-          router.refresh();
-        }, 600);
-      }
-    } catch (err: any) {
-      setError(err.message || "Network error. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function openAuth(mode: "signin" | "signup") {
-    setAuthMode(mode);
-    setUsePasskeyDirect(false);
-    setError(null);
-    setSuccessMsg(null);
-    setAuthModalOpen(true);
-  }
 
   return (
     <div className="landing min-h-screen bg-[#F3F1EA] text-[#111413] relative selection:bg-[#D4F04F]/30">
@@ -287,20 +156,18 @@ export default function LandingPage() {
               </Link>
             ) : (
               <>
-                <button
-                  type="button"
-                  onClick={() => openAuth("signin")}
+                <Link
+                  href="/login"
                   className="landing-signin"
                 >
                   Sign In
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openAuth("signup")}
+                </Link>
+                <Link
+                  href="/signup"
                   className="landing-button landing-button-lime"
                 >
                   Sign Up
-                </button>
+                </Link>
               </>
             )}
           </div>
@@ -328,7 +195,7 @@ export default function LandingPage() {
               <AuraPrimaryButton
                 label="Create your account"
                 size="large"
-                onClick={() => openAuth("signup")}
+                href="/signup"
               />
               <Link href="/pricing" className="landing-text-link">
                 Explore services
@@ -1042,200 +909,6 @@ export default function LandingPage() {
           </div>
         </section>
       </main>
-
-      {/* ── Unified Sign In / Sign Up Modal ── */}
-      {authModalOpen && (
-        <div className="fixed inset-0 z-50 bg-[#252943]/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-fadeIn">
-          <div className="bg-white rounded-3xl border border-[#DEE0ED] max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-5 my-auto max-h-[calc(100vh-2rem)] overflow-y-auto animate-scaleUp">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-[#DEE0ED]">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-[#3A4EFB] text-white flex items-center justify-center font-bold">
-                  <Zap className="w-4 h-4 fill-white" />
-                </div>
-                <div>
-                  <h3 className="text-base font-black text-[#252943]">
-                    {usePasskeyDirect ? "Admin / Passkey Login" : authMode === "signup" ? "Create an Account" : "Sign In to AuraSMM"}
-                  </h3>
-                  <span className="text-[11px] text-[#252943]/50 block">
-                    {usePasskeyDirect ? "Enter your master access passkey" : authMode === "signup" ? "Get started with natural social engagement" : "Welcome back to your dashboard"}
-                  </span>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setAuthModalOpen(false)}
-                className="text-[#252943]/40 hover:text-[#252943] text-sm font-bold p-1 cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Switcher Tabs: Sign In vs Sign Up (when not in passkey mode) */}
-            {!usePasskeyDirect && (
-              <div className="flex items-center p-1 bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl text-xs font-bold">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAuthMode("signup");
-                    setError(null);
-                  }}
-                  className={`flex-1 py-2 rounded-lg transition-all cursor-pointer ${
-                    authMode === "signup"
-                      ? "bg-white text-[#3A4EFB] shadow-xs"
-                      : "text-[#252943]/60 hover:text-[#252943]"
-                  }`}
-                >
-                  Create Account
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAuthMode("signin");
-                    setError(null);
-                  }}
-                  className={`flex-1 py-2 rounded-lg transition-all cursor-pointer ${
-                    authMode === "signin"
-                      ? "bg-white text-[#3A4EFB] shadow-xs"
-                      : "text-[#252943]/60 hover:text-[#252943]"
-                  }`}
-                >
-                  Sign In
-                </button>
-              </div>
-            )}
-
-            {/* Error / Success Messages */}
-            {error && (
-              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-medium flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
-                <span>{error}</span>
-              </div>
-            )}
-            {successMsg && (
-              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
-                <span>{successMsg}</span>
-              </div>
-            )}
-
-            {/* Auth Form */}
-            <form onSubmit={handleAuthSubmit} className="space-y-4 text-xs">
-              {usePasskeyDirect ? (
-                <div>
-                  <label className="block font-bold text-[#252943] mb-1">Passkey Code</label>
-                  <div className="relative group">
-                    <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#252943]/40 group-focus-within:text-[#3A4EFB]" />
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      required
-                      value={passkey}
-                      onChange={(e) => setPasskey(e.target.value)}
-                      placeholder="Enter passkey code..."
-                      className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl pl-10 pr-10 py-2.5 font-mono font-bold text-[#252943] outline-none focus:border-[#3A4EFB]"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#252943]/40 hover:text-[#252943]"
-                    >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <div>
-                    <label className="block font-bold text-[#252943] mb-1">Username</label>
-                    <input
-                      type="text"
-                      required
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      placeholder="e.g. creator_john"
-                      className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3.5 py-2.5 font-semibold text-[#252943] outline-none focus:border-[#3A4EFB]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-[#252943] mb-1">Password</label>
-                    <div className="relative group">
-                      <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#252943]/40 group-focus-within:text-[#3A4EFB]" />
-                      <input
-                        type={showPassword ? "text" : "password"}
-                        required
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="••••••••"
-                        className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl pl-10 pr-10 py-2.5 font-semibold text-[#252943] outline-none focus:border-[#3A4EFB]"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[#252943]/40 hover:text-[#252943]"
-                      >
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  {authMode === "signup" && (
-                    <div>
-                      <label className="block font-bold text-[#252943] mb-1">Confirm Password</label>
-                      <div className="relative group">
-                        <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#252943]/40 group-focus-within:text-[#3A4EFB]" />
-                        <input
-                          type={showPassword ? "text" : "password"}
-                          required
-                          value={confirmPassword}
-                          onChange={(e) => setConfirmPassword(e.target.value)}
-                          placeholder="••••••••"
-                          className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl pl-10 pr-3.5 py-2.5 font-semibold text-[#252943] outline-none focus:border-[#3A4EFB]"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-
-              {/* VIP Notice */}
-              <div className="p-3 rounded-xl bg-blue-50/70 border border-blue-200/60 text-[11px] text-blue-900 leading-relaxed">
-                <span className="font-bold">💡 Tip:</span> Received an exclusive VIP passkey from admin? Sign up here, then enter your passkey in <span className="font-bold">Settings</span> to unlock wholesale 0% markup perks!
-              </div>
-
-              {/* Submit Button */}
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3 rounded-xl bg-[#3A4EFB] hover:bg-[#2A3DE0] active:scale-[0.97] text-white font-black text-xs transition-all shadow-subtle flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-              >
-                {loading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <ArrowRight className="w-4 h-4" />
-                )}
-                <span>
-                  {usePasskeyDirect ? "Login with Passkey" : authMode === "signup" ? "Create Free Account" : "Sign In"}
-                </span>
-              </button>
-
-              {/* Toggle to Admin Passkey */}
-              <div className="pt-2 text-center">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setUsePasskeyDirect(!usePasskeyDirect);
-                    setError(null);
-                  }}
-                  className="text-[11px] text-[#3A4EFB] font-bold hover:underline cursor-pointer"
-                >
-                  {usePasskeyDirect ? "← Back to standard login" : "Have an access passkey? Sign in here →"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* ── Footer ── */}
       <footer className="bg-white border-t border-[#DEE0ED] py-8 text-xs text-[#252943]/60 text-center">
