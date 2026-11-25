@@ -36,7 +36,6 @@ import {
   Link2,
   Users,
 } from "lucide-react";
-import { BinanceAddFundsModal } from "@/components/BinanceAddFundsModal";
 import { AdminOutOfBalanceBanner } from "@/components/AdminOutOfBalanceBanner";
 import { LiveOrganicGrowthPreview } from "@/components/engagement/LiveOrganicGrowthPreview";
 import {
@@ -273,7 +272,6 @@ export default function EngagementPage() {
     providerName: string;
   } | null>(null);
   const [successReceipt, setSuccessReceipt] = useState<any | null>(null);
-  const [showAddFundsModal, setShowAddFundsModal] = useState(false);
 
   // Active platform rates from status API
   const currentRates = useMemo(() => {
@@ -1486,14 +1484,13 @@ export default function EngagementPage() {
                       <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
                       <span>Need ₹{(totalCampaignPriceInr - walletBalance).toFixed(2)} More</span>
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => setShowAddFundsModal(true)}
-                      className="px-3 py-1.5 rounded-xl bg-[#F0B90B] hover:bg-[#e0a800] text-[#1E2329] text-xs font-black shadow-subtle flex items-center gap-1 transition-all press-scale cursor-pointer font-sans"
+                    <Link
+                      href={`/wallet/pay?amount=${Math.max(50, Math.ceil(totalCampaignPriceInr - walletBalance))}`}
+                      className="px-3 py-1.5 rounded-xl bg-[#D4F04F] hover:bg-[#C5E23A] text-[#111413] text-xs font-black shadow-subtle flex items-center gap-1 transition-all press-scale font-sans"
                     >
-                      <Zap className="w-3 h-3 fill-[#1E2329]" />
+                      <Zap className="w-3 h-3 fill-[#111413]" />
                       <span>Add Funds</span>
-                    </button>
+                    </Link>
                   </div>
                 )}
               </div>
@@ -1561,14 +1558,13 @@ export default function EngagementPage() {
               )}
             </button>
           ) : (
-            <button
-              type="button"
-              onClick={() => setShowAddFundsModal(true)}
-              className="w-full py-4 rounded-xl text-sm font-black tracking-wide bg-[#F0B90B] hover:bg-[#e0a800] text-[#1E2329] shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 transition-all press-scale cursor-pointer active:scale-[0.98] font-sans"
+            <Link
+              href={`/wallet/pay?amount=${Math.max(50, Math.ceil(totalCampaignPriceInr - walletBalance))}`}
+              className="w-full py-4 rounded-xl text-sm font-black tracking-wide bg-[#D4F04F] hover:bg-[#C5E23A] text-[#111413] shadow-sm flex items-center justify-center gap-2 transition-all press-scale active:scale-[0.98] font-sans"
             >
-              <Zap className="w-4 h-4 fill-[#1E2329]" />
+              <Zap className="w-4 h-4 fill-[#111413]" />
               <span>Add Funds (Need ₹{(totalCampaignPriceInr - walletBalance).toFixed(2)})</span>
-            </button>
+            </Link>
           )}
 
           <div className="pt-2 text-center text-xs text-[#5B625F] flex items-center justify-center gap-3 font-sans">
@@ -1605,14 +1601,6 @@ export default function EngagementPage() {
           <span>Telegram @Ghostfinds</span>
         </a>
       </div>
-
-      {/* Binance Pay Add Funds Modal */}
-      <BinanceAddFundsModal
-        isOpen={showAddFundsModal}
-        onClose={() => setShowAddFundsModal(false)}
-        currentBalance={walletBalance}
-        onSuccess={() => fetchStatus(true)}
-      />
     </div>
   );
 }

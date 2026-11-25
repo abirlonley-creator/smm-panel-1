@@ -438,13 +438,17 @@ export async function verifyAndCreditDeposit({
   }
 
   // Variants that may be stored in the database for this same payment.
-  const txnIdVariants = new Set<string>([cleanTxnId]);
+  const txnIdVariants = new Set<string>([cleanTxnId, normalizeBinanceId(cleanTxnId)]);
   const addVariant = (value?: string) => {
-    if (value) txnIdVariants.add(value);
+    if (value) {
+      txnIdVariants.add(value);
+      const norm = normalizeBinanceId(value);
+      if (norm) txnIdVariants.add(norm);
+    }
   };
   addVariant(idInfo.extractedOrderId);
   addVariant(idInfo.extractedTxnId);
-  const variantList = Array.from(txnIdVariants);
+  const variantList = Array.from(txnIdVariants).filter((v) => v.length >= 5);
 
   // 1. Resolve the deposit being verified and enforce ownership before anything else.
   let deposit = depositId
@@ -473,11 +477,16 @@ export async function verifyAndCreditDeposit({
     };
   }
 
-  // 2. An Order ID may only ever be credited ONCE - to the account that claimed it.
+  // 2. An Order ID OR Transaction ID may only ever be credited ONCE - to the account that claimed it.
   const duplicateTxn = await prisma.paymentDeposit.findFirst({
     where: {
       status: "VERIFIED",
-      txnId: { in: variantList },
+      OR: [
+        { txnId: { in: variantList } },
+        ...variantList.map((v) => ({
+          rawVerification: { contains: v, mode: "insensitive" as const },
+        })),
+      ],
     },
   });
 
@@ -657,24 +666,67 @@ export async function verifyAndCreditDeposit({
 
     const orderIdToLock = payment.orderId || cleanTxnId;
     const txnIdToLock = payment.transactionId || cleanTxnId;
-    const lockIds = Array.from(new Set([cleanTxnId, orderIdToLock, txnIdToLock]));
+    const lockIds = Array.from(
+      new Set(
+        [cleanTxnId, orderIdToLock, txnIdToLock, normalizeBinanceId(orderIdToLock), normalizeBinanceId(txnIdToLock)].filter(
+          (v) => v && v.length >= 5
+        )
+      )
+    );
+    const advisoryKeys = Array.from(
+      new Set(lockIds.map((id) => normalizeBinanceId(id)).filter(Boolean))
+    ).sort();
 
     let result: { updatedDeposit: any; newBalance: number };
     try {
       result = await prisma.$transaction(async (tx) => {
-        // Re-verify inside the transaction: no other account may already own this payment.
+        // Serialize concurrent verification claims for the exact same Order ID / Transaction ID across all instances.
+        for (const key of advisoryKeys) {
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`binance_claim:${key}`}))`;
+        }
+
+        const freshDeposit = await tx.paymentDeposit.findUnique({
+          where: { id: deposit.id },
+        });
+        if (freshDeposit?.status === "VERIFIED") {
+          throw new Error("ALREADY_CREDITED_SELF");
+        }
+
+        // Re-verify inside the serialized transaction across both PaymentDeposit and immutable WalletTransaction ledger.
         const concurrentCheck = await tx.paymentDeposit.findFirst({
           where: {
             status: "VERIFIED",
-            txnId: { in: lockIds },
+            OR: [
+              { txnId: { in: lockIds } },
+              ...lockIds.map((id) => ({
+                rawVerification: { contains: id, mode: "insensitive" as const },
+              })),
+            ],
           },
         });
         if (concurrentCheck) {
+          if (concurrentCheck.userId === userId) {
+            throw new Error("ALREADY_CREDITED_SELF");
+          }
           throw new Error("This Binance Order ID has already been claimed.");
         }
 
-        // Release identifiers from this account's own stale records only. Another
-        // account's claim is never released (it would allow payment hijacking).
+        const existingCreditTx = await tx.walletTransaction.findFirst({
+          where: {
+            type: "CREDIT",
+            OR: lockIds.map((id) => ({
+              description: { contains: id, mode: "insensitive" as const },
+            })),
+          },
+        });
+        if (existingCreditTx) {
+          if (existingCreditTx.userId === userId) {
+            throw new Error("ALREADY_CREDITED_SELF");
+          }
+          throw new Error("This Binance Order ID has already been claimed.");
+        }
+
+        // Release identifiers from this account's own stale non-verified records only.
         await tx.paymentDeposit.updateMany({
           where: {
             id: { not: deposit.id },
@@ -685,7 +737,16 @@ export async function verifyAndCreditDeposit({
           data: { txnId: null },
         });
 
-        // A. Update deposit status to VERIFIED
+        // Guarded state transition ensures this exact deposit row can transition to VERIFIED at most once.
+        const lockedTransition = await tx.paymentDeposit.updateMany({
+          where: { id: deposit.id, status: { not: "VERIFIED" } },
+          data: { status: "VERIFIED" },
+        });
+        if (lockedTransition.count !== 1) {
+          throw new Error("ALREADY_CREDITED_SELF");
+        }
+
+        // A. Persist full verified metadata on the locked deposit
         const updatedDeposit = await tx.paymentDeposit.update({
           where: { id: deposit.id },
           data: {
@@ -723,7 +784,7 @@ export async function verifyAndCreditDeposit({
           select: { id: true, walletBalance: true },
         });
 
-        // C. Create immutable audit record
+        // C. Create immutable audit record indexing both Order ID & Transaction ID
         await tx.walletTransaction.create({
           data: {
             userId,
@@ -731,7 +792,7 @@ export async function verifyAndCreditDeposit({
             amount: creditInr,
             balanceAfter: updatedUser.walletBalance,
             referenceId: deposit.depositRef,
-            description: `Binance Pay Auto-Verified: ₹${creditInr} (${receivedUsdt} USDT @ ₹${deposit.exchangeRate}) - Order ID: ${orderIdToLock}`,
+            description: `Binance Pay Auto-Verified: ₹${creditInr} (${receivedUsdt} USDT @ ₹${deposit.exchangeRate}) | Order ID: ${orderIdToLock} | Txn ID: ${txnIdToLock}`,
           },
         });
 
@@ -741,17 +802,27 @@ export async function verifyAndCreditDeposit({
         };
       });
     } catch (err: any) {
-      // Unique constraint on txnId: another account won the race for this payment.
+      if (err?.message === "ALREADY_CREDITED_SELF") {
+        const user = await prisma.user.findUnique({ where: { id: userId }, select: { walletBalance: true } });
+        return {
+          success: true,
+          alreadyCredited: true,
+          newBalance: user?.walletBalance ?? deposit.inrAmount,
+          deposit,
+          message: "This Binance payment has already been credited to your wallet balance.",
+        };
+      }
+      // Unique constraint or duplicate claim: reject cleanly without queuing another admin review.
       if (err?.code === "P2002" || /already been claimed/i.test(err?.message || "")) {
         return {
           success: false,
-          requiresAdminReview: true,
+          requiresAdminReview: false,
           autoVerifyStatus: "ALREADY_CLAIMED",
           error:
-            "This Order ID has already been claimed by another account. If you believe this is a mistake, contact support with your Binance receipt.",
+            "This Binance Order ID has already been claimed and credited to an account. A single Order ID can only be used once.",
           message:
-            "This Order ID has already been claimed by another account. If you believe this is a mistake, contact support with your Binance receipt.",
-          deposit,
+            "This Binance Order ID has already been claimed and credited to an account. A single Order ID can only be used once.",
+          deposit: null,
           failureReason: "Duplicate claim detected",
         };
       }

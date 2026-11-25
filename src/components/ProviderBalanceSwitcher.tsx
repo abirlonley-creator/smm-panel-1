@@ -15,7 +15,6 @@ import {
   Zap,
 } from "lucide-react";
 import { formatProviderBalance } from "@/lib/currency";
-import { BinanceAddFundsModal } from "@/components/BinanceAddFundsModal";
 
 interface ProviderItem {
   id: string;
@@ -111,7 +110,6 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
   const [refreshing, setRefreshing] = useState(false);
   const [switching, setSwitching] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [showAddFundsModal, setShowAddFundsModal] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   async function loadBalanceData(forceRefresh = false) {
@@ -241,85 +239,66 @@ export function ProviderBalanceSwitcher({ variant = "header" }: ProviderBalanceS
   const activeProvider = providers.find((p) => p.id === activeProviderId) || providers[0];
   const hasMultiple = providers.length > 1;
 
-  // Binance Pay Add Funds Modal
-  const renderAddFundsModal = () => (
-    <BinanceAddFundsModal
-      isOpen={showAddFundsModal}
-      onClose={() => setShowAddFundsModal(false)}
-      currentBalance={walletBalance}
-      onSuccess={(newBal) => {
-        setWalletBalance(newBal);
-        loadBalanceData(true);
-      }}
-    />
-  );
-
   // -------------------------------------------------------------
   // NON-ADMIN VIEW (Regular Users)
   // -------------------------------------------------------------
   if (!isAdmin) {
     if (variant === "header") {
       return (
-        <>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#E4E0D3] text-xs font-bold text-[#111413] shadow-subtle">
-              <Wallet className="w-3.5 h-3.5 text-[#5E8C1F]" />
-              <span>Balance: ₹{walletBalance.toFixed(2)}</span>
-            </div>
-            <Link
-              href="/wallet"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-[#F0B90B] to-[#e0a800] hover:brightness-105 text-[#1E2329] text-xs font-black transition-all shadow-subtle press-scale"
-            >
-              <Zap className="w-3.5 h-3.5 fill-[#1E2329]" />
-              <span>Add Funds</span>
-            </Link>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#E4E0D3] text-xs font-bold text-[#111413] shadow-subtle">
+            <Wallet className="w-3.5 h-3.5 text-[#5E8C1F]" />
+            <span>Balance: ₹{walletBalance.toFixed(2)}</span>
           </div>
-          {renderAddFundsModal()}
-        </>
+          <Link
+            href="/wallet/pay"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#D4F04F] hover:bg-[#C5E23A] text-[#111413] text-xs font-black transition-all shadow-subtle press-scale"
+          >
+            <Zap className="w-3.5 h-3.5 fill-[#111413]" />
+            <span>Add Funds</span>
+          </Link>
+        </div>
       );
     }
 
     // Non-Admin Sidebar Card
     return (
-      <>
-        <div className="mx-3.5 mt-4 p-3.5 rounded-2xl bg-[#1B201E] border border-[#222826] flex flex-col gap-2.5 shadow-subtle">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-[#D4F04F]/15 border border-[#D4F04F]/30 text-[#D4F04F] flex items-center justify-center shrink-0">
-                <Wallet className="w-4 h-4" />
-              </div>
-              <div>
-                <span className="text-[10px] uppercase tracking-wider text-[#9AA39F] font-semibold block leading-none mb-1">
-                  Account Balance
-                </span>
-                <span className="text-sm font-black text-white tracking-tight">
-                  ₹{walletBalance.toFixed(2)}
-                </span>
-              </div>
+      <div className="mx-3.5 mt-4 p-3.5 rounded-2xl bg-[#1B201E] border border-[#222826] flex flex-col gap-2.5 shadow-subtle">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-[#D4F04F]/15 border border-[#D4F04F]/30 text-[#D4F04F] flex items-center justify-center shrink-0">
+              <Wallet className="w-4 h-4" />
             </div>
-            <button
-              type="button"
-              onClick={() => loadBalanceData(true)}
-              disabled={refreshing}
-              title="Refresh wallet balance"
-              className="p-1.5 rounded-lg text-[#9AA39F] hover:text-white hover:bg-[#222826] transition-colors press-scale"
-            >
-              <RefreshCw
-                className={`w-3.5 h-3.5 text-[#D4F04F] ${refreshing ? "animate-spin" : ""}`}
-              />
-            </button>
+            <div>
+              <span className="text-[10px] uppercase tracking-wider text-[#9AA39F] font-semibold block leading-none mb-1">
+                Account Balance
+              </span>
+              <span className="text-sm font-black text-white tracking-tight">
+                ₹{walletBalance.toFixed(2)}
+              </span>
+            </div>
           </div>
-
-          <Link
-            href="/wallet"
-            className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-[#F0B90B] to-[#e0a800] hover:brightness-105 text-[#1E2329] text-xs font-black text-center transition-all press-scale flex items-center justify-center gap-1.5 shadow-subtle"
+          <button
+            type="button"
+            onClick={() => loadBalanceData(true)}
+            disabled={refreshing}
+            title="Refresh wallet balance"
+            className="p-1.5 rounded-lg text-[#9AA39F] hover:text-white hover:bg-[#222826] transition-colors press-scale"
           >
-            <Zap className="w-3.5 h-3.5 fill-[#1E2329]" />
-            <span>Add Funds · Binance Pay</span>
-          </Link>
+            <RefreshCw
+              className={`w-3.5 h-3.5 text-[#D4F04F] ${refreshing ? "animate-spin" : ""}`}
+            />
+          </button>
         </div>
-        {renderAddFundsModal()}
-      </>
+
+        <Link
+          href="/wallet/pay"
+          className="w-full py-2.5 px-3 rounded-xl bg-[#D4F04F] hover:bg-[#C5E23A] text-[#111413] text-xs font-black text-center transition-all press-scale flex items-center justify-center gap-1.5 shadow-subtle"
+        >
+          <Zap className="w-3.5 h-3.5 fill-[#111413]" />
+          <span>Add Funds · Binance Pay</span>
+        </Link>
+      </div>
     );
   }
 

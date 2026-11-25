@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAuthSession } from "@/lib/auth/session";
+import { getAdminSession, getAuthSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { refreshAllUserProviderBalances } from "@/lib/provider/concurrent-runner";
 import { z } from "zod";
@@ -64,9 +64,12 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const session = await getAuthSession(request);
-  if (!session.authenticated || !session.user) {
-    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  const adminSession = await getAdminSession(request);
+  if (!adminSession.authenticated || !adminSession.user) {
+    return NextResponse.json(
+      { success: false, error: "Forbidden: Direct wallet recharge requires administrator authorization." },
+      { status: 403 }
+    );
   }
 
   try {
@@ -74,7 +77,7 @@ export async function POST(request: Request) {
     const parsed = depositSchema.parse(body);
 
     const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
+      where: { id: adminSession.user.id },
       select: { id: true, walletBalance: true },
     });
 

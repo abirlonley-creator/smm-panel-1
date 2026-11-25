@@ -211,7 +211,7 @@ export function Navigation() {
                 item.href === "/order"
                   ? pathname === "/order" || pathname === "/"
                   : item.href === "/wallet"
-                  ? pathname === "/wallet" || pathname === "/addfunds" || pathname === "/add-funds"
+                  ? pathname.startsWith("/wallet") || pathname === "/addfunds" || pathname === "/add-funds"
                   : pathname === item.href || pathname.startsWith(item.href + "/");
               return (
                 <Link
@@ -313,7 +313,7 @@ export function Navigation() {
               item.href === "/order"
                 ? pathname === "/order" || pathname === "/"
                 : item.href === "/wallet"
-                ? pathname === "/wallet" || pathname === "/addfunds" || pathname === "/add-funds"
+                ? pathname.startsWith("/wallet") || pathname === "/addfunds" || pathname === "/add-funds"
                 : pathname === item.href || pathname.startsWith(item.href + "/");
             return (
               <Link

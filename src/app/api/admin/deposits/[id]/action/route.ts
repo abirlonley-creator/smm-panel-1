@@ -52,15 +52,37 @@ export async function POST(
       });
     }
 
-    // APPROVE action: Atomically credit user's wallet
+    // APPROVE action: Atomically lock and credit user's wallet (preventing duplicate Order ID or race double-credit)
     const result = await prisma.$transaction(async (tx) => {
-      const updatedDeposit = await tx.paymentDeposit.update({
-        where: { id: deposit.id },
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`admin_deposit:${deposit.id}`}))`;
+      if (deposit.txnId) {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`binance_claim:${deposit.txnId.toLowerCase()}`}))`;
+        const alreadyClaimed = await tx.paymentDeposit.findFirst({
+          where: {
+            id: { not: deposit.id },
+            status: "VERIFIED",
+            txnId: deposit.txnId,
+          },
+        });
+        if (alreadyClaimed) {
+          throw new Error("Order ID has already been credited to another deposit.");
+        }
+      }
+
+      const locked = await tx.paymentDeposit.updateMany({
+        where: { id: deposit.id, status: { not: "VERIFIED" } },
         data: {
           status: "VERIFIED",
           verifiedAt: new Date(),
           rejectionReason: null,
         },
+      });
+      if (locked.count !== 1) {
+        throw new Error("Deposit is already approved and credited.");
+      }
+
+      const updatedDeposit = await tx.paymentDeposit.findUniqueOrThrow({
+        where: { id: deposit.id },
       });
 
       const updatedUser = await tx.user.update({
@@ -78,7 +100,7 @@ export async function POST(
           amount: deposit.inrAmount,
           balanceAfter: updatedUser.walletBalance,
           referenceId: deposit.depositRef,
-          description: `Admin Approved Binance Pay Deposit: ₹${deposit.inrAmount} (${deposit.usdtAmount} USDT)`,
+          description: `Admin Approved Binance Pay Deposit: ₹${deposit.inrAmount} (${deposit.usdtAmount} USDT)${deposit.txnId ? ` | Order ID: ${deposit.txnId}` : ""}`,
         },
       });
 
