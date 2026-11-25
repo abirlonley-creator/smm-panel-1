@@ -28,13 +28,8 @@
   --aura-views: #2F6B3A; --aura-comments: #2A9D8F; --aura-likes: #C4552D; --aura-saves: #E0A030; --aura-shares: #7C5CBF;
 }
 
-html {
+html, body {
   overflow-x: clip;
-}
-
-body {
-  overflow-x: clip;
-  overflow-y: auto;
 }
 
 body, input, button, select, textarea {

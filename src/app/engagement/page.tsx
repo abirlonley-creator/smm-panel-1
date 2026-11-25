@@ -648,13 +648,72 @@ export default function EngagementPage() {
   const canLaunch =
     !submitting && isReady && isCurrentPlatformEnabled && hasSufficientFunds && !needsCommentsInput && agreedToTerms;
 
+  function renderCtaButton(compact = false) {
+    const sizeCls = compact ? "px-4 py-2.5 rounded-xl text-xs" : "w-full py-3.5 rounded-2xl text-sm";
+
+    if (!isReady) {
+      return (
+        <button
+          type="button"
+          disabled
+          className={`${sizeCls} font-bold bg-[#F3F1EA] text-[#5B625F] flex items-center justify-center gap-2 cursor-not-allowed`}
+        >
+          <Loader2 className="w-4 h-4 animate-spin" />
+          <span>{compact ? "Syncing" : "Syncing Engines..."}</span>
+        </button>
+      );
+    }
+
+    if (!hasSufficientFunds) {
+      return (
+        <Link
+          href={`/wallet/pay?amount=${Math.max(50, Math.ceil(totalCampaignPriceInr - walletBalance))}`}
+          className={`${sizeCls} font-extrabold bg-[#D4F04F] hover:bg-[#C5E23A] text-[#111413] flex items-center justify-center gap-2 transition-colors active:scale-[0.98]`}
+        >
+          <Zap className="w-3.5 h-3.5 fill-[#111413]" />
+          <span>{compact ? `Add ₹${shortfallInr.toFixed(2)}` : `Add Funds (Need ₹${shortfallInr.toFixed(2)})`}</span>
+        </Link>
+      );
+    }
+
+    return (
+      <button
+        type="submit"
+        disabled={!canLaunch}
+        className={`${sizeCls} font-extrabold flex items-center justify-center gap-2 transition-colors ${
+          canLaunch
+            ? "bg-[#D4F04F] hover:bg-[#C5E23A] text-[#111413] cursor-pointer active:scale-[0.98]"
+            : "bg-[#E4E0D3] text-[#5B625F] cursor-not-allowed"
+        }`}
+      >
+        {submitting ? (
+          <>
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span>{compact ? "Launching..." : "Launching Campaign..."}</span>
+          </>
+        ) : !isCurrentPlatformEnabled ? (
+          <span>{platform} Paused</span>
+        ) : needsCommentsInput ? (
+          <span>
+            {compact ? `Comments (${customCommentsLines.length}/${targetCommentsCount})` : `Add Comments (${customCommentsLines.length}/${targetCommentsCount})`}
+          </span>
+        ) : (
+          <>
+            <Play className="w-3.5 h-3.5 fill-[#111413]" />
+            <span>{compact ? "Launch Order" : `Launch Campaign • ₹${totalCampaignPriceInr.toFixed(2)}`}</span>
+          </>
+        )}
+      </button>
+    );
+  }
+
   if (loading) {
     return <EngagementPageSkeleton />;
   }
 
   return (
     <MotionConfig reducedMotion="user">
-      <div className="max-w-6xl mx-auto space-y-6 pb-24 lg:pb-16 animate-fadeIn font-sans">
+      <div className="max-w-6xl mx-auto space-y-6 pb-28 lg:pb-16 font-sans">
         {/* TOP SUB-HEADER: Sub-navigation + Wallet Pill */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E4E0D3] pb-4">
           <div className="inline-flex items-center p-1 rounded-2xl bg-white border border-[#E4E0D3] shadow-2xs">
@@ -814,19 +873,17 @@ export default function EngagementPage() {
                         setPlatform(p);
                         setErrorMsg(null);
                       }}
-                      className={`p-3.5 rounded-2xl border text-left transition-colors cursor-pointer flex items-center justify-between active:scale-[0.99] ${
-                        isActive
+                      className={`p-3.5 rounded-2xl border text-left transition-colors cursor-pointer flex items-center justify-between active:scale-[0.99] ${isActive
                           ? "bg-[#111413] border-[#111413] text-white"
                           : "bg-[#FAF9F5] border-[#E4E0D3] hover:border-[#111413]/30 text-[#111413]"
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center gap-3">
                         <div
-                          className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-                            isActive
+                          className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${isActive
                               ? "bg-[#D4F04F] text-[#111413]"
                               : "bg-white border border-[#E4E0D3] text-[#111413]"
-                          }`}
+                            }`}
                         >
                           {p === "TikTok" ? (
                             <TikTokIcon className="w-4 h-4" />
@@ -850,9 +907,8 @@ export default function EngagementPage() {
                       </div>
 
                       <div
-                        className={`w-4 h-4 rounded-full flex items-center justify-center ${
-                          isActive ? "bg-[#D4F04F]" : "border border-[#D8D4C7] bg-white"
-                        }`}
+                        className={`w-4 h-4 rounded-full flex items-center justify-center ${isActive ? "bg-[#D4F04F]" : "border border-[#D8D4C7] bg-white"
+                          }`}
                       >
                         {isActive && <Check className="w-2.5 h-2.5 text-[#111413] stroke-[3]" />}
                       </div>
@@ -883,21 +939,18 @@ export default function EngagementPage() {
                         key={pkg.id}
                         type="button"
                         onClick={() => handleSelectPackage(pkg.id)}
-                        className={`relative p-3.5 rounded-2xl border text-left transition-colors cursor-pointer flex flex-col justify-between gap-3 active:scale-[0.98] ${
-                          idx === 4 ? "col-span-2 sm:col-span-1" : "col-span-1"
-                        } ${
-                          isSelected
+                        className={`relative p-3.5 rounded-2xl border text-left transition-colors cursor-pointer flex flex-col justify-between gap-3 active:scale-[0.98] ${idx === 4 ? "col-span-2 sm:col-span-1" : "col-span-1"
+                          } ${isSelected
                             ? "bg-[#FAF9F5] border-2 border-[#111413] shadow-2xs"
                             : "bg-white border-[#E4E0D3] hover:border-[#111413]/35"
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center justify-between gap-1">
                           <div
-                            className={`w-7 h-7 rounded-xl flex items-center justify-center ${
-                              isSelected
+                            className={`w-7 h-7 rounded-xl flex items-center justify-center ${isSelected
                                 ? "bg-[#111413] text-[#D4F04F]"
                                 : "bg-[#FAF9F5] border border-[#E4E0D3] text-[#111413]"
-                            }`}
+                              }`}
                           >
                             <Icon className="w-3.5 h-3.5" />
                           </div>
@@ -926,11 +979,10 @@ export default function EngagementPage() {
                             ₹{(pkg.price_inr ?? 0).toFixed(2)}
                           </span>
                           <span
-                            className={`w-4 h-4 rounded-full flex items-center justify-center ${
-                              isSelected
+                            className={`w-4 h-4 rounded-full flex items-center justify-center ${isSelected
                                 ? "bg-[#D4F04F] text-[#111413] border border-[#111413]/20"
                                 : "border border-[#E4E0D3]"
-                            }`}
+                              }`}
                           >
                             {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
                           </span>
@@ -958,11 +1010,10 @@ export default function EngagementPage() {
                     <button
                       type="button"
                       onClick={() => setAddOnLikes(!addOnLikes)}
-                      className={`px-3 py-2 rounded-xl border text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer active:scale-[0.98] ${
-                        addOnLikes
+                      className={`px-3 py-2 rounded-xl border text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer active:scale-[0.98] ${addOnLikes
                           ? "bg-[#111413] border-[#111413] text-white"
                           : "bg-[#FAF9F5] border-[#E4E0D3] text-[#5B625F] hover:text-[#111413]"
-                      }`}
+                        }`}
                     >
                       <Heart className={`w-3.5 h-3.5 ${addOnLikes ? "text-[#D4F04F] fill-[#D4F04F]" : ""}`} />
                       <span>Likes</span>
@@ -976,11 +1027,10 @@ export default function EngagementPage() {
                   <button
                     type="button"
                     onClick={() => setAddOnSaves(!addOnSaves)}
-                    className={`px-3 py-2 rounded-xl border text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer active:scale-[0.98] ${
-                      addOnSaves
+                    className={`px-3 py-2 rounded-xl border text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer active:scale-[0.98] ${addOnSaves
                         ? "bg-[#111413] border-[#111413] text-white"
                         : "bg-[#FAF9F5] border-[#E4E0D3] text-[#5B625F] hover:text-[#111413]"
-                    }`}
+                      }`}
                   >
                     <Bookmark className={`w-3.5 h-3.5 ${addOnSaves ? "text-[#D4F04F] fill-[#D4F04F]" : ""}`} />
                     <span>Saves</span>
@@ -993,11 +1043,10 @@ export default function EngagementPage() {
                   <button
                     type="button"
                     onClick={() => setAddOnShares(!addOnShares)}
-                    className={`px-3 py-2 rounded-xl border text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer active:scale-[0.98] ${
-                      addOnShares
+                    className={`px-3 py-2 rounded-xl border text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer active:scale-[0.98] ${addOnShares
                         ? "bg-[#111413] border-[#111413] text-white"
                         : "bg-[#FAF9F5] border-[#E4E0D3] text-[#5B625F] hover:text-[#111413]"
-                    }`}
+                      }`}
                   >
                     <Share2 className={`w-3.5 h-3.5 ${addOnShares ? "text-[#D4F04F]" : ""}`} />
                     <span>Shares</span>
@@ -1010,11 +1059,10 @@ export default function EngagementPage() {
                   <button
                     type="button"
                     onClick={() => setAddOnReposts(!addOnReposts)}
-                    className={`px-3 py-2 rounded-xl border text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer active:scale-[0.98] ${
-                      addOnReposts
+                    className={`px-3 py-2 rounded-xl border text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer active:scale-[0.98] ${addOnReposts
                         ? "bg-[#111413] border-[#111413] text-white"
                         : "bg-[#FAF9F5] border-[#E4E0D3] text-[#5B625F] hover:text-[#111413]"
-                    }`}
+                      }`}
                   >
                     <Repeat className={`w-3.5 h-3.5 ${addOnReposts ? "text-[#D4F04F]" : ""}`} />
                     <span>Reposts</span>
@@ -1027,11 +1075,10 @@ export default function EngagementPage() {
                   <button
                     type="button"
                     onClick={() => setAddOnComments(!addOnComments)}
-                    className={`px-3 py-2 rounded-xl border text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer active:scale-[0.98] ${
-                      addOnComments
+                    className={`px-3 py-2 rounded-xl border text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer active:scale-[0.98] ${addOnComments
                         ? "bg-[#111413] border-[#111413] text-white"
                         : "bg-[#FAF9F5] border-[#E4E0D3] text-[#5B625F] hover:text-[#111413]"
-                    }`}
+                      }`}
                   >
                     <MessageSquare className={`w-3.5 h-3.5 ${addOnComments ? "text-[#D4F04F]" : ""}`} />
                     <span>Custom Comments</span>
@@ -1065,11 +1112,10 @@ export default function EngagementPage() {
                               key={preset}
                               type="button"
                               onClick={() => setCommentsCount(preset)}
-                              className={`px-2.5 py-1 rounded-lg text-xs font-bold tabular-nums transition-colors cursor-pointer ${
-                                commentsCount === preset
+                              className={`px-2.5 py-1 rounded-lg text-xs font-bold tabular-nums transition-colors cursor-pointer ${commentsCount === preset
                                   ? "bg-[#111413] text-[#D4F04F]"
                                   : "bg-white border border-[#E4E0D3] text-[#5B625F] hover:text-[#111413]"
-                              }`}
+                                }`}
                             >
                               {preset}
                             </button>
@@ -1206,11 +1252,10 @@ export default function EngagementPage() {
                           key={val}
                           type="button"
                           onClick={() => setFollowers(val)}
-                          className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-colors cursor-pointer ${
-                            followers === val
+                          className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-colors cursor-pointer ${followers === val
                               ? "bg-[#111413] text-[#D4F04F]"
                               : "bg-[#FAF9F5] border border-[#E4E0D3] text-[#5B625F] hover:text-[#111413]"
-                          }`}
+                            }`}
                         >
                           {val >= 1000 ? `${val / 1000}K` : val}
                         </button>
@@ -1242,22 +1287,20 @@ export default function EngagementPage() {
                     <button
                       type="button"
                       onClick={() => setStartMode("now")}
-                      className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition-colors cursor-pointer ${
-                        startMode === "now"
+                      className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition-colors cursor-pointer ${startMode === "now"
                           ? "bg-[#111413] border-[#111413] text-[#D4F04F]"
                           : "bg-[#FAF9F5] border-[#E4E0D3] text-[#5B625F] hover:text-[#111413]"
-                      }`}
+                        }`}
                     >
                       Start Immediately
                     </button>
                     <button
                       type="button"
                       onClick={() => setStartMode("schedule")}
-                      className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
-                        startMode === "schedule"
+                      className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${startMode === "schedule"
                           ? "bg-[#111413] border-[#111413] text-[#D4F04F]"
                           : "bg-[#FAF9F5] border-[#E4E0D3] text-[#5B625F] hover:text-[#111413]"
-                      }`}
+                        }`}
                     >
                       <Calendar className="w-3.5 h-3.5" />
                       <span>Schedule</span>
@@ -1296,11 +1339,10 @@ export default function EngagementPage() {
                       <p className="text-[11px] text-[#5B625F]">Enter exactly 1 comment per line.</p>
                     </div>
                     <span
-                      className={`px-2.5 py-1 rounded-full text-[11px] font-bold tabular-nums ${
-                        customCommentsLines.length >= targetCommentsCount
+                      className={`px-2.5 py-1 rounded-full text-[11px] font-bold tabular-nums ${customCommentsLines.length >= targetCommentsCount
                           ? "bg-[#D4F04F] text-[#111413]"
                           : "bg-white border border-[#E4E0D3] text-[#C4552D]"
-                      }`}
+                        }`}
                     >
                       {customCommentsLines.length} / {targetCommentsCount} lines
                     </span>
@@ -1328,7 +1370,7 @@ export default function EngagementPage() {
           </div>
 
           {/* RIGHT COLUMN: STICKY ORDER SUMMARY & LAUNCH */}
-          <aside className="lg:col-span-4 lg:sticky lg:top-6 space-y-4">
+          <aside className="lg:col-span-4 lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto space-y-4">
             <div className="bg-white rounded-3xl border border-[#E4E0D3] p-5 sm:p-6 shadow-subtle space-y-5">
               <div className="flex items-center justify-between pb-3.5 border-b border-[#E4E0D3]">
                 <h2 className="text-base font-bold text-[#111413]">Campaign Summary</h2>
@@ -1448,11 +1490,10 @@ export default function EngagementPage() {
 
               {/* Wallet Check */}
               <div
-                className={`p-3 rounded-2xl border text-xs flex items-center justify-between ${
-                  hasSufficientFunds
+                className={`p-3 rounded-2xl border text-xs flex items-center justify-between ${hasSufficientFunds
                     ? "bg-[#FAF9F5] border-[#E4E0D3] text-[#111413]"
                     : "bg-[#FFFBEB] border-[#F59E0B]/40 text-[#92400E]"
-                }`}
+                  }`}
               >
                 <div className="flex items-center gap-2">
                   <Wallet className={`w-4 h-4 ${hasSufficientFunds ? "text-[#5E8C1F]" : "text-[#D97706]"}`} />
@@ -1480,52 +1521,7 @@ export default function EngagementPage() {
               </label>
 
               {/* Primary CTA */}
-              {!isReady ? (
-                <button
-                  type="button"
-                  disabled
-                  className="w-full py-3.5 rounded-2xl text-sm font-bold bg-[#F3F1EA] text-[#5B625F] flex items-center justify-center gap-2 cursor-not-allowed"
-                >
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Syncing Engines...</span>
-                </button>
-              ) : hasSufficientFunds ? (
-                <button
-                  type="submit"
-                  disabled={!canLaunch}
-                  className={`w-full py-3.5 rounded-2xl text-sm font-extrabold flex items-center justify-center gap-2 transition-colors ${
-                    canLaunch
-                      ? "bg-[#D4F04F] hover:bg-[#C5E23A] text-[#111413] cursor-pointer active:scale-[0.98]"
-                      : "bg-[#E4E0D3] text-[#5B625F] cursor-not-allowed"
-                  }`}
-                >
-                  {submitting ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Launching Campaign...</span>
-                    </>
-                  ) : !isCurrentPlatformEnabled ? (
-                    <span>{platform} Paused by Admin</span>
-                  ) : needsCommentsInput ? (
-                    <span>
-                      Add Comments ({customCommentsLines.length}/{targetCommentsCount})
-                    </span>
-                  ) : (
-                    <>
-                      <Play className="w-4 h-4 fill-[#111413]" />
-                      <span>Launch Campaign • ₹{totalCampaignPriceInr.toFixed(2)}</span>
-                    </>
-                  )}
-                </button>
-              ) : (
-                <Link
-                  href={`/wallet/pay?amount=${Math.max(50, Math.ceil(totalCampaignPriceInr - walletBalance))}`}
-                  className="w-full py-3.5 rounded-2xl text-sm font-extrabold bg-[#D4F04F] hover:bg-[#C5E23A] text-[#111413] flex items-center justify-center gap-2 transition-colors active:scale-[0.98]"
-                >
-                  <Zap className="w-4 h-4 fill-[#111413]" />
-                  <span>Add Funds (Need ₹{shortfallInr.toFixed(2)})</span>
-                </Link>
-              )}
+              {renderCtaButton(false)}
             </div>
 
             {/* Compact Telegram Support Card */}
@@ -1547,6 +1543,22 @@ export default function EngagementPage() {
               <ExternalLink className="w-3.5 h-3.5 text-[#5B625F] group-hover:text-[#111413]" />
             </a>
           </aside>
+
+          {/* STICKY MOBILE / TABLET FLOATING CHECKOUT BAR */}
+          <div className="fixed bottom-0 inset-x-0 z-30 lg:hidden bg-white/95 backdrop-blur-md border-t border-[#E4E0D3] px-4 py-3 shadow-dropdown">
+            <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[11px] font-semibold text-[#5B625F] truncate">
+                  {platform} • {plan.totals.views.toLocaleString()} views • {plan.durationLabel}
+                </div>
+                <div className="text-base font-black text-[#111413] tabular-nums leading-tight">
+                  ₹{totalCampaignPriceInr.toFixed(2)}
+                </div>
+              </div>
+
+              <div className="shrink-0">{renderCtaButton(true)}</div>
+            </div>
+          </div>
         </form>
       </div>
     </MotionConfig>
