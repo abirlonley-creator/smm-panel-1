@@ -14,7 +14,11 @@ export async function GET(request: Request) {
   const state = reqUrl.searchParams.get("state");
   const error = reqUrl.searchParams.get("error");
 
-  const baseUrl = `${reqUrl.protocol}//${reqUrl.host}`;
+  const rawHost = request.headers.get("x-forwarded-host") || request.headers.get("host") || reqUrl.host;
+  const host = rawHost.split(",")[0].trim();
+  const rawProto = request.headers.get("x-forwarded-proto") || reqUrl.protocol.replace(":", "") || "https";
+  const proto = rawProto.split(",")[0].trim();
+  const baseUrl = `${proto}://${host}`;
 
   if (error || !code || !state) {
     const errorMsg = error ? `Google login failed: ${error}` : "Missing OAuth authorization code or state.";
@@ -135,8 +139,8 @@ export async function GET(request: Request) {
       path: "/",
     });
 
-    const destination = stored.returnTo && stored.returnTo.startsWith("/") ? stored.returnTo : "/dashboard";
-    return NextResponse.redirect(new URL(destination, request.url));
+    const destination = stored.returnTo && stored.returnTo.startsWith("/") ? stored.returnTo : "/engagement";
+    return NextResponse.redirect(`${baseUrl}${destination}`);
   } catch (err: any) {
     console.error("[Google OAuth Callback Error]:", err);
     return NextResponse.redirect(

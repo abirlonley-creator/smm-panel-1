@@ -18,11 +18,14 @@ export async function GET(request: Request) {
   const { codeVerifier, codeChallenge } = generatePKCE();
   const { state, nonce } = generateStateAndNonce();
 
-  // Determine redirect URI dynamically based on current origin
+  // Determine redirect URI cleanly (prefer explicit GOOGLE_REDIRECT_URI if configured)
   const reqUrl = new URL(request.url);
-  const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || reqUrl.host;
-  const proto = request.headers.get("x-forwarded-proto") || (reqUrl.protocol.replace(":", "") || "https");
-  const redirectUri = `${proto}://${host}/api/auth/google/callback`;
+  const rawHost = request.headers.get("x-forwarded-host") || request.headers.get("host") || reqUrl.host;
+  const host = rawHost.split(",")[0].trim();
+  const rawProto = request.headers.get("x-forwarded-proto") || reqUrl.protocol.replace(":", "") || "https";
+  const proto = rawProto.split(",")[0].trim();
+  const redirectUri =
+    process.env.GOOGLE_REDIRECT_URI?.trim() || `${proto}://${host}/api/auth/google/callback`;
 
   // Store state and PKCE verifier in Redis with 10-minute expiry
   await redis.set(
