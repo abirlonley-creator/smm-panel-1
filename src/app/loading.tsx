@@ -1,71 +1,55 @@
-"use client";
-
-import React, { useState, useEffect } from "react";
-import Image from "next/image";
-import { Zap, ShieldCheck } from "lucide-react";
-
-const LOADING_STEPS = [
-  "Synchronizing algorithmic pacing models...",
-  "Calibrating organic delivery thresholds...",
-  "Loading real-time campaign telemetry...",
-  "Connecting high-retention upstream nodes...",
-];
+import React from "react";
 
 export default function RootLoading() {
-  const [stepIndex, setStepIndex] = useState(0);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setStepIndex((prev) => (prev + 1) % LOADING_STEPS.length);
-    }, 1200);
-    return () => clearInterval(timer);
-  }, []);
-
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#F3F1EA] px-4 font-sans select-none animate-fadeIn">
-      {/* Background Soft Glow */}
-      <div className="absolute w-80 h-80 rounded-full bg-radial from-[#D4F04F]/20 to-transparent blur-3xl pointer-events-none" />
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#F3F1EA] px-4 select-none">
+      {/* Subtle Ambient Lime Aura */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute w-[320px] h-[320px] rounded-full"
+        style={{
+          background:
+            "radial-gradient(circle, rgba(212, 240, 79, 0.26) 0%, rgba(212, 240, 79, 0) 68%)",
+        }}
+      />
 
-      {/* Main Container */}
-      <div className="relative z-10 flex flex-col items-center max-w-sm w-full text-center space-y-6">
-        {/* Brand Icon Mark with Breathing Halo */}
-        <div className="relative group">
-          <div className="absolute -inset-2 rounded-3xl bg-[#D4F04F]/30 blur-lg animate-pulse" />
-          <div className="relative w-16 h-16 rounded-2xl bg-[#111413] flex items-center justify-center shadow-lg border border-[#222826]">
+      <div className="relative z-10 flex flex-col items-center gap-6">
+        {/* Clean Ink Vessel with Official Dark-Mode Leaf & Lime Dot */}
+        <div className="relative flex items-center justify-center">
+          <div
+            aria-hidden="true"
+            className="absolute -inset-2 rounded-[26px] bg-[#D4F04F]/25 blur-xl animate-aura-breathe"
+          />
+          <div className="relative w-16 h-16 rounded-[20px] bg-[#111413] border border-[#222826] shadow-[0_20px_50px_-12px_rgba(17,20,19,0.34),inset_0_1px_0_rgba(255,255,255,0.12)] flex items-center justify-center">
             <img
-              src="/brand/logos/mark-on-light.svg"
+              src="/brand/logos/mark-on-dark.svg"
               alt="AuraSMM"
-              className="w-8 h-8 object-contain filter invert drop-shadow-[0_0_8px_rgba(212,240,79,0.5)]"
+              className="w-8 h-8 object-contain animate-aura-breathe"
             />
           </div>
         </div>
 
-        {/* Brand Name & Tagline */}
-        <div className="space-y-1">
-          <h2 className="text-base font-black tracking-tight text-[#111413]">
-            Aura<span className="text-[#5E8C1F]">SMM</span>
-          </h2>
-          <p className="text-[11px] font-semibold text-[#5B625F] tracking-wide uppercase">
-            Organic Algorithmic Growth Platform
-          </p>
-        </div>
+        {/* Official Brand Lockup + Hairline Sweep Bar */}
+        <div className="flex flex-col items-center gap-4">
+          <img
+            src="/brand/logos/lockup-horizontal-on-light.svg"
+            alt="AuraSMM"
+            className="h-6 w-auto"
+          />
 
-        {/* Progress Track */}
-        <div className="w-56 h-1.5 rounded-full bg-[#E4E0D3] overflow-hidden relative shadow-inner">
-          <div className="absolute top-0 bottom-0 left-0 bg-[#111413] w-1/3 rounded-full animate-marquee-fast" />
-          <div className="absolute top-0 bottom-0 right-0 bg-[#D4F04F] w-1/4 rounded-full animate-pulse" />
-        </div>
-
-        {/* Dynamic Micro-Step Pill */}
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-[#E4E0D3] shadow-xs text-[11px] font-bold text-[#111413] transition-all">
-          <span className="w-2 h-2 rounded-full bg-[#5E8C1F] animate-ping shrink-0" />
-          <span className="truncate">{LOADING_STEPS[stepIndex]}</span>
-        </div>
-
-        {/* Security & Authenticity Reassurance Footer */}
-        <div className="flex items-center gap-1.5 text-[10px] font-medium text-[#5B625F]/80 pt-2">
-          <ShieldCheck className="w-3.5 h-3.5 text-[#5E8C1F]" />
-          <span>Encrypted Session • Zero Data Loss Engine</span>
+          <div
+            role="progressbar"
+            aria-label="Loading"
+            className="w-36 h-[3px] rounded-full bg-[#E4E0D3]/90 overflow-hidden relative"
+          >
+            <div
+              className="absolute inset-y-0 left-0 w-1/2 rounded-full animate-aura-sweep"
+              style={{
+                background:
+                  "linear-gradient(90deg, transparent 0%, #111413 38%, #5E8C1F 72%, #D4F04F 100%)",
+              }}
+            />
+          </div>
         </div>
       </div>
     </div>

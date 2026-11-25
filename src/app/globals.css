@@ -204,6 +204,42 @@ body, input, button, select, textarea {
   }
 }
 
+/* ── Minimal Sleek Route Loader ─────────────────── */
+@keyframes auraBreathe {
+  0%, 100% {
+    opacity: 0.72;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes auraSweep {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+
+.animate-aura-breathe {
+  animation: auraBreathe 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.animate-aura-sweep {
+  animation: auraSweep 1.45s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-aura-breathe,
+  .animate-aura-sweep {
+    animation: none;
+  }
+}
+
 /* AuraSMM landing page: use the supplied bone, ink and lime brand palette. */
 .landing {
   --land-ink: #111413;
