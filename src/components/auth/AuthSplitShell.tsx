@@ -770,7 +770,7 @@ export function AuthSplitShell({ initialMode }: AuthSplitShellProps) {
 
             {/* Author row */}
             <div className="mt-2 flex items-center gap-3">
-              <Image
+              <img
                 src={quote.avatar}
                 alt={quote.author}
                 width={44}

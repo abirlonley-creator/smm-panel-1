@@ -48,11 +48,17 @@ export function middleware(request: NextRequest) {
   // Allow static assets, images, and Next.js internals
   if (
     pathname.startsWith("/_next") ||
+    pathname.startsWith("/images/") ||
+    pathname.startsWith("/brand/") ||
     pathname.startsWith("/favicon.ico") ||
     pathname.startsWith("/whop-logo.png") ||
     pathname.startsWith("/fonts") ||
+    pathname === "/manifest.json" ||
     pathname.endsWith(".png") ||
+    pathname.endsWith(".jpg") ||
+    pathname.endsWith(".jpeg") ||
     pathname.endsWith(".webp") ||
+    pathname.endsWith(".avif") ||
     pathname.endsWith(".svg") ||
     pathname.endsWith(".ico")
   ) {
