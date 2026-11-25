@@ -2,6 +2,8 @@
 
 import React, { useMemo, useState } from "react";
 import Link from "next/link";
+import { motion } from "motion/react";
+import { toast } from "sonner";
 import { ArrowRight, Check, AlertTriangle, Activity, Pause, Sparkles } from "lucide-react";
 import {
   generatePattern,
@@ -9,6 +11,9 @@ import {
   DEFAULT_PROVIDER_MINIMUMS,
   DEFAULT_TIKTOK_CONFIG,
 } from "@/lib/engagement/deterministic-pattern-engine";
+import { EASE_OUT, SPRING_GENTLE, VIEWPORT_ONCE } from "./motionTokens";
+
+const PLATFORM_DELAYS = [0, 0.045, 0.085, 0.12, 0.15];
 
 export function LandingOrganicShowcase() {
   const [curveMode, setCurveMode] = useState<"organic" | "bot">("organic");
@@ -58,24 +63,44 @@ export function LandingOrganicShowcase() {
 
   const botPath = "M 10 135 L 42 135 L 54 18 L 300 18";
 
+  function handleCurveSwitch(mode: "organic" | "bot") {
+    setCurveMode(mode);
+    if (mode === "organic") {
+      toast.success("Organic Multi-Wave Curve", {
+        description: "Views climb gradually across 24 hours—zero spam flags.",
+      });
+    } else {
+      toast.error("Bot Spike Warning", {
+        description: "Instant 90-second dumps trigger velocity tripwires.",
+      });
+    }
+  }
+
   return (
     <div className="space-y-24 sm:space-y-32">
-      {/* ── SECTION 4: Platforms + Dark Promo Banner (frame_004 style) ── */}
+      {/* ── SECTION 4: Platforms + Dark Promo Banner ── */}
       <section className="max-w-[1160px] mx-auto px-4 sm:px-8">
-        <div className="text-center max-w-xl mx-auto space-y-3 mb-12">
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={VIEWPORT_ONCE}
+          transition={{ duration: 0.52, ease: EASE_OUT }}
+          className="text-center max-w-xl mx-auto space-y-3 mb-12"
+        >
           <h2 className="text-3xl sm:text-[44px] font-bold tracking-[-0.035em] text-[#111413] leading-[1.08]">
             Supported Platforms
           </h2>
           <p className="text-sm sm:text-base text-[#5B625F] leading-relaxed">
             Built for the algorithmic pacing rules of today&apos;s biggest creator networks and feeds.
           </p>
-        </div>
+        </motion.div>
 
-        {/* Clean Circular Platform Badges */}
+        {/* Clean Circular Platform Badges with non-uniform wave entrance */}
         <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-7 mb-20">
           {[
             {
               name: "TikTok",
+              note: "Circadian FYP pacing & 3–6% likes ratio active",
               svg: (
                 <svg viewBox="0 0 24 24" className="w-6 h-6 fill-[#111413]" aria-hidden="true">
                   <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z" />
@@ -84,6 +109,7 @@ export function LandingOrganicShowcase() {
             },
             {
               name: "Instagram",
+              note: "Reels Explore-safe velocity & save retention boost",
               svg: (
                 <svg viewBox="0 0 24 24" className="w-6 h-6 stroke-[#111413] fill-none" strokeWidth="2" aria-hidden="true">
                   <rect x="2" y="2" width="20" height="20" rx="5" />
@@ -94,6 +120,7 @@ export function LandingOrganicShowcase() {
             },
             {
               name: "YouTube",
+              note: "Shorts retention-matched micro-batches",
               svg: (
                 <svg viewBox="0 0 24 24" className="w-6 h-6 fill-[#111413]" aria-hidden="true">
                   <path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z" />
@@ -103,6 +130,7 @@ export function LandingOrganicShowcase() {
             },
             {
               name: "Facebook",
+              note: "Reels & feed steady multi-hour growth",
               svg: (
                 <svg viewBox="0 0 24 24" className="w-6 h-6 fill-[#111413]" aria-hidden="true">
                   <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
@@ -111,27 +139,48 @@ export function LandingOrganicShowcase() {
             },
             {
               name: "X",
+              note: "Post impressions synced with natural repost waves",
               svg: (
                 <svg viewBox="0 0 24 24" className="w-5 h-5 fill-[#111413]" aria-hidden="true">
                   <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
                 </svg>
               ),
             },
-          ].map((item) => (
-            <div key={item.name} className="group flex flex-col items-center gap-2">
-              <div
-                title={item.name}
-                className="w-16 h-16 sm:w-[72px] sm:h-[72px] rounded-full bg-[#F7F6F2] border border-[#E4E0D3]/70 flex items-center justify-center transition-transform duration-200 group-hover:-translate-y-1 group-hover:border-[#111413]/30"
-              >
+          ].map((item, idx) => (
+            <motion.button
+              key={item.name}
+              type="button"
+              onClick={() => toast(item.name, { description: item.note })}
+              initial={{ opacity: 0, y: 12, scale: 0.93 }}
+              whileInView={{ opacity: 1, y: 0, scale: 1 }}
+              viewport={VIEWPORT_ONCE}
+              transition={{
+                duration: 0.45,
+                delay: PLATFORM_DELAYS[idx] ?? 0.15,
+                ease: EASE_OUT,
+              }}
+              whileHover={{ y: -3, transition: SPRING_GENTLE }}
+              whileTap={{ scale: 0.96 }}
+              className="group flex flex-col items-center gap-2 cursor-pointer focus-visible:outline-none"
+            >
+              <div className="w-16 h-16 sm:w-[72px] sm:h-[72px] rounded-full bg-[#F7F6F2] border border-[#E4E0D3]/70 flex items-center justify-center transition-colors duration-200 group-hover:border-[#111413]/35 group-hover:bg-[#D4F04F]/30">
                 {item.svg}
               </div>
-              <span className="text-[11px] font-semibold text-[#5B625F]">{item.name}</span>
-            </div>
+              <span className="text-[11px] font-semibold text-[#5B625F] group-hover:text-[#111413] transition-colors">
+                {item.name}
+              </span>
+            </motion.button>
           ))}
         </div>
 
-        {/* Dark Ink Control Banner with Floating White Mobile Panel */}
-        <div className="relative rounded-[28px] sm:rounded-[34px] bg-[#111413] text-white px-6 py-10 sm:px-14 sm:py-14 overflow-visible">
+        {/* Dark Ink Control Banner with Self-Drawing Sine Wave & Floating White Dashboard Card */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.97, y: 18 }}
+          whileInView={{ opacity: 1, scale: 1, y: 0 }}
+          viewport={VIEWPORT_ONCE}
+          transition={{ duration: 0.58, ease: EASE_OUT }}
+          className="relative rounded-[28px] sm:rounded-[34px] bg-[#111413] text-white px-6 py-10 sm:px-14 sm:py-14 overflow-visible"
+        >
           {/* Subtle Concentric/Diagonal Vector Lines inside dark banner */}
           <svg
             aria-hidden="true"
@@ -145,20 +194,23 @@ export function LandingOrganicShowcase() {
           </svg>
 
           <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
-            {/* Left Copy + Curved Sine Doodle */}
+            {/* Left Copy + Self-Drawing Curved Sine Doodle */}
             <div className="lg:col-span-7 flex flex-col sm:flex-row items-start gap-6">
-              {/* Minimal curved wave doodle matching frame_004 */}
               <svg
                 aria-hidden="true"
                 viewBox="0 0 110 64"
                 className="w-20 h-12 shrink-0 hidden sm:block mt-2"
               >
-                <path
+                <motion.path
                   d="M 4 50 C 20 12, 42 12, 54 34 C 66 56, 86 52, 102 36"
                   fill="none"
                   stroke="#FFFFFF"
                   strokeWidth="2.2"
                   strokeLinecap="round"
+                  initial={{ pathLength: 0 }}
+                  whileInView={{ pathLength: 1 }}
+                  viewport={VIEWPORT_ONCE}
+                  transition={{ duration: 0.85, delay: 0.2, ease: EASE_OUT }}
                 />
               </svg>
 
@@ -171,7 +223,7 @@ export function LandingOrganicShowcase() {
                 </p>
                 <Link
                   href="/signup"
-                  className="inline-flex items-center gap-2.5 px-6 py-3.5 rounded-xl bg-white hover:bg-[#F3F1EA] text-[#111413] text-sm font-bold transition-transform active:scale-[0.98]"
+                  className="inline-flex items-center gap-2.5 px-6 py-3.5 rounded-xl bg-white hover:bg-[#F3F1EA] active:scale-[0.97] text-[#111413] text-sm font-bold transition-transform"
                 >
                   <span>Open Growth Planner</span>
                   <ArrowRight className="w-4 h-4" />
@@ -179,9 +231,15 @@ export function LandingOrganicShowcase() {
               </div>
             </div>
 
-            {/* Right Floating White App Card sticking cleanly over the dark banner */}
+            {/* Right Floating White App Card rising gently */}
             <div className="lg:col-span-5">
-              <div className="bg-white text-[#111413] rounded-[24px] p-5 shadow-[0_30px_70px_-15px_rgba(0,0,0,0.45)] border border-[#E4E0D3]/60 lg:-my-8">
+              <motion.div
+                initial={{ opacity: 0, y: 28, scale: 0.96 }}
+                whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                viewport={VIEWPORT_ONCE}
+                transition={{ duration: 0.62, delay: 0.14, ease: EASE_OUT }}
+                className="bg-white text-[#111413] rounded-[24px] p-5 shadow-[0_30px_70px_-15px_rgba(0,0,0,0.45)] border border-[#E4E0D3]/60 lg:-my-8"
+              >
                 <div className="text-center pb-3">
                   <div className="text-[9px] font-bold uppercase tracking-widest text-[#9AA39F]">
                     Total Reach Delivered
@@ -195,7 +253,7 @@ export function LandingOrganicShowcase() {
                 <div className="rounded-2xl bg-[#111413] text-white p-4 mb-3.5">
                   <div className="flex items-center justify-between text-[10px] text-[#9AA39F] mb-1">
                     <span>Active Campaign • TikTok 10K</span>
-                    <span className="w-2 h-2 rounded-full bg-[#D4F04F]" />
+                    <span className="w-2 h-2 rounded-full bg-[#D4F04F] animate-pulse" />
                   </div>
                   <div className="text-lg font-extrabold tabular-nums">
                     8,420 Views{" "}
@@ -215,7 +273,7 @@ export function LandingOrganicShowcase() {
                   </div>
                 </div>
 
-                {/* 3 Sparkline Rows */}
+                {/* 3 Self-Drawing Sparkline Rows */}
                 <div className="space-y-2.5 text-xs">
                   <div className="flex items-center justify-between py-1">
                     <div className="flex items-center gap-2.5">
@@ -228,12 +286,16 @@ export function LandingOrganicShowcase() {
                       </div>
                     </div>
                     <svg viewBox="0 0 60 20" className="w-12 h-5">
-                      <path
+                      <motion.path
                         d="M 2 16 Q 16 14, 28 9 T 58 3"
                         fill="none"
                         stroke="#5E8C1F"
                         strokeWidth="2"
                         strokeLinecap="round"
+                        initial={{ pathLength: 0 }}
+                        whileInView={{ pathLength: 1 }}
+                        viewport={VIEWPORT_ONCE}
+                        transition={{ duration: 0.75, delay: 0.28, ease: EASE_OUT }}
                       />
                     </svg>
                     <div className="text-right tabular-nums">
@@ -253,12 +315,16 @@ export function LandingOrganicShowcase() {
                       </div>
                     </div>
                     <svg viewBox="0 0 60 20" className="w-12 h-5">
-                      <path
+                      <motion.path
                         d="M 2 17 Q 20 15, 34 11 T 58 5"
                         fill="none"
                         stroke="#C4552D"
                         strokeWidth="2"
                         strokeLinecap="round"
+                        initial={{ pathLength: 0 }}
+                        whileInView={{ pathLength: 1 }}
+                        viewport={VIEWPORT_ONCE}
+                        transition={{ duration: 0.75, delay: 0.36, ease: EASE_OUT }}
                       />
                     </svg>
                     <div className="text-right tabular-nums">
@@ -278,12 +344,16 @@ export function LandingOrganicShowcase() {
                       </div>
                     </div>
                     <svg viewBox="0 0 60 20" className="w-12 h-5">
-                      <path
+                      <motion.path
                         d="M 2 17 L 22 14 L 38 12 L 58 6"
                         fill="none"
                         stroke="#E0A030"
                         strokeWidth="2"
                         strokeLinecap="round"
+                        initial={{ pathLength: 0 }}
+                        whileInView={{ pathLength: 1 }}
+                        viewport={VIEWPORT_ONCE}
+                        transition={{ duration: 0.75, delay: 0.44, ease: EASE_OUT }}
                       />
                     </svg>
                     <div className="text-right tabular-nums">
@@ -292,25 +362,33 @@ export function LandingOrganicShowcase() {
                     </div>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             </div>
           </div>
-        </div>
+        </motion.div>
       </section>
 
-      {/* ── SECTION 5A: See the Curve Before You Spend (frame_005 style) ── */}
-      <section id="organic-growth" className="max-w-[1160px] mx-auto px-4 sm:px-8">
+      {/* ── SECTION 5A: See the Curve Before You Spend ── */}
+      <section id="organic-growth" className="max-w-[1160px] mx-auto px-4 sm:px-8 scroll-mt-24">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-center">
-          {/* Left: Tilted Dark Chart Card over Lime Backing */}
+          {/* Left: Lime Backing rotating into place + Dark Chart Card */}
           <div className="lg:col-span-6 relative py-4">
-            {/* Lime Backing Block */}
-            <div
+            <motion.div
               aria-hidden="true"
-              className="absolute left-2 sm:left-6 top-6 bottom-2 w-[82%] rounded-[24px] bg-[#D4F04F] -rotate-[3deg]"
+              initial={{ opacity: 0, rotate: -7, scale: 0.94 }}
+              whileInView={{ opacity: 1, rotate: -3, scale: 1 }}
+              viewport={VIEWPORT_ONCE}
+              transition={{ duration: 0.65, ease: EASE_OUT }}
+              className="absolute left-2 sm:left-6 top-6 bottom-2 w-[82%] rounded-[24px] bg-[#D4F04F]"
             />
 
-            {/* Foreground Dark Chart Card */}
-            <div className="relative z-10 bg-[#111413] text-white rounded-[24px] p-6 sm:p-7 shadow-[0_28px_60px_-15px_rgba(17,20,19,0.35)] border border-[#222826] max-w-[460px] mx-auto lg:mx-0">
+            <motion.div
+              initial={{ opacity: 0, y: 22, scale: 0.96 }}
+              whileInView={{ opacity: 1, y: 0, scale: 1 }}
+              viewport={VIEWPORT_ONCE}
+              transition={{ duration: 0.58, delay: 0.08, ease: EASE_OUT }}
+              className="relative z-10 bg-[#111413] text-white rounded-[24px] p-6 sm:p-7 shadow-[0_28px_60px_-15px_rgba(17,20,19,0.35)] border border-[#222826] max-w-[460px] mx-auto lg:mx-0"
+            >
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <div className="text-xs font-bold text-white flex items-center gap-2">
@@ -338,7 +416,7 @@ export function LandingOrganicShowcase() {
                 </span>
               </div>
 
-              {/* SVG Live Curve Chart */}
+              {/* SVG Live Curve Chart with Self-Drawing Animation */}
               <div className="h-[175px] rounded-2xl bg-[#181C1A] border border-[#222826] p-3 relative overflow-hidden">
                 <svg viewBox="0 0 310 145" className="w-full h-full">
                   <line x1="10" y1="35" x2="300" y2="35" stroke="#222826" strokeDasharray="3 3" />
@@ -346,37 +424,68 @@ export function LandingOrganicShowcase() {
                   <line x1="10" y1="135" x2="300" y2="135" stroke="#2C332F" />
 
                   {curveMode === "organic" ? (
-                    <>
-                      <path
+                    <g key="organic-svg">
+                      <motion.path
                         d={`${organicPath} L 286 135 L 10 135 Z`}
                         fill="rgba(212, 240, 79, 0.12)"
+                        initial={{ opacity: 0 }}
+                        whileInView={{ opacity: 1 }}
+                        viewport={VIEWPORT_ONCE}
+                        transition={{ duration: 0.6, delay: 0.25 }}
                       />
-                      <path
+                      <motion.path
                         d={organicPath}
                         fill="none"
                         stroke="#D4F04F"
                         strokeWidth="2.8"
                         strokeLinecap="round"
                         strokeLinejoin="round"
+                        initial={{ pathLength: 0 }}
+                        whileInView={{ pathLength: 1 }}
+                        viewport={VIEWPORT_ONCE}
+                        transition={{ duration: 0.95, ease: EASE_OUT }}
                       />
-                      <circle cx="286" cy="26" r="4" fill="#D4F04F" />
-                    </>
+                      <motion.circle
+                        cx="286"
+                        cy="26"
+                        r="4"
+                        fill="#D4F04F"
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        whileInView={{ opacity: 1, scale: 1 }}
+                        viewport={VIEWPORT_ONCE}
+                        transition={{ delay: 0.8, duration: 0.25 }}
+                      />
+                    </g>
                   ) : (
-                    <>
-                      <path
+                    <g key="bot-svg">
+                      <motion.path
                         d={`${botPath} L 300 135 L 10 135 Z`}
                         fill="rgba(196, 85, 45, 0.16)"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 0.35 }}
                       />
-                      <path
+                      <motion.path
                         d={botPath}
                         fill="none"
                         stroke="#C4552D"
                         strokeWidth="2.8"
                         strokeLinecap="round"
                         strokeLinejoin="round"
+                        initial={{ pathLength: 0 }}
+                        animate={{ pathLength: 1 }}
+                        transition={{ duration: 0.6, ease: EASE_OUT }}
                       />
-                      <circle cx="54" cy="18" r="4.5" fill="#C4552D" />
-                    </>
+                      <motion.circle
+                        cx="54"
+                        cy="18"
+                        r="4.5"
+                        fill="#C4552D"
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: 0.35 }}
+                      />
+                    </g>
                   )}
                 </svg>
 
@@ -385,11 +494,12 @@ export function LandingOrganicShowcase() {
                 </div>
               </div>
 
-              {/* Interactive Curve Switcher inside card */}
+              {/* Interactive Curve Switcher */}
               <div className="grid grid-cols-2 gap-2 mt-4 p-1 rounded-xl bg-[#181C1A] border border-[#222826]">
-                <button
+                <motion.button
                   type="button"
-                  onClick={() => setCurveMode("organic")}
+                  whileTap={{ scale: 0.96 }}
+                  onClick={() => handleCurveSwitch("organic")}
                   className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
                     curveMode === "organic"
                       ? "bg-[#D4F04F] text-[#111413]"
@@ -398,10 +508,11 @@ export function LandingOrganicShowcase() {
                 >
                   <Check className="w-3.5 h-3.5" />
                   <span>Organic Curve</span>
-                </button>
-                <button
+                </motion.button>
+                <motion.button
                   type="button"
-                  onClick={() => setCurveMode("bot")}
+                  whileTap={{ scale: 0.96 }}
+                  onClick={() => handleCurveSwitch("bot")}
                   className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
                     curveMode === "bot"
                       ? "bg-[#C4552D] text-white"
@@ -410,13 +521,19 @@ export function LandingOrganicShowcase() {
                 >
                   <AlertTriangle className="w-3.5 h-3.5" />
                   <span>Bot Spike</span>
-                </button>
+                </motion.button>
               </div>
-            </div>
+            </motion.div>
           </div>
 
           {/* Right Copy */}
-          <div className="lg:col-span-6 space-y-5">
+          <motion.div
+            initial={{ opacity: 0, y: 18 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={VIEWPORT_ONCE}
+            transition={{ duration: 0.56, delay: 0.12, ease: EASE_OUT }}
+            className="lg:col-span-6 space-y-5"
+          >
             <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#5E8C1F]">
               <span className="w-2 h-2 rounded-full bg-[#5E8C1F]" />
               Preview Before Launch
@@ -439,15 +556,21 @@ export function LandingOrganicShowcase() {
                 <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
-          </div>
+          </motion.div>
         </div>
       </section>
 
-      {/* ── SECTION 5B: Simple From Link to Launch (frame_006 style) ── */}
+      {/* ── SECTION 5B: Simple From Link to Launch ── */}
       <section className="max-w-[1160px] mx-auto px-4 sm:px-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-center">
           {/* Left Copy */}
-          <div className="lg:col-span-6 space-y-5 order-2 lg:order-1">
+          <motion.div
+            initial={{ opacity: 0, y: 18 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={VIEWPORT_ONCE}
+            transition={{ duration: 0.56, ease: EASE_OUT }}
+            className="lg:col-span-6 space-y-5 order-2 lg:order-1"
+          >
             <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#5E8C1F]">
               <span className="w-2 h-2 rounded-full bg-[#5E8C1F]" />
               All-In-One Growth
@@ -461,7 +584,7 @@ export function LandingOrganicShowcase() {
             <div className="flex flex-wrap items-center gap-6 pt-2">
               <Link
                 href="/pricing"
-                className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-[#111413] hover:bg-[#1B201E] text-white text-sm font-semibold transition-colors"
+                className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-[#111413] hover:bg-[#1B201E] active:scale-[0.97] text-white text-sm font-semibold transition-transform"
               >
                 <span>Explore Packages</span>
                 <ArrowRight className="w-4 h-4 text-[#D4F04F]" />
@@ -474,34 +597,47 @@ export function LandingOrganicShowcase() {
                 <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
-          </div>
+          </motion.div>
 
-          {/* Right: Big Lime Circle + 3 Staggered Floating Batch Cards (frame_006 style) */}
+          {/* Right: Lime Circle Scaling + Vertical Ink Curve Drawing + Alternating Wave Cards */}
           <div className="lg:col-span-6 relative py-8 order-1 lg:order-2">
-            {/* Big Lime Circle */}
-            <div
+            <motion.div
               aria-hidden="true"
+              initial={{ opacity: 0, scale: 0.92 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={VIEWPORT_ONCE}
+              transition={{ duration: 0.65, ease: EASE_OUT }}
               className="absolute right-0 sm:right-4 top-1/2 -translate-y-1/2 w-[260px] h-[260px] sm:w-[320px] sm:h-[320px] rounded-full bg-[#D4F04F]"
             />
 
-            {/* Connecting Curved Line behind cards */}
             <svg
               aria-hidden="true"
               viewBox="0 0 320 260"
               className="absolute inset-0 w-full h-full pointer-events-none z-0"
             >
-              <path
+              <motion.path
                 d="M 190 36 C 245 65, 115 110, 145 155 C 170 190, 230 205, 180 250"
                 fill="none"
                 stroke="#111413"
                 strokeWidth="2"
                 strokeLinecap="round"
+                initial={{ pathLength: 0 }}
+                whileInView={{ pathLength: 1 }}
+                viewport={VIEWPORT_ONCE}
+                transition={{ duration: 0.95, delay: 0.15, ease: EASE_OUT }}
               />
             </svg>
 
             <div className="relative z-10 space-y-4 max-w-[380px] mx-auto lg:mx-0">
               {/* Staggered Card 1 */}
-              <div className="bg-white rounded-2xl border border-[#E4E0D3]/80 shadow-[0_18px_40px_-12px_rgba(17,20,19,0.12)] px-4 py-3.5 flex items-center justify-between gap-3 sm:-rotate-[2deg]">
+              <motion.div
+                initial={{ opacity: 0, x: -18, rotate: 0 }}
+                whileInView={{ opacity: 1, x: 0, rotate: -2 }}
+                viewport={VIEWPORT_ONCE}
+                transition={{ duration: 0.52, delay: 0.08, ease: EASE_OUT }}
+                whileHover={{ rotate: 0, y: -2, transition: SPRING_GENTLE }}
+                className="bg-white rounded-2xl border border-[#E4E0D3]/80 shadow-[0_18px_40px_-12px_rgba(17,20,19,0.12)] px-4 py-3.5 flex items-center justify-between gap-3"
+              >
                 <div className="flex items-center gap-3 min-w-0">
                   <span className="w-8 h-8 rounded-full bg-[#111413] text-[#D4F04F] flex items-center justify-center text-xs font-extrabold shrink-0">
                     01
@@ -517,10 +653,17 @@ export function LandingOrganicShowcase() {
                   <div className="text-xs font-extrabold text-[#111413]">+420 Views</div>
                   <div className="text-[10px] font-semibold text-[#5E8C1F]">+14 Likes</div>
                 </div>
-              </div>
+              </motion.div>
 
               {/* Staggered Card 2 */}
-              <div className="bg-white rounded-2xl border border-[#E4E0D3]/80 shadow-[0_18px_40px_-12px_rgba(17,20,19,0.14)] px-4 py-3.5 flex items-center justify-between gap-3 sm:translate-x-6">
+              <motion.div
+                initial={{ opacity: 0, x: 24 }}
+                whileInView={{ opacity: 1, x: 16 }}
+                viewport={VIEWPORT_ONCE}
+                transition={{ duration: 0.52, delay: 0.16, ease: EASE_OUT }}
+                whileHover={{ y: -2, transition: SPRING_GENTLE }}
+                className="bg-white rounded-2xl border border-[#E4E0D3]/80 shadow-[0_18px_40px_-12px_rgba(17,20,19,0.14)] px-4 py-3.5 flex items-center justify-between gap-3"
+              >
                 <div className="flex items-center gap-3 min-w-0">
                   <span className="w-8 h-8 rounded-full bg-[#F3F1EA] border border-[#E4E0D3] text-[#111413] flex items-center justify-center text-xs font-extrabold shrink-0">
                     02
@@ -533,22 +676,33 @@ export function LandingOrganicShowcase() {
                   </div>
                 </div>
                 <svg viewBox="0 0 46 18" className="w-10 h-4 shrink-0 hidden sm:block">
-                  <path
+                  <motion.path
                     d="M 2 14 Q 14 14, 22 8 T 44 3"
                     fill="none"
                     stroke="#C4552D"
                     strokeWidth="2"
                     strokeLinecap="round"
+                    initial={{ pathLength: 0 }}
+                    whileInView={{ pathLength: 1 }}
+                    viewport={VIEWPORT_ONCE}
+                    transition={{ duration: 0.7, delay: 0.3, ease: EASE_OUT }}
                   />
                 </svg>
                 <div className="text-right shrink-0 tabular-nums">
                   <div className="text-xs font-extrabold text-[#111413]">+2,650 Views</div>
                   <div className="text-[10px] font-semibold text-[#C4552D]">+112 Likes</div>
                 </div>
-              </div>
+              </motion.div>
 
               {/* Staggered Card 3 */}
-              <div className="bg-white rounded-2xl border border-[#E4E0D3]/80 shadow-[0_18px_40px_-12px_rgba(17,20,19,0.14)] px-4 py-3.5 flex items-center justify-between gap-3 sm:translate-x-2 sm:rotate-[1.5deg]">
+              <motion.div
+                initial={{ opacity: 0, x: -12, rotate: 0 }}
+                whileInView={{ opacity: 1, x: 6, rotate: 1.5 }}
+                viewport={VIEWPORT_ONCE}
+                transition={{ duration: 0.52, delay: 0.22, ease: EASE_OUT }}
+                whileHover={{ rotate: 0, y: -2, transition: SPRING_GENTLE }}
+                className="bg-white rounded-2xl border border-[#E4E0D3]/80 shadow-[0_18px_40px_-12px_rgba(17,20,19,0.14)] px-4 py-3.5 flex items-center justify-between gap-3"
+              >
                 <div className="flex items-center gap-3 min-w-0">
                   <span className="w-8 h-8 rounded-full bg-[#EEF6EC] text-[#2F6B3A] flex items-center justify-center text-xs font-extrabold shrink-0">
                     03
@@ -561,19 +715,23 @@ export function LandingOrganicShowcase() {
                   </div>
                 </div>
                 <svg viewBox="0 0 46 18" className="w-10 h-4 shrink-0 hidden sm:block">
-                  <path
+                  <motion.path
                     d="M 2 15 Q 16 12, 26 9 T 44 2"
                     fill="none"
                     stroke="#5E8C1F"
                     strokeWidth="2"
                     strokeLinecap="round"
+                    initial={{ pathLength: 0 }}
+                    whileInView={{ pathLength: 1 }}
+                    viewport={VIEWPORT_ONCE}
+                    transition={{ duration: 0.7, delay: 0.38, ease: EASE_OUT }}
                   />
                 </svg>
                 <div className="text-right shrink-0 tabular-nums">
                   <div className="text-xs font-extrabold text-[#111413]">+2,030 Views</div>
                   <div className="text-[10px] font-semibold text-[#5E8C1F]">+42 Saves</div>
                 </div>
-              </div>
+              </motion.div>
             </div>
           </div>
         </div>

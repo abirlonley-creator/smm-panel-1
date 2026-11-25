@@ -1,7 +1,11 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
+import { motion } from "motion/react";
+import { toast } from "sonner";
 import { CheckCircle2, Play, Pause, Sparkles, Link2, ShieldCheck } from "lucide-react";
+import { EASE_OUT, SPRING_GENTLE } from "./motionTokens";
 
 type PlatformKey = "TikTok" | "Instagram" | "YouTube" | "X";
 type HorizonKey = "1H" | "6H" | "24H" | "48H" | "72H";
@@ -125,11 +129,38 @@ export function LandingHeroMockups() {
   const active = PLATFORM_PRESETS[platform];
   const bars = HORIZON_BARS[horizon];
 
+  function handlePlatformSelect(item: PlatformKey) {
+    setPlatform(item);
+    toast(`${item} preset preview loaded`, {
+      description: PLATFORM_PRESETS[item].waveNote,
+    });
+  }
+
+  function handlePauseToggle() {
+    const nextPaused = !paused;
+    setPaused(nextPaused);
+    if (nextPaused) {
+      toast("Wave paused in preview", {
+        description: "Delivery pacing holds safely until you resume.",
+      });
+    } else {
+      toast.success("Wave resumed", {
+        description: `${platform} circadian pacing is active again.`,
+      });
+    }
+  }
+
   return (
     <div className="relative w-full max-w-[620px] mx-auto lg:mx-0 lg:ml-auto select-none">
       <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 sm:gap-0 items-start">
         {/* ── Front White Card: Growth Planner / Link & Package Picker ── */}
-        <div className="sm:col-span-7 relative z-20 bg-white rounded-[26px] border border-[#E4E0D3]/80 shadow-[0_28px_60px_-15px_rgba(17,20,19,0.20)] p-5 text-[#111413] sm:-rotate-[2.5deg] transition-transform duration-300 hover:rotate-0">
+        <motion.div
+          initial={{ opacity: 0, y: 24, x: -10, scale: 0.96, rotate: 0 }}
+          animate={{ opacity: 1, y: 0, x: 0, scale: 1, rotate: -2.5 }}
+          transition={{ duration: 0.62, delay: 0.14, ease: EASE_OUT }}
+          whileHover={{ rotate: 0, y: -3, transition: SPRING_GENTLE }}
+          className="sm:col-span-7 relative z-20 bg-white rounded-[26px] border border-[#E4E0D3]/80 shadow-[0_28px_60px_-15px_rgba(17,20,19,0.20)] p-5 text-[#111413]"
+        >
           <div className="flex items-center justify-between mb-3.5">
             <span className="text-[17px] font-bold tracking-tight text-[#111413]">
               Planner
@@ -149,10 +180,11 @@ export function LandingHeroMockups() {
           {/* Interactive Platform Chips */}
           <div className="flex flex-wrap gap-1.5 mb-4">
             {(["TikTok", "Instagram", "YouTube", "X"] as PlatformKey[]).map((item) => (
-              <button
+              <motion.button
                 key={item}
                 type="button"
-                onClick={() => setPlatform(item)}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => handlePlatformSelect(item)}
                 className={`px-2.5 py-1 rounded-full text-[10px] font-semibold transition-colors cursor-pointer ${
                   platform === item
                     ? "bg-[#111413] text-[#D4F04F]"
@@ -160,7 +192,7 @@ export function LandingHeroMockups() {
                 }`}
               >
                 {item}
-              </button>
+              </motion.button>
             ))}
           </div>
 
@@ -228,15 +260,25 @@ export function LandingHeroMockups() {
               </div>
             </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* ── Back Dark Card: Live Organic Curve & Controls ── */}
-        <div className="sm:col-span-6 sm:-ml-8 sm:mt-8 relative z-10 bg-[#111413] rounded-[26px] border border-[#222826] shadow-[0_32px_70px_-15px_rgba(17,20,19,0.42)] p-4 text-white sm:rotate-[2deg] transition-transform duration-300 hover:rotate-0">
+        <motion.div
+          initial={{ opacity: 0, y: 30, x: 14, scale: 0.95, rotate: 0 }}
+          animate={{ opacity: 1, y: 0, x: 0, scale: 1, rotate: 2 }}
+          transition={{ duration: 0.66, delay: 0.24, ease: EASE_OUT }}
+          whileHover={{ rotate: 0, y: -3, transition: SPRING_GENTLE }}
+          className="sm:col-span-6 sm:-ml-8 sm:mt-8 relative z-10 bg-[#111413] rounded-[26px] border border-[#222826] shadow-[0_32px_70px_-15px_rgba(17,20,19,0.42)] p-4 text-white"
+        >
           {/* Header */}
           <div className="flex items-center justify-between mb-3">
             <div>
               <div className="text-[11px] font-bold text-white flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#D4F04F] animate-pulse" />
+                <span
+                  className={`w-1.5 h-1.5 rounded-full transition-colors ${
+                    paused ? "bg-[#C4552D]" : "bg-[#D4F04F] animate-pulse"
+                  }`}
+                />
                 {platform} Organic Curve
               </div>
               <div className="text-[16px] font-extrabold text-white tabular-nums mt-0.5">
@@ -248,32 +290,42 @@ export function LandingHeroMockups() {
             </div>
           </div>
 
-          {/* Dark Chart Area (Bars + Smooth Wave Line) */}
+          {/* Dark Chart Area (GPU-scaled Bars + Smooth Wave Line) */}
           <div className="relative h-[132px] rounded-2xl bg-[#181C1A] border border-[#222826] px-3 pt-4 pb-2 flex flex-col justify-end overflow-hidden mb-3">
             {/* Subtle Curve Overlay */}
             <svg
               viewBox="0 0 220 90"
-              className="absolute inset-0 w-full h-full pointer-events-none opacity-60"
+              className="absolute inset-0 w-full h-full pointer-events-none opacity-65"
               preserveAspectRatio="none"
             >
-              <path
+              <motion.path
                 d="M 10 82 Q 55 72, 95 52 T 175 26 T 212 12"
                 fill="none"
                 stroke="#D4F04F"
                 strokeWidth="1.6"
                 strokeDasharray="3 3"
+                initial={{ pathLength: 0, opacity: 0 }}
+                animate={{ pathLength: 1, opacity: 1 }}
+                transition={{ duration: 0.9, delay: 0.4, ease: EASE_OUT }}
               />
             </svg>
 
-            {/* Wave Bars */}
+            {/* Wave Bars (GPU scaleY animation) */}
             <div className="relative z-10 flex items-end justify-between gap-1.5 h-[88px]">
               {bars.map((bar, idx) => (
                 <div key={idx} className="flex-1 flex flex-col items-center justify-end h-full">
-                  <div
-                    className={`w-1.5 rounded-full transition-all duration-300 ${
+                  <motion.div
+                    initial={{ scaleY: 0.15, opacity: 0.4 }}
+                    animate={{ scaleY: paused ? bar.h / 140 : bar.h / 100, opacity: paused ? 0.5 : 1 }}
+                    transition={{
+                      duration: 0.42,
+                      delay: idx * 0.025,
+                      ease: EASE_OUT,
+                    }}
+                    style={{ originY: 1 }}
+                    className={`w-1.5 h-full rounded-full ${
                       bar.type === "lime" ? "bg-[#D4F04F]" : "bg-[#C4552D]"
                     }`}
-                    style={{ height: `${bar.h}%` }}
                   />
                 </div>
               ))}
@@ -283,9 +335,10 @@ export function LandingHeroMockups() {
           {/* Timeframe Pills */}
           <div className="flex items-center justify-between gap-1 bg-[#181C1A] rounded-full p-1 mb-3">
             {(["1H", "6H", "24H", "48H", "72H"] as HorizonKey[]).map((t) => (
-              <button
+              <motion.button
                 key={t}
                 type="button"
+                whileTap={{ scale: 0.94 }}
                 onClick={() => setHorizon(t)}
                 className={`flex-1 py-1 rounded-full text-[9px] font-bold transition-colors cursor-pointer ${
                   horizon === t
@@ -294,7 +347,7 @@ export function LandingHeroMockups() {
                 }`}
               >
                 {t}
-              </button>
+              </motion.button>
             ))}
           </div>
 
@@ -325,26 +378,27 @@ export function LandingHeroMockups() {
               </span>
             </div>
 
-            {/* Bottom Pause / Launch Pill Row matching Sell / Buy in video */}
+            {/* Bottom Pause / Launch Pill Row */}
             <div className="grid grid-cols-2 gap-2 pt-1">
-              <button
+              <motion.button
                 type="button"
-                onClick={() => setPaused(!paused)}
+                whileTap={{ scale: 0.96 }}
+                onClick={handlePauseToggle}
                 className="py-2 rounded-full bg-[#C4552D] hover:bg-[#B04823] text-white text-[11px] font-bold flex items-center justify-center gap-1 transition-colors cursor-pointer"
               >
                 {paused ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
                 {paused ? "Resume" : "Pause"}
-              </button>
-              <a
+              </motion.button>
+              <Link
                 href="/signup"
-                className="py-2 rounded-full bg-[#D4F04F] hover:bg-[#C5E23A] text-[#111413] text-[11px] font-bold flex items-center justify-center gap-1 transition-colors"
+                className="py-2 rounded-full bg-[#D4F04F] hover:bg-[#C5E23A] active:scale-[0.97] text-[#111413] text-[11px] font-bold flex items-center justify-center gap-1 transition-transform"
               >
                 <CheckCircle2 className="w-3 h-3" />
                 Launch
-              </a>
+              </Link>
             </div>
           </div>
-        </div>
+        </motion.div>
       </div>
     </div>
   );

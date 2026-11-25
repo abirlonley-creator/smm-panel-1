@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { AppShell } from "@/components/AppShell";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
+import { Toaster } from "sonner";
 
 import { BRAND } from "@/lib/brand";
 
@@ -66,6 +67,19 @@ export default function RootLayout({
     <html lang="en" className={inter.variable}>
       <body className="font-sans antialiased bg-[#F3F1EA] text-[#111413] min-h-screen">
         <AppShell>{children}</AppShell>
+        <Toaster
+          position="bottom-right"
+          richColors
+          toastOptions={{
+            style: {
+              background: "#FFFFFF",
+              border: "1px solid #E4E0D3",
+              color: "#111413",
+              borderRadius: "16px",
+              boxShadow: "0 16px 36px -12px rgba(17, 20, 19, 0.18)",
+            },
+          }}
+        />
         <ServiceWorkerRegister />
       </body>
     </html>
