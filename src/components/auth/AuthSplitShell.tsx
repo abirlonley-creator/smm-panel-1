@@ -246,15 +246,15 @@ export function AuthSplitShell({ initialMode }: AuthSplitShellProps) {
     authMode === "signup"
       ? {
           text: "Thoughtful delivery curves that actually respect how platforms work. Setting up our campaigns takes under a minute, and every batch stays transparent from start to finish.",
-          author: "Nadia Rahman",
-          location: "Growth Lead, Dhaka",
-          initials: "NR",
+          author: "Ahmed Abir",
+          location: "Rajshahi, Bangladesh",
+          avatar: "/images/ahmed-abir.jpg",
         }
       : {
           text: "Seamless campaign experience! The panel makes scheduling views and engagement so easy. I loved the real-time pacing curves and instant order tracking. Definitely my go-to for every launch.",
-          author: "Alex Mitchell",
-          location: "Amsterdam",
-          initials: "AM",
+          author: "Ahmed Abir",
+          location: "Rajshahi, Bangladesh",
+          avatar: "/images/ahmed-abir.jpg",
         };
 
   return (
@@ -770,12 +770,13 @@ export function AuthSplitShell({ initialMode }: AuthSplitShellProps) {
 
             {/* Author row */}
             <div className="mt-2 flex items-center gap-3">
-              <div
-                aria-hidden="true"
-                className="w-10 h-10 rounded-full bg-[#E4E0D3]/60 border border-[#E4E0D3] flex items-center justify-center text-xs font-bold text-[#18422B] shrink-0"
-              >
-                {quote.initials}
-              </div>
+              <Image
+                src={quote.avatar}
+                alt={quote.author}
+                width={44}
+                height={44}
+                className="w-11 h-11 rounded-full object-cover object-top border border-[#E4E0D3] shadow-xs shrink-0"
+              />
               <div>
                 <div className="text-xs font-bold text-[#111413]">{quote.author}</div>
                 <div className="text-[11px] text-[#5B625F]">{quote.location}</div>
