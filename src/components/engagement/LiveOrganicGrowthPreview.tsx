@@ -383,213 +383,156 @@ export function LiveOrganicGrowthPreview({
   };
 
   return (
-    <div className="bg-white rounded-3xl border border-[#E4E0D3] p-3.5 sm:p-6 shadow-subtle space-y-4 font-sans select-none">
-      {/* 1. TOP HEADER: Live Growth Preview */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#E4E0D3]">
+    <div className="bg-white rounded-3xl border border-[#E4E0D3] p-4 sm:p-6 shadow-subtle space-y-4 font-sans select-none">
+      {/* 1. CLEAN TOP HEADER */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3.5 border-b border-[#E4E0D3]">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-[#F3F1EA] border border-[#E4E0D3] flex items-center justify-center text-[#5E8C1F] shadow-2xs">
-            <Activity className="w-5 h-5 stroke-[2.3]" />
+          <div className="w-9 h-9 rounded-2xl bg-[#111413] text-[#D4F04F] flex items-center justify-center shrink-0">
+            <Activity className="w-4 h-4 stroke-[2.2]" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-[#111413] font-sans">
-              Live Growth Preview
-            </h2>
-            <p className="text-xs text-[#5B625F] font-medium font-sans">
-              Gradual, view-paced delivery • Monotonic continuous plan execution
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm sm:text-base font-bold text-[#111413] tracking-tight">
+                Live Delivery Curve
+              </h2>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-[#F3F1EA] text-[#5B625F] border border-[#E4E0D3]">
+                #{plan.seed.slice(0, 6)}
+              </span>
+            </div>
+            <p className="text-xs text-[#5B625F]">
+              {plan.durationLabel} finish • {plan.rows.length} micro-batches on a 15-min grid
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
-          {/* New Pattern Button */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setShowEngagementOverlay(!showEngagementOverlay)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors border cursor-pointer ${
+              showEngagementOverlay
+                ? "bg-[#111413] text-[#D4F04F] border-[#111413]"
+                : "bg-[#FAF9F5] text-[#5B625F] border-[#E4E0D3] hover:text-[#111413]"
+            }`}
+          >
+            {showEngagementOverlay ? "Signals: On" : "Signals: Off"}
+          </button>
+
           <button
             type="button"
             onClick={handleNewPatternClick}
-            className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white hover:bg-[#F3F1EA] border border-[#E4E0D3] text-[#111413] flex items-center gap-1.5 shadow-2xs hover:border-[#111413]/40 transition-all press-scale cursor-pointer"
-            title="Generate a fresh, unique delivery pattern schedule"
+            className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#FAF9F5] hover:bg-[#F3F1EA] border border-[#E4E0D3] text-[#111413] flex items-center gap-1.5 transition-colors active:scale-[0.98] cursor-pointer"
+            title="Generate a fresh organic delivery curve"
           >
             <RefreshCw
               className={`w-3.5 h-3.5 ${
                 isGenerating ? "animate-spin text-[#5E8C1F]" : "text-[#5B625F]"
               }`}
             />
-            <span>New Pattern</span>
-          </button>
-
-          {/* Delivery Quality Pill */}
-          <span className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 text-[#5E8C1F] border border-emerald-200/80 flex items-center gap-1 shadow-2xs font-sans">
-            <CheckCircle2 className="w-3.5 h-3.5 text-[#5E8C1F]" />
-            <span>Gradual, view-paced delivery</span>
-          </span>
-        </div>
-      </div>
-
-      {/* 2. PATTERN ID & DURATION BAR */}
-      <div className="flex items-center justify-between flex-wrap gap-2 pt-0.5">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="px-3 py-1 rounded-full text-xs font-bold bg-white text-[#111413] border border-[#E4E0D3] shadow-2xs font-sans">
-            Pattern #{plan.seed.slice(0, 8)}
-          </span>
-
-          <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-[#5E8C1F] border border-emerald-200/60 shadow-2xs font-sans flex items-center gap-1">
-            <Clock className="w-3 h-3 text-[#5E8C1F]" />
-            <span>{plan.durationLabel} finish</span>
-          </span>
-
-          {/* Engagement Overlay Toggle */}
-          <button
-            type="button"
-            onClick={() => setShowEngagementOverlay(!showEngagementOverlay)}
-            className={`px-3 py-1 rounded-full text-xs font-bold transition-all border cursor-pointer ${
-              showEngagementOverlay
-                ? "bg-[#111413] text-[#D4F04F] border-[#111413] shadow-2xs"
-                : "bg-white text-[#5B625F] border-[#E4E0D3] hover:bg-[#F3F1EA]"
-            }`}
-          >
-            {showEngagementOverlay ? "Engagement: Shown" : "Engagement: Hidden"}
+            <span>Shuffle Curve</span>
           </button>
 
           {isAdmin && (
-            <span className="text-[11px] font-mono text-[#5B625F] bg-[#F3F1EA] px-2 py-0.5 rounded border border-[#E4E0D3]">
-              rebalanced: views exact
-            </span>
-          )}
-        </div>
-
-        {/* Admin Template Selector */}
-        {isAdmin && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-[#5B625F] font-sans"># Template:</span>
-            <input
-              type="number"
-              min="1"
-              max="999"
-              value={templateInput}
-              onChange={(e) => {
-                setTemplateInput(e.target.value);
-                const num = parseInt(e.target.value, 10);
-                if (!isNaN(num) && onSelectTemplate) onSelectTemplate(num);
-              }}
-              className="w-16 px-2.5 py-1 rounded-xl bg-white border border-[#E4E0D3] text-xs font-bold text-[#111413] text-center focus:outline-none focus:border-[#111413] font-sans"
-              title="Admin control: Select template (1 to 550+)"
-            />
-            <span className="text-xs font-semibold text-[#5B625F] font-sans">
-              550+ patterns
-            </span>
-          </div>
-        )}
-      </div>
-
-      {/* 3. METRIC CHIPS SUMMARY ROW (Section 6: Exact sums of rows[]) */}
-      <div className="flex items-center flex-wrap gap-2 text-xs font-sans">
-        {/* Total Views Chip */}
-        <span className="px-3 py-1 rounded-xl bg-[#2F6B3A] text-white font-bold flex items-center gap-1.5 shadow-2xs font-sans">
-          <Eye className="w-3.5 h-3.5 fill-white" />
-          <span>{plan.totals.views.toLocaleString()} Views</span>
-        </span>
-
-        {/* Likes Chip */}
-        {plan.totals.likes > 0 ? (
-          <span className="px-3 py-1 rounded-xl bg-white border border-[#C4552D]/30 text-[#C4552D] font-bold flex items-center gap-1.5 shadow-2xs font-sans">
-            <Heart className="w-3.5 h-3.5 fill-[#C4552D] text-[#C4552D]" />
-            <span>{plan.totals.likes.toLocaleString()} Likes</span>
-          </span>
-        ) : (
-          <span className="px-2.5 py-1 rounded-xl bg-[#F3F1EA] text-[#5B625F] border border-[#E4E0D3] font-semibold text-[11px] font-sans">
-            Likes: not included in this order (below min 10)
-          </span>
-        )}
-
-        {/* Saves Chip */}
-        {plan.totals.saves > 0 ? (
-          <span className="px-3 py-1 rounded-xl bg-white border border-[#E0A030]/30 text-[#E0A030] font-bold flex items-center gap-1.5 shadow-2xs font-sans">
-            <Bookmark className="w-3.5 h-3.5 fill-[#E0A030] text-[#E0A030]" />
-            <span>{plan.totals.saves.toLocaleString()} Saves</span>
-          </span>
-        ) : (
-          <span className="px-2.5 py-1 rounded-xl bg-[#F3F1EA] text-[#5B625F] border border-[#E4E0D3] font-semibold text-[11px] font-sans">
-            Saves: not included in this order (below min 10)
-          </span>
-        )}
-
-        {/* Reposts Chip */}
-        {plan.totals.reposts > 0 ? (
-          <span className="px-3 py-1 rounded-xl bg-white border border-[#2A9D8F]/30 text-[#2A9D8F] font-bold flex items-center gap-1.5 shadow-2xs font-sans">
-            <Repeat className="w-3.5 h-3.5 text-[#2A9D8F]" />
-            <span>{plan.totals.reposts.toLocaleString()} Reposts</span>
-          </span>
-        ) : (
-          <span className="px-2.5 py-1 rounded-xl bg-[#F3F1EA] text-[#5B625F] border border-[#E4E0D3] font-semibold text-[11px] font-sans">
-            Reposts: not included in this order (below min 10)
-          </span>
-        )}
-
-        {/* Shares Chip */}
-        {plan.totals.shares > 0 ? (
-          <span className="px-3 py-1 rounded-xl bg-white border border-[#7C5CBF]/30 text-[#7C5CBF] font-bold flex items-center gap-1.5 shadow-2xs font-sans">
-            <Share2 className="w-3.5 h-3.5 text-[#7C5CBF]" />
-            <span>{plan.totals.shares.toLocaleString()} Shares</span>
-          </span>
-        ) : (
-          <span className="px-2.5 py-1 rounded-xl bg-[#F3F1EA] text-[#5B625F] border border-[#E4E0D3] font-semibold text-[11px] font-sans">
-            Shares: not included in this order (below min 10)
-          </span>
-        )}
-
-        {/* Comments Chip */}
-        {plan.totals.comments > 0 ? (
-          <span className="px-3 py-1 rounded-xl bg-white border border-[#3D82A2]/30 text-[#3D82A2] font-bold flex items-center gap-1.5 shadow-2xs font-sans">
-            <MessageCircle className="w-3.5 h-3.5 text-[#3D82A2]" />
-            <span>{plan.totals.comments.toLocaleString()} Comments</span>
-          </span>
-        ) : null}
-
-        {/* Runs Count Chip */}
-        <span className="px-2.5 py-1 rounded-xl bg-white border border-[#E4E0D3] text-[#111413] font-bold shadow-2xs flex items-center gap-1 font-sans ml-auto">
-          <TrendingUp className="w-3.5 h-3.5 text-[#5E8C1F]" />
-          <span>{plan.rows.length} batches on 15m grid</span>
-        </span>
-      </div>
-
-      {/* 4. THE GRAPH SVG (Section 4: Direct render of rows[], viewBox 0 0 900 320) */}
-      <div className="relative w-full bg-gradient-to-b from-[#F3F1EA]/40 to-white rounded-2xl border border-[#E4E0D3] p-2.5 sm:p-3 space-y-2">
-        {/* Mobile View Switcher & Timeline Hint */}
-        <div className="sm:hidden flex items-center justify-between px-1 text-xs text-[#5B625F]">
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-[#111413]/70">Timeline:</span>
-            <div className="inline-flex rounded-lg bg-[#F3F1EA] p-0.5 border border-[#E4E0D3]">
-              <button
-                type="button"
-                onClick={() => setMobileGraphView("detailed")}
-                className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
-                  mobileGraphView === "detailed"
-                    ? "bg-[#111413] text-[#D4F04F] shadow-xs"
-                    : "text-[#5B625F] hover:text-[#111413]"
-                }`}
-              >
-                Detailed (Swipe ↔)
-              </button>
-              <button
-                type="button"
-                onClick={() => setMobileGraphView("fit")}
-                className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
-                  mobileGraphView === "fit"
-                    ? "bg-[#111413] text-[#D4F04F] shadow-xs"
-                    : "text-[#5B625F] hover:text-[#111413]"
-                }`}
-              >
-                Fit Screen
-              </button>
+            <div className="flex items-center gap-1.5 pl-1">
+              <span className="text-[11px] font-semibold text-[#5B625F]">#</span>
+              <input
+                type="number"
+                min="1"
+                max="999"
+                value={templateInput}
+                onChange={(e) => {
+                  setTemplateInput(e.target.value);
+                  const num = parseInt(e.target.value, 10);
+                  if (!isNaN(num) && onSelectTemplate) onSelectTemplate(num);
+                }}
+                className="w-14 px-2 py-1 rounded-xl bg-[#FAF9F5] border border-[#E4E0D3] text-xs font-bold text-[#111413] text-center focus:outline-none focus:border-[#111413]"
+                title="Admin: Template seed index"
+              />
             </div>
-          </div>
-          {mobileGraphView === "detailed" && (
-            <span className="text-[10px] text-[#5E8C1F] font-bold flex items-center gap-0.5 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/80">
-              <span>↔</span> Swipe timeline
-            </span>
           )}
         </div>
+      </div>
 
-        {/* Scrollable Container on Mobile for Detailed, or Responsive Fit */}
+      {/* 2. COMPACT ACTIVE METRIC LEGEND (only included deliverables) */}
+      <div className="flex items-center flex-wrap gap-2 text-xs">
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#2F6B3A]/10 text-[#2F6B3A] font-semibold border border-[#2F6B3A]/20">
+          <span className="w-2 h-2 rounded-full bg-[#2F6B3A]" />
+          <span className="tabular-nums">{plan.totals.views.toLocaleString()}</span>
+          <span className="font-normal opacity-80">Views</span>
+        </span>
+
+        {plan.totals.likes > 0 && (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#FAF9F5] text-[#111413] font-semibold border border-[#E4E0D3]">
+            <span className="w-2 h-2 rounded-full bg-[#C4552D]" />
+            <span className="tabular-nums">{plan.totals.likes.toLocaleString()}</span>
+            <span className="font-normal text-[#5B625F]">Likes</span>
+          </span>
+        )}
+
+        {plan.totals.saves > 0 && (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#FAF9F5] text-[#111413] font-semibold border border-[#E4E0D3]">
+            <span className="w-2 h-2 rounded-full bg-[#E0A030]" />
+            <span className="tabular-nums">{plan.totals.saves.toLocaleString()}</span>
+            <span className="font-normal text-[#5B625F]">Saves</span>
+          </span>
+        )}
+
+        {plan.totals.reposts > 0 && (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#FAF9F5] text-[#111413] font-semibold border border-[#E4E0D3]">
+            <span className="w-2 h-2 rounded-full bg-[#2A9D8F]" />
+            <span className="tabular-nums">{plan.totals.reposts.toLocaleString()}</span>
+            <span className="font-normal text-[#5B625F]">Reposts</span>
+          </span>
+        )}
+
+        {plan.totals.shares > 0 && (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#FAF9F5] text-[#111413] font-semibold border border-[#E4E0D3]">
+            <span className="w-2 h-2 rounded-full bg-[#7C5CBF]" />
+            <span className="tabular-nums">{plan.totals.shares.toLocaleString()}</span>
+            <span className="font-normal text-[#5B625F]">Shares</span>
+          </span>
+        )}
+
+        {plan.totals.comments > 0 && (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#FAF9F5] text-[#111413] font-semibold border border-[#E4E0D3]">
+            <span className="w-2 h-2 rounded-full bg-[#3D82A2]" />
+            <span className="tabular-nums">{plan.totals.comments.toLocaleString()}</span>
+            <span className="font-normal text-[#5B625F]">Comments</span>
+          </span>
+        )}
+      </div>
+
+      {/* 3. INTERACTIVE GROWTH SVG */}
+      <div className="relative w-full bg-[#FAF9F5] rounded-2xl border border-[#E4E0D3] p-2.5 sm:p-4 space-y-2">
+        {/* Mobile View Switcher */}
+        <div className="sm:hidden flex items-center justify-between px-1 text-xs text-[#5B625F]">
+          <div className="inline-flex rounded-lg bg-[#F3F1EA] p-0.5 border border-[#E4E0D3]">
+            <button
+              type="button"
+              onClick={() => setMobileGraphView("fit")}
+              className={`px-2.5 py-0.5 rounded-md text-[10px] font-bold transition-colors cursor-pointer ${
+                mobileGraphView === "fit"
+                  ? "bg-[#111413] text-[#D4F04F]"
+                  : "text-[#5B625F]"
+              }`}
+            >
+              Fit Screen
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileGraphView("detailed")}
+              className={`px-2.5 py-0.5 rounded-md text-[10px] font-bold transition-colors cursor-pointer ${
+                mobileGraphView === "detailed"
+                  ? "bg-[#111413] text-[#D4F04F]"
+                  : "text-[#5B625F]"
+              }`}
+            >
+              Scroll Timeline
+            </button>
+          </div>
+          <span className="text-[10px] text-[#5B625F]">Tap curve to inspect</span>
+        </div>
+
         <div
           className={`w-full ${
             mobileGraphView === "detailed"
@@ -602,7 +545,7 @@ export function LiveOrganicGrowthPreview({
             viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
             className={`${
               mobileGraphView === "detailed"
-                ? "min-w-[650px] sm:min-w-0 w-full h-[225px] sm:h-72 touch-pan-x sm:touch-auto"
+                ? "min-w-[650px] sm:min-w-0 w-full h-[220px] sm:h-68 touch-pan-x sm:touch-auto"
                 : "w-full h-auto aspect-[900/320]"
             } cursor-crosshair font-sans overflow-visible select-none`}
             onPointerMove={handlePointerMove}
@@ -625,551 +568,379 @@ export function LiveOrganicGrowthPreview({
               setHoveredRowIndex(nearestIdx);
             }}
           >
-          <defs>
-            <linearGradient id="viewsGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#2F6B3A" stopOpacity="0.14" />
-              <stop offset="100%" stopColor="#2F6B3A" stopOpacity="0.01" />
-            </linearGradient>
+            <defs>
+              <linearGradient id="viewsGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#2F6B3A" stopOpacity="0.14" />
+                <stop offset="100%" stopColor="#2F6B3A" stopOpacity="0.01" />
+              </linearGradient>
 
-            <filter id="tooltipShadow" x="-20%" y="-20%" width="140%" height="140%">
-              <feDropShadow dx="0" dy="2" stdDeviation="4" floodOpacity="0.15" />
-            </filter>
-          </defs>
+              <filter id="tooltipShadow" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="4" stdDeviation="6" floodOpacity="0.12" />
+              </filter>
+            </defs>
 
-          {/* Left Y-Axis Horizontal Grid Lines (Views) */}
-          {leftYTicks.map((tick, i) => (
-            <g key={`ly-${i}`}>
-              <line
-                x1={padLeft}
-                y1={tick.y}
-                x2={padLeft + plotWidth}
-                y2={tick.y}
-                stroke="#E4E0D3"
-                strokeWidth="1"
-                strokeDasharray="3 3"
-              />
-              <text
-                x={padLeft - 8}
-                y={tick.y + 3.5}
-                textAnchor="end"
-                className="fill-[#5B625F] text-[10px] font-bold font-sans"
-              >
-                {tick.label}
-              </text>
-            </g>
-          ))}
-
-          {/* Right Y-Axis Grid Labels (Engagement) */}
-          {showEngagementOverlay &&
-            rightYTicks.map((tick, i) => (
-              <g key={`ry-${i}`}>
+            {/* Left Y-Axis Grid */}
+            {leftYTicks.map((tick, i) => (
+              <g key={`ly-${i}`}>
+                <line
+                  x1={padLeft}
+                  y1={tick.y}
+                  x2={padLeft + plotWidth}
+                  y2={tick.y}
+                  stroke="#E4E0D3"
+                  strokeWidth="1"
+                  strokeDasharray="3 3"
+                />
                 <text
-                  x={padLeft + plotWidth + 8}
+                  x={padLeft - 8}
                   y={tick.y + 3.5}
-                  textAnchor="start"
-                  className="fill-[#C4552D] text-[9.5px] font-mono font-bold"
+                  textAnchor="end"
+                  className="fill-[#5B625F] text-[10px] font-semibold font-sans"
                 >
                   {tick.label}
                 </text>
               </g>
             ))}
 
-          {/* Baseline Axis */}
-          <line
-            x1={padLeft}
-            y1={baselineY}
-            x2={padLeft + plotWidth}
-            y2={baselineY}
-            stroke="#E4E0D3"
-            strokeWidth="1.5"
-          />
+            {/* Right Y-Axis Grid Labels */}
+            {showEngagementOverlay &&
+              rightYTicks.map((tick, i) => (
+                <g key={`ry-${i}`}>
+                  <text
+                    x={padLeft + plotWidth + 8}
+                    y={tick.y + 3.5}
+                    textAnchor="start"
+                    className="fill-[#C4552D] text-[9.5px] font-mono font-semibold"
+                  >
+                    {tick.label}
+                  </text>
+                </g>
+              ))}
 
-          {/* Axis Labels */}
-          <text
-            x={padLeft - 8}
-            y={padTop - 12}
-            textAnchor="end"
-            className="fill-[#2F6B3A] text-[10px] font-black uppercase tracking-wider font-sans"
-          >
-            Views
-          </text>
-          {showEngagementOverlay && (
-            <text
-              x={padLeft + plotWidth + 8}
-              y={padTop - 12}
-              textAnchor="start"
-              className="fill-[#C4552D] text-[10px] font-black uppercase tracking-wider font-sans"
-            >
-              Engagement
-            </text>
-          )}
-
-          {/* A. FAINT CONTINUOUS TREND CURVE C(t) */}
-          {trendCurvePath && (
-            <path
-              d={trendCurvePath}
-              fill="none"
-              stroke="#D8D4C7"
+            {/* Baseline Axis */}
+            <line
+              x1={padLeft}
+              y1={baselineY}
+              x2={padLeft + plotWidth}
+              y2={baselineY}
+              stroke="#E4E0D3"
               strokeWidth="1.5"
-              strokeDasharray="2 2"
-              opacity="0.75"
             />
-          )}
 
-          {/* B. VIEWS AREA GRADIENT & CUMULATIVE LINE */}
-          {viewsAreaPath && <path d={viewsAreaPath} fill="url(#viewsGrad)" />}
-          {viewsLinePath && (
-            <path
-              d={viewsLinePath}
-              fill="none"
-              stroke="#2F6B3A"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          )}
-
-          {/* C. ENGAGEMENT SERIES DASHED LINES (overlay enabled) */}
-          {showEngagementOverlay && (
-            <>
-              {/* Reposts: #2A9D8F */}
-              {repostsPath && (
-                <path
-                  d={repostsPath}
-                  fill="none"
-                  stroke="#2A9D8F"
-                  strokeWidth="1.6"
-                  strokeDasharray="4 3"
-                />
-              )}
-              {/* Shares: #7C5CBF */}
-              {sharesPath && (
-                <path
-                  d={sharesPath}
-                  fill="none"
-                  stroke="#7C5CBF"
-                  strokeWidth="1.6"
-                  strokeDasharray="4 3"
-                />
-              )}
-              {/* Saves: #E0A030 */}
-              {savesPath && (
-                <path
-                  d={savesPath}
-                  fill="none"
-                  stroke="#E0A030"
-                  strokeWidth="1.6"
-                  strokeDasharray="4 3"
-                />
-              )}
-              {/* Comments: #3D82A2 */}
-              {commentsPath && (
-                <path
-                  d={commentsPath}
-                  fill="none"
-                  stroke="#3D82A2"
-                  strokeWidth="1.6"
-                  strokeDasharray="4 3"
-                />
-              )}
-              {/* Likes: #C4552D */}
-              {likesPath && (
-                <path
-                  d={likesPath}
-                  fill="none"
-                  stroke="#C4552D"
-                  strokeWidth="1.8"
-                  strokeDasharray="4 3"
-                />
-              )}
-            </>
-          )}
-
-          {/* D. BOTTOM BARS: view size of each batch at bottom */}
-          {plan.rows.map((r) => {
-            const bx = getX(r.minuteOffset) - 2;
-            const barHeight = Math.max(2, (r.views / peakViewBatch) * 36);
-            const by = baselineY - barHeight;
-            const isSelected = selectedRowIndex === r.index;
-            const isHovered = hoveredRowIndex === r.index;
-            const matchesFilter = isRowMatchingFilter(r);
-
-            return (
-              <rect
-                key={`bar-${r.index}`}
-                x={bx}
-                y={by}
-                width="4"
-                height={barHeight}
-                rx="1"
-                fill={
-                  isSelected
-                    ? "#111413"
-                    : isHovered
-                    ? "#2F6B3A"
-                    : "rgba(47, 107, 58, 0.38)"
-                }
-                opacity={matchesFilter ? 1 : 0.25}
-                className="transition-colors cursor-pointer"
-                onClick={() => setSelectedRowIndex(r.index)}
-                onMouseEnter={() => setHoveredRowIndex(r.index)}
-              />
-            );
-          })}
-
-          {/* E. BATCH DATA POINTS on Views Cumulative Line */}
-          {plan.rows.map((r) => {
-            const cx = getX(r.minuteOffset);
-            const cy = getYViews(r.cumulativeViews);
-            const isSelected = selectedRowIndex === r.index;
-            const isHovered = hoveredRowIndex === r.index;
-            const matchesFilter = isRowMatchingFilter(r);
-
-            let radius = 3.5;
-            let fill = "#2F6B3A";
-            let stroke = "#FFFFFF";
-            let strokeWidth = 1.5;
-
-            if (isSelected) {
-              radius = 6.5;
-              fill = "#D4F04F";
-              stroke = "#111413";
-              strokeWidth = 3;
-            } else if (isHovered) {
-              radius = 5.5;
-              fill = "#2F6B3A";
-              stroke = "#111413";
-              strokeWidth = 2;
-            }
-
-            return (
-              <circle
-                key={`pt-${r.index}`}
-                cx={cx}
-                cy={cy}
-                r={radius}
-                fill={fill}
-                stroke={stroke}
-                strokeWidth={strokeWidth}
-                opacity={matchesFilter ? 1 : 0.25}
-                className="cursor-pointer transition-transform"
-                onClick={() => setSelectedRowIndex(r.index)}
-                onMouseEnter={() => setHoveredRowIndex(r.index)}
-              />
-            );
-          })}
-
-          {/* F. BOTTOM TIME LABELS */}
-          {timeLabels.map((lbl, idx) => (
+            {/* Axis Labels */}
             <text
-              key={`time-${idx}`}
-              x={lbl.x}
-              y={baselineY + 18}
-              textAnchor="middle"
-              className="fill-[#5B625F] text-[9.5px] font-semibold font-sans"
+              x={padLeft - 8}
+              y={padTop - 12}
+              textAnchor="end"
+              className="fill-[#2F6B3A] text-[10px] font-bold uppercase tracking-wider font-sans"
             >
-              {lbl.text}
+              Views
             </text>
-          ))}
-
-          {/* G. INTERACTIVE CROSSHAIR & TOOLTIP */}
-          {activeRow && (
-            <g>
-              {/* Vertical Guide Line */}
-              <line
-                x1={getX(activeRow.minuteOffset)}
-                y1={padTop}
-                x2={getX(activeRow.minuteOffset)}
-                y2={baselineY}
-                stroke="#111413"
-                strokeWidth="1.2"
-                strokeDasharray="2 2"
-                opacity="0.75"
-              />
-
-              {/* Tooltip Card */}
-              <g
-                transform={`translate(${
-                  getX(activeRow.minuteOffset) > SVG_WIDTH - 200
-                    ? getX(activeRow.minuteOffset) - 185
-                    : getX(activeRow.minuteOffset) + 12
-                }, ${Math.max(
-                  padTop + 5,
-                  Math.min(baselineY - 145, getYViews(activeRow.cumulativeViews) - 60)
-                )})`}
-                filter="url(#tooltipShadow)"
+            {showEngagementOverlay && (
+              <text
+                x={padLeft + plotWidth + 8}
+                y={padTop - 12}
+                textAnchor="start"
+                className="fill-[#C4552D] text-[10px] font-bold uppercase tracking-wider font-sans"
               >
-                <rect
-                  width="175"
-                  height="138"
-                  rx="14"
-                  fill="#FFFFFF"
-                  stroke="#E4E0D3"
-                  strokeWidth="1.2"
-                />
-                <text
-                  x="12"
-                  y="18"
-                  className="fill-[#111413] text-[11px] font-black font-sans"
-                >
-                  Batch #{activeRow.index + 1} • +{activeRow.minuteOffset}m ({activeRow.clockTime} BD)
-                </text>
-                <line
-                  x1="12"
-                  y1="25"
-                  x2="163"
-                  y2="25"
-                  stroke="#E4E0D3"
-                  strokeWidth="1"
-                />
+                Signals
+              </text>
+            )}
 
-                {/* Views */}
-                <circle cx="16" cy="38" r="3" fill="#2F6B3A" />
-                <text x="24" y="41" className="fill-[#5B625F] text-[10px] font-semibold font-sans">
-                  Views Batch
-                </text>
-                <text
-                  x="163"
-                  y="41"
-                  textAnchor="end"
-                  className="fill-[#2F6B3A] text-[10px] font-bold font-sans"
-                >
-                  {activeRow.views.toLocaleString()} (+{activeRow.cumulativeViews.toLocaleString()})
-                </text>
+            {/* Continuous Trend Curve */}
+            {trendCurvePath && (
+              <path
+                d={trendCurvePath}
+                fill="none"
+                stroke="#D8D4C7"
+                strokeWidth="1.5"
+                strokeDasharray="2 2"
+                opacity="0.7"
+              />
+            )}
 
-                {/* Likes */}
-                <circle cx="16" cy="56" r="3" fill="#C4552D" />
-                <text x="24" y="59" className="fill-[#5B625F] text-[10px] font-semibold font-sans">
-                  Likes
-                </text>
-                <text
-                  x="163"
-                  y="59"
-                  textAnchor="end"
-                  className={`text-[10px] font-bold font-sans ${
-                    activeRow.likes > 0 ? "fill-[#C4552D]" : "fill-[#5B625F]/40"
-                  }`}
-                >
-                  {activeRow.likes > 0
-                    ? `${activeRow.likes} (cum ${activeRow.cumulativeLikes})`
-                    : "—"}
-                </text>
+            {/* Views Area & Line */}
+            {viewsAreaPath && <path d={viewsAreaPath} fill="url(#viewsGrad)" />}
+            {viewsLinePath && (
+              <path
+                d={viewsLinePath}
+                fill="none"
+                stroke="#2F6B3A"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            )}
 
-                {/* Saves */}
-                <circle cx="16" cy="74" r="3" fill="#E0A030" />
-                <text x="24" y="77" className="fill-[#5B625F] text-[10px] font-semibold font-sans">
-                  Saves
-                </text>
-                <text
-                  x="163"
-                  y="77"
-                  textAnchor="end"
-                  className={`text-[10px] font-bold font-sans ${
-                    activeRow.saves > 0 ? "fill-[#E0A030]" : "fill-[#5B625F]/40"
-                  }`}
-                >
-                  {activeRow.saves > 0
-                    ? `${activeRow.saves} (cum ${activeRow.cumulativeSaves})`
-                    : "—"}
-                </text>
-
-                {/* Reposts */}
-                <circle cx="16" cy="92" r="3" fill="#2A9D8F" />
-                <text x="24" y="95" className="fill-[#5B625F] text-[10px] font-semibold font-sans">
-                  Reposts
-                </text>
-                <text
-                  x="163"
-                  y="95"
-                  textAnchor="end"
-                  className={`text-[10px] font-bold font-sans ${
-                    activeRow.reposts > 0 ? "fill-[#2A9D8F]" : "fill-[#5B625F]/40"
-                  }`}
-                >
-                  {activeRow.reposts > 0
-                    ? `${activeRow.reposts} (cum ${activeRow.cumulativeReposts})`
-                    : "—"}
-                </text>
-
-                {/* Shares */}
-                <circle cx="16" cy="110" r="3" fill="#7C5CBF" />
-                <text x="24" y="113" className="fill-[#5B625F] text-[10px] font-semibold font-sans">
-                  Shares
-                </text>
-                <text
-                  x="163"
-                  y="113"
-                  textAnchor="end"
-                  className={`text-[10px] font-bold font-sans ${
-                    activeRow.shares > 0 ? "fill-[#7C5CBF]" : "fill-[#5B625F]/40"
-                  }`}
-                >
-                  {activeRow.shares > 0
-                    ? `${activeRow.shares} (cum ${activeRow.cumulativeShares})`
-                    : "—"}
-                </text>
-
-                {/* Comments (if any) */}
-                {plan.totals.comments > 0 && (
-                  <>
-                    <circle cx="16" cy="126" r="3" fill="#3D82A2" />
-                    <text x="24" y="129" className="fill-[#5B625F] text-[9px] font-semibold font-sans">
-                      Comments
-                    </text>
-                    <text
-                      x="163"
-                      y="129"
-                      textAnchor="end"
-                      className={`text-[9px] font-bold font-sans ${
-                        activeRow.comments > 0 ? "fill-[#3D82A2]" : "fill-[#5B625F]/40"
-                      }`}
-                    >
-                      {activeRow.comments > 0
-                        ? `${activeRow.comments} (cum ${activeRow.cumulativeComments})`
-                        : "—"}
-                    </text>
-                  </>
+            {/* Secondary Signal Curves */}
+            {showEngagementOverlay && (
+              <>
+                {repostsPath && (
+                  <path d={repostsPath} fill="none" stroke="#2A9D8F" strokeWidth="1.5" strokeDasharray="4 3" />
                 )}
+                {sharesPath && (
+                  <path d={sharesPath} fill="none" stroke="#7C5CBF" strokeWidth="1.5" strokeDasharray="4 3" />
+                )}
+                {savesPath && (
+                  <path d={savesPath} fill="none" stroke="#E0A030" strokeWidth="1.5" strokeDasharray="4 3" />
+                )}
+                {commentsPath && (
+                  <path d={commentsPath} fill="none" stroke="#3D82A2" strokeWidth="1.5" strokeDasharray="4 3" />
+                )}
+                {likesPath && (
+                  <path d={likesPath} fill="none" stroke="#C4552D" strokeWidth="1.75" strokeDasharray="4 3" />
+                )}
+              </>
+            )}
+
+            {/* Bottom Micro-Batch Bars */}
+            {plan.rows.map((r) => {
+              const bx = getX(r.minuteOffset) - 2;
+              const barHeight = Math.max(2, (r.views / peakViewBatch) * 32);
+              const by = baselineY - barHeight;
+              const isSelected = selectedRowIndex === r.index;
+              const isHovered = hoveredRowIndex === r.index;
+              const matchesFilter = isRowMatchingFilter(r);
+
+              return (
+                <rect
+                  key={`bar-${r.index}`}
+                  x={bx}
+                  y={by}
+                  width="4"
+                  height={barHeight}
+                  rx="1.5"
+                  fill={
+                    isSelected
+                      ? "#111413"
+                      : isHovered
+                      ? "#2F6B3A"
+                      : "rgba(47, 107, 58, 0.28)"
+                  }
+                  opacity={matchesFilter ? 1 : 0.25}
+                  className="transition-colors cursor-pointer"
+                  onClick={() => setSelectedRowIndex(r.index)}
+                  onMouseEnter={() => setHoveredRowIndex(r.index)}
+                />
+              );
+            })}
+
+            {/* Batch Data Points */}
+            {plan.rows.map((r) => {
+              const cx = getX(r.minuteOffset);
+              const cy = getYViews(r.cumulativeViews);
+              const isSelected = selectedRowIndex === r.index;
+              const isHovered = hoveredRowIndex === r.index;
+              const matchesFilter = isRowMatchingFilter(r);
+
+              let radius = 3;
+              let fill = "#2F6B3A";
+              let stroke = "#FFFFFF";
+              let strokeWidth = 1.5;
+
+              if (isSelected) {
+                radius = 6;
+                fill = "#D4F04F";
+                stroke = "#111413";
+                strokeWidth = 2.5;
+              } else if (isHovered) {
+                radius = 5;
+                fill = "#2F6B3A";
+                stroke = "#111413";
+                strokeWidth = 2;
+              }
+
+              return (
+                <circle
+                  key={`pt-${r.index}`}
+                  cx={cx}
+                  cy={cy}
+                  r={radius}
+                  fill={fill}
+                  stroke={stroke}
+                  strokeWidth={strokeWidth}
+                  opacity={matchesFilter ? 1 : 0.25}
+                  className="cursor-pointer"
+                  onClick={() => setSelectedRowIndex(r.index)}
+                  onMouseEnter={() => setHoveredRowIndex(r.index)}
+                />
+              );
+            })}
+
+            {/* Time Axis Labels */}
+            {timeLabels.map((lbl, idx) => (
+              <text
+                key={`time-${idx}`}
+                x={lbl.x}
+                y={baselineY + 18}
+                textAnchor="middle"
+                className="fill-[#5B625F] text-[9.5px] font-semibold font-sans"
+              >
+                {lbl.text}
+              </text>
+            ))}
+
+            {/* Hover / Selected Tooltip */}
+            {activeRow && (
+              <g>
+                <line
+                  x1={getX(activeRow.minuteOffset)}
+                  y1={padTop}
+                  x2={getX(activeRow.minuteOffset)}
+                  y2={baselineY}
+                  stroke="#111413"
+                  strokeWidth="1.2"
+                  strokeDasharray="2 2"
+                  opacity="0.65"
+                />
+
+                <g
+                  transform={`translate(${
+                    getX(activeRow.minuteOffset) > SVG_WIDTH - 200
+                      ? getX(activeRow.minuteOffset) - 185
+                      : getX(activeRow.minuteOffset) + 12
+                  }, ${Math.max(
+                    padTop + 5,
+                    Math.min(baselineY - 145, getYViews(activeRow.cumulativeViews) - 60)
+                  )})`}
+                  filter="url(#tooltipShadow)"
+                >
+                  <rect
+                    width="175"
+                    height={plan.totals.comments > 0 ? 138 : 122}
+                    rx="12"
+                    fill="#FFFFFF"
+                    stroke="#E4E0D3"
+                    strokeWidth="1.2"
+                  />
+                  <text x="12" y="18" className="fill-[#111413] text-[10.5px] font-bold font-sans">
+                    Batch #{activeRow.index + 1} • {activeRow.clockTime} BD
+                  </text>
+                  <line x1="12" y1="25" x2="163" y2="25" stroke="#E4E0D3" strokeWidth="1" />
+
+                  <circle cx="16" cy="38" r="3" fill="#2F6B3A" />
+                  <text x="24" y="41" className="fill-[#5B625F] text-[10px] font-medium font-sans">Views</text>
+                  <text x="163" y="41" textAnchor="end" className="fill-[#2F6B3A] text-[10px] font-bold font-sans">
+                    +{activeRow.views.toLocaleString()} ({activeRow.cumulativeViews.toLocaleString()})
+                  </text>
+
+                  <circle cx="16" cy="56" r="3" fill="#C4552D" />
+                  <text x="24" y="59" className="fill-[#5B625F] text-[10px] font-medium font-sans">Likes</text>
+                  <text x="163" y="59" textAnchor="end" className={`text-[10px] font-bold font-sans ${activeRow.likes > 0 ? "fill-[#C4552D]" : "fill-[#5B625F]/40"}`}>
+                    {activeRow.likes > 0 ? `+${activeRow.likes} (${activeRow.cumulativeLikes})` : "—"}
+                  </text>
+
+                  <circle cx="16" cy="74" r="3" fill="#E0A030" />
+                  <text x="24" y="77" className="fill-[#5B625F] text-[10px] font-medium font-sans">Saves</text>
+                  <text x="163" y="77" textAnchor="end" className={`text-[10px] font-bold font-sans ${activeRow.saves > 0 ? "fill-[#E0A030]" : "fill-[#5B625F]/40"}`}>
+                    {activeRow.saves > 0 ? `+${activeRow.saves} (${activeRow.cumulativeSaves})` : "—"}
+                  </text>
+
+                  <circle cx="16" cy="92" r="3" fill="#2A9D8F" />
+                  <text x="24" y="95" className="fill-[#5B625F] text-[10px] font-medium font-sans">Reposts</text>
+                  <text x="163" y="95" textAnchor="end" className={`text-[10px] font-bold font-sans ${activeRow.reposts > 0 ? "fill-[#2A9D8F]" : "fill-[#5B625F]/40"}`}>
+                    {activeRow.reposts > 0 ? `+${activeRow.reposts} (${activeRow.cumulativeReposts})` : "—"}
+                  </text>
+
+                  <circle cx="16" cy="110" r="3" fill="#7C5CBF" />
+                  <text x="24" y="113" className="fill-[#5B625F] text-[10px] font-medium font-sans">Shares</text>
+                  <text x="163" y="113" textAnchor="end" className={`text-[10px] font-bold font-sans ${activeRow.shares > 0 ? "fill-[#7C5CBF]" : "fill-[#5B625F]/40"}`}>
+                    {activeRow.shares > 0 ? `+${activeRow.shares} (${activeRow.cumulativeShares})` : "—"}
+                  </text>
+
+                  {plan.totals.comments > 0 && (
+                    <>
+                      <circle cx="16" cy="126" r="3" fill="#3D82A2" />
+                      <text x="24" y="129" className="fill-[#5B625F] text-[9.5px] font-medium font-sans">Comments</text>
+                      <text x="163" y="129" textAnchor="end" className={`text-[9.5px] font-bold font-sans ${activeRow.comments > 0 ? "fill-[#3D82A2]" : "fill-[#5B625F]/40"}`}>
+                        {activeRow.comments > 0 ? `+${activeRow.comments} (${activeRow.cumulativeComments})` : "—"}
+                      </text>
+                    </>
+                  )}
+                </g>
               </g>
-            </g>
-          )}
-        </svg>
+            )}
+          </svg>
         </div>
       </div>
 
-      {/* 5. VIEW SCHEDULE BUTTON & COLLAPSIBLE PANEL */}
-      <div className="flex items-center justify-between pt-1">
+      {/* 4. COLLAPSIBLE BATCH TABLE & CSV EXPORT */}
+      <div className="flex items-center justify-between pt-0.5">
         <button
           type="button"
           onClick={() => setShowScheduleModal(!showScheduleModal)}
-          className="px-3.5 py-2 rounded-xl bg-white hover:bg-[#F3F1EA] border border-[#E4E0D3] text-xs font-bold text-[#111413] flex items-center gap-2 shadow-2xs transition-all press-scale cursor-pointer"
+          className="px-3 py-1.5 rounded-xl bg-[#FAF9F5] hover:bg-[#F3F1EA] border border-[#E4E0D3] text-xs font-semibold text-[#111413] flex items-center gap-2 transition-colors cursor-pointer"
         >
           <Layers className="w-3.5 h-3.5 text-[#5E8C1F]" />
-          <span>Batch Schedule ({plan.rows.length} Rows)</span>
+          <span>Inspect Schedule ({plan.rows.length} batches)</span>
           {showScheduleModal ? (
-            <ChevronUp className="w-3.5 h-3.5" />
+            <ChevronUp className="w-3.5 h-3.5 text-[#5B625F]" />
           ) : (
-            <ChevronDown className="w-3.5 h-3.5" />
+            <ChevronDown className="w-3.5 h-3.5 text-[#5B625F]" />
           )}
         </button>
 
         <button
           type="button"
           onClick={handleDownloadCsv}
-          className="px-3.5 py-2 rounded-xl bg-white hover:bg-[#F3F1EA] border border-[#E4E0D3] text-xs font-bold text-[#111413] flex items-center gap-1.5 shadow-2xs hover:border-[#111413]/40 transition-all press-scale cursor-pointer"
-          title="Download schedule CSV with exact row data"
+          className="px-3 py-1.5 rounded-xl bg-[#FAF9F5] hover:bg-[#F3F1EA] border border-[#E4E0D3] text-xs font-semibold text-[#5B625F] hover:text-[#111413] flex items-center gap-1.5 transition-colors cursor-pointer"
+          title="Export delivery schedule CSV"
         >
-          <Download className="w-3.5 h-3.5 text-[#5B625F]" />
-          <span>Download CSV</span>
+          <Download className="w-3.5 h-3.5" />
+          <span>CSV</span>
         </button>
       </div>
 
-      {/* 6. THE BATCH TABLE (Section 5: Scrollable table rendered directly from rows[]) */}
       {showScheduleModal && (
-        <div className="p-4 rounded-2xl bg-[#F3F1EA]/50 border border-[#E4E0D3] space-y-3 animate-fadeIn font-sans">
-          {/* Filter Pills */}
+        <div className="p-3.5 rounded-2xl bg-[#FAF9F5] border border-[#E4E0D3] space-y-3 animate-fadeIn font-sans">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[11px] font-bold text-[#5B625F] mr-1 flex items-center gap-1">
+            <span className="text-[11px] font-semibold text-[#5B625F] mr-1 flex items-center gap-1">
               <Filter className="w-3 h-3" /> Filter:
             </span>
-            <button
-              type="button"
-              onClick={() => setFilterType("ALL")}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-                filterType === "ALL"
-                  ? "bg-[#111413] text-[#D4F04F] shadow-2xs"
-                  : "bg-white text-[#5B625F] border border-[#E4E0D3] hover:bg-[#F3F1EA]"
-              }`}
-            >
-              All ({countsByFilter.all})
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilterType("VIEWS_ONLY")}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-                filterType === "VIEWS_ONLY"
-                  ? "bg-[#111413] text-[#D4F04F] shadow-2xs"
-                  : "bg-white text-[#5B625F] border border-[#E4E0D3] hover:bg-[#F3F1EA]"
-              }`}
-            >
-              Views only ({countsByFilter.viewsOnly})
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilterType("LIKES")}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-                filterType === "LIKES"
-                  ? "bg-[#111413] text-[#D4F04F] shadow-2xs"
-                  : "bg-white text-[#5B625F] border border-[#E4E0D3] hover:bg-[#F3F1EA]"
-              }`}
-            >
-              With Likes ({countsByFilter.likes})
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilterType("SAVES")}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-                filterType === "SAVES"
-                  ? "bg-[#111413] text-[#D4F04F] shadow-2xs"
-                  : "bg-white text-[#5B625F] border border-[#E4E0D3] hover:bg-[#F3F1EA]"
-              }`}
-            >
-              With Saves ({countsByFilter.saves})
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilterType("REPOSTS")}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-                filterType === "REPOSTS"
-                  ? "bg-[#111413] text-[#D4F04F] shadow-2xs"
-                  : "bg-white text-[#5B625F] border border-[#E4E0D3] hover:bg-[#F3F1EA]"
-              }`}
-            >
-              With Reposts ({countsByFilter.reposts})
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilterType("SHARES")}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-                filterType === "SHARES"
-                  ? "bg-[#111413] text-[#D4F04F] shadow-2xs"
-                  : "bg-white text-[#5B625F] border border-[#E4E0D3] hover:bg-[#F3F1EA]"
-              }`}
-            >
-              With Shares ({countsByFilter.shares})
-            </button>
-            {plan.totals.comments > 0 && (
+            {(
+              [
+                ["ALL", `All (${countsByFilter.all})`],
+                ["VIEWS_ONLY", `Views only (${countsByFilter.viewsOnly})`],
+                ["LIKES", `Likes (${countsByFilter.likes})`],
+                ["SAVES", `Saves (${countsByFilter.saves})`],
+                ["REPOSTS", `Reposts (${countsByFilter.reposts})`],
+                ["SHARES", `Shares (${countsByFilter.shares})`],
+                ...(plan.totals.comments > 0
+                  ? [["COMMENTS", `Comments (${countsByFilter.comments})`] as const]
+                  : []),
+              ] as const
+            ).map(([key, label]) => (
               <button
+                key={key}
                 type="button"
-                onClick={() => setFilterType("COMMENTS")}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-                  filterType === "COMMENTS"
-                    ? "bg-[#111413] text-[#D4F04F] shadow-2xs"
-                    : "bg-white text-[#5B625F] border border-[#E4E0D3] hover:bg-[#F3F1EA]"
+                onClick={() => setFilterType(key)}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer ${
+                  filterType === key
+                    ? "bg-[#111413] text-[#D4F04F]"
+                    : "bg-white text-[#5B625F] border border-[#E4E0D3] hover:text-[#111413]"
                 }`}
               >
-                With Comments ({countsByFilter.comments})
+                {label}
               </button>
-            )}
+            ))}
           </div>
 
-          {/* Table Container */}
-          <div className="max-h-72 overflow-y-auto rounded-xl border border-[#E4E0D3] bg-white">
+          <div className="max-h-64 overflow-y-auto rounded-xl border border-[#E4E0D3] bg-white">
             <table className="w-full text-left text-xs font-sans border-collapse">
-              <thead className="bg-[#F3F1EA] text-[#5B625F] sticky top-0 z-10 border-b border-[#E4E0D3] text-[11px] uppercase tracking-wider font-bold">
+              <thead className="bg-[#F3F1EA] text-[#5B625F] sticky top-0 z-10 border-b border-[#E4E0D3] text-[10.5px] uppercase tracking-wider font-bold">
                 <tr>
-                  <th className="py-2.5 px-3 w-12 text-center">#</th>
-                  <th className="py-2.5 px-3">Offset</th>
-                  <th className="py-2.5 px-3">Clock Time (BD)</th>
-                  <th className="py-2.5 px-3 text-right">Views</th>
-                  <th className="py-2.5 px-3 text-right">Likes</th>
-                  <th className="py-2.5 px-3 text-right">Saves</th>
-                  <th className="py-2.5 px-3 text-right">Reposts</th>
-                  <th className="py-2.5 px-3 text-right">Shares</th>
-                  <th className="py-2.5 px-3 text-right">Comments</th>
+                  <th className="py-2 px-3 w-12 text-center">#</th>
+                  <th className="py-2 px-3">Offset</th>
+                  <th className="py-2 px-3">Time (BD)</th>
+                  <th className="py-2 px-3 text-right">Views</th>
+                  <th className="py-2 px-3 text-right">Likes</th>
+                  <th className="py-2 px-3 text-right">Saves</th>
+                  <th className="py-2 px-3 text-right">Reposts</th>
+                  <th className="py-2 px-3 text-right">Shares</th>
+                  <th className="py-2 px-3 text-right">Comments</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#E4E0D3]/60">
+              <tbody className="divide-y divide-[#E4E0D3]/60 tabular-nums">
                 {filteredRows.map((r) => {
                   const isSelected = selectedRowIndex === r.index;
                   const isHovered = hoveredRowIndex === r.index;
@@ -1182,68 +953,38 @@ export function LiveOrganicGrowthPreview({
                       onMouseLeave={() => setHoveredRowIndex(null)}
                       className={`cursor-pointer transition-colors ${
                         isSelected
-                          ? "bg-[#D4F04F]/20 font-bold border-l-4 border-l-[#111413]"
+                          ? "bg-[#D4F04F]/20 font-semibold border-l-4 border-l-[#111413]"
                           : isHovered
                           ? "bg-[#F3F1EA]"
-                          : "hover:bg-[#F3F1EA]/60"
+                          : "hover:bg-[#FAF9F5]"
                       }`}
                     >
                       <td className="py-2 px-3 text-center font-mono text-[11px] text-[#5B625F]">
-                        #{r.index + 1}
+                        {r.index + 1}
                       </td>
-                      <td className="py-2 px-3 font-semibold text-[#111413]">
+                      <td className="py-2 px-3 font-medium text-[#111413]">
                         +{r.minuteOffset}m
                       </td>
                       <td className="py-2 px-3 font-mono text-[11px] text-[#5B625F]">
                         {r.clockTime}
                       </td>
-                      <td className="py-2 px-3 text-right font-bold text-[#2F6B3A]">
+                      <td className="py-2 px-3 text-right font-semibold text-[#2F6B3A]">
                         {r.views.toLocaleString()}
                       </td>
-                      <td className="py-2 px-3 text-right font-medium">
-                        {r.likes > 0 ? (
-                          <span className="text-[#C4552D] font-bold font-mono">
-                            {r.likes.toLocaleString()}
-                          </span>
-                        ) : (
-                          <span className="text-[#5B625F]/40 font-mono">-</span>
-                        )}
+                      <td className="py-2 px-3 text-right font-mono">
+                        {r.likes > 0 ? <span className="text-[#C4552D] font-semibold">{r.likes}</span> : <span className="text-[#5B625F]/40">—</span>}
                       </td>
-                      <td className="py-2 px-3 text-right font-medium">
-                        {r.saves > 0 ? (
-                          <span className="text-[#E0A030] font-bold font-mono">
-                            {r.saves.toLocaleString()}
-                          </span>
-                        ) : (
-                          <span className="text-[#5B625F]/40 font-mono">-</span>
-                        )}
+                      <td className="py-2 px-3 text-right font-mono">
+                        {r.saves > 0 ? <span className="text-[#E0A030] font-semibold">{r.saves}</span> : <span className="text-[#5B625F]/40">—</span>}
                       </td>
-                      <td className="py-2 px-3 text-right font-medium">
-                        {r.reposts > 0 ? (
-                          <span className="text-[#2A9D8F] font-bold font-mono">
-                            {r.reposts.toLocaleString()}
-                          </span>
-                        ) : (
-                          <span className="text-[#5B625F]/40 font-mono">-</span>
-                        )}
+                      <td className="py-2 px-3 text-right font-mono">
+                        {r.reposts > 0 ? <span className="text-[#2A9D8F] font-semibold">{r.reposts}</span> : <span className="text-[#5B625F]/40">—</span>}
                       </td>
-                      <td className="py-2 px-3 text-right font-medium">
-                        {r.shares > 0 ? (
-                          <span className="text-[#7C5CBF] font-bold font-mono">
-                            {r.shares.toLocaleString()}
-                          </span>
-                        ) : (
-                          <span className="text-[#5B625F]/40 font-mono">-</span>
-                        )}
+                      <td className="py-2 px-3 text-right font-mono">
+                        {r.shares > 0 ? <span className="text-[#7C5CBF] font-semibold">{r.shares}</span> : <span className="text-[#5B625F]/40">—</span>}
                       </td>
-                      <td className="py-2 px-3 text-right font-medium">
-                        {r.comments > 0 ? (
-                          <span className="text-[#3D82A2] font-bold font-mono">
-                            {r.comments.toLocaleString()}
-                          </span>
-                        ) : (
-                          <span className="text-[#5B625F]/40 font-mono">-</span>
-                        )}
+                      <td className="py-2 px-3 text-right font-mono">
+                        {r.comments > 0 ? <span className="text-[#3D82A2] font-semibold">{r.comments}</span> : <span className="text-[#5B625F]/40">—</span>}
                       </td>
                     </tr>
                   );
@@ -1252,12 +993,10 @@ export function LiveOrganicGrowthPreview({
             </table>
           </div>
 
-          <div className="flex items-center justify-between text-[11px] text-[#5B625F] pt-1">
-            <span>
-              Click any row to pinpoint its batch in the graph above. Hovering shows live sync.
-            </span>
-            <span className="font-mono font-bold">
-              {filteredRows.length} of {plan.rows.length} rows displayed
+          <div className="flex items-center justify-between text-[11px] text-[#5B625F]">
+            <span>Click any batch row to highlight it on the curve.</span>
+            <span className="font-mono font-semibold">
+              {filteredRows.length} / {plan.rows.length} shown
             </span>
           </div>
         </div>
