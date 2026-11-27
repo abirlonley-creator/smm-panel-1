@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 const patchUserSchema = z.object({
   username: z.string().min(2).max(40).optional(),
   name: z.string().min(2).max(60).optional(),
+  role: z.enum(["USER", "ADMIN"]).optional(),
   status: z.enum(["ACTIVE", "DISABLED", "REVOKED", "EXPIRED"]).optional(),
   walletBalance: z.number().min(0).optional(),
   adjustmentNote: z.string().optional(),
@@ -162,7 +163,18 @@ export async function PATCH(
       updates.username = cleanUsername;
     }
 
-    // 2. Status update
+    // 2. Role update (preserves balance, display name, and username)
+    if (parsed.role && parsed.role !== existingUser.role) {
+      if (parsed.role === "USER" && session.user?.id === userId) {
+        return NextResponse.json(
+          { success: false, error: "You cannot demote your own currently active admin account." },
+          { status: 400 }
+        );
+      }
+      updates.role = parsed.role;
+    }
+
+    // 3. Status update
     if (parsed.status) {
       updates.status = parsed.status;
     }
@@ -189,6 +201,27 @@ export async function PATCH(
       where: { id: userId },
       data: updates,
     });
+
+    // Keep passkey roles synced when role changes (without altering label/name)
+    if (parsed.role && parsed.role !== existingUser.role) {
+      await prisma.passkey.updateMany({
+        where: { userId },
+        data: { role: parsed.role },
+      });
+      await prisma.auditLog.create({
+        data: {
+          action: "USER_ROLE_UPDATED",
+          actor: session.label || session.user?.username || "admin",
+          userId,
+          details: JSON.stringify({
+            username: updatedUser.username,
+            fromRole: existingUser.role,
+            toRole: parsed.role,
+            walletBalance: updatedUser.walletBalance,
+          }),
+        },
+      }).catch(() => {});
+    }
 
     // 4. Update Name in Passkey if provided
     if (parsed.name && parsed.name.trim()) {

@@ -137,10 +137,12 @@ export function UsersLiveActivityTab() {
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
   const [editName, setEditName] = useState<string>("");
   const [editUsername, setEditUsername] = useState<string>("");
+  const [editRole, setEditRole] = useState<"USER" | "ADMIN">("USER");
   const [editBalance, setEditBalance] = useState<string>("");
   const [editNote, setEditNote] = useState<string>("");
   const [savingEdit, setSavingEdit] = useState<boolean>(false);
   const [editError, setEditError] = useState<string | null>(null);
+  const [updatingRoleId, setUpdatingRoleId] = useState<string | null>(null);
 
   // Copy feedback
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -203,9 +205,32 @@ export function UsersLiveActivityTab() {
     setEditingUser(user);
     setEditName(user.name);
     setEditUsername(user.username);
+    setEditRole(user.role === "ADMIN" ? "ADMIN" : "USER");
     setEditBalance(user.walletBalance.toString());
     setEditNote("");
     setEditError(null);
+  }
+
+  async function handleQuickToggleRole(user: UserProfile) {
+    const nextRole: "USER" | "ADMIN" = user.role === "ADMIN" ? "USER" : "ADMIN";
+    setUpdatingRoleId(user.id);
+    setLoadError(null);
+    try {
+      const res = await fetch(`/api/admin/users/${user.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: nextRole }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to update role");
+      }
+      await loadUsers();
+    } catch (err: any) {
+      setLoadError(err?.message || "Failed to update user role");
+    } finally {
+      setUpdatingRoleId(null);
+    }
   }
 
   async function handleSaveEdit(e: React.FormEvent) {
@@ -221,6 +246,7 @@ export function UsersLiveActivityTab() {
         body: JSON.stringify({
           name: editName.trim() || undefined,
           username: editUsername.trim() || undefined,
+          role: editRole,
           walletBalance: editBalance !== "" ? Number(editBalance) : undefined,
           adjustmentNote: editNote.trim() || undefined,
         }),
@@ -427,7 +453,13 @@ export function UsersLiveActivityTab() {
                   <div className="flex items-center gap-2">
                     <h2 className="text-sm font-bold text-[#252943]">{selectedUser.name}</h2>
                     <span className="text-xs text-[#252943]/50 font-mono">@{selectedUser.username}</span>
-                    <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-gray-100 text-gray-700">
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        selectedUser.role === "ADMIN"
+                          ? "bg-[#111413] text-[#D4F04F]"
+                          : "bg-gray-100 text-gray-700"
+                      }`}
+                    >
                       {selectedUser.role}
                     </span>
                   </div>
@@ -441,14 +473,33 @@ export function UsersLiveActivityTab() {
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => handleOpenEdit(selectedUser)}
-                className="px-3 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-xs font-semibold text-gray-800 flex items-center gap-1.5 self-start sm:self-auto"
-              >
-                <Edit3 className="w-3 h-3" />
-                <span>Edit Profile</span>
-              </button>
+              <div className="flex items-center gap-2 self-start sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => handleQuickToggleRole(selectedUser)}
+                  disabled={updatingRoleId === selectedUser.id}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 ${
+                    selectedUser.role === "ADMIN"
+                      ? "bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200"
+                      : "bg-[#111413] hover:bg-[#1B201E] text-[#D4F04F]"
+                  }`}
+                  title="Change role while keeping current name, username, and wallet balance unchanged"
+                >
+                  {updatingRoleId === selectedUser.id
+                    ? "Updating..."
+                    : selectedUser.role === "ADMIN"
+                    ? "Demote to User"
+                    : "Promote to Admin"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleOpenEdit(selectedUser)}
+                  className="px-3 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-xs font-semibold text-gray-800 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Edit3 className="w-3 h-3" />
+                  <span>Edit Profile</span>
+                </button>
+              </div>
             </div>
 
             {/* Quick Stats Row */}
@@ -868,6 +919,31 @@ export function UsersLiveActivityTab() {
                   onChange={(e) => setEditUsername(e.target.value)}
                   className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3 py-2 text-xs font-mono font-semibold text-gray-800 outline-none"
                 />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-700 mb-1">Account Role</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(["USER", "ADMIN"] as const).map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setEditRole(r)}
+                      className={`py-2 px-3 rounded-xl border text-xs font-bold transition-colors cursor-pointer ${
+                        editRole === r
+                          ? r === "ADMIN"
+                            ? "bg-[#111413] border-[#111413] text-[#D4F04F]"
+                            : "bg-[#252943] border-[#252943] text-white"
+                          : "bg-[#F8F9FD] border-[#DEE0ED] text-gray-600 hover:text-gray-900"
+                      }`}
+                    >
+                      {r === "ADMIN" ? "ADMIN" : "USER"}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] text-gray-500 mt-1">
+                  Role changes preserve their name, username, and wallet balance.
+                </p>
               </div>
 
               <div>
