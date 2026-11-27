@@ -1,11 +1,35 @@
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/auth/session";
-import { verifyAndConsumeApproval } from "@/lib/security/telegram";
+import { getApprovalStatus, verifyAndConsumeApproval } from "@/lib/security/telegram";
 import { z } from "zod";
 
 const verifyApprovalSchema = z.object({
   approvalId: z.string().min(1),
 });
+
+export async function GET(request: Request) {
+  const adminSession = await getAdminSession(request);
+  if (!adminSession.authenticated || adminSession.role !== "ADMIN") {
+    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const approvalId = searchParams.get("approvalId") || "";
+  if (!approvalId) {
+    return NextResponse.json({ success: false, error: "approvalId is required" }, { status: 400 });
+  }
+
+  const record = await getApprovalStatus(approvalId);
+  if (!record) {
+    return NextResponse.json({ success: true, status: "EXPIRED" });
+  }
+
+  return NextResponse.json({
+    success: true,
+    status: record.status,
+    decidedBy: record.decidedBy || null,
+  });
+}
 
 export async function POST(request: Request) {
   const adminSession = await getAdminSession(request);

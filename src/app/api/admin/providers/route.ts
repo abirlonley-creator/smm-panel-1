@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/auth/session";
+import { requireAdminPermission } from "@/lib/auth/admin-permissions";
 import { prisma } from "@/lib/prisma";
 import { encryptApiKey, maskApiKey } from "@/lib/security/crypto";
 import { validateProviderEndpointUrl } from "@/lib/security/ssrf";
@@ -89,9 +90,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const session = await getAdminSession(request);
-  if (!session.authenticated) {
-    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  const perm = await requireAdminPermission(request, "MASTER_ONLY");
+  if (!perm.allowed) {
+    return NextResponse.json({ success: false, error: perm.error }, { status: perm.status });
   }
 
   try {

@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { getAdminSession } from "@/lib/auth/session";
+import { requireAdminPermission } from "@/lib/auth/admin-permissions";
+import {
+  createRateChangeApprovalRequest,
+  verifyAndConsumeTelegramApproved,
+} from "@/lib/security/telegram";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
@@ -17,20 +21,22 @@ const updateServiceSchema = z.object({
   cancelSupported: z.boolean().optional(),
   dripFeedSupported: z.boolean().optional(),
   active: z.boolean().optional(),
+  approvalId: z.string().optional(),
 });
 
 export async function PATCH(
   request: Request,
   { params }: { params: { id: string } }
 ) {
-  const session = await getAdminSession(request);
-  if (!session.authenticated) {
-    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  const perm = await requireAdminPermission(request, "canEditRates");
+  if (!perm.allowed) {
+    return NextResponse.json({ success: false, error: perm.error }, { status: perm.status });
   }
+  const session = perm.session;
 
   try {
     const body = await request.json();
-    const parsed = updateServiceSchema.parse(body);
+    const { approvalId, ...serviceFields } = updateServiceSchema.parse(body);
 
     const existing = await prisma.service.findUnique({
       where: { id: params.id },
@@ -39,10 +45,60 @@ export async function PATCH(
       return NextResponse.json({ success: false, error: "Service not found" }, { status: 404 });
     }
 
-    const dataToUpdate: any = { ...parsed };
-    if (parsed.providerServiceId) {
-      dataToUpdate.providerServiceId = parsed.providerServiceId.trim();
-      dataToUpdate.externalId = parsed.providerServiceId.trim();
+    // Co-admins MUST get Master Admin Telegram approval before changing service rates or settings
+    if (!perm.isMaster) {
+      const approved = approvalId
+        ? await verifyAndConsumeTelegramApproved(approvalId, session.user?.id)
+        : false;
+
+      if (!approved) {
+        const changes: string[] = [];
+        const fromParts: string[] = [];
+        const toParts: string[] = [];
+
+        if (typeof serviceFields.ratePer1000 === "number" && serviceFields.ratePer1000 !== existing.ratePer1000) {
+          changes.push("Rate");
+          fromParts.push(`₹${existing.ratePer1000}/1k`);
+          toParts.push(`₹${serviceFields.ratePer1000}/1k`);
+        }
+        if (typeof serviceFields.active === "boolean" && serviceFields.active !== existing.active) {
+          changes.push("Status");
+          fromParts.push(existing.active ? "Active" : "Disabled");
+          toParts.push(serviceFields.active ? "Active" : "Disabled");
+        }
+        if (typeof serviceFields.name === "string" && serviceFields.name !== existing.name) {
+          changes.push("Name");
+          fromParts.push(existing.name);
+          toParts.push(serviceFields.name);
+        }
+
+        const reqRes = await createRateChangeApprovalRequest({
+          actor: session.user?.username || session.label || "co-admin",
+          actorId: session.user?.id || "",
+          action: `Update Service (${changes.join(", ") || "Config"})`,
+          target: `${existing.name} (#${existing.numericId || existing.externalId})`,
+          fromValue: fromParts.join(" | ") || `₹${existing.ratePer1000}/1k`,
+          toValue: toParts.join(" | ") || `₹${serviceFields.ratePer1000 ?? existing.ratePer1000}/1k`,
+          metadata: { serviceId: existing.id },
+        });
+
+        return NextResponse.json(
+          {
+            success: false,
+            requiresApproval: true,
+            approvalId: reqRes.approvalId,
+            expiresAt: reqRes.expiresAt,
+            message: "Telegram approval sent to Master Admin. Waiting for confirmation...",
+          },
+          { status: 202 }
+        );
+      }
+    }
+
+    const dataToUpdate: any = { ...serviceFields };
+    if (serviceFields.providerServiceId) {
+      dataToUpdate.providerServiceId = serviceFields.providerServiceId.trim();
+      dataToUpdate.externalId = serviceFields.providerServiceId.trim();
     }
 
     const updated = await prisma.service.update({
@@ -78,9 +134,9 @@ export async function DELETE(
   request: Request,
   { params }: { params: { id: string } }
 ) {
-  const session = await getAdminSession(request);
-  if (!session.authenticated) {
-    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  const perm = await requireAdminPermission(request, "MASTER_ONLY");
+  if (!perm.allowed) {
+    return NextResponse.json({ success: false, error: perm.error }, { status: perm.status });
   }
 
   try {

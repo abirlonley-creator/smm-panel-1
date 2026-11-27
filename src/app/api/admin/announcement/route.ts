@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/auth/session";
+import { requireAdminPermission } from "@/lib/auth/admin-permissions";
 import { getAnnouncementState, setAnnouncementState, AnnouncementConfig } from "@/lib/announcement/announcement-service";
 
 export const dynamic = "force-dynamic";
@@ -25,10 +26,11 @@ export async function GET(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const session = await getAdminSession(request);
-  if (!session.authenticated) {
-    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  const perm = await requireAdminPermission(request, "canEditAnnouncement");
+  if (!perm.allowed) {
+    return NextResponse.json({ success: false, error: perm.error }, { status: perm.status });
   }
+  const session = perm.session;
 
   try {
     const body = await request.json();

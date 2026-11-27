@@ -170,8 +170,30 @@ model User {
   bulkBatches        BulkBatch[]
   apiKeys            UserApiKey[]
   apiLogs            UserApiLog[]
+  adminPermissions   AdminPermission?
   createdAt          DateTime                @default(now())
   updatedAt          DateTime                @updatedAt
+}
+
+// =====================================================================
+// Co-Admin Permission System
+// =====================================================================
+
+model AdminPermission {
+  id                   String   @id @default(cuid())
+  userId               String   @unique
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  canEditRates         Boolean  @default(false) // edit service/engagement rates (requires Telegram approval from master)
+  canManageOrders      Boolean  @default(true)  // view/refund/cancel orders
+  canViewFinancials    Boolean  @default(false) // view revenue & financials tab
+  canManageDeposits    Boolean  @default(false) // approve/reject deposits
+  canManageUsers       Boolean  @default(false) // edit user balance/name/status
+  canEditAnnouncement  Boolean  @default(false) // post/clear announcements
+  canViewAlerts        Boolean  @default(true)  // view system alerts
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@map("admin_permissions")
 }
 
 model Passkey {

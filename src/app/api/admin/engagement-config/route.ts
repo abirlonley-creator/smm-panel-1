@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/auth/session";
+import { requireAdminPermission } from "@/lib/auth/admin-permissions";
+import {
+  createRateChangeApprovalRequest,
+  verifyAndConsumeTelegramApproved,
+} from "@/lib/security/telegram";
 import { prisma } from "@/lib/prisma";
 import {
   getTikTokEngagementConfigAsync,
@@ -199,15 +204,93 @@ export async function GET(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const session = await getAdminSession(request);
-  if (!session.authenticated) {
-    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  const perm = await requireAdminPermission(request, "canEditRates");
+  if (!perm.allowed) {
+    return NextResponse.json({ success: false, error: perm.error }, { status: perm.status });
   }
+  const session = perm.session;
 
-  const actor = session.user?.username || session.user?.email || "admin";
+  const actor = session.user?.username || session.label || "admin";
 
   try {
     const body = await request.json();
+
+    // Co-admins MUST get Master Admin Telegram approval before changing engagement rates/presets
+    if (!perm.isMaster) {
+      const approvalId = typeof body.approvalId === "string" ? body.approvalId : "";
+      const approved = approvalId
+        ? await verifyAndConsumeTelegramApproved(approvalId, session.user?.id)
+        : false;
+
+      if (!approved) {
+        const currentConfig = await getTikTokEngagementConfigAsync(true);
+        const fromParts: string[] = [];
+        const toParts: string[] = [];
+
+        const newPricing = body.pricing || body.config?.pricing;
+        if (newPricing) {
+          const oldP = currentConfig.pricing || ({} as any);
+          if (typeof newPricing.viewsUserRate === "number" && newPricing.viewsUserRate !== oldP.viewsUserRate) {
+            fromParts.push(`Views: ₹${oldP.viewsUserRate ?? 0}`);
+            toParts.push(`Views: ₹${newPricing.viewsUserRate}`);
+          }
+          if (typeof newPricing.likesUserRate === "number" && newPricing.likesUserRate !== oldP.likesUserRate) {
+            fromParts.push(`Likes: ₹${oldP.likesUserRate ?? 0}`);
+            toParts.push(`Likes: ₹${newPricing.likesUserRate}`);
+          }
+          if (typeof newPricing.savesUserRate === "number" && newPricing.savesUserRate !== oldP.savesUserRate) {
+            fromParts.push(`Saves: ₹${oldP.savesUserRate ?? 0}`);
+            toParts.push(`Saves: ₹${newPricing.savesUserRate}`);
+          }
+          if (typeof newPricing.sharesUserRate === "number" && newPricing.sharesUserRate !== oldP.sharesUserRate) {
+            fromParts.push(`Shares: ₹${oldP.sharesUserRate ?? 0}`);
+            toParts.push(`Shares: ₹${newPricing.sharesUserRate}`);
+          }
+          if (typeof newPricing.commentsUserRate === "number" && newPricing.commentsUserRate !== oldP.commentsUserRate) {
+            fromParts.push(`Comments: ₹${oldP.commentsUserRate ?? 0}`);
+            toParts.push(`Comments: ₹${newPricing.commentsUserRate}`);
+          }
+        }
+
+        const newIgPricing = body.instagramPricing || body.config?.instagramPricing;
+        if (newIgPricing) {
+          const oldIg = currentConfig.instagramPricing || ({} as any);
+          if (typeof newIgPricing.viewsUserRate === "number" && newIgPricing.viewsUserRate !== oldIg.viewsUserRate) {
+            fromParts.push(`IG Views: ₹${oldIg.viewsUserRate ?? 0}`);
+            toParts.push(`IG Views: ₹${newIgPricing.viewsUserRate}`);
+          }
+          if (typeof newIgPricing.likesUserRate === "number" && newIgPricing.likesUserRate !== oldIg.likesUserRate) {
+            fromParts.push(`IG Likes: ₹${oldIg.likesUserRate ?? 0}`);
+            toParts.push(`IG Likes: ₹${newIgPricing.likesUserRate}`);
+          }
+        }
+
+        if (body.presetId && body.preset) {
+          fromParts.push(`Preset ${body.presetId}`);
+          toParts.push(`Updated (${body.preset.price_inr ? `₹${body.preset.price_inr}` : "modified"})`);
+        }
+
+        const reqRes = await createRateChangeApprovalRequest({
+          actor,
+          actorId: session.user?.id || "",
+          action: "Update Engagement Rates / Presets",
+          target: body.presetId ? `Preset: ${body.presetId}` : "Engagement Pricing Config",
+          fromValue: fromParts.join(", ") || "Current rates",
+          toValue: toParts.join(", ") || "Updated rates",
+        });
+
+        return NextResponse.json(
+          {
+            success: false,
+            requiresApproval: true,
+            approvalId: reqRes.approvalId,
+            expiresAt: reqRes.expiresAt,
+            message: "Telegram approval sent to Master Admin. Waiting for confirmation...",
+          },
+          { status: 202 }
+        );
+      }
+    }
 
     // 1. Update individual preset if presetId and preset updates are provided
     if (body.presetId && body.preset) {

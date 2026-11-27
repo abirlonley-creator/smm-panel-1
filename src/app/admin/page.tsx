@@ -88,7 +88,7 @@ export type SettingsSubTab = "provider" | "announcement";
 
 export default function AdminPage() {
   const router = useRouter();
-  const [session, setSession] = useState<{ authenticated: boolean; label?: string; role?: string } | null>(null);
+  const [session, setSession] = useState<{ authenticated: boolean; label?: string; role?: string; isMaster?: boolean; userId?: string; username?: string } | null>(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
 
   // Announcement Active State for Quick Header Pill
@@ -1242,7 +1242,7 @@ export default function AdminPage() {
                   </p>
                 </div>
               </div>
-              <UsersLiveActivityTab />
+              <UsersLiveActivityTab isMaster={Boolean(session?.isMaster)} />
             </div>
           ) : (
             <div className="space-y-6 animate-fadeIn">

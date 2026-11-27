@@ -1109,14 +1109,20 @@ export function UsersLiveActivityTab({ isMaster = false }: { isMaster?: boolean 
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-gray-700 mb-1">Wallet Balance (₹)</label>
+                <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                  Real Wallet Balance (₹)
+                </label>
                 <input
                   type="number"
                   step="0.01"
+                  min="0"
                   value={editBalance}
                   onChange={(e) => setEditBalance(e.target.value)}
                   className="w-full bg-[#F8F9FD] border border-[#DEE0ED] rounded-xl px-3 py-2 text-xs font-mono font-bold text-gray-800 outline-none"
                 />
+                <p className="text-[10px] text-emerald-700 mt-1">
+                  Shows in user&apos;s main balance immediately and can be used to place real orders.
+                </p>
               </div>
 
               <div>

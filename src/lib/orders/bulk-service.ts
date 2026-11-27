@@ -1,5 +1,6 @@
 import { prisma } from "../prisma";
 import { getActiveProvider } from "../provider/adapter";
+import { isMasterAdmin } from "../auth/master-admin";
 import {
   getPostRequirementError,
   normalizeTargetUrl,
@@ -468,6 +469,29 @@ export async function submitBulkOrders(
       throw new Error("No order rows provided for bulk submission");
     }
 
+    // Enforce real wallet balance for non-master users before placing any bulk orders
+    let currentUserBalance = 0;
+    let isMaster = false;
+    if (userId) {
+      const userRecord = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, username: true, role: true, walletBalance: true },
+      });
+      if (!userRecord) {
+        throw new Error("User account not found");
+      }
+      isMaster = isMasterAdmin(userRecord);
+      currentUserBalance = userRecord.walletBalance ?? 0;
+      const estimatedTotalCost = Number(
+        rows.reduce((sum, r) => sum + ((r.quantity || 0) / 1000) * service.ratePer1000, 0).toFixed(4)
+      );
+      if (!isMaster && currentUserBalance < estimatedTotalCost) {
+        throw new Error(
+          `Insufficient wallet balance. Bulk order costs ₹${estimatedTotalCost.toFixed(2)}, but your wallet has ₹${currentUserBalance.toFixed(2)}. Please add funds to your wallet.`
+        );
+      }
+    }
+
     const batchRef = `BLK-${Math.floor(100000 + Math.random() * 900000)}`;
     const unitCost = service.ratePer1000 / 1000;
 
@@ -567,29 +591,55 @@ export async function submitBulkOrders(
         });
 
         if (providerRes.success && providerRes.providerOrderId) {
+          if (userId && !isMaster && orderCost > 0) {
+            if (currentUserBalance < orderCost) {
+              throw new Error(`Insufficient wallet balance for row ${i + 1}`);
+            }
+            currentUserBalance = Number((currentUserBalance - orderCost).toFixed(2));
+          }
+
           successCount++;
           accumulatedCost += orderCost;
 
-          const createdOrder = await prisma.order.create({
-            data: {
-              orderRef,
-              serviceId: service.id,
-              targetUrl,
-              requestedQuantity: quantity,
-              submittedQuantity: quantity,
-              deliveredQuantity: 0,
-              remainingQuantity: quantity,
-              failedQuantity: 0,
-              unitCost,
-              totalCost: orderCost,
-              isScheduled: false,
-              scheduleMode: "INSTANT",
-              status: "PROCESSING",
-              providerOrderId: providerRes.providerOrderId,
-              bulkBatchId: bulkBatch.id,
-              scheduledJobId: scheduledJobId || null,
-              userId: userId || null,
-            },
+          const createdOrder = await prisma.$transaction(async (tx) => {
+            if (userId && !isMaster && orderCost > 0) {
+              await tx.user.update({
+                where: { id: userId },
+                data: { walletBalance: currentUserBalance },
+              });
+              await tx.walletTransaction.create({
+                data: {
+                  userId,
+                  type: "DEBIT",
+                  amount: -orderCost,
+                  balanceAfter: currentUserBalance,
+                  referenceId: orderRef,
+                  description: `Bulk Order ${orderRef} (${service.name}, ${quantity.toLocaleString()} units)`,
+                },
+              });
+            }
+
+            return tx.order.create({
+              data: {
+                orderRef,
+                serviceId: service.id,
+                targetUrl,
+                requestedQuantity: quantity,
+                submittedQuantity: quantity,
+                deliveredQuantity: 0,
+                remainingQuantity: quantity,
+                failedQuantity: 0,
+                unitCost,
+                totalCost: orderCost,
+                isScheduled: false,
+                scheduleMode: "INSTANT",
+                status: "PROCESSING",
+                providerOrderId: providerRes.providerOrderId,
+                bulkBatchId: bulkBatch.id,
+                scheduledJobId: scheduledJobId || null,
+                userId: userId || null,
+              },
+            });
           });
 
           outcomes.push({

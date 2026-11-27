@@ -837,14 +837,6 @@ export default function WalletPage() {
                   className="w-full px-3 py-2 rounded-xl border border-[#E4E0D3] focus:border-[#111413] outline-none font-mono text-[11px]"
                 />
               </div>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isMock}
-                  onChange={(e) => setIsMock(e.target.checked)}
-                />
-                <span>Mock Mode</span>
-              </label>
 
               {importStatus && (
                 <div className="p-2.5 rounded-xl bg-[#FAF9F5] border border-[#E4E0D3] text-[#111413] text-[11px] flex items-center gap-2">

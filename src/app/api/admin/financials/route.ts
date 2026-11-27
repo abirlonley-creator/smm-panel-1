@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/auth/session";
+import { requireAdminPermission } from "@/lib/auth/admin-permissions";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const session = await getAdminSession(request);
-  if (!session.authenticated) {
-    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  const perm = await requireAdminPermission(request, "canViewFinancials");
+  if (!perm.allowed) {
+    return NextResponse.json({ success: false, error: perm.error }, { status: perm.status });
   }
 
   const url = new URL(request.url);

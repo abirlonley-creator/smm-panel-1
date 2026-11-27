@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthSession } from "@/lib/auth/session";
+import { isMasterAdmin } from "@/lib/auth/master-admin";
 import { refreshUserBalance, getUserProviderConfig } from "@/lib/provider/user-provider";
 import { decryptApiKey } from "@/lib/security/crypto";
 import { StandardSMMv2Provider, MockSMMProvider } from "@/lib/provider/adapter";
@@ -47,11 +48,11 @@ export async function GET(request: Request) {
 
     if (session.authenticated && session.user) {
       const userId = session.user.id;
-      const isAdmin = session.user.role === "ADMIN";
+      const isMaster = isMasterAdmin(session.user);
 
-      // Non-admin regular users only have their personal wallet balance.
-      // Upstream provider APIs, balances and credentials are strictly hidden.
-      if (!isAdmin) {
+      // Regular users AND co-admins only use their personal INR wallet balance.
+      // Upstream provider APIs, mock balances, and credentials are strictly Master Admin only.
+      if (!isMaster) {
         const user = await prisma.user.findUnique({
           where: { id: userId },
           select: { walletBalance: true },
@@ -60,8 +61,9 @@ export async function GET(request: Request) {
         const walletBal = user?.walletBalance ?? 0;
         return NextResponse.json({
           success: true,
-          role: "USER",
+          role: session.user.role,
           isAdmin: false,
+          isCoAdmin: session.user.role === "ADMIN",
           walletBalance: walletBal,
           balance: walletBal,
           currency: "INR",
@@ -110,7 +112,7 @@ export async function GET(request: Request) {
           balance: null,
           currency: "USD",
           providerName: null,
-          isMock: true,
+          isMock: false,
           hasApiKey: false,
         });
       }
@@ -217,8 +219,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
 
-    if (session.user.role !== "ADMIN") {
-      return NextResponse.json({ success: false, error: "Forbidden: Only administrators can configure providers." }, { status: 403 });
+    if (!isMasterAdmin(session.user)) {
+      return NextResponse.json({ success: false, error: "Forbidden: Only the Master Admin can configure universal providers." }, { status: 403 });
     }
 
     const body = await request.json();

@@ -78,11 +78,16 @@ export async function POST(request: Request) {
     const body = await request.json();
     const parsed = createConnectionSchema.parse(body);
 
-    if (!parsed.isMock) {
-      const ssrf = validateProviderEndpointUrl(parsed.apiUrl);
-      if (!ssrf.valid) {
-        return NextResponse.json({ success: false, error: `Invalid API URL: ${ssrf.error}` }, { status: 400 });
-      }
+    if (parsed.isMock) {
+      return NextResponse.json(
+        { success: false, error: "Mock balance providers are disabled. Please use a real provider or your INR wallet balance." },
+        { status: 403 }
+      );
+    }
+
+    const ssrf = validateProviderEndpointUrl(parsed.apiUrl);
+    if (!ssrf.valid) {
+      return NextResponse.json({ success: false, error: `Invalid API URL: ${ssrf.error}` }, { status: 400 });
     }
 
     // Check if name is already used for this user

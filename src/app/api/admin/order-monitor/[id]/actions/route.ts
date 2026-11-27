@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAdminSession } from "@/lib/auth/session";
+import { requireAdminPermission } from "@/lib/auth/admin-permissions";
 import { prisma } from "@/lib/prisma";
 import { replanRemainingEngagementRuns } from "@/lib/engagement/worker";
 import { logOrderEvent } from "@/lib/engagement/event-logger";
@@ -11,10 +11,11 @@ export async function POST(
   request: Request,
   { params }: { params: { id: string } }
 ) {
-  const session = await getAdminSession(request);
-  if (!session.authenticated) {
-    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  const perm = await requireAdminPermission(request, "canManageOrders");
+  if (!perm.allowed) {
+    return NextResponse.json({ success: false, error: perm.error }, { status: perm.status });
   }
+  const session = perm.session;
 
   try {
     const { id } = params;

@@ -23,16 +23,19 @@ export async function POST(request: Request) {
     const body = await request.json();
     const parsed = testSchema.parse(body);
 
-    if (!parsed.isMock) {
-      const ssrf = validateProviderEndpointUrl(parsed.apiUrl);
-      if (!ssrf.valid) {
-        return NextResponse.json({ success: false, error: `Invalid API URL: ${ssrf.error}` }, { status: 400 });
-      }
+    if (parsed.isMock) {
+      return NextResponse.json(
+        { success: false, error: "Mock balance providers are disabled." },
+        { status: 403 }
+      );
     }
 
-    const adapter = parsed.isMock
-      ? new MockSMMProvider()
-      : new StandardSMMv2Provider(parsed.apiUrl.trim(), parsed.apiKey.trim());
+    const ssrf = validateProviderEndpointUrl(parsed.apiUrl);
+    if (!ssrf.valid) {
+      return NextResponse.json({ success: false, error: `Invalid API URL: ${ssrf.error}` }, { status: 400 });
+    }
+
+    const adapter = new StandardSMMv2Provider(parsed.apiUrl.trim(), parsed.apiKey.trim());
 
     const balRes = await adapter.getBalance();
     if (typeof balRes.balance !== "number") {

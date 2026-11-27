@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { verifyAdminCredential } from "@/lib/auth/keys";
 import { verifyPasskey, createSession } from "@/lib/auth/passkey-service";
 import { ADMIN_COOKIE_NAME, SESSION_COOKIE_NAME, getAdminSession } from "@/lib/auth/session";
+import { getAdminPermissions } from "@/lib/auth/admin-permissions";
 import { prisma } from "@/lib/prisma";
 import { adminRateLimiter, getClientIp } from "@/lib/security/redis";
 import { sendTelegramSecurityAlert } from "@/lib/security/telegram";
@@ -129,10 +130,19 @@ export async function POST(request: Request) {
       userAgent: request.headers.get("user-agent") || undefined,
     }).catch(() => {});
 
+    let permInfo = { isMaster: false, permissions: {} as Record<string, boolean> };
+    if (adminUser) {
+      permInfo = await getAdminPermissions(adminUser.id);
+    }
+
     return NextResponse.json({
       success: true,
       role: verification.role,
       label: verification.label,
+      userId: adminUser.id,
+      username: adminUser.username,
+      isMaster: permInfo.isMaster,
+      permissions: permInfo.permissions,
     });
   } catch (error: any) {
     return NextResponse.json(
@@ -161,10 +171,22 @@ export async function GET(request: Request) {
     }
   }
 
+  let isMaster = false;
+  let permissions: Record<string, boolean> = {};
+  if (session.authenticated && session.user?.id) {
+    const permInfo = await getAdminPermissions(session.user.id);
+    isMaster = permInfo.isMaster;
+    permissions = permInfo.permissions;
+  }
+
   return NextResponse.json({
     authenticated: session.authenticated,
     role: session.role || null,
     label: session.label || null,
+    userId: session.user?.id || null,
+    username: session.user?.username || null,
+    isMaster,
+    permissions,
   });
 }
 

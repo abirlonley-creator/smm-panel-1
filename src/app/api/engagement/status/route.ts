@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
+import { isMasterAdmin } from "@/lib/auth/master-admin";
 import { prisma } from "@/lib/prisma";
 import { decryptApiKey } from "@/lib/security/crypto";
 import { StandardSMMv2Provider, MockSMMProvider } from "@/lib/provider/adapter";
@@ -32,7 +33,7 @@ export async function GET(request: Request) {
   }
 
   const userId = session.user.id;
-  const isAdmin = session.user.role === "ADMIN";
+  const isAdmin = isMasterAdmin(session.user);
   const config = await getTikTokEngagementConfigAsync();
 
   // If engagement is globally disabled by admin

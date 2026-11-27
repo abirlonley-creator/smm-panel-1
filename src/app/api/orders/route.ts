@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProvider } from "@/lib/provider/adapter";
 import { getAuthSession } from "@/lib/auth/session";
+import { isMasterAdmin } from "@/lib/auth/master-admin";
 import { calculateGrowthPlan } from "@/lib/scheduler/calculator";
 import { ScheduleMode } from "@/lib/types";
 import { generateDripFeedSequence } from "@/lib/orders/drip-feed-randomizer";
@@ -145,15 +146,19 @@ export async function POST(request: Request) {
       );
     }
     const userId = session.user.id;
+    const isMaster = isMasterAdmin(session.user);
 
     // -----------------------------------------------------------------------
     // Resolve Chosen Provider Connection & Ownership Guard
-    // Supports Multiple ("Double") Connected APIs per user.
+    // Only Master Admin uses personal upstream provider connections.
+    // Regular users & co-admins ALWAYS pay from their real INR walletBalance.
     // -----------------------------------------------------------------------
-    const userConnections = await prisma.userProviderConnection.findMany({
-      where: { userId, active: true },
-      orderBy: { createdAt: "asc" },
-    });
+    const userConnections = isMaster
+      ? await prisma.userProviderConnection.findMany({
+          where: { userId, active: true },
+          orderBy: { createdAt: "asc" },
+        })
+      : [];
 
     let providerConnection = null;
     if (parsed.data.providerId) {
@@ -255,6 +260,21 @@ export async function POST(request: Request) {
       const totalQuantity = runQuantities.reduce((sum, q) => sum + q, 0);
       const totalCharge = Number(((totalQuantity / 1000) * service.ratePer1000).toFixed(4));
 
+      // Enforce wallet balance for all non-master users (no mock/free drip-feed orders)
+      if (!isMaster && currentBalance < totalCharge) {
+        const needed = Number((totalCharge - currentBalance).toFixed(2));
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Insufficient wallet balance. This drip feed order costs ₹${totalCharge.toFixed(2)}, but your wallet has ₹${currentBalance.toFixed(2)}. Please add funds to your wallet.`,
+            required: totalCharge,
+            currentBalance,
+            needed,
+          },
+          { status: 402 }
+        );
+      }
+
       // Validate provider balance if known
       if (providerConnection && providerConnection.balance !== null && providerConnection.balance < totalCharge && !providerConnection.isMock) {
         // Record High Priority Admin Alert (Lights up Red 1 in Admin Panel)
@@ -329,8 +349,9 @@ export async function POST(request: Request) {
       // Record in database
       const now = new Date();
       const order = await prisma.$transaction(async (tx) => {
-        if (currentBalance > 0) {
-          const debited = Math.min(currentBalance, totalCharge);
+        // Master Admin uses provider API balance — no wallet deduction
+        if (!isMaster && totalCharge > 0) {
+          const debited = totalCharge; // Always deduct full cost (balance validated above)
           const newBal = Number((currentBalance - debited).toFixed(2));
           await tx.user.update({
             where: { id: userId },
@@ -453,16 +474,18 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2. Validate User Wallet Balance (Only block if no provider connected)
+    // 2. Wallet Balance Check
+    // Master Admin uses their own upstream provider API and is NOT charged from wallet.
+    // ALL other users (USER role + co-admins) MUST have sufficient walletBalance to place any order.
     if (!user) {
       return NextResponse.json({ success: false, error: "User account not found." }, { status: 404 });
     }
-    if (!providerConnection && currentBalance < totalCost) {
+    if (!isMaster && currentBalance < totalCost) {
       const needed = Number((totalCost - currentBalance).toFixed(2));
       return NextResponse.json(
         {
           success: false,
-          error: `Insufficient wallet balance. Total cost is ${totalCost.toFixed(2)}, but your balance is ${currentBalance.toFixed(2)}. Please connect your provider API key or add balance.`,
+          error: `Insufficient wallet balance. This order costs ₹${totalCost.toFixed(2)}, but your wallet has ₹${currentBalance.toFixed(2)}. Please add funds to your wallet.`,
           required: totalCost,
           currentBalance,
           needed,
@@ -536,11 +559,12 @@ export async function POST(request: Request) {
         );
       }
 
-      // Success: Transactionally debit user wallet (if positive) and record order
-      const debited = Math.min(currentBalance, totalCost);
-      const newBal = Number((currentBalance - debited).toFixed(2));
+      // Success: Transactionally debit user wallet and record order
+      // Master Admin uses provider API balance — wallet not charged
+      const debited = isMaster ? 0 : totalCost;
+      const newBal = isMaster ? currentBalance : Number((currentBalance - debited).toFixed(2));
       const order = await prisma.$transaction(async (tx) => {
-        if (debited > 0) {
+        if (!isMaster && debited > 0) {
           await tx.user.update({
             where: { id: userId },
             data: { walletBalance: newBal },
@@ -634,24 +658,26 @@ export async function POST(request: Request) {
       );
     }
 
-    // Transactionally debit wallet and create Order + persistent steps
-    const newBal = Number((currentBalance - totalCost).toFixed(2));
+    // Transactionally debit wallet (for non-master users) and create Order + persistent steps
+    const newBal = isMaster ? currentBalance : Number((currentBalance - totalCost).toFixed(2));
     const order = await prisma.$transaction(async (tx) => {
-      await tx.user.update({
-        where: { id: userId },
-        data: { walletBalance: newBal },
-      });
+      if (!isMaster && totalCost > 0) {
+        await tx.user.update({
+          where: { id: userId },
+          data: { walletBalance: newBal },
+        });
 
-      await tx.walletTransaction.create({
-        data: {
-          userId,
-          type: "DEBIT",
-          amount: -totalCost,
-          balanceAfter: newBal,
-          referenceId: orderRef,
-          description: `Scheduled Growth Order ${orderRef} (${stepsCount} steps, ${requestedQuantity.toLocaleString()} units)`,
-        },
-      });
+        await tx.walletTransaction.create({
+          data: {
+            userId,
+            type: "DEBIT",
+            amount: -totalCost,
+            balanceAfter: newBal,
+            referenceId: orderRef,
+            description: `Scheduled Growth Order ${orderRef} (${stepsCount} steps, ${requestedQuantity.toLocaleString()} units)`,
+          },
+        });
+      }
 
       const newOrder = await tx.order.create({
         data: {

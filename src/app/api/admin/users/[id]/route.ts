@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/auth/session";
+import { requireAdminPermission } from "@/lib/auth/admin-permissions";
+import { isMasterAdmin } from "@/lib/auth/master-admin";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
@@ -127,10 +129,11 @@ export async function PATCH(
   request: Request,
   { params }: { params: { id: string } }
 ) {
-  const session = await getAdminSession(request);
-  if (!session.authenticated) {
-    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  const perm = await requireAdminPermission(request, "canManageUsers");
+  if (!perm.allowed) {
+    return NextResponse.json({ success: false, error: perm.error }, { status: perm.status });
   }
+  const session = perm.session;
 
   const userId = params.id;
   try {
@@ -163,8 +166,20 @@ export async function PATCH(
       updates.username = cleanUsername;
     }
 
-    // 2. Role update (preserves balance, display name, and username)
+    // 2. Role update (preserves balance, display name, and username) — Master Admin only
     if (parsed.role && parsed.role !== existingUser.role) {
+      if (!perm.isMaster) {
+        return NextResponse.json(
+          { success: false, error: "Forbidden: Only the Master Admin can promote or demote roles." },
+          { status: 403 }
+        );
+      }
+      if (isMasterAdmin(existingUser)) {
+        return NextResponse.json(
+          { success: false, error: "Cannot change role of the Master Admin account." },
+          { status: 400 }
+        );
+      }
       if (parsed.role === "USER" && session.user?.id === userId) {
         return NextResponse.json(
           { success: false, error: "You cannot demote your own currently active admin account." },
