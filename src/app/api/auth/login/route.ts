@@ -115,7 +115,7 @@ export async function POST(request: Request) {
           httpOnly: true,
           secure: process.env.NODE_ENV === "production",
           sameSite: "lax",
-          maxAge: 60 * 60 * 2, // 2-hour admin session limit
+          maxAge: Math.floor((session.expiresAt.getTime() - Date.now()) / 1000),
           path: "/",
         });
 
@@ -219,7 +219,7 @@ export async function POST(request: Request) {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
-        maxAge: 60 * 60 * 2, // 2 hour max session for admin
+        maxAge: Math.floor((session.expiresAt.getTime() - Date.now()) / 1000),
         path: "/",
       });
 

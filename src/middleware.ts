@@ -128,25 +128,27 @@ export function middleware(request: NextRequest) {
     return applySecurityHeaders(NextResponse.redirect(loginUrl));
   }
 
-  // Strict protection for /admin routes:
+  // Strict protection for /admin routes (actual role === "ADMIN" is enforced server-side):
   if (pathname === "/admin" || pathname.startsWith("/admin/")) {
-    const hasAdminToken = Boolean(
+    const hasAdminOrSessionToken = Boolean(
       (adminCookie && adminCookie.trim().length >= 6) ||
+      (sessionToken && sessionToken.trim().length >= 10) ||
       (adminHeader && adminHeader.trim().length >= 6)
     );
-    if (!hasAdminToken) {
+    if (!hasAdminOrSessionToken) {
       const fallbackUrl = new URL("/engagement", request.url);
       return applySecurityHeaders(NextResponse.redirect(fallbackUrl));
     }
   }
 
-  // Strict protection for /api/admin/ endpoints (excluding the auth route)
+  // Strict protection for /api/admin/ endpoints (actual role === "ADMIN" is enforced in getAdminSession):
   if (pathname.startsWith("/api/admin/") && !pathname.startsWith("/api/admin/auth")) {
-    const hasAdminToken = Boolean(
+    const hasAdminOrSessionToken = Boolean(
       (adminCookie && adminCookie.trim().length >= 6) ||
+      (sessionToken && sessionToken.trim().length >= 10) ||
       (adminHeader && adminHeader.trim().length >= 6)
     );
-    if (!hasAdminToken) {
+    if (!hasAdminOrSessionToken) {
       return applySecurityHeaders(
         NextResponse.json({ success: false, error: "Not found" }, { status: 404 })
       );

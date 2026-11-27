@@ -98,9 +98,12 @@ export async function POST(request: Request) {
     const session = await createSession(adminUser.id, passkeyId);
 
     const cookieStore = cookies();
-    const sessionMaxAge = 60 * 60 * 2; // 2 hours strict session limit
+    const sessionMaxAge = Math.max(
+      60 * 60 * 24,
+      Math.floor((session.expiresAt.getTime() - Date.now()) / 1000)
+    );
 
-    // Set signed, short-lived session token (not raw secret)
+    // Set signed, session-aligned token (not raw secret)
     cookieStore.set(ADMIN_COOKIE_NAME, session.token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -141,6 +144,23 @@ export async function POST(request: Request) {
 
 export async function GET(request: Request) {
   const session = await getAdminSession(request);
+
+  // Heal/refresh ADMIN_COOKIE_NAME if admin has a valid active SESSION_COOKIE_NAME
+  if (session.authenticated && session.role === "ADMIN") {
+    const cookieStore = cookies();
+    const existingAdminCookie = cookieStore.get(ADMIN_COOKIE_NAME)?.value;
+    const existingSessionToken = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+    if (!existingAdminCookie && existingSessionToken) {
+      cookieStore.set(ADMIN_COOKIE_NAME, existingSessionToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 60 * 60 * 24 * 7,
+        path: "/",
+      });
+    }
+  }
+
   return NextResponse.json({
     authenticated: session.authenticated,
     role: session.role || null,

@@ -121,6 +121,7 @@ function getInitials(name: string): string {
 
 export function UsersLiveActivityTab() {
   const [loading, setLoading] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [stats, setStats] = useState<GlobalStats | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -146,23 +147,27 @@ export function UsersLiveActivityTab() {
 
   async function loadUsers(query = searchQuery, filter = activeFilter) {
     setLoading(true);
+    setLoadError(null);
     try {
       const params = new URLSearchParams();
       if (query.trim()) params.set("search", query.trim());
       if (filter !== "ALL") params.set("filter", filter);
 
       const res = await fetch(`/api/admin/users?${params.toString()}`);
-      const data = await res.json();
-      if (data.success) {
-        setUsers(data.users || []);
-        if (data.stats) setStats(data.stats);
-
-        if (data.searchedOrderUserFound && data.users.length === 1) {
-          setSelectedUserId(data.users[0].id);
-        }
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || `Failed to load users (HTTP ${res.status})`);
       }
-    } catch (err) {
+
+      setUsers(data.users || []);
+      if (data.stats) setStats(data.stats);
+
+      if (data.searchedOrderUserFound && data.users.length === 1) {
+        setSelectedUserId(data.users[0].id);
+      }
+    } catch (err: any) {
       console.error("Failed to load users:", err);
+      setLoadError(err?.message || "Failed to load user directory.");
     } finally {
       setLoading(false);
     }
@@ -686,6 +691,17 @@ export function UsersLiveActivityTab() {
 
           {loading ? (
             <div className="py-12 text-center text-xs text-neutral-400">Loading directory...</div>
+          ) : loadError ? (
+            <div className="p-6 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <span className="font-semibold">{loadError}</span>
+              <button
+                type="button"
+                onClick={() => loadUsers()}
+                className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold self-start sm:self-auto cursor-pointer"
+              >
+                Retry
+              </button>
+            </div>
           ) : users.length === 0 ? (
             <div className="p-8 text-center text-xs text-neutral-400 bg-white rounded-2xl border border-[#DEE0ED]">
               No users match your criteria.
