@@ -119,7 +119,28 @@ function getInitials(name: string): string {
   return name.slice(0, 2).toUpperCase();
 }
 
-export function UsersLiveActivityTab() {
+const PERMISSION_ITEMS: Array<{
+  key:
+    | "canEditRates"
+    | "canManageOrders"
+    | "canViewFinancials"
+    | "canManageDeposits"
+    | "canManageUsers"
+    | "canEditAnnouncement"
+    | "canViewAlerts";
+  label: string;
+  hint: string;
+}> = [
+  { key: "canEditRates", label: "Edit Service & Engagement Rates", hint: "Requires Telegram approval from Master Admin" },
+  { key: "canManageOrders", label: "Manage Orders & Refunds", hint: "View, cancel, replan, and refund orders" },
+  { key: "canViewFinancials", label: "View Revenue & Financials", hint: "Access profit, revenue, and analytics" },
+  { key: "canManageDeposits", label: "Approve / Reject Deposits", hint: "Verify or decline user deposit requests" },
+  { key: "canManageUsers", label: "Manage User Profiles & Balances", hint: "Edit user balances, names, and status" },
+  { key: "canEditAnnouncement", label: "Manage Announcements", hint: "Publish or update global site banner" },
+  { key: "canViewAlerts", label: "View System Alerts", hint: "See operational and provider alerts" },
+];
+
+export function UsersLiveActivityTab({ isMaster = false }: { isMaster?: boolean }) {
   const [loading, setLoading] = useState<boolean>(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -143,6 +164,12 @@ export function UsersLiveActivityTab() {
   const [savingEdit, setSavingEdit] = useState<boolean>(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [updatingRoleId, setUpdatingRoleId] = useState<string | null>(null);
+
+  // Co-admin permissions state
+  const [coAdminPerms, setCoAdminPerms] = useState<Record<string, boolean> | null>(null);
+  const [coAdminIsMaster, setCoAdminIsMaster] = useState<boolean>(false);
+  const [loadingPerms, setLoadingPerms] = useState<boolean>(false);
+  const [savingPermKey, setSavingPermKey] = useState<string | null>(null);
 
   // Copy feedback
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -192,6 +219,57 @@ export function UsersLiveActivityTab() {
   const selectedUser = useMemo(() => {
     return users.find((u) => u.id === selectedUserId) || null;
   }, [users, selectedUserId]);
+
+  useEffect(() => {
+    if (!selectedUser || selectedUser.role !== "ADMIN" || !isMaster) {
+      setCoAdminPerms(null);
+      setCoAdminIsMaster(false);
+      return;
+    }
+    let cancelled = false;
+    setLoadingPerms(true);
+    fetch(`/api/admin/users/${selectedUser.id}/permissions`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        if (data?.success) {
+          setCoAdminPerms(data.permissions || null);
+          setCoAdminIsMaster(Boolean(data.isMaster));
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoadingPerms(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedUser?.id, selectedUser?.role, isMaster]);
+
+  async function handleTogglePermission(permKey: string, nextVal: boolean) {
+    if (!selectedUser || !isMaster || coAdminIsMaster) return;
+    setSavingPermKey(permKey);
+    const prev = coAdminPerms;
+    setCoAdminPerms((p) => ({ ...(p || {}), [permKey]: nextVal }));
+    try {
+      const res = await fetch(`/api/admin/users/${selectedUser.id}/permissions`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [permKey]: nextVal }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success) {
+        setCoAdminPerms(prev);
+        alert(data?.error || "Failed to update permission");
+      } else if (data.permissions) {
+        setCoAdminPerms(data.permissions);
+      }
+    } catch {
+      setCoAdminPerms(prev);
+    } finally {
+      setSavingPermKey(null);
+    }
+  }
 
   function handleCopy(text: string, id: string) {
     if (typeof navigator !== "undefined" && navigator.clipboard) {
@@ -529,6 +607,68 @@ export function UsersLiveActivityTab() {
                 </span>
               </div>
             </div>
+
+            {/* Co-Admin Permissions Matrix (Master Admin only) */}
+            {selectedUser.role === "ADMIN" && isMaster && (
+              <div className="mt-4 pt-4 border-t border-[#DEE0ED]">
+                <div className="flex items-center justify-between mb-2.5">
+                  <div>
+                    <h3 className="text-xs font-bold text-[#111413] flex items-center gap-1.5">
+                      <span>Co-Admin Permissions</span>
+                      {coAdminIsMaster && (
+                        <span className="px-2 py-0.5 rounded-full bg-[#111413] text-[#D4F04F] text-[10px] font-bold">
+                          Master Admin
+                        </span>
+                      )}
+                    </h3>
+                    <p className="text-[11px] text-[#5B625F]">
+                      {coAdminIsMaster
+                        ? "Master Admin has full unconditional access including Universal APIs and mock balance."
+                        : "Tick or untick what this co-admin can do. Co-admins always use their own real wallet balance and cannot add Universal APIs."}
+                    </p>
+                  </div>
+                </div>
+
+                {!coAdminIsMaster && (
+                  loadingPerms ? (
+                    <div className="text-xs text-[#5B625F] py-2">Loading permissions...</div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {PERMISSION_ITEMS.map((item) => {
+                        const checked = Boolean(coAdminPerms?.[item.key]);
+                        const busy = savingPermKey === item.key;
+                        return (
+                          <label
+                            key={item.key}
+                            className={`flex items-start gap-2.5 p-2.5 rounded-xl border transition-all cursor-pointer select-none ${
+                              checked
+                                ? "bg-[#F3F1EA] border-[#111413]/30"
+                                : "bg-white border-[#DEE0ED] hover:bg-gray-50"
+                            } ${busy ? "opacity-60" : ""}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              disabled={busy}
+                              onChange={(e) => handleTogglePermission(item.key, e.target.checked)}
+                              className="mt-0.5 w-4 h-4 accent-[#111413] rounded cursor-pointer"
+                            />
+                            <div className="min-w-0">
+                              <div className="text-xs font-semibold text-[#111413] leading-tight">
+                                {item.label}
+                              </div>
+                              <div className="text-[10px] text-[#5B625F] mt-0.5">
+                                {item.hint}
+                              </div>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )
+                )}
+              </div>
+            )}
           </div>
 
           {/* Sub Navigation */}
@@ -731,6 +871,28 @@ export function UsersLiveActivityTab() {
               </div>
             </div>
           )}
+
+          {/* ── Sticky Bottom Bar — Back & Scroll-to-top shortcut ── */}
+          <div className="sticky bottom-0 z-10 mt-4">
+            <div className="bg-white/90 backdrop-blur-sm border-t border-[#E4E0D3] px-4 py-3 flex items-center justify-between gap-3 rounded-b-2xl shadow-sm">
+              <button
+                type="button"
+                onClick={() => setSelectedUserId(null)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#111413] text-[#D4F04F] text-xs font-bold hover:bg-[#1a1f1d] transition-colors"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                Back to Directory
+              </button>
+              <span className="text-[11px] text-[#5B625F] font-mono">@{selectedUser.username}</span>
+              <button
+                type="button"
+                onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+                className="px-3 py-1.5 rounded-xl bg-[#F3F1EA] border border-[#E4E0D3] text-xs font-semibold text-[#111413] hover:bg-[#E4E0D3] transition-colors"
+              >
+                ↑ Top
+              </button>
+            </div>
+          </div>
         </div>
       ) : (
         /* ── DIRECTORY LIST / CARDS ── */

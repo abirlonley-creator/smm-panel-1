@@ -62,13 +62,17 @@ export async function GET(request: Request) {
         { engagementOrders: { some: { orderRef: { contains: cleanSearch, mode: "insensitive" } } } },
       ];
     } else {
-      // Show genuine accounts with passkeys, sessions, orders, or admin role
+      // Show genuine accounts: admin, any wallet activity, orders, sessions, or passkeys
+      // This catches users who registered with username/password and made deposits
       whereClause.OR = [
         { role: "ADMIN" },
         { passkeys: { some: {} } },
         { sessions: { some: {} } },
         { orders: { some: {} } },
         { engagementOrders: { some: {} } },
+        { deposits: { some: {} } },
+        { walletTransactions: { some: {} } },
+        { walletBalance: { gt: 0 } },
       ];
     }
 
